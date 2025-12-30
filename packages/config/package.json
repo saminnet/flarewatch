@@ -1,0 +1,21 @@
+{
+  "name": "@flarewatch/config",
+  "private": true,
+  "type": "module",
+  "main": "./src/public.ts",
+  "types": "./src/public.ts",
+  "exports": {
+    "./worker": "./src/worker.ts",
+    ".": "./src/public.ts"
+  },
+  "scripts": {
+    "compile": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@flarewatch/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@flarewatch/ts-config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

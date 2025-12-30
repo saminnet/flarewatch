@@ -1,0 +1,4 @@
+{
+  "extends": "@flarewatch/ts-config/base",
+  "include": ["src"]
+}
