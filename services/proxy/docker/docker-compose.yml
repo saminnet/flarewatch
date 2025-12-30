@@ -1,0 +1,21 @@
+# FlareWatch Proxy - Docker Compose
+# Runs as a non-root user and ships only the bundled runtime
+
+services:
+  flarewatch-proxy:
+    build:
+      context: ../../..
+      dockerfile: services/proxy/docker/Dockerfile
+    ports:
+      - '${PORT:-3000}:${PORT:-3000}'
+    environment:
+      - PORT=${PORT:-3000}
+      - FLAREWATCH_PROXY_LOCATION=${FLAREWATCH_PROXY_LOCATION:-}
+      - FLAREWATCH_PROXY_TOKEN=${FLAREWATCH_PROXY_TOKEN:-}
+    restart: unless-stopped
+    # Container runs as non-root by default
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev
