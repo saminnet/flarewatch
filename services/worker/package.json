@@ -1,0 +1,25 @@
+{
+  "name": "worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy src/index.ts --outdir dist --dry-run",
+    "compile": "tsc --noEmit",
+    "deploy:wrangler": "wrangler deploy",
+    "dev": "wrangler dev --config wrangler-dev.toml --test-scheduled --persist-to ../../apps/status-page/.wrangler/state",
+    "start": "wrangler dev",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@flarewatch/config": "workspace:*",
+    "@flarewatch/shared": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@flarewatch/ts-config": "workspace:*",
+    "typescript": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

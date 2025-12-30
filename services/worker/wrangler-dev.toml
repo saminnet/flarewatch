@@ -1,0 +1,5 @@
+name = "flarewatch-worker"
+main = "src/index.ts"
+compatibility_date = "2025-11-17"
+kv_namespaces = [{ binding = "FLAREWATCH_STATE", id = "FLAREWATCH_STATE" }]
+compatibility_flags = ["nodejs_compat"]

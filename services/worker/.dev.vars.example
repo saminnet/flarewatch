@@ -1,0 +1,6 @@
+# FlareWatch Worker (wrangler dev)
+# Copy to `services/worker/.dev.vars` and edit.
+
+# Optional: If your monitors use an external proxy protected by a token,
+# set the same token here so the worker can send `Authorization: Bearer <token>`.
+# FLAREWATCH_PROXY_TOKEN=<proxy-token>
