@@ -1,0 +1,7 @@
+# Optional: protect the status page with Basic Auth.
+# Format: "username:password"
+FLAREWATCH_STATUS_PAGE_BASIC_AUTH=
+
+# Required for admin access (/admin and /api/admin routes)
+# Format: "username:password"
+FLAREWATCH_ADMIN_BASIC_AUTH=
