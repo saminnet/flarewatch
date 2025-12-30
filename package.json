@@ -1,0 +1,40 @@
+{
+  "name": "flarewatch",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -F status-page dev",
+    "build": "pnpm -F status-page build",
+    "compile": "pnpm -r compile",
+    "deploy": "pnpm worker:build && pnpm build && pnpm infra:up",
+    "worker:build": "pnpm -F worker build",
+    "worker:dev": "pnpm -F worker dev",
+    "proxy:dev": "pnpm -F @flarewatch/proxy dev",
+    "proxy:start": "pnpm -F @flarewatch/proxy start",
+    "proxy:deploy": "pnpm -F @flarewatch/proxy deploy",
+    "infra:up": "pulumi -C infra up",
+    "infra:preview": "pulumi -C infra preview",
+    "infra:destroy": "pulumi -C infra destroy",
+    "test": "pnpm -r test",
+    "lint": "oxlint --deny-warnings --type-aware --type-check --report-unused-disable-directives",
+    "format:check": "oxfmt --check",
+    "format": "oxfmt",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "oxfmt": "^0.21.0",
+    "oxlint": "^1.36.0",
+    "oxlint-tsgolint": "^0.10.0",
+    "vitest": "^4.0.16"
+  },
+  "lint-staged": {
+    "*": "oxfmt --no-error-on-unmatched-pattern"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@10.20.0"
+}

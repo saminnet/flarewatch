@@ -1,0 +1,46 @@
+# .dockerignore - Optimizes Docker build context
+# Used when building services/proxy/docker/Dockerfile
+
+# Dependencies (will be installed fresh)
+node_modules
+**/node_modules
+.pnpm-store
+
+# Build outputs
+dist
+**/dist
+.wrangler
+
+# Development files
+*.log
+.env*
+.git
+.gitignore
+.husky
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Test files
+coverage
+*.test.ts
+*.spec.ts
+__tests__
+
+# Documentation (not needed in container)
+*.md
+LICENSE
+docs
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Apps not needed for proxy
+apps/
+
+# Infra not needed for proxy
+infra/

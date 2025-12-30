@@ -1,0 +1,32 @@
+packages:
+  - apps/*
+  - packages/*
+  - services/*
+  - infra
+
+catalog:
+  '@cloudflare/workers-types': 4.20251230.0
+  '@tailwindcss/vite': 4.1.18
+  '@tanstack/devtools-vite': 0.4.0
+  '@tanstack/react-devtools': 0.9.0
+  '@tanstack/react-query': 5.90.15
+  '@tanstack/react-router': 1.144.0
+  '@tanstack/react-router-devtools': 1.144.0
+  '@tanstack/react-router-ssr-query': 1.144.0
+  '@tanstack/react-start': 1.145.2
+  '@tanstack/router-plugin': 1.145.2
+  '@types/node': 24.10.4
+  date-fns: 4.1.0
+  i18next: 25.7.3
+  react: 19.2.3
+  react-dom: 19.2.3
+  react-i18next: 16.5.0
+  tailwindcss: 4.1.18
+  typescript: 5.9.3
+  vite: 7.3.0
+  wrangler: 4.56.0
+
+ignoredBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd

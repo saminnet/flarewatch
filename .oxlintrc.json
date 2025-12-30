@@ -1,0 +1,5 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["worker-configuration.d.ts"],
+  "plugins": ["react", "react-perf", "node", "jsdoc", "import", "promise", "jsx-a11y", "vitest"]
+}
