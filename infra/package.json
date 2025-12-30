@@ -1,0 +1,20 @@
+{
+  "name": "@flarewatch/infra",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pulumi infrastructure for FlareWatch",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "compile": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pulumi/cloudflare": "^6.12.0",
+    "@pulumi/pulumi": "^3.214.0"
+  },
+  "devDependencies": {
+    "@flarewatch/ts-config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
