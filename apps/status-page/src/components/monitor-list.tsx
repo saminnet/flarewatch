@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Accordion,
   AccordionContent,
@@ -10,6 +11,7 @@ import { MonitorCard } from '@/components/monitor-card';
 import type { MonitorState, PageConfigGroup } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/monitors';
 import { setUiPrefsServerFn, type UiPrefs } from '@/lib/ui-prefs-server';
+import { qk } from '@/lib/query/keys';
 
 interface MonitorListProps {
   monitors: PublicMonitor[];
@@ -20,6 +22,7 @@ interface MonitorListProps {
 
 export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [collapsedMonitors, setCollapsedMonitors] = useState<string[]>(
     () => uiPrefs?.collapsedMonitors ?? [],
   );
@@ -27,9 +30,13 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
     () => uiPrefs?.collapsedGroups ?? [],
   );
 
-  const persistPrefs = useCallback((next: UiPrefs) => {
-    void setUiPrefsServerFn({ data: next });
-  }, []);
+  const persistPrefs = useCallback(
+    (next: UiPrefs) => {
+      queryClient.setQueryData(qk.uiPrefs, next);
+      void setUiPrefsServerFn({ data: next });
+    },
+    [queryClient],
+  );
 
   const onMonitorOpenChange = useCallback(
     (monitorId: string, open: boolean) => {
