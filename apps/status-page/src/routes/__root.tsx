@@ -11,6 +11,7 @@ import { getThemeInitScript, getThemePreferenceServerFn } from '@/lib/theme-serv
 import '@/lib/i18n';
 
 import appCss from '../styles.css?url';
+import interFontUrl from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
 
 const authMiddleware = createMiddleware({ type: 'request' }).server(async (opts) => {
   const { authMiddlewareServer } = await import('../server/auth-middleware');
@@ -43,7 +44,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           content: 'Open-source uptime monitoring for Cloudflare',
         },
       ],
-      links: [{ rel: 'stylesheet', href: appCss }, ...icons],
+      links: [
+        {
+          rel: 'preload',
+          href: interFontUrl,
+          as: 'font',
+          type: 'font/woff2',
+          crossOrigin: 'anonymous',
+        },
+        { rel: 'stylesheet', href: appCss },
+        ...icons,
+      ],
     };
   },
 

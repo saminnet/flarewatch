@@ -47,6 +47,14 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
         {dailyStatus.map((day, index) => (
           <Tooltip key={index}>
             <TooltipTrigger
+              aria-label={
+                day.status === 'unknown'
+                  ? t('monitor.noDataAt', { date: formatUtc(day.date, 'MMM d, yyyy') })
+                  : t('monitor.statusAt', {
+                      percent: day.uptime.toFixed(2),
+                      date: formatUtc(day.date, 'MMM d, yyyy'),
+                    })
+              }
               className={cn(
                 'h-8 flex-1 min-w-0 rounded-sm transition-colors',
                 statusColors[day.status],

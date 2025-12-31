@@ -70,7 +70,11 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
           nativeButton={false}
           render={<div />}
           className="w-full text-left"
-          aria-label={t('monitor.toggleDetails', { name: monitor.name })}
+          aria-label={t('monitor.toggleMonitor', {
+            name: monitor.name,
+            status: isUp ? t('monitor.statusUp') : t('monitor.statusDown'),
+            uptime: uptimePercent.toFixed(2),
+          })}
         >
           <div className="flex items-center gap-3 p-3 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors">
             <div className="shrink-0">
