@@ -76,7 +76,7 @@ export function OverallStatus({ state }: OverallStatusProps) {
           </div>
 
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <p className="text-xs text-neutral-500 dark:text-neutral-500">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
               {t('status.lastUpdated', {
                 date: lastUpdated,
                 seconds: secondsAgo,

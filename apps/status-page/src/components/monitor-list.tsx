@@ -100,11 +100,14 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
             <AccordionItem key={groupName} value={groupName} className="border rounded-lg">
               <AccordionTrigger
                 className="px-4 py-3 hover:no-underline hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded-lg"
-                aria-label={'Toggle ' + groupName + ' monitors'}
+                aria-label={t('monitor.toggleGroup', {
+                  name: groupName,
+                  count: groupMonitors.length,
+                })}
               >
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{groupName}</span>
-                  <span className="text-sm text-neutral-500">
+                  <span className="text-sm text-neutral-500 dark:text-neutral-400">
                     ({t('monitor.count', { count: groupMonitors.length })})
                   </span>
                 </div>
@@ -130,7 +133,9 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
       {ungroupedMonitors.length > 0 && (
         <div className="space-y-3">
           {Object.keys(groups).length > 0 && (
-            <h3 className="text-sm font-medium text-neutral-500 px-1">{t('monitor.other')}</h3>
+            <h3 className="text-sm font-medium text-neutral-500 dark:text-neutral-400 px-1">
+              {t('monitor.other')}
+            </h3>
           )}
           {ungroupedMonitors.map((monitor) => (
             <MonitorCard
