@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -151,52 +152,74 @@ function EventsPage() {
   const navigate = Route.useNavigate();
   const resolvedMonth = selectedMonth ?? getCurrentMonth();
 
-  const monthDate = new Date(resolvedMonth + '-01');
-  const monthStart = startOfMonth(monthDate);
-  const monthEnd = endOfMonth(monthDate);
+  const { monthDate, monthStart, monthEnd } = useMemo(() => {
+    const monthDate = new Date(resolvedMonth + '-01');
+    return {
+      monthDate,
+      monthStart: startOfMonth(monthDate),
+      monthEnd: endOfMonth(monthDate),
+    };
+  }, [resolvedMonth]);
 
-  const incidentEvents = extractIncidentsFromState(state, monitors, monthStart, monthEnd);
-  const maintenanceEvents = extractMaintenanceEvents(maintenances, monthStart, monthEnd);
-  let allEvents: TimelineEvent[] = [...incidentEvents, ...maintenanceEvents];
+  const allEvents = useMemo(() => {
+    const incidentEvents = extractIncidentsFromState(state, monitors, monthStart, monthEnd);
+    const maintenanceEvents = extractMaintenanceEvents(maintenances, monthStart, monthEnd);
+    let events: TimelineEvent[] = [...incidentEvents, ...maintenanceEvents];
 
-  // Filter by event type
-  if (eventType === 'incident') {
-    allEvents = allEvents.filter((e) => e.type === 'incident');
-  } else if (eventType === 'maintenance') {
-    allEvents = allEvents.filter((e) => e.type === 'maintenance');
-  }
+    // Filter by event type
+    if (eventType === 'incident') {
+      events = events.filter((e) => e.type === 'incident');
+    } else if (eventType === 'maintenance') {
+      events = events.filter((e) => e.type === 'maintenance');
+    }
 
-  // Filter by monitor
-  if (selectedMonitor) {
-    allEvents = allEvents.filter((e) => {
-      if (e.type === 'incident') {
-        return e.monitorId === selectedMonitor;
-      } else {
-        return e.maintenance.monitors?.includes(selectedMonitor) ?? false;
-      }
+    // Filter by monitor
+    if (selectedMonitor) {
+      events = events.filter((e) => {
+        if (e.type === 'incident') {
+          return e.monitorId === selectedMonitor;
+        } else {
+          return e.maintenance.monitors?.includes(selectedMonitor) ?? false;
+        }
+      });
+    }
+
+    // Sort by start date (newest first)
+    events.sort((a, b) => {
+      const aStart =
+        a.type === 'incident' ? a.start * 1000 : new Date(a.maintenance.start).getTime();
+      const bStart =
+        b.type === 'incident' ? b.start * 1000 : new Date(b.maintenance.start).getTime();
+      return bStart - aStart;
     });
-  }
 
-  // Sort by start date (newest first)
-  allEvents.sort((a, b) => {
-    const aStart = a.type === 'incident' ? a.start * 1000 : new Date(a.maintenance.start).getTime();
-    const bStart = b.type === 'incident' ? b.start * 1000 : new Date(b.maintenance.start).getTime();
-    return bStart - aStart;
-  });
+    return events;
+  }, [state, monitors, maintenances, monthStart, monthEnd, eventType, selectedMonitor]);
 
-  const prevMonth = format(subMonths(monthDate, 1), 'yyyy-MM');
-  const nextMonth = format(addMonths(monthDate, 1), 'yyyy-MM');
+  const { prevMonth, nextMonth } = useMemo(
+    () => ({
+      prevMonth: format(subMonths(monthDate, 1), 'yyyy-MM'),
+      nextMonth: format(addMonths(monthDate, 1), 'yyyy-MM'),
+    }),
+    [monthDate],
+  );
 
-  const monitorOptions = [
-    { value: '', label: t('filter.all') },
-    ...monitors.map((m) => ({ value: m.id, label: m.name })),
-  ];
+  const monitorOptions = useMemo(
+    () => [
+      { value: '', label: t('filter.all') },
+      ...monitors.map((m) => ({ value: m.id, label: m.name })),
+    ],
+    [monitors, t],
+  );
 
-  const typeOptions = [
-    { value: 'all', label: t('filter.allEvents') },
-    { value: 'incident', label: t('filter.incidents') },
-    { value: 'maintenance', label: t('filter.maintenances') },
-  ];
+  const typeOptions = useMemo(
+    () => [
+      { value: 'all', label: t('filter.allEvents') },
+      { value: 'incident', label: t('filter.incidents') },
+      { value: 'maintenance', label: t('filter.maintenances') },
+    ],
+    [t],
+  );
 
   return (
     <div className="container mx-auto max-w-5xl px-4 py-8">

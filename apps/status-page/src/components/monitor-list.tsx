@@ -71,8 +71,10 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
     [allGroupNames, collapsedGroups],
   );
 
-  const groupedMonitorIds = new Set(Object.values(groups).flat());
-  const ungroupedMonitors = monitors.filter((m) => !groupedMonitorIds.has(m.id));
+  const ungroupedMonitors = useMemo(() => {
+    const groupedMonitorIds = new Set(Object.values(groups).flat());
+    return monitors.filter((m) => !groupedMonitorIds.has(m.id));
+  }, [groups, monitors]);
 
   return (
     <div className="space-y-4">

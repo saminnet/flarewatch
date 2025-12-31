@@ -1,5 +1,3 @@
-export {};
-
 declare global {
   interface Env {
     FLAREWATCH_STATE: KVNamespace;
