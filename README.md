@@ -98,14 +98,14 @@ export const pageConfig = {
 
 ## Docs
 
-- `DEVELOPMENT.md` — local dev commands + repo structure
-- `infra/README.md` — Pulumi (long-lived resources) + R2 backend
-- `apps/status-page/README.md` — status page Worker, APIs, auth, local testing
-- `services/worker/README.md` — monitoring Worker, cron, KV state
-- `services/proxy/README.md` — optional self-hosted check proxy
-- `CONTRIBUTING.md` — how to contribute
-- `SECURITY.md` — security policy
-- `CODE_OF_CONDUCT.md` — community guidelines
+- [DEVELOPMENT.md](DEVELOPMENT.md) — local dev commands + repo structure
+- [infra/README.md](infra/README.md) — Pulumi (long-lived resources) + R2 backend
+- [apps/status-page/README.md](apps/status-page/README.md) — status page Worker, APIs, auth, local testing
+- [services/worker/README.md](services/worker/README.md) — monitoring Worker, cron, KV state
+- [services/proxy/README.md](services/proxy/README.md) — optional self-hosted check proxy
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
+- [SECURITY.md](SECURITY.md) — security policy
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community guidelines
 
 ## License
 

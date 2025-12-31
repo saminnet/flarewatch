@@ -4,22 +4,19 @@ Thanks for helping improve FlareWatch.
 
 ## Development setup
 
-- Node.js 24+
-- pnpm 10+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for commands and local setup.
+
+## Tests
+
+If you're adding a feature or fixing a bug, a test supporting the change is appreciated.
+
+Run tests with:
 
 ```bash
-pnpm install
-pnpm dev
-```
-
-## Quality checks
-
-Run these before opening a PR:
-
-```bash
-pnpm format:check
-pnpm lint
-pnpm compile
+pnpm test                      # all tests
+pnpm -F worker test            # worker only
+pnpm -F status-page test       # status page only
+pnpm -F @flarewatch/proxy test # proxy only
 ```
 
 ## What goes where

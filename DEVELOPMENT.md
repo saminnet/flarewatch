@@ -47,24 +47,9 @@ All resources are managed by Pulumi:
 - Worker: `packages/config/src/worker.ts` (examples: `packages/config/src/worker.example.ts`)
 - Status page: `packages/config/src/public.ts` (examples: `packages/config/src/public.example.ts`)
 
-## Secrets / environment
+## Secrets
 
-All secrets are managed via Pulumi config:
-
-- `PULUMI_CONFIG_PASSPHRASE` - Required for local backends like R2
-- `proxyToken` - Optional proxy auth token
-- `statusPageBasicAuth` - Optional Basic Auth for status page (`<username>:<password>`)
-- `adminBasicAuth` - Optional Basic Auth for admin routes (`<username>:<password>`)
-
-Set secrets with:
-
-```bash
-pulumi -C infra config set --secret proxyToken
-pulumi -C infra config set --secret statusPageBasicAuth
-pulumi -C infra config set --secret adminBasicAuth
-```
-
-Pulumi prompts you for the value. For Basic Auth, use the format `<username>:<password>`.
+See [infra/README.md](infra/README.md#optional-secrets) for Pulumi secret configuration.
 
 ## Deployment
 
