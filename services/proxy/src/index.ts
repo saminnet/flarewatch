@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { z } from 'zod';
 import type { CheckResultWithLocation, MonitorTarget } from '@flarewatch/shared';
-import { createLogger } from '@flarewatch/shared';
+import { createLogger, getErrorMessage } from '@flarewatch/shared';
 import { checkMonitor } from './checkers';
 import { getLocation, setLocation } from './utils/location';
 
@@ -27,9 +27,6 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/**
- * Zod schema for validating monitor target requests
- */
 const MonitorTargetSchema = z.object({
   id: z.string().min(1, 'id must be a non-empty string').default('unknown'),
   name: z.string().min(1, 'name must be a non-empty string').optional(),
@@ -60,7 +57,6 @@ function parseMonitorTarget(
     const message = firstIssue?.message ?? 'Invalid request body';
     return { ok: false, error: path ? `${path}: ${message}` : message };
   }
-  // Set name to id if not provided
   const data = result.data;
   return {
     ok: true,
@@ -68,9 +64,6 @@ function parseMonitorTarget(
   };
 }
 
-/**
- * Shared handler for check endpoints
- */
 async function handleCheckRequest(c: Context): Promise<Response> {
   try {
     let body: unknown;
@@ -94,19 +87,15 @@ async function handleCheckRequest(c: Context): Promise<Response> {
     log.info('Completed', { status: result.ok ? 'UP' : 'DOWN', location });
     return c.json({ location, result } satisfies CheckResultWithLocation);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    log.error('Error', { error: errorMessage });
-    return c.json({ error: errorMessage }, 500);
+    const message = getErrorMessage(error);
+    log.error('Error', { error: message });
+    return c.json({ error: message }, 500);
   }
 }
 
-/**
- * Create a Hono application for the proxy
- */
 export function createProxy(config: ProxyConfig = {}) {
   const app = new Hono();
 
-  // Set custom location if provided
   if (config.location) {
     setLocation(config.location);
   }
@@ -114,12 +103,10 @@ export function createProxy(config: ProxyConfig = {}) {
   // Enable CORS for browser-based testing
   app.use('/*', cors());
 
-  // Health check endpoint
   app.get('/health', (c) => {
     return c.json({ status: 'ok', timestamp: Date.now() });
   });
 
-  // Authentication middleware for check endpoints
   if (config.authToken) {
     const expectedAuth = `Bearer ${config.authToken}`;
 
@@ -133,10 +120,8 @@ export function createProxy(config: ProxyConfig = {}) {
     });
   }
 
-  // Main check endpoint (POST /check)
   app.post('/check', handleCheckRequest);
 
-  // Root GET - info page
   app.get('/', (c) => {
     return c.json({
       name: 'FlareWatch Proxy',

@@ -1,9 +1,5 @@
 import type { WorkerConfig } from '@flarewatch/shared';
 
-// =============================================================================
-// Worker & Monitor Configuration
-// =============================================================================
-
 export const workerConfig: WorkerConfig = {
   /**
    * Demo monitors (safe defaults)

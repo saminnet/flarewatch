@@ -136,14 +136,12 @@ function validateHttpResult(
 ): { error: string | null; ssl?: SSLCertificateInfo } {
   let ssl: SSLCertificateInfo | undefined;
 
-  // Validate status code and keywords using shared validation
   let error = validateHttpStatusAndBody(result.statusCode ?? 0, result.rawBody ?? '', {
     expectedCodes: target.expectedCodes,
     responseKeyword: target.responseKeyword,
     responseForbiddenKeyword: target.responseForbiddenKeyword,
   });
 
-  // Check TLS
   const tls = result.tls;
   if (tls && target.target.toLowerCase().startsWith('https')) {
     if (!error && !tls.authorized && !target.sslIgnoreSelfSigned) {
@@ -241,14 +239,12 @@ function parseMeasurementResult(
 
   const location = `${probeResult.probe.country}/${probeResult.probe.city}`;
 
-  // Handle TCP ping result
   if (target.method === 'TCP_PING') {
     const latency = Math.round(probeResult.result.stats?.avg ?? 0);
     log.info('TCP ping', { name: target.name, latency, location });
     return { location, result: success(latency) };
   }
 
-  // Handle HTTP result
   const latency = Math.round(probeResult.result.timings?.total ?? 0);
   const { error, ssl } = validateHttpResult(target, probeResult.result);
 
@@ -273,22 +269,15 @@ export class GlobalPingChecker {
     try {
       const config = parseProxyUrl(target.checkProxy);
 
-      // Build request based on method
       const measurementRequest =
         target.method === 'TCP_PING'
           ? buildTcpRequest(target, config)
           : buildHttpRequest(target, config);
 
       log.info('Creating measurement', { name: target.name });
-
-      // Create measurement
       const measurementId = await createMeasurement(measurementRequest, config.token);
-
-      // Poll for results
       const pollTimeout = (target.timeout ?? DEFAULT_HTTP_TIMEOUT) + 2000;
       const measurement = await pollMeasurement(measurementId, pollTimeout);
-
-      // Parse and return result
       return parseMeasurementResult(target, measurement);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -304,5 +293,4 @@ export class GlobalPingChecker {
   }
 }
 
-/** Singleton instance */
 export const globalPingChecker = new GlobalPingChecker();

@@ -3,6 +3,15 @@ import type { MonitorTarget, SSLCertificateInfo, CheckSuccess, CheckFailure } fr
 export const DEFAULT_HTTP_TIMEOUT = 10000;
 export const DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS = 30;
 
+export function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function isTimeoutError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes('timeout') || lower.includes('timed out') || lower.includes('abort');
+}
+
 export interface FetchOptions extends Omit<RequestInit, 'signal' | 'body'> {
   timeout?: number;
   body?: BodyInit | null | undefined;

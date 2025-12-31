@@ -9,6 +9,8 @@ import {
   validateHttpResponse,
   DEFAULT_HTTP_TIMEOUT,
   createLogger,
+  getErrorMessage,
+  isTimeoutError,
 } from '@flarewatch/shared';
 
 const log = createLogger('HTTP');
@@ -22,9 +24,6 @@ interface CloudflareFetchOptions extends FetchOptions {
   };
 }
 
-/**
- * HTTP monitor checker implementation
- */
 export class HttpChecker implements MonitorChecker {
   async check(target: MonitorTarget): Promise<CheckResult> {
     const startTime = performance.now();
@@ -65,10 +64,9 @@ export class HttpChecker implements MonitorChecker {
       return success(latency);
     } catch (error) {
       const latency = Math.round(performance.now() - startTime);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
 
-      // Handle timeout specifically
-      if (errorMessage.includes('timeout') || errorMessage.includes('abort')) {
+      if (isTimeoutError(errorMessage)) {
         log.info('Timeout', { name: target.name, latency });
         return failure(`Timeout after ${target.timeout || DEFAULT_HTTP_TIMEOUT}ms`, latency);
       }

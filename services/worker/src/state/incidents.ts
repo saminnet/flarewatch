@@ -5,11 +5,8 @@ import type {
   SSLCertificateInfo,
 } from '@flarewatch/shared';
 
-/** 90 days in seconds */
-const INCIDENT_RETENTION_SECONDS = 90 * 24 * 60 * 60;
-
-/** 12 hours in seconds */
-const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
+const INCIDENT_RETENTION_SECONDS = 90 * 24 * 60 * 60; // 90 days
+const LATENCY_RETENTION_SECONDS = 12 * 60 * 60; // 12 hours
 
 export interface IncidentUpdate {
   statusChanged: boolean;
@@ -19,9 +16,6 @@ export interface IncidentUpdate {
   error: string;
 }
 
-/**
- * Initialize state for a new monitor if needed
- */
 function ensureMonitorState(state: MonitorState, monitorId: string, currentTime: number): void {
   if (!state.startedAt[monitorId]) {
     state.startedAt[monitorId] = currentTime;
@@ -31,10 +25,6 @@ function ensureMonitorState(state: MonitorState, monitorId: string, currentTime:
   state.latency[monitorId] ??= { recent: [] };
 }
 
-/**
- * Process a check result and update incident state
- * Returns information about the status change for notifications
- */
 export function processCheckResult(
   state: MonitorState,
   monitor: MonitorTarget,
@@ -59,10 +49,8 @@ export function processCheckResult(
   let changeType: IncidentUpdate['changeType'] = 'none';
 
   if (result.ok) {
-    // Service is UP
     state.overallUp++;
 
-    // Close any open incident
     if (lastIncident && lastIncident.end === undefined) {
       lastIncident.end = currentTime;
       statusChanged = true;
@@ -78,11 +66,9 @@ export function processCheckResult(
       error: '',
     };
   } else {
-    // Service is DOWN
     state.overallDown++;
 
     if (!lastIncident || lastIncident.end !== undefined) {
-      // No open incident - create new one
       incidents.push({
         start: [currentTime],
         end: undefined,
@@ -93,7 +79,6 @@ export function processCheckResult(
     } else {
       const lastError = lastIncident.error[lastIncident.error.length - 1];
       if (lastError !== result.error) {
-        // Incident open but error changed - append
         lastIncident.start.push(currentTime);
         lastIncident.error.push(result.error);
         statusChanged = true;
@@ -113,9 +98,6 @@ export function processCheckResult(
   }
 }
 
-/**
- * Update latency tracking data
- */
 export function updateLatency(
   state: MonitorState,
   monitorId: string,
@@ -126,14 +108,12 @@ export function updateLatency(
   const latencyData = state.latency[monitorId];
   if (!latencyData) return;
 
-  // Add new record
   latencyData.recent.push({
     loc: location,
     ping: latency,
     time: currentTime,
   });
 
-  // Remove old data
   const cutoff = currentTime - LATENCY_RETENTION_SECONDS;
   let firstRecord = latencyData.recent[0];
   while (firstRecord && firstRecord.time < cutoff) {
@@ -142,9 +122,6 @@ export function updateLatency(
   }
 }
 
-/**
- * Update SSL certificate tracking
- */
 export function updateSSLCertificate(
   state: MonitorState,
   monitorId: string,
@@ -175,9 +152,6 @@ export function updateSSLCertificate(
   state.sslCertificates[monitorId] = cert;
 }
 
-/**
- * Clean up old incidents beyond retention period
- */
 export function cleanupOldIncidents(
   state: MonitorState,
   monitorId: string,
@@ -188,7 +162,6 @@ export function cleanupOldIncidents(
 
   const cutoff = currentTime - INCIDENT_RETENTION_SECONDS;
 
-  // Remove old closed incidents
   let first = incidents[0];
   while (first && first.end !== undefined && first.end < cutoff) {
     incidents.shift();
@@ -196,9 +169,6 @@ export function cleanupOldIncidents(
   }
 }
 
-/**
- * Create initial empty state
- */
 export function createInitialState(): MonitorState {
   return {
     lastUpdate: 0,
@@ -210,9 +180,6 @@ export function createInitialState(): MonitorState {
   };
 }
 
-/**
- * Reset counters at start of check cycle
- */
 export function resetCounters(state: MonitorState): void {
   state.overallUp = 0;
   state.overallDown = 0;

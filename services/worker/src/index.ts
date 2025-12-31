@@ -63,9 +63,6 @@ function parseMaintenances(value: unknown): Maintenance[] {
   return value.filter(isMaintenance);
 }
 
-/**
- * Check if a monitor is currently in maintenance
- */
 function isInMaintenance(
   monitorId: string,
   currentTime: number,
@@ -81,9 +78,6 @@ function isInMaintenance(
   });
 }
 
-/**
- * Check if notification should be skipped
- */
 function shouldSkipNotification(
   monitorId: string,
   currentTime: number,
@@ -93,9 +87,6 @@ function shouldSkipNotification(
   return skipList.includes(monitorId) || isInMaintenance(monitorId, currentTime, maintenances);
 }
 
-/**
- * Load maintenances from KV
- */
 async function loadMaintenances(kv: KVNamespace): Promise<Maintenance[]> {
   try {
     const data = await kv.get('maintenances', { type: 'json' });
@@ -146,28 +137,22 @@ function shouldNotify(
   );
 }
 
-/**
- * Main worker entry point
- */
 const Worker = {
   async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
     const location = await getEdgeLocation();
     log.info('Starting scheduled check', { location });
 
-    // Load or create state
     const storedState = await env.FLAREWATCH_STATE.get('state', {
       type: 'json',
     });
     const state: MonitorState = isMonitorState(storedState) ? storedState : createInitialState();
     resetCounters(state);
 
-    // Load maintenances from KV
     const maintenances = await loadMaintenances(env.FLAREWATCH_STATE);
 
     const currentTime = Math.floor(Date.now() / 1000);
     const notifier = createNotifier(workerConfig.notification?.webhook);
 
-    // Check all monitors in parallel
     const checkResults = await Promise.allSettled(
       workerConfig.monitors.map(async (monitor) => {
         log.info('Checking monitor', { name: monitor.name });
@@ -177,7 +162,6 @@ const Worker = {
       }),
     );
 
-    // Process results
     let stateChanged = false;
 
     for (const settled of checkResults) {
@@ -190,23 +174,18 @@ const Worker = {
       const { monitor, result } = settled.value;
       const { location: checkLocation, result: checkResult } = result;
 
-      // Update incident state
       const update = processCheckResult(state, monitor, checkResult, currentTime);
       stateChanged ||= update.statusChanged;
 
-      // Update latency data
       const latency = checkResult.ok ? checkResult.latency : (checkResult.latency ?? 0);
       updateLatency(state, monitor.id, checkLocation, latency, currentTime);
 
-      // Update SSL certificate data
       if (checkResult.ok && checkResult.ssl) {
         updateSSLCertificate(state, monitor.id, checkResult.ssl, currentTime);
       }
 
-      // Cleanup old incidents
       cleanupOldIncidents(state, monitor.id, currentTime);
 
-      // Send notifications
       if (notifier && !shouldSkipNotification(monitor.id, currentTime, maintenances)) {
         const skipErrorChanges = Boolean(workerConfig.notification?.skipErrorChangeNotification);
         const statusChangedForNotification =
@@ -235,7 +214,6 @@ const Worker = {
         }
       }
 
-      // Call user callbacks
       if (update.statusChanged && workerConfig.callbacks?.onStatusChange) {
         try {
           await workerConfig.callbacks.onStatusChange(
@@ -266,7 +244,6 @@ const Worker = {
       }
     }
 
-    // Save state with cooldown
     const cooldownSeconds = (workerConfig.kvWriteCooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES) * 60;
     const timeSinceUpdate = currentTime - state.lastUpdate;
 

@@ -5,6 +5,7 @@ import {
   failure,
   fetchWithTimeout,
   DEFAULT_HTTP_TIMEOUT,
+  getErrorMessage,
 } from '@flarewatch/shared';
 import { getEdgeLocation } from '../utils/location';
 import { httpChecker } from './http';
@@ -70,10 +71,9 @@ export async function checkMonitor(
 
       return { location: data.location, result: data.result };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         location: 'ERROR',
-        result: failure(`Proxy error: ${errorMessage}`),
+        result: failure(`Proxy error: ${getErrorMessage(error)}`),
       };
     }
   }

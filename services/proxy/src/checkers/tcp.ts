@@ -6,6 +6,8 @@ import {
   parseTcpTarget,
   DEFAULT_HTTP_TIMEOUT,
   createLogger,
+  getErrorMessage,
+  isTimeoutError,
 } from '@flarewatch/shared';
 
 const log = createLogger('TCP');
@@ -51,10 +53,9 @@ export async function checkTcp(target: MonitorTarget): Promise<CheckResult> {
     return success(latency);
   } catch (error) {
     const latency = Math.round(performance.now() - startTime);
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
 
-    // Handle timeout
-    if (errorMessage.includes('timed out') || errorMessage.includes('timeout')) {
+    if (isTimeoutError(errorMessage)) {
       log.info('Timeout', { name: target.name, timeout });
       return failure(`Timeout after ${timeout}ms`, latency);
     }
