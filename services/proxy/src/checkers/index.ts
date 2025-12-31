@@ -1,4 +1,10 @@
-import { type MonitorTarget, type CheckResult, failure, createLogger } from '@flarewatch/shared';
+import {
+  type MonitorTarget,
+  type CheckResult,
+  failure,
+  createLogger,
+  getErrorMessage,
+} from '@flarewatch/shared';
 import { checkHttp } from './http';
 import { checkTcp } from './tcp';
 
@@ -29,7 +35,7 @@ export async function checkMonitor(target: MonitorTarget): Promise<CheckResult> 
         return await checkHttp(target);
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     log.error('Unexpected error', { name: target.name, error: errorMessage });
     return failure(`Unexpected error: ${errorMessage}`);
   }

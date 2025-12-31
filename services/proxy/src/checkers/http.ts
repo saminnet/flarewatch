@@ -8,6 +8,8 @@ import {
   DEFAULT_HTTP_TIMEOUT,
   DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   createLogger,
+  getErrorMessage,
+  isTimeoutError,
 } from '@flarewatch/shared';
 import { checkSSLCertificate } from './ssl';
 
@@ -15,9 +17,6 @@ const log = createLogger('HTTP');
 
 const USER_AGENT = 'FlareWatch-Proxy/1.0 (+https://github.com/saminnet/flarewatch)';
 
-/**
- * Check an HTTP/HTTPS endpoint
- */
 export async function checkHttp(target: MonitorTarget): Promise<CheckResult> {
   const startTime = performance.now();
   const timeout = target.timeout ?? DEFAULT_HTTP_TIMEOUT;
@@ -77,20 +76,18 @@ export async function checkHttp(target: MonitorTarget): Promise<CheckResult> {
 
         return success(latency, sslInfo);
       } catch (sslError) {
-        // SSL check failed
-        const errorMessage = sslError instanceof Error ? sslError.message : String(sslError);
-        log.warn('SSL check failed', { name: target.name, error: errorMessage });
-        return failure(`SSL check failed: ${errorMessage}`, latency);
+        const sslErrorMessage = getErrorMessage(sslError);
+        log.warn('SSL check failed', { name: target.name, error: sslErrorMessage });
+        return failure(`SSL check failed: ${sslErrorMessage}`, latency);
       }
     }
 
     return success(latency);
   } catch (error) {
     const latency = Math.round(performance.now() - startTime);
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
 
-    // Handle timeout specifically
-    if (errorMessage.includes('timeout') || errorMessage.includes('abort')) {
+    if (isTimeoutError(errorMessage)) {
       log.info('Timeout', { name: target.name, latency });
       return failure(`Timeout after ${timeout}ms`, latency);
     }

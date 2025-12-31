@@ -3,12 +3,23 @@ import {
   type WebhookConfig,
   fetchWithTimeout,
   createLogger,
+  getErrorMessage,
 } from '@flarewatch/shared';
 import { getTemplate, type TemplateContext } from './templates';
 
 const log = createLogger('Webhook');
 
-/** Notification context for formatting messages */
+function createDateFormatter(timeZone: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'numeric',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone,
+  });
+}
+
 export interface NotificationContext {
   monitor: MonitorTarget;
   isUp: boolean;
@@ -18,28 +29,15 @@ export interface NotificationContext {
   timeZone: string;
 }
 
-/** Result of a webhook send attempt */
 export interface WebhookResult {
   success: boolean;
   statusCode?: number;
   error?: string;
 }
 
-/**
- * Format a status change notification message
- */
 export function formatNotificationMessage(ctx: NotificationContext): string {
   const { monitor, isUp, incidentStartTime, currentTime, reason, timeZone } = ctx;
-
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    month: 'numeric',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone,
-  });
-
+  const formatter = createDateFormatter(timeZone);
   const downtimeMinutes = Math.round((currentTime - incidentStartTime) / 60);
   const currentTimeFormatted = formatter.format(new Date(currentTime * 1000));
   const incidentStartFormatted = formatter.format(new Date(incidentStartTime * 1000));
@@ -66,9 +64,6 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
   ].join('\n');
 }
 
-/**
- * Recursively replace $MSG placeholders in payload
- */
 function applyMessageTemplate(payload: unknown, message: string): unknown {
   if (payload === '$MSG') {
     return message;
@@ -89,21 +84,9 @@ function applyMessageTemplate(payload: unknown, message: string): unknown {
   return payload;
 }
 
-/**
- * Build template context from notification context
- */
 function buildTemplateContext(ctx: NotificationContext): TemplateContext {
   const { monitor, isUp, incidentStartTime, currentTime, reason, timeZone } = ctx;
-
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    month: 'numeric',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone,
-  });
-
+  const formatter = createDateFormatter(timeZone);
   const downtimeMinutes = Math.round((currentTime - incidentStartTime) / 60);
   const timestamp = formatter.format(new Date(currentTime * 1000));
   const timestampIso = new Date(currentTime * 1000).toISOString();
@@ -122,18 +105,9 @@ function buildTemplateContext(ctx: NotificationContext): TemplateContext {
   };
 }
 
-/**
- * Webhook notifier class
- * Handles sending notifications to configured webhook endpoints
- */
 export class WebhookNotifier {
   constructor(private config: WebhookConfig) {}
 
-  /**
-   * Send a notification to all configured webhooks
-   * @param ctx - Full notification context (used by templates)
-   * @param message - Pre-formatted message (used by custom payloads with $MSG)
-   */
   async send(ctx: NotificationContext, message: string): Promise<WebhookResult[]> {
     const configs = Array.isArray(this.config) ? this.config : [this.config];
     const results = await Promise.all(configs.map((cfg) => this.sendSingle(cfg, ctx, message)));
@@ -152,7 +126,6 @@ export class WebhookNotifier {
       let finalUrl = url;
 
       if (template) {
-        // Use pre-built template
         const templateCtx = buildTemplateContext(ctx);
         const output = getTemplate(template)(templateCtx);
 
@@ -169,7 +142,6 @@ export class WebhookNotifier {
           body: output.body,
         };
       } else {
-        // Use custom payload with $MSG placeholder
         const templatedPayload = applyMessageTemplate(payload, message);
 
         requestInit = this.buildRequest(
@@ -204,9 +176,9 @@ export class WebhookNotifier {
       log.info('Success', { status: response.status });
       return { success: true, statusCode: response.status };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      log.error('Error', { error: errorMessage });
-      return { success: false, error: errorMessage };
+      const message = getErrorMessage(error);
+      log.error('Error', { error: message });
+      return { success: false, error: message };
     }
   }
 
@@ -263,10 +235,6 @@ export class WebhookNotifier {
   }
 }
 
-/**
- * Create a webhook notifier from config
- * Returns null if no webhook is configured
- */
 export function createNotifier(config: WebhookConfig | undefined): WebhookNotifier | null {
   if (!config) return null;
   return new WebhookNotifier(config);

@@ -4,9 +4,25 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// ESM __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const COMPATIBILITY_DATE = '2025-11-17';
+const COMPATIBILITY_FLAGS = ['nodejs_compat'];
+const MAIN_MODULE = 'index.js';
+const CRON_EVERY_MINUTE = '* * * * *';
+
+const BINDING_NAMES = {
+  STATE: 'FLAREWATCH_STATE',
+  PROXY_TOKEN: 'FLAREWATCH_PROXY_TOKEN',
+  STATUS_PAGE_AUTH: 'FLAREWATCH_STATUS_PAGE_BASIC_AUTH',
+  ADMIN_AUTH: 'FLAREWATCH_ADMIN_BASIC_AUTH',
+} as const;
+
+const BINDING_TYPES = {
+  KV_NAMESPACE: 'kv_namespace',
+  SECRET_TEXT: 'secret_text',
+} as const;
 
 // Configuration (ENVs and secrets)
 const config = new pulumi.Config();
@@ -31,25 +47,24 @@ if (!fs.existsSync(workerScriptPath)) {
 }
 const workerContent = fs.readFileSync(workerScriptPath, 'utf-8');
 
-// Workers Script for monitoring
 const worker = new cloudflare.WorkersScript('worker', {
   accountId,
   scriptName: `${projectName}_worker`,
   content: workerContent,
-  mainModule: 'index.js',
-  compatibilityDate: '2025-11-17',
-  compatibilityFlags: ['nodejs_compat'],
+  mainModule: MAIN_MODULE,
+  compatibilityDate: COMPATIBILITY_DATE,
+  compatibilityFlags: COMPATIBILITY_FLAGS,
   bindings: pulumi.output(proxyToken).apply((token) => [
     {
-      name: 'FLAREWATCH_STATE',
-      type: 'kv_namespace',
+      name: BINDING_NAMES.STATE,
+      type: BINDING_TYPES.KV_NAMESPACE,
       namespaceId: kvNamespace.id,
     },
     ...(token
       ? [
           {
-            name: 'FLAREWATCH_PROXY_TOKEN',
-            type: 'secret_text',
+            name: BINDING_NAMES.PROXY_TOKEN,
+            type: BINDING_TYPES.SECRET_TEXT,
             text: token,
           },
         ]
@@ -57,14 +72,12 @@ const worker = new cloudflare.WorkersScript('worker', {
   ]),
 });
 
-// Cron trigger for the worker (every minute)
 new cloudflare.WorkersCronTrigger('cron', {
   accountId,
   scriptName: worker.scriptName,
-  schedules: [{ cron: '* * * * *' }],
+  schedules: [{ cron: CRON_EVERY_MINUTE }],
 });
 
-// Status page Worker
 const statusPagePath = path.join(__dirname, '../apps/status-page/dist/server/index.js');
 if (!fs.existsSync(statusPagePath)) {
   throw new Error(`Status page bundle not found at "${statusPagePath}". Run: pnpm build`);
@@ -75,9 +88,9 @@ const statusPageWorker = new cloudflare.WorkersScript('statusPage', {
   accountId,
   scriptName: projectName,
   content: statusPageContent,
-  mainModule: 'index.js',
-  compatibilityDate: '2025-11-17',
-  compatibilityFlags: ['nodejs_compat'],
+  mainModule: MAIN_MODULE,
+  compatibilityDate: COMPATIBILITY_DATE,
+  compatibilityFlags: COMPATIBILITY_FLAGS,
   observability: { enabled: true },
   assets: {
     directory: path.join(__dirname, '../apps/status-page/dist/client'),
@@ -85,22 +98,22 @@ const statusPageWorker = new cloudflare.WorkersScript('statusPage', {
   bindings: pulumi.all([statusPageBasicAuth, adminBasicAuth]).apply(([spAuth, adminAuth]) => {
     const bindings: cloudflare.types.input.WorkersScriptBinding[] = [
       {
-        name: 'FLAREWATCH_STATE',
-        type: 'kv_namespace',
+        name: BINDING_NAMES.STATE,
+        type: BINDING_TYPES.KV_NAMESPACE,
         namespaceId: kvNamespace.id,
       },
     ];
     if (spAuth) {
       bindings.push({
-        name: 'FLAREWATCH_STATUS_PAGE_BASIC_AUTH',
-        type: 'secret_text',
+        name: BINDING_NAMES.STATUS_PAGE_AUTH,
+        type: BINDING_TYPES.SECRET_TEXT,
         text: spAuth,
       });
     }
     if (adminAuth) {
       bindings.push({
-        name: 'FLAREWATCH_ADMIN_BASIC_AUTH',
-        type: 'secret_text',
+        name: BINDING_NAMES.ADMIN_AUTH,
+        type: BINDING_TYPES.SECRET_TEXT,
         text: adminAuth,
       });
     }

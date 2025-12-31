@@ -8,14 +8,12 @@ import {
   parseTcpTarget,
   DEFAULT_HTTP_TIMEOUT,
   createLogger,
+  getErrorMessage,
+  isTimeoutError,
 } from '@flarewatch/shared';
 
 const log = createLogger('TCP');
 
-/**
- * TCP port checker implementation
- * Tests if a TCP port is reachable
- */
 export class TcpChecker implements MonitorChecker {
   async check(target: MonitorTarget): Promise<CheckResult> {
     const startTime = performance.now();
@@ -45,10 +43,9 @@ export class TcpChecker implements MonitorChecker {
       return success(latency);
     } catch (error) {
       const latency = Math.round(performance.now() - startTime);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
 
-      // Handle timeout
-      if (errorMessage.includes('timed out') || errorMessage.includes('timeout')) {
+      if (isTimeoutError(errorMessage)) {
         log.info('Timeout', { name: target.name, timeout });
         return failure(`Timeout after ${timeout}ms`, latency);
       }
