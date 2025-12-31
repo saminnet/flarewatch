@@ -1,19 +1,17 @@
 import { format, formatDistanceToNow, fromUnixTime } from 'date-fns';
 import type { MonitorState } from '@flarewatch/shared';
 import { formatUtc } from './date';
+import { UPTIME_DAYS, UPTIME_THRESHOLDS } from './constants';
 
-/**
- * Calculate uptime percentage for a monitor over the last 90 days
- */
 export function calculateUptimePercent(monitorId: string, state: MonitorState): number {
   const incidents = state.incident[monitorId];
 
   const nowSec = state.lastUpdate > 0 ? state.lastUpdate : Math.floor(Date.now() / 1000);
-  const ninetyDaysAgoSec = nowSec - 90 * 24 * 60 * 60;
+  const windowDaysAgoSec = nowSec - UPTIME_DAYS * 24 * 60 * 60;
 
   const monitorStartSec = state.startedAt?.[monitorId];
   const windowStartSec =
-    monitorStartSec && monitorStartSec > ninetyDaysAgoSec ? monitorStartSec : ninetyDaysAgoSec;
+    monitorStartSec && monitorStartSec > windowDaysAgoSec ? monitorStartSec : windowDaysAgoSec;
 
   const totalTimeSec = nowSec - windowStartSec;
   if (totalTimeSec <= 0) return 100;
@@ -38,9 +36,6 @@ export function calculateUptimePercent(monitorId: string, state: MonitorState): 
   return Math.max(0, Math.min(100, uptimePercent));
 }
 
-/**
- * Check if a monitor is currently up
- */
 export function isMonitorUp(monitorId: string, state: MonitorState): boolean {
   const incidents = state.incident[monitorId];
   if (!incidents || incidents.length === 0) return true;
@@ -50,9 +45,6 @@ export function isMonitorUp(monitorId: string, state: MonitorState): boolean {
   return lastIncident.end !== undefined;
 }
 
-/**
- * Get the current status error message for a monitor
- */
 export function getMonitorError(monitorId: string, state: MonitorState): string | null {
   const incidents = state.incident[monitorId];
   if (!incidents || incidents.length === 0) return null;
@@ -64,9 +56,6 @@ export function getMonitorError(monitorId: string, state: MonitorState): string 
   return lastError ?? 'Unknown error';
 }
 
-/**
- * Get the latest latency for a monitor
- */
 export function getLatestLatency(
   monitorId: string,
   state: MonitorState,
@@ -78,23 +67,14 @@ export function getLatestLatency(
   return lastRecord ?? null;
 }
 
-/**
- * Format a Unix timestamp to a human-readable string
- */
 export function formatTimestamp(timestamp: number): string {
   return format(fromUnixTime(timestamp), 'PPpp');
 }
 
-/**
- * Format a Unix timestamp to relative time (e.g., "5 minutes ago")
- */
 export function formatRelativeTime(timestamp: number): string {
   return formatDistanceToNow(fromUnixTime(timestamp), { addSuffix: true });
 }
 
-/**
- * Format duration in milliseconds to human-readable string
- */
 export function formatDuration(ms: number): string {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -107,9 +87,6 @@ export function formatDuration(ms: number): string {
   return `${seconds}s`;
 }
 
-/**
- * Get overall system status
- */
 export function getOverallStatus(state: MonitorState): 'operational' | 'degraded' | 'down' {
   if (state.overallDown === 0) return 'operational';
   if (state.overallUp > 0) return 'degraded';
@@ -130,9 +107,6 @@ export interface DailyStatusData {
   incidents: DayIncidentDetail[];
 }
 
-/**
- * Generate daily status data for the status bar (last 90 days)
- */
 export function generateDailyStatus(monitorId: string, state: MonitorState): DailyStatusData[] {
   const days: DailyStatusData[] = [];
   const nowSec = state.lastUpdate > 0 ? state.lastUpdate : Math.floor(Date.now() / 1000);
@@ -141,7 +115,7 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
   const incidents = state.incident[monitorId] || [];
   const monitorStartSec = state.startedAt?.[monitorId];
 
-  for (let i = 89; i >= 0; i--) {
+  for (let i = UPTIME_DAYS - 1; i >= 0; i--) {
     const date = new Date(now);
     date.setUTCDate(date.getUTCDate() - i);
     date.setUTCHours(0, 0, 0, 0);
@@ -215,7 +189,7 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
     let status: 'up' | 'down' | 'partial' | 'unknown';
     if (dayStart > nowMs || effectiveDayEndSec <= effectiveDayStartSec) {
       status = 'unknown';
-    } else if (uptimePercent >= 99.9) {
+    } else if (uptimePercent >= UPTIME_THRESHOLDS.EXCELLENT) {
       status = 'up';
     } else if (uptimePercent >= 50) {
       status = 'partial';

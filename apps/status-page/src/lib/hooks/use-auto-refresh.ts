@@ -2,11 +2,9 @@ import { useRef, useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useWindowVisibility } from './use-window-visibility';
-import { useHydrated } from '@/lib/hydrated';
+import { useHydrated } from './use-hydrated';
 import { qk } from '@/lib/query/keys';
-
-const STALE_THRESHOLD = 300; // 5 minutes in seconds
-const MIN_OPEN_TIME = 10; // Wait 10 seconds after opening before auto-refresh
+import { STALE_THRESHOLD_SECONDS, AUTO_REFRESH_MIN_OPEN_SECONDS } from '@/lib/constants';
 
 interface UseAutoRefreshOptions {
   lastUpdate: number; // Unix timestamp in seconds
@@ -35,10 +33,12 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
 
   // Calculate refresh state
   const dataAge = displayTime - lastUpdate;
-  const isStale = dataAge > STALE_THRESHOLD;
-  const pageOpenedLongEnough = currentTime - openTime > MIN_OPEN_TIME;
+  const isStale = dataAge > STALE_THRESHOLD_SECONDS;
+  const pageOpenedLongEnough = currentTime - openTime > AUTO_REFRESH_MIN_OPEN_SECONDS;
   const willRefreshSoon = isStale && pageOpenedLongEnough && isWindowVisible;
-  const refreshCountdown = isStale ? Math.max(0, MIN_OPEN_TIME - (currentTime - openTime)) : null;
+  const refreshCountdown = isStale
+    ? Math.max(0, AUTO_REFRESH_MIN_OPEN_SECONDS - (currentTime - openTime))
+    : null;
 
   // Auto-refresh if data is stale (>5 minutes old)
   useEffect(() => {
@@ -48,8 +48,11 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
 
       // Revalidate loader data instead of doing a full page reload.
       // Use a cooldown to avoid hammering KV if the worker isn't updating.
-      if (now - lastUpdate > STALE_THRESHOLD && now - openTime > MIN_OPEN_TIME) {
-        if (now - lastInvalidateAt.current >= MIN_OPEN_TIME) {
+      if (
+        now - lastUpdate > STALE_THRESHOLD_SECONDS &&
+        now - openTime > AUTO_REFRESH_MIN_OPEN_SECONDS
+      ) {
+        if (now - lastInvalidateAt.current >= AUTO_REFRESH_MIN_OPEN_SECONDS) {
           lastInvalidateAt.current = now;
           void queryClient.invalidateQueries({ queryKey: qk.monitorState });
           void router.invalidate();

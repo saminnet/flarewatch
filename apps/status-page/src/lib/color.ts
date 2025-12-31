@@ -1,3 +1,5 @@
+import { UPTIME_THRESHOLDS } from './constants';
+
 export type StatusColor = {
   bg: string;
   text: string;
@@ -10,19 +12,19 @@ export type StatusColor = {
 export function getStatusColor(percent: number | string): StatusColor {
   const p = Number(percent);
 
-  if (p >= 99.9) {
+  if (p >= UPTIME_THRESHOLDS.EXCELLENT) {
     return {
       bg: 'bg-emerald-500',
       text: 'text-emerald-500',
       border: 'border-emerald-500',
     };
-  } else if (p >= 99) {
+  } else if (p >= UPTIME_THRESHOLDS.GOOD) {
     return {
       bg: 'bg-emerald-400',
       text: 'text-emerald-400',
       border: 'border-emerald-400',
     };
-  } else if (p >= 95) {
+  } else if (p >= UPTIME_THRESHOLDS.DEGRADED) {
     return {
       bg: 'bg-amber-500',
       text: 'text-amber-500',
@@ -49,11 +51,11 @@ export function getStatusColor(percent: number | string): StatusColor {
 export function getStatusHexColor(percent: number | string, darker = false): string {
   const p = Number(percent);
 
-  if (p >= 99.9) {
+  if (p >= UPTIME_THRESHOLDS.EXCELLENT) {
     return darker ? '#059669' : '#10b981'; // emerald-600 / emerald-500
-  } else if (p >= 99) {
+  } else if (p >= UPTIME_THRESHOLDS.GOOD) {
     return darker ? '#10b981' : '#34d399'; // emerald-500 / emerald-400
-  } else if (p >= 95) {
+  } else if (p >= UPTIME_THRESHOLDS.DEGRADED) {
     return '#f59e0b'; // amber-500
   } else if (Number.isNaN(p)) {
     return '#a3a3a3'; // neutral-400
@@ -68,9 +70,9 @@ export function getStatusHexColor(percent: number | string, darker = false): str
 export function getStatusLabel(percent: number | string): string {
   const p = Number(percent);
 
-  if (p >= 99.9) return 'Operational';
-  if (p >= 99) return 'Good';
-  if (p >= 95) return 'Degraded';
+  if (p >= UPTIME_THRESHOLDS.EXCELLENT) return 'Operational';
+  if (p >= UPTIME_THRESHOLDS.GOOD) return 'Good';
+  if (p >= UPTIME_THRESHOLDS.DEGRADED) return 'Degraded';
   if (Number.isNaN(p)) return 'Unknown';
   return 'Down';
 }

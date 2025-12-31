@@ -1,13 +1,11 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getCookie, setCookie } from '@tanstack/react-start/server';
+import { ONE_YEAR_SECONDS, COOKIE_NAMES } from './constants';
 
 export type UiPrefs = {
   collapsedMonitors: string[];
   collapsedGroups: string[];
 };
-
-const UI_PREFS_COOKIE = 'flarewatch_ui_prefs';
-const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 const DEFAULT_UI_PREFS: UiPrefs = {
   collapsedGroups: [],
@@ -70,13 +68,13 @@ function validateUiPrefs(data: unknown): UiPrefs {
 }
 
 export const getUiPrefsServerFn = createServerFn({ method: 'GET' }).handler(async () => {
-  return parseUiPrefsCookie(getCookie(UI_PREFS_COOKIE));
+  return parseUiPrefsCookie(getCookie(COOKIE_NAMES.UI_PREFS));
 });
 
 export const setUiPrefsServerFn = createServerFn({ method: 'POST' })
   .inputValidator(validateUiPrefs)
   .handler(async ({ data }) => {
-    setCookie(UI_PREFS_COOKIE, JSON.stringify(data), {
+    setCookie(COOKIE_NAMES.UI_PREFS, JSON.stringify(data), {
       maxAge: ONE_YEAR_SECONDS,
       path: '/',
       sameSite: 'lax',

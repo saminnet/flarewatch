@@ -1,10 +1,8 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getCookie, setCookie } from '@tanstack/react-start/server';
+import { ONE_YEAR_SECONDS, COOKIE_NAMES } from './constants';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
-
-const THEME_COOKIE = 'flarewatch_theme';
-const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 function isThemePreference(value: unknown): value is ThemePreference {
   return value === 'light' || value === 'dark' || value === 'system';
@@ -13,7 +11,7 @@ function isThemePreference(value: unknown): value is ThemePreference {
 export const getThemePreferenceServerFn = createServerFn({
   method: 'GET',
 }).handler(async () => {
-  const cookieValue = getCookie(THEME_COOKIE);
+  const cookieValue = getCookie(COOKIE_NAMES.THEME);
   return isThemePreference(cookieValue) ? cookieValue : 'system';
 });
 
@@ -25,7 +23,7 @@ export const setThemePreferenceServerFn = createServerFn({ method: 'POST' })
     return data;
   })
   .handler(async ({ data }) => {
-    setCookie(THEME_COOKIE, data, {
+    setCookie(COOKIE_NAMES.THEME, data, {
       maxAge: ONE_YEAR_SECONDS,
       path: '/',
       sameSite: 'lax',

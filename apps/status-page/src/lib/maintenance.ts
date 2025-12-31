@@ -2,22 +2,12 @@ import type { Maintenance } from '@flarewatch/shared';
 import { TIME_MS, UPCOMING_MAINTENANCE_DAYS } from './constants';
 import { formatUtc } from './date';
 
-// ============================================================================
-// Status Functions
-// ============================================================================
-
-/**
- * Check if a maintenance is currently active
- */
 export function isMaintenanceActive(maintenance: Maintenance, now = Date.now()): boolean {
   const startMs = new Date(maintenance.start).getTime();
   const endMs = maintenance.end ? new Date(maintenance.end).getTime() : undefined;
   return startMs <= now && (endMs === undefined || endMs > now);
 }
 
-/**
- * Check if a maintenance is upcoming (within configured days)
- */
 export function isMaintenanceUpcoming(
   maintenance: Maintenance,
   now = Date.now(),
@@ -28,17 +18,11 @@ export function isMaintenanceUpcoming(
   return startMs > now && startMs <= futureMs;
 }
 
-/**
- * Check if a maintenance is past (completed)
- */
 export function isMaintenancePast(maintenance: Maintenance, now = Date.now()): boolean {
   const endMs = maintenance.end ? new Date(maintenance.end).getTime() : undefined;
   return endMs !== undefined && endMs <= now;
 }
 
-/**
- * Get maintenance status
- */
 export function getMaintenanceStatus(
   maintenance: Maintenance,
   now = Date.now(),
@@ -48,19 +32,12 @@ export function getMaintenanceStatus(
   return 'upcoming';
 }
 
-// ============================================================================
-// Filtering & Sorting
-// ============================================================================
-
 export interface FilteredMaintenances {
   active: Maintenance[];
   upcoming: Maintenance[];
   past: Maintenance[];
 }
 
-/**
- * Filter and sort maintenances by status
- */
 export function filterMaintenances(
   maintenances: Maintenance[],
   options?: { upcomingDays?: number; nowMs?: number },
@@ -82,24 +59,16 @@ export function filterMaintenances(
     }
   }
 
-  // Sort by start time
   const sortByStart = (a: Maintenance, b: Maintenance) =>
     new Date(a.start).getTime() - new Date(b.start).getTime();
 
   active.sort(sortByStart);
   upcoming.sort(sortByStart);
-  past.sort((a, b) => sortByStart(b, a)); // Past sorted newest first
+  past.sort((a, b) => sortByStart(b, a)); // newest first
 
   return { active, upcoming, past };
 }
 
-// ============================================================================
-// Formatting
-// ============================================================================
-
-/**
- * Format time until a date (e.g., "2d 5h", "3h 20m", "45m")
- */
 export function formatTimeUntil(date: Date, now = new Date()): string {
   const diffMs = date.getTime() - now.getTime();
   const diffMins = Math.floor(diffMs / TIME_MS.MINUTE);
@@ -115,9 +84,6 @@ export function formatTimeUntil(date: Date, now = new Date()): string {
   return `${diffMins}m`;
 }
 
-/**
- * Format a date range for display
- */
 export function formatDateRange(start: Date, end: Date | null): string {
   const pattern = 'MMM d, HH:mm';
   const startStr = formatUtc(start, pattern);
@@ -126,58 +92,90 @@ export function formatDateRange(start: Date, end: Date | null): string {
   return `${startStr} - ${endStr}`;
 }
 
-// ============================================================================
-// Colors
-// ============================================================================
-
 export type MaintenanceColors = {
   bg: string;
   border: string;
+  borderAccent: string;
   icon: string;
 };
 
-const DEFAULT_MAINTENANCE_COLOR: MaintenanceColors = {
-  bg: 'bg-blue-50 dark:bg-blue-950/30',
-  border: 'border-blue-200 dark:border-blue-800',
-  icon: 'text-blue-500',
-};
-
 const MAINTENANCE_COLOR_MAP: Record<string, MaintenanceColors> = {
-  blue: DEFAULT_MAINTENANCE_COLOR,
+  blue: {
+    bg: 'bg-blue-50 dark:bg-blue-950/30',
+    border: 'border-blue-200 dark:border-blue-800',
+    borderAccent: 'border-blue-500',
+    icon: 'text-blue-500',
+  },
   yellow: {
     bg: 'bg-amber-50 dark:bg-amber-950/30',
     border: 'border-amber-200 dark:border-amber-800',
+    borderAccent: 'border-amber-500',
     icon: 'text-amber-500',
   },
   red: {
     bg: 'bg-red-50 dark:bg-red-950/30',
     border: 'border-red-200 dark:border-red-800',
+    borderAccent: 'border-red-500',
     icon: 'text-red-500',
   },
   green: {
     bg: 'bg-emerald-50 dark:bg-emerald-950/30',
     border: 'border-emerald-200 dark:border-emerald-800',
+    borderAccent: 'border-emerald-500',
     icon: 'text-emerald-500',
   },
 };
 
-/**
- * Get maintenance color classes based on color name
- */
+const DEFAULT_COLOR = MAINTENANCE_COLOR_MAP.blue!;
+
 export function getMaintenanceColors(color?: string): MaintenanceColors {
-  return MAINTENANCE_COLOR_MAP[color ?? 'blue'] ?? DEFAULT_MAINTENANCE_COLOR;
+  return MAINTENANCE_COLOR_MAP[color ?? 'blue'] ?? DEFAULT_COLOR;
 }
 
-/**
- * Get border color class for events list (combined border + bg)
- */
 export function getMaintenanceBorderClass(color?: string): string {
-  const colorMap: Record<string, string> = {
-    blue: 'border-blue-500 bg-blue-50 dark:bg-blue-950/30',
-    yellow: 'border-amber-500 bg-amber-50 dark:bg-amber-950/30',
-    red: 'border-red-500 bg-red-50 dark:bg-red-950/30',
-    green: 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30',
-  };
-  const defaultColor = 'border-amber-500 bg-amber-50 dark:bg-amber-950/30';
-  return colorMap[color ?? 'yellow'] ?? defaultColor;
+  const colors = getMaintenanceColors(color ?? 'yellow');
+  return `${colors.borderAccent} ${colors.bg}`;
+}
+
+export const SEVERITY_OPTIONS = [
+  {
+    value: 'green',
+    labelKey: 'severity.minor',
+    dot: 'bg-emerald-500',
+    badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+  },
+  {
+    value: 'yellow',
+    labelKey: 'event.maintenance',
+    dot: 'bg-amber-500',
+    badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+  },
+  {
+    value: 'blue',
+    labelKey: 'severity.info',
+    dot: 'bg-blue-500',
+    badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  },
+  {
+    value: 'red',
+    labelKey: 'severity.critical',
+    dot: 'bg-red-500',
+    badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  },
+] as const;
+
+export type SeverityOption = (typeof SEVERITY_OPTIONS)[number];
+
+export function getSeverityOption(color?: string): SeverityOption {
+  return SEVERITY_OPTIONS.find((s) => s.value === color) ?? SEVERITY_OPTIONS[1];
+}
+
+export function resolveAffectedMonitors<T extends { id: string }>(
+  monitorIds: string[] | undefined,
+  monitors: T[],
+): T[] {
+  if (!monitorIds) return [];
+  return monitorIds
+    .map((id) => monitors.find((m) => m.id === id))
+    .filter((m): m is T => m !== undefined);
 }

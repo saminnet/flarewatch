@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { IconPlus, IconTool, IconArrowLeft } from '@tabler/icons-react';
 import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
 import { MaintenanceRow } from '@/components/admin/maintenance-row';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,8 @@ import {
   type MaintenanceUpdatePatch,
 } from '@/lib/query/maintenance.mutations';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
+import { SEVERITY_OPTIONS } from '@/lib/maintenance';
+import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 
 type FormData = {
   title: string;
@@ -164,18 +166,8 @@ function MaintenancesAdmin() {
     formData.start && formData.end && formData.end.getTime() < formData.start.getTime(),
   );
 
-  const severityOptions = useMemo(
-    () => [
-      { value: 'green', label: t('severity.minor'), color: 'bg-emerald-500' },
-      { value: 'yellow', label: t('event.maintenance'), color: 'bg-amber-500' },
-      { value: 'blue', label: t('severity.info'), color: 'bg-blue-500' },
-      { value: 'red', label: t('severity.critical'), color: 'bg-red-500' },
-    ],
-    [t],
-  );
-
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-8">
+    <div className={PAGE_CONTAINER_CLASSES}>
       <div className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to="/">
@@ -203,15 +195,11 @@ function MaintenancesAdmin() {
       )}
 
       {sortedMaintenances.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800">
-            <IconTool className="h-6 w-6 text-neutral-500" />
-          </div>
-          <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
-            {t('admin.noMaintenances')}
-          </h3>
-          <p className="mt-1 text-sm text-neutral-500">{t('admin.createFirst')}</p>
-        </Card>
+        <EmptyState
+          icon={IconTool}
+          title={t('admin.noMaintenances')}
+          description={t('admin.createFirst')}
+        />
       ) : (
         <div className="space-y-4">
           {sortedMaintenances.map((maintenance) => (
@@ -298,7 +286,7 @@ function MaintenancesAdmin() {
             <div>
               <Label className="text-xs text-neutral-500">{t('field.severity')}</Label>
               <div className="mt-1.5 flex gap-2">
-                {severityOptions.map((option) => (
+                {SEVERITY_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
@@ -310,8 +298,8 @@ function MaintenancesAdmin() {
                         : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600'
                     }`}
                   >
-                    <span className={`h-2.5 w-2.5 rounded-full ${option.color}`} />
-                    {option.label}
+                    <span className={`h-2.5 w-2.5 rounded-full ${option.dot}`} />
+                    {t(option.labelKey)}
                   </button>
                 ))}
               </div>

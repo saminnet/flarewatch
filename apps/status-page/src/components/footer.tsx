@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { PageConfig } from '@flarewatch/shared';
 import { ThemeToggle } from '@/components/theme-toggle';
 import type { ThemePreference } from '@/lib/theme-server';
+import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 
 interface FooterProps {
   config?: PageConfig;
@@ -15,7 +16,7 @@ export function Footer({ config, theme = 'system' }: FooterProps) {
 
   return (
     <footer className="mt-auto border-t border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
-      <div className="container mx-auto max-w-5xl px-4 py-8">
+      <div className={PAGE_CONTAINER_CLASSES}>
         {config?.customFooter ? (
           <div
             className="text-sm text-neutral-600 dark:text-neutral-400"

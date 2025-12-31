@@ -5,8 +5,7 @@ import type { Maintenance } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/monitors';
 import { filterMaintenances } from '@/lib/maintenance';
 import { useMonitorNameMap } from '@/lib/hooks/use-monitor-name-map';
-import { ActiveMaintenanceCard } from './maintenance/active-card';
-import { UpcomingMaintenanceCard } from './maintenance/upcoming-card';
+import { MaintenanceCard } from './maintenance-card';
 
 interface MaintenanceAlertsProps {
   maintenances: Maintenance[];
@@ -37,11 +36,12 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
             {t('maintenance.active')}
           </h3>
           {activeMaintenances.map((m) => (
-            <ActiveMaintenanceCard
+            <MaintenanceCard
               key={`active-${m.id}`}
               maintenance={m}
               monitorNames={monitorNamesById}
               nowMs={stableNowMs}
+              variant="active"
             />
           ))}
         </div>
@@ -55,11 +55,12 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
             {t('maintenance.upcoming')}
           </h3>
           {upcomingMaintenances.map((m) => (
-            <UpcomingMaintenanceCard
+            <MaintenanceCard
               key={`upcoming-${m.id}`}
               maintenance={m}
               monitorNames={monitorNamesById}
               nowMs={stableNowMs}
+              variant="upcoming"
             />
           ))}
         </div>

@@ -1,25 +1,5 @@
 import type { RequestServerOptions, RequestServerResult } from '@tanstack/react-start';
-
-type RuntimeEnv = {
-  FLAREWATCH_STATUS_PAGE_BASIC_AUTH?: string;
-  FLAREWATCH_ADMIN_BASIC_AUTH?: string;
-};
-
-async function resolveRuntimeEnv(): Promise<RuntimeEnv | undefined> {
-  try {
-    const mod = await import('cloudflare:workers');
-    const workers = (mod as unknown as { default?: unknown }).default ?? mod;
-    const env = (workers as { env?: RuntimeEnv } | undefined)?.env;
-    if (env) return env;
-  } catch {
-    // Ignore - likely not running in the Workers runtime.
-  }
-
-  const env =
-    (globalThis as { __env__?: unknown; process?: { env?: unknown } }).__env__ ??
-    globalThis.process?.env;
-  return env as RuntimeEnv | undefined;
-}
+import { resolveRuntimeEnv } from '@/lib/runtime-env';
 
 function isAdminRoute(pathname: string): boolean {
   return (

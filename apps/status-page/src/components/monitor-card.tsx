@@ -12,7 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusBar } from '@/components/status-bar';
 import type { MonitorState } from '@flarewatch/shared';
-import { useHydrated } from '@/lib/hydrated';
+import { useHydrated } from '@/lib/hooks/use-hydrated';
 import type { PublicMonitor } from '@/lib/monitors';
 import {
   calculateUptimePercent,

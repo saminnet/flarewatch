@@ -1,9 +1,28 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
 import { qk } from './keys';
 
 const API_PATH = '/api/admin/maintenances';
+
+type TranslateFn = ReturnType<typeof useTranslation>['t'];
+
+function createMutationHandlers<TResult>(
+  queryClient: QueryClient,
+  t: TranslateFn,
+  callbacks?: { onSuccess?: (result: TResult) => void; onError?: (error: Error) => void },
+) {
+  return {
+    onSuccess: (result: TResult) => {
+      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
+      callbacks?.onSuccess?.(result);
+    },
+    onError: (error: unknown) => {
+      const err = error instanceof Error ? error : new Error(t('error.somethingWrong'));
+      callbacks?.onError?.(err);
+    },
+  };
+}
 
 export type MaintenanceUpdatePatch = {
   title: string | null;
@@ -26,8 +45,8 @@ async function request<T = void>(path: string, init: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-interface MutationCallbacks {
-  onSuccess?: (result: Maintenance | void, variable: unknown) => void;
+interface MutationCallbacks<T = Maintenance> {
+  onSuccess?: (result: T) => void;
   onError?: (error: Error) => void;
 }
 
@@ -43,14 +62,7 @@ export function useCreateMaintenance(callbacks?: MutationCallbacks) {
         body: JSON.stringify(data),
       });
     },
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
-      callbacks?.onSuccess?.(result, undefined);
-    },
-    onError: (error) => {
-      const err = error instanceof Error ? error : new Error(t('error.somethingWrong'));
-      callbacks?.onError?.(err);
-    },
+    ...createMutationHandlers(queryClient, t, callbacks),
   });
 }
 
@@ -66,20 +78,11 @@ export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
         body: JSON.stringify({ id, updates }),
       });
     },
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
-      callbacks?.onSuccess?.(result, undefined);
-    },
-    onError: (error) => {
-      const err = error instanceof Error ? error : new Error(t('error.somethingWrong'));
-      callbacks?.onError?.(err);
-    },
+    ...createMutationHandlers(queryClient, t, callbacks),
   });
 }
 
-export function useDeleteMaintenance(
-  callbacks?: Omit<MutationCallbacks, 'onSuccess'> & { onSuccess?: (id: string) => void },
-) {
+export function useDeleteMaintenance(callbacks?: MutationCallbacks<string>) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
@@ -92,13 +95,6 @@ export function useDeleteMaintenance(
       });
       return id;
     },
-    onSuccess: (id) => {
-      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
-      callbacks?.onSuccess?.(id);
-    },
-    onError: (error) => {
-      const err = error instanceof Error ? error : new Error(t('error.somethingWrong'));
-      callbacks?.onError?.(err);
-    },
+    ...createMutationHandlers(queryClient, t, callbacks),
   });
 }
