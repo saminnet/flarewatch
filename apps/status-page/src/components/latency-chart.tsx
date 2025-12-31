@@ -68,14 +68,18 @@ function chooseTickStepMs(rangeMs: number): number {
 
 export function LatencyChart({ monitor, state }: LatencyChartProps) {
   const { t } = useTranslation();
-  const latencyData = state.latency[monitor.id]?.recent || [];
+  const latencyData = state.latency[monitor.id]?.recent;
 
   // Transform data for recharts
-  const chartData = latencyData.map((point) => ({
-    timeMs: point.time * 1000,
-    ping: point.ping,
-    loc: point.loc,
-  }));
+  const chartData = useMemo(
+    () =>
+      (latencyData ?? []).map((point) => ({
+        timeMs: point.time * 1000,
+        ping: point.ping,
+        loc: point.loc,
+      })),
+    [latencyData],
+  );
 
   const domainMin = chartData[0]?.timeMs;
   const domainMax = chartData[chartData.length - 1]?.timeMs;
@@ -95,19 +99,16 @@ export function LatencyChart({ monitor, state }: LatencyChartProps) {
     domainMin !== undefined && domainMax !== undefined ? [domainMin, domainMax] : undefined;
 
   // Generate rounded tick positions, filtered to within data range
-  const xTicks =
-    domainMin !== undefined && domainMax !== undefined && tickStepMs > 0
-      ? (() => {
-          const tickStart = floorToStep(domainMin, tickStepMs);
-          const tickEnd = ceilToStep(domainMax, tickStepMs);
-          const allTicks = Array.from(
-            { length: Math.floor((tickEnd - tickStart) / tickStepMs) + 1 },
-            (_, i) => tickStart + i * tickStepMs,
-          );
-          // Filter to only ticks within the actual data range
-          return allTicks.filter((tick) => tick >= domainMin && tick <= domainMax);
-        })()
-      : undefined;
+  const xTicks = useMemo(() => {
+    if (domainMin === undefined || domainMax === undefined || tickStepMs <= 0) return undefined;
+    const tickStart = floorToStep(domainMin, tickStepMs);
+    const tickEnd = ceilToStep(domainMax, tickStepMs);
+    const allTicks = Array.from(
+      { length: Math.floor((tickEnd - tickStart) / tickStepMs) + 1 },
+      (_, i) => tickStart + i * tickStepMs,
+    );
+    return allTicks.filter((tick) => tick >= domainMin && tick <= domainMax);
+  }, [domainMin, domainMax, tickStepMs]);
 
   if (chartData.length === 0) {
     return (

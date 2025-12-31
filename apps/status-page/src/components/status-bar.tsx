@@ -21,18 +21,18 @@ interface StatusBarProps {
   state: MonitorState;
 }
 
+const statusColors = {
+  up: 'bg-emerald-500 hover:bg-emerald-400',
+  down: 'bg-red-500 hover:bg-red-400',
+  partial: 'bg-amber-500 hover:bg-amber-400',
+  unknown: 'bg-neutral-300 dark:bg-neutral-700 hover:bg-neutral-400 dark:hover:bg-neutral-600',
+};
+
 export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
   const { t } = useTranslation();
   const [selectedDay, setSelectedDay] = useState<DailyStatusData | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const dailyStatus = useMemo(() => generateDailyStatus(monitorId, state), [monitorId, state]);
-
-  const statusColors = {
-    up: 'bg-emerald-500 hover:bg-emerald-400',
-    down: 'bg-red-500 hover:bg-red-400',
-    partial: 'bg-amber-500 hover:bg-amber-400',
-    unknown: 'bg-neutral-300 dark:bg-neutral-700 hover:bg-neutral-400 dark:hover:bg-neutral-600',
-  };
 
   const handleDayClick = (day: DailyStatusData) => {
     if (day.downtime > 0 && day.incidents.length > 0) {

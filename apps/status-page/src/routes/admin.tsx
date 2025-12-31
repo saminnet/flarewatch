@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -154,12 +154,24 @@ function MaintenancesAdmin() {
     });
   };
 
-  const sortedMaintenances = [...maintenances].sort(
-    (a, b) => new Date(b.start).getTime() - new Date(a.start).getTime(),
+  const sortedMaintenances = useMemo(
+    () =>
+      [...maintenances].sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime()),
+    [maintenances],
   );
 
   const isEndBeforeStart = Boolean(
     formData.start && formData.end && formData.end.getTime() < formData.start.getTime(),
+  );
+
+  const severityOptions = useMemo(
+    () => [
+      { value: 'green', label: t('severity.minor'), color: 'bg-emerald-500' },
+      { value: 'yellow', label: t('event.maintenance'), color: 'bg-amber-500' },
+      { value: 'blue', label: t('severity.info'), color: 'bg-blue-500' },
+      { value: 'red', label: t('severity.critical'), color: 'bg-red-500' },
+    ],
+    [t],
   );
 
   return (
@@ -286,12 +298,7 @@ function MaintenancesAdmin() {
             <div>
               <Label className="text-xs text-neutral-500">{t('field.severity')}</Label>
               <div className="mt-1.5 flex gap-2">
-                {[
-                  { value: 'green', label: t('severity.minor'), color: 'bg-emerald-500' },
-                  { value: 'yellow', label: t('event.maintenance'), color: 'bg-amber-500' },
-                  { value: 'blue', label: t('severity.info'), color: 'bg-blue-500' },
-                  { value: 'red', label: t('severity.critical'), color: 'bg-red-500' },
-                ].map((option) => (
+                {severityOptions.map((option) => (
                   <button
                     key={option.value}
                     type="button"
