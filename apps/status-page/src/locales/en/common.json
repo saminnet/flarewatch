@@ -46,7 +46,7 @@
   "monitor.responseTimes": "Response times (ms)",
   "monitor.noResponseData": "No response data yet",
   "monitor.latency": "{{ping}}ms (edge {{loc}})",
-  "monitor.checkLocation.cloudflare": "This is the Cloudflare edge data center (colo) where FlareWatch ran the last check — it may not match your browser location.",
+  "monitor.checkLocation.cloudflare": "Last check ran at this Cloudflare edge location (may differ from yours).",
   "monitor.noData": "No Data",
   "monitor.percentAtDate": "{{percent}}% at {{date}}",
   "monitor.downFor": "Down for {{duration}} (click for detail)",

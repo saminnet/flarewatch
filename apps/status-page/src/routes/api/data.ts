@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getMonitorState } from '@/lib/kv';
+import { isMonitorUp, getMonitorError } from '@/lib/uptime';
 import { workerConfig } from '@flarewatch/config/worker';
 import { pageConfig } from '@flarewatch/config';
 
@@ -49,24 +50,16 @@ export const Route = createFileRoute('/api/data')({
           > = {};
 
           for (const monitor of workerConfig.monitors) {
-            const incidents = state.incident[monitor.id];
             const latencyData = state.latency[monitor.id]?.recent;
-
-            const lastIncident = incidents?.[incidents.length - 1];
-            const isUp =
-              !incidents ||
-              incidents.length === 0 ||
-              !lastIncident ||
-              lastIncident.end !== undefined;
-
             const latestLatency = latencyData?.[latencyData.length - 1];
-            const latestError = incidents?.[incidents.length - 1]?.error;
+            const isUp = isMonitorUp(monitor.id, state);
+            const error = getMonitorError(monitor.id, state);
 
             monitors[monitor.id] = {
               up: isUp,
               latency: latestLatency?.ping ?? null,
               location: latestLatency?.loc ?? null,
-              message: isUp ? 'OK' : (latestError?.[latestError.length - 1] ?? 'Unknown error'),
+              message: isUp ? 'OK' : (error ?? 'Unknown error'),
             };
           }
 

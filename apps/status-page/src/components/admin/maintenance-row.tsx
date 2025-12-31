@@ -1,12 +1,16 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { MaintenanceStatusBadge } from '@/components/maintenance/status-badge';
 import type { Maintenance } from '@flarewatch/shared';
-import { getMaintenanceStatus } from '@/lib/maintenance';
+import {
+  getMaintenanceStatus,
+  getSeverityOption,
+  resolveAffectedMonitors,
+} from '@/lib/maintenance';
 
 interface MaintenanceRowProps {
   maintenance: Maintenance;
@@ -20,38 +24,8 @@ export function MaintenanceRow({ maintenance, monitors, onEdit, onDelete }: Main
   const startDate = new Date(maintenance.start);
   const endDate = maintenance.end ? new Date(maintenance.end) : null;
   const status = getMaintenanceStatus(maintenance);
-  const isUpcoming = status === 'upcoming';
-  const isOngoing = status === 'active';
-  const isPast = status === 'past';
-
-  const affectedMonitors = maintenance.monitors
-    ?.map((id) => monitors.find((m) => m.id === id))
-    .filter((m): m is { id: string; name: string } => m !== undefined);
-
-  const severity = useMemo(() => {
-    const defaultSeverity = {
-      label: t('event.maintenance'),
-      className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    };
-
-    const severityConfig: Record<string, { label: string; className: string }> = {
-      green: {
-        label: t('severity.minor'),
-        className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-      },
-      yellow: defaultSeverity,
-      blue: {
-        label: t('severity.info'),
-        className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-      },
-      red: {
-        label: t('severity.critical'),
-        className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-      },
-    };
-
-    return severityConfig[maintenance.color ?? 'yellow'] ?? defaultSeverity;
-  }, [t, maintenance.color]);
+  const affectedMonitors = resolveAffectedMonitors(maintenance.monitors, monitors);
+  const severity = getSeverityOption(maintenance.color);
 
   return (
     <Card className="p-4">
@@ -61,10 +35,8 @@ export function MaintenanceRow({ maintenance, monitors, onEdit, onDelete }: Main
             <h3 className="font-medium text-neutral-900 dark:text-neutral-100">
               {maintenance.title ?? t('maintenance.scheduled')}
             </h3>
-            <Badge className={severity.className}>{severity.label}</Badge>
-            {isUpcoming && <Badge variant="secondary">{t('status.upcoming')}</Badge>}
-            {isOngoing && <Badge variant="secondary">{t('status.ongoing')}</Badge>}
-            {isPast && <Badge variant="outline">{t('status.completed')}</Badge>}
+            <Badge className={severity.badge}>{t(severity.labelKey)}</Badge>
+            <MaintenanceStatusBadge status={status} />
           </div>
 
           <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{maintenance.body}</p>
@@ -80,7 +52,7 @@ export function MaintenanceRow({ maintenance, monitors, onEdit, onDelete }: Main
             )}
           </div>
 
-          {affectedMonitors && affectedMonitors.length > 0 && (
+          {affectedMonitors.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {affectedMonitors.map((monitor) => (
                 <Badge key={monitor.id} variant="outline" className="text-xs">

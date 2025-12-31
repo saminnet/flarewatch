@@ -3,8 +3,9 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { OverallStatus } from '@/components/overall-status';
 import { MonitorList } from '@/components/monitor-list';
-import { MaintenanceAlerts } from '@/components/maintenance-alerts';
+import { MaintenanceAlerts } from '@/components/maintenance/alerts';
 import { pageConfig } from '@flarewatch/config';
+import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 import {
   maintenancesQuery,
   monitorStateQuery,
@@ -33,7 +34,7 @@ function DashboardPage() {
 
   if (!state) {
     return (
-      <div className="container mx-auto max-w-5xl px-4 py-8">
+      <div className={PAGE_CONTAINER_CLASSES}>
         <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-8 text-center dark:border-neutral-800 dark:bg-neutral-900">
           <h2 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
             {t('error.noMonitoringData')}
@@ -45,7 +46,7 @@ function DashboardPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-8">
+    <div className={PAGE_CONTAINER_CLASSES}>
       <div className="space-y-4">
         <OverallStatus state={state} />
 

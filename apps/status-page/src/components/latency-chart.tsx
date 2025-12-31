@@ -68,17 +68,17 @@ function chooseTickStepMs(rangeMs: number): number {
 
 export function LatencyChart({ monitor, state }: LatencyChartProps) {
   const { t } = useTranslation();
-  const latencyData = state.latency[monitor.id]?.recent;
+  const recentLatency = state.latency[monitor.id]?.recent;
 
   // Transform data for recharts
   const chartData = useMemo(
     () =>
-      (latencyData ?? []).map((point) => ({
+      (recentLatency ?? []).map((point) => ({
         timeMs: point.time * 1000,
         ping: point.ping,
         loc: point.loc,
       })),
-    [latencyData],
+    [recentLatency],
   );
 
   const domainMin = chartData[0]?.timeMs;

@@ -3,6 +3,7 @@ import { getMaintenances, getMonitorState } from '@/lib/kv';
 import { getPublicMonitors } from '@/lib/monitors';
 import { getUiPrefsServerFn } from '@/lib/ui-prefs-server';
 import { qk } from './keys';
+import { QUERY_STALE_TIME } from '@/lib/constants';
 
 export const monitorStateQuery = () =>
   queryOptions({
@@ -14,7 +15,7 @@ export const publicMonitorsQuery = () =>
   queryOptions({
     queryFn: () => getPublicMonitors(),
     queryKey: qk.publicMonitors,
-    staleTime: 5 * 60_000, // Monitors rarely change
+    staleTime: QUERY_STALE_TIME.MONITORS,
   });
 
 export const uiPrefsQuery = () =>
@@ -28,5 +29,5 @@ export const maintenancesQuery = () =>
   queryOptions({
     queryFn: () => getMaintenances(),
     queryKey: qk.maintenances,
-    staleTime: 30_000,
+    staleTime: QUERY_STALE_TIME.DEFAULT,
   });

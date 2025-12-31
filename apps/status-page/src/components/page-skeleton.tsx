@@ -1,8 +1,9 @@
 import { Card } from '@/components/ui/card';
+import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 
 export function PageSkeleton() {
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-8">
+    <div className={PAGE_CONTAINER_CLASSES}>
       <div className="animate-pulse space-y-6">
         <div className="h-7 w-56 rounded bg-neutral-200 dark:bg-neutral-800" />
 

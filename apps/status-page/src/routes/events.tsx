@@ -3,13 +3,7 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { format, subMonths, addMonths, startOfMonth, endOfMonth } from 'date-fns';
-import {
-  IconChevronLeft,
-  IconChevronRight,
-  IconCalendar,
-  IconAlertTriangle,
-  IconTool,
-} from '@tabler/icons-react';
+import { IconChevronLeft, IconChevronRight, IconCalendar } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { MonthPicker } from '@/components/ui/month-picker';
 import {
@@ -19,14 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { EmptyState } from '@/components/ui/empty-state';
+import { IncidentCard } from '@/components/events/incident-card';
+import { MaintenanceEventCard } from '@/components/events/maintenance-event-card';
+import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/events/types';
 import type { PublicMonitor } from '@/lib/monitors';
 import { publicMonitorsQuery, monitorStateQuery } from '@/lib/query/monitors.queries';
 import { getMaintenances } from '@/lib/kv';
-import { getMaintenanceStatus, getMaintenanceBorderClass } from '@/lib/maintenance';
 import type { Maintenance, MonitorState } from '@flarewatch/shared';
+import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 
 interface EventsSearch {
   month?: string;
@@ -46,22 +41,6 @@ function isValidYearMonth(value: unknown): value is string {
   const month = Number(match[2]);
   return month >= 1 && month <= 12;
 }
-
-type IncidentEvent = {
-  type: 'incident';
-  monitorId: string;
-  monitorName: string;
-  start: number; // seconds
-  end?: number; // seconds
-  errors: string[];
-};
-
-type MaintenanceEvent = {
-  type: 'maintenance';
-  maintenance: Maintenance;
-};
-
-type TimelineEvent = IncidentEvent | MaintenanceEvent;
 
 export const Route = createFileRoute('/events')({
   validateSearch: (search: Record<string, unknown>): EventsSearch => {
@@ -185,16 +164,14 @@ function EventsPage() {
     }
 
     // Sort by start date (newest first)
-    events.sort((a, b) => {
+    return events.sort((a, b) => {
       const aStart =
         a.type === 'incident' ? a.start * 1000 : new Date(a.maintenance.start).getTime();
       const bStart =
         b.type === 'incident' ? b.start * 1000 : new Date(b.maintenance.start).getTime();
       return bStart - aStart;
     });
-
-    return events;
-  }, [state, monitors, maintenances, monthStart, monthEnd, eventType, selectedMonitor]);
+  }, [state, monitors, monthStart, monthEnd, maintenances, eventType, selectedMonitor]);
 
   const { prevMonth, nextMonth } = useMemo(
     () => ({
@@ -222,7 +199,7 @@ function EventsPage() {
   );
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-8">
+    <div className={PAGE_CONTAINER_CLASSES}>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
           {t('nav.events')}
@@ -306,15 +283,13 @@ function EventsPage() {
       </div>
 
       {allEvents.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-            <IconCalendar className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
-            {t('events.noEvents')}
-          </h3>
-          <p className="mt-1 text-sm text-neutral-500">{t('events.noIncidentsOrMaintenance')}</p>
-        </Card>
+        <EmptyState
+          icon={IconCalendar}
+          iconClassName="text-emerald-600 dark:text-emerald-400"
+          iconContainerClassName="bg-emerald-100 dark:bg-emerald-900/30"
+          title={t('events.noEvents')}
+          description={t('events.noIncidentsOrMaintenance')}
+        />
       ) : (
         <div className="space-y-4">
           {allEvents.map((event) =>
@@ -324,7 +299,7 @@ function EventsPage() {
                 event={event}
               />
             ) : (
-              <MaintenanceCard
+              <MaintenanceEventCard
                 key={`maintenance-${event.maintenance.id}`}
                 event={event}
                 monitors={monitors}
@@ -334,130 +309,5 @@ function EventsPage() {
         </div>
       )}
     </div>
-  );
-}
-
-interface IncidentCardProps {
-  event: IncidentEvent;
-}
-
-function IncidentCard({ event }: IncidentCardProps) {
-  const { t } = useTranslation();
-  const startDate = new Date(event.start * 1000);
-  const endDate = event.end ? new Date(event.end * 1000) : null;
-  const isOngoing = !event.end;
-  const latestError = event.errors[event.errors.length - 1] ?? t('error.unknown');
-
-  return (
-    <Alert className="border-l-4 border-red-500 bg-red-50 dark:bg-red-950/30">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <AlertTitle className="flex items-center gap-2">
-            <IconAlertTriangle className="h-4 w-4 text-red-500" />
-            {event.monitorName}
-            <Badge variant="outline" className="text-xs">
-              {t('event.incident')}
-            </Badge>
-            {isOngoing && (
-              <Badge variant="destructive" className="text-xs">
-                {t('status.ongoing')}
-              </Badge>
-            )}
-          </AlertTitle>
-
-          <AlertDescription className="mt-2">
-            <p className="text-neutral-700 dark:text-neutral-300">{latestError}</p>
-
-            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-neutral-500">
-              <span>
-                <strong>{t('field.from')}</strong> {format(startDate, 'PPp')}
-              </span>
-              {endDate ? (
-                <span>
-                  <strong>{t('field.to')}</strong> {format(endDate, 'PPp')}
-                </span>
-              ) : (
-                <span className="text-red-500">{t('status.ongoing')}</span>
-              )}
-            </div>
-          </AlertDescription>
-        </div>
-      </div>
-    </Alert>
-  );
-}
-
-interface MaintenanceCardProps {
-  event: MaintenanceEvent;
-  monitors: PublicMonitor[];
-}
-
-function MaintenanceCard({ event, monitors }: MaintenanceCardProps) {
-  const { t } = useTranslation();
-  const { maintenance } = event;
-  const startDate = new Date(maintenance.start);
-  const endDate = maintenance.end ? new Date(maintenance.end) : null;
-  const status = getMaintenanceStatus(maintenance);
-  const isUpcoming = status === 'upcoming';
-  const isOngoing = status === 'active';
-  const isPast = status === 'past';
-
-  // Get affected monitor names
-  const affectedMonitors = maintenance.monitors
-    ?.map((id) => monitors.find((m) => m.id === id))
-    .filter((m): m is PublicMonitor => m !== undefined);
-
-  const borderColor = getMaintenanceBorderClass(maintenance.color);
-
-  return (
-    <Alert className={`border-l-4 ${borderColor}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <AlertTitle className="flex items-center gap-2">
-            <IconTool className="h-4 w-4 text-amber-500" />
-            {maintenance.title ?? t('maintenance.scheduled')}
-            <Badge variant="outline" className="text-xs">
-              {t('event.maintenance')}
-            </Badge>
-            {isUpcoming && <Badge variant="secondary">{t('status.upcoming')}</Badge>}
-            {isOngoing && <Badge variant="secondary">{t('status.ongoing')}</Badge>}
-            {isPast && <Badge variant="outline">{t('status.completed')}</Badge>}
-          </AlertTitle>
-
-          <AlertDescription className="mt-2">
-            <p className="text-neutral-700 dark:text-neutral-300">{maintenance.body}</p>
-
-            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-neutral-500">
-              <span>
-                <strong>{t('field.from')}</strong> {format(startDate, 'PPp')}
-              </span>
-              {endDate ? (
-                <span>
-                  <strong>{t('field.to')}</strong> {format(endDate, 'PPp')}
-                </span>
-              ) : (
-                <span>{t('maintenance.untilFurtherNotice')}</span>
-              )}
-            </div>
-
-            {affectedMonitors && affectedMonitors.length > 0 && (
-              <div className="mt-3">
-                <span className="text-xs text-neutral-500">
-                  {t('field.affectedMonitors')}
-                  {': '}
-                </span>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {affectedMonitors.map((monitor) => (
-                    <Badge key={monitor.id} variant="outline" className="text-xs">
-                      {monitor.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </AlertDescription>
-        </div>
-      </div>
-    </Alert>
   );
 }
