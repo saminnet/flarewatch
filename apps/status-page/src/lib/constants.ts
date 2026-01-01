@@ -43,3 +43,8 @@ export const COOKIE_NAMES = {
 
 // Page layout
 export const PAGE_CONTAINER_CLASSES = 'container mx-auto max-w-5xl px-4 py-8';
+
+// Status bar mobile display
+export const STATUS_BAR = {
+  MOBILE_BAR_WIDTH: 8, // w-1.5 (6px) + gap-0.5 (2px)
+} as const;

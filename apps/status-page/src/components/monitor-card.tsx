@@ -121,32 +121,39 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
             </div>
 
             {latency && (
-              <div className="hidden sm:block text-right">
-                <div className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                  {latency.ping}ms
-                </div>
-                {monitor.isProxy ? (
-                  <span className="text-xs text-neutral-400">{latency.loc}</span>
-                ) : (
-                  <Tooltip>
-                    <TooltipTrigger
-                      className="text-xs text-neutral-400 cursor-help"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {latency.loc}
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <div className="flex flex-col gap-1">
-                        <div className="font-medium">
-                          <span className="font-mono">{latency.loc}</span>
-                          {coloLabel ? <span>{` — ${coloLabel}`}</span> : null}
+              <>
+                {/* Desktop: latency + colo stacked */}
+                <div className="hidden sm:block text-right">
+                  <div className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    {latency.ping}ms
+                  </div>
+                  {monitor.isProxy ? (
+                    <span className="text-xs text-neutral-400">{latency.loc}</span>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger
+                        className="text-xs text-neutral-400 cursor-help"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {latency.loc}
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="flex flex-col gap-1">
+                          <div className="font-medium">
+                            <span className="font-mono">{latency.loc}</span>
+                            {coloLabel ? <span>{` — ${coloLabel}`}</span> : null}
+                          </div>
+                          <div className="opacity-80">{t('monitor.checkLocation.cloudflare')}</div>
                         </div>
-                        <div className="opacity-80">{t('monitor.checkLocation.cloudflare')}</div>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+                {/* Mobile: just colo code */}
+                <span className="sm:hidden text-xs text-neutral-400 shrink-0" aria-hidden="true">
+                  {latency.loc}
+                </span>
+              </>
             )}
 
             <Badge
