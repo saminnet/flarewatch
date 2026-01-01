@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { memo, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -14,12 +14,8 @@ import type { MonitorState } from '@flarewatch/shared';
 import { generateDailyStatus, formatDuration, type DailyStatusData } from '@/lib/uptime';
 import { formatUtc } from '@/lib/date';
 import { cn } from '@/lib/utils';
-
-interface StatusBarProps {
-  monitorId: string;
-  monitorName?: string;
-  state: MonitorState;
-}
+import { useContainerWidth } from '@/lib/hooks/use-container-width';
+import { STATUS_BAR } from '@/lib/constants';
 
 const statusColors = {
   up: 'bg-emerald-500 hover:bg-emerald-400',
@@ -28,56 +24,112 @@ const statusColors = {
   unknown: 'bg-neutral-300 dark:bg-neutral-700 hover:bg-neutral-400 dark:hover:bg-neutral-600',
 };
 
+interface StatusBarSegmentProps {
+  day: DailyStatusData;
+  isMobile: boolean;
+  onClick: (day: DailyStatusData) => void;
+}
+
+const StatusBarSegment = memo(function StatusBarSegment({
+  day,
+  isMobile,
+  onClick,
+}: StatusBarSegmentProps) {
+  const { t } = useTranslation();
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        aria-label={
+          day.status === 'unknown'
+            ? t('monitor.noDataAt', { date: formatUtc(day.date, 'MMM d, yyyy') })
+            : t('monitor.statusAt', {
+                percent: day.uptime.toFixed(2),
+                date: formatUtc(day.date, 'MMM d, yyyy'),
+              })
+        }
+        className={cn(
+          'h-8 rounded-sm transition-colors',
+          isMobile ? 'w-1.5 shrink-0' : 'flex-1 min-w-0',
+          statusColors[day.status],
+          day.downtime > 0 ? 'cursor-pointer' : 'cursor-default',
+        )}
+        onClick={() => onClick(day)}
+      />
+      <TooltipContent side="top" className="text-xs">
+        <div className="font-medium">
+          {day.status === 'unknown'
+            ? t('monitor.noData')
+            : t('monitor.percentAtDate', {
+                percent: day.uptime.toFixed(2),
+                date: formatUtc(day.date, 'MMM d, yyyy'),
+              })}
+        </div>
+        {day.downtime > 0 && (
+          <div className="text-neutral-400">
+            {t('monitor.downFor', { duration: formatDuration(day.downtime) })}
+          </div>
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
+});
+
+interface StatusBarProps {
+  monitorId: string;
+  monitorName?: string;
+  state: MonitorState;
+}
+
 export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
   const { t } = useTranslation();
   const [selectedDay, setSelectedDay] = useState<DailyStatusData | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const dailyStatus = useMemo(() => generateDailyStatus(monitorId, state), [monitorId, state]);
 
-  const handleDayClick = (day: DailyStatusData) => {
+  const { ref, width } = useContainerWidth();
+
+  const mobileBarCount = useMemo(() => {
+    // calculate how many bars fit based on container width
+    if (width === 0) return dailyStatus.length;
+    return Math.min(Math.floor(width / STATUS_BAR.MOBILE_BAR_WIDTH), dailyStatus.length);
+  }, [width, dailyStatus.length]);
+
+  const mobileBars = useMemo(
+    () => dailyStatus.slice(-mobileBarCount),
+    [dailyStatus, mobileBarCount],
+  );
+
+  const handleDayClick = useCallback((day: DailyStatusData) => {
     if (day.downtime > 0 && day.incidents.length > 0) {
       setSelectedDay(day);
       setModalOpen(true);
     }
-  };
+  }, []);
 
   return (
     <>
-      <div className="flex items-center gap-0.5 overflow-hidden rounded">
-        {dailyStatus.map((day, index) => (
-          <Tooltip key={index}>
-            <TooltipTrigger
-              aria-label={
-                day.status === 'unknown'
-                  ? t('monitor.noDataAt', { date: formatUtc(day.date, 'MMM d, yyyy') })
-                  : t('monitor.statusAt', {
-                      percent: day.uptime.toFixed(2),
-                      date: formatUtc(day.date, 'MMM d, yyyy'),
-                    })
-              }
-              className={cn(
-                'h-8 flex-1 min-w-0 rounded-sm transition-colors',
-                statusColors[day.status],
-                day.downtime > 0 ? 'cursor-pointer' : 'cursor-default',
-              )}
-              onClick={() => handleDayClick(day)}
-            />
-            <TooltipContent side="top" className="text-xs">
-              <div className="font-medium">
-                {day.status === 'unknown'
-                  ? t('monitor.noData')
-                  : t('monitor.percentAtDate', {
-                      percent: day.uptime.toFixed(2),
-                      date: formatUtc(day.date, 'MMM d, yyyy'),
-                    })}
-              </div>
-              {day.downtime > 0 && (
-                <div className="text-neutral-400">
-                  {t('monitor.downFor', { duration: formatDuration(day.downtime) })}
-                </div>
-              )}
-            </TooltipContent>
-          </Tooltip>
+      {/* Desktop: all 90 bars with flex-1 */}
+      <div className="hidden sm:flex items-center gap-0.5 overflow-hidden rounded">
+        {dailyStatus.map((day) => (
+          <StatusBarSegment
+            key={day.date.toISOString()}
+            day={day}
+            isMobile={false}
+            onClick={handleDayClick}
+          />
+        ))}
+      </div>
+
+      {/* Mobile: fewer bars with fixed width based on container */}
+      <div ref={ref} className="flex sm:hidden items-center gap-0.5 overflow-hidden rounded">
+        {mobileBars.map((day) => (
+          <StatusBarSegment
+            key={day.date.toISOString()}
+            day={day}
+            isMobile={true}
+            onClick={handleDayClick}
+          />
         ))}
       </div>
 
