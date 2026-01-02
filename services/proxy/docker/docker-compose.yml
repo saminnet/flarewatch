@@ -4,8 +4,8 @@
 services:
   flarewatch-proxy:
     build:
-      context: ../../..
-      dockerfile: services/proxy/docker/Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - '${PORT:-3000}:${PORT:-3000}'
     environment:

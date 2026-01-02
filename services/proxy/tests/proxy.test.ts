@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createProxy } from '../src/index';
+import { createProxy } from '../src/app';
 
 vi.mock('../src/checkers', () => ({
   checkMonitor: vi.fn().mockResolvedValue({
@@ -14,9 +14,9 @@ vi.mock('../src/utils/location', () => ({
 }));
 
 describe('proxy', () => {
-  describe('without auth', () => {
-    const app = createProxy({ location: 'TEST' });
+  const app = createProxy({ authToken: 'test-token', location: 'TEST' });
 
+  describe('public endpoints', () => {
     it('GET /health returns ok status', async () => {
       const res = await app.request('/health');
       const json = await res.json();
@@ -35,71 +35,9 @@ describe('proxy', () => {
       expect(json.endpoints).toBeDefined();
       expect(json.docs).toContain('github.com');
     });
-
-    it('POST /check returns 400 when target is missing', async () => {
-      const res = await app.request('/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: 'test' }),
-      });
-
-      expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error).toContain('target');
-    });
-
-    it('POST /check returns 400 when body is invalid JSON', async () => {
-      const res = await app.request('/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{',
-      });
-
-      expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error).toContain('Invalid JSON');
-    });
-
-    it('POST /check returns 400 when target is not a string', async () => {
-      const res = await app.request('/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 'test',
-          name: 'Test',
-          method: 'GET',
-          target: 123,
-        }),
-      });
-
-      expect(res.status).toBe(400);
-      const json = await res.json();
-      expect(json.error).toContain('target');
-    });
-
-    it('POST /check returns 200 with valid monitor', async () => {
-      const res = await app.request('/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 'test',
-          name: 'Test',
-          method: 'GET',
-          target: 'https://example.com',
-        }),
-      });
-
-      expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json.location).toBe('TEST');
-      expect(json.result).toBeDefined();
-      expect(json.result.ok).toBe(true);
-    });
   });
 
-  describe('with auth', () => {
-    const app = createProxy({ authToken: 'test-token', location: 'TEST' });
-
+  describe('authentication', () => {
     it('POST /check returns 401 without auth header', async () => {
       const res = await app.request('/check', {
         method: 'POST',

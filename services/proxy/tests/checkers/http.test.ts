@@ -1,15 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { MonitorTarget } from '@flarewatch/shared';
+import type { MonitorTarget } from '../../src/types';
 
 const fetchWithTimeoutMock = vi.fn();
 const checkSSLCertificateMock = vi.fn();
 
-vi.mock('@flarewatch/shared', async () => {
-  const actual = await vi.importActual<typeof import('@flarewatch/shared')>('@flarewatch/shared');
-  return {
-    ...actual,
-    fetchWithTimeout: fetchWithTimeoutMock,
-  };
+vi.mock('../../src/utils', async () => {
+  const actual = await vi.importActual<typeof import('../../src/utils')>('../../src/utils');
+  return { ...actual, fetchWithTimeout: fetchWithTimeoutMock };
 });
 
 vi.mock('../../src/checkers/ssl', () => ({

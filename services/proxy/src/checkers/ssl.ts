@@ -1,4 +1,5 @@
-import { type SSLCertificateInfo, withTimeout, DEFAULT_HTTP_TIMEOUT } from '@flarewatch/shared';
+import type { SSLCertificateInfo } from '../types';
+import { DEFAULT_HTTP_TIMEOUT, withTimeout } from '../utils';
 
 export interface SSLCheckOptions {
   /** Days before expiry to warn */

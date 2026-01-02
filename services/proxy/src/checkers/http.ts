@@ -1,16 +1,15 @@
+import { createLogger } from '../log';
+import type { CheckResult, MonitorTarget } from '../types';
 import {
-  type MonitorTarget,
-  type CheckResult,
-  success,
-  failure,
-  fetchWithTimeout,
-  validateHttpResponse,
   DEFAULT_HTTP_TIMEOUT,
   DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
-  createLogger,
+  failure,
+  fetchWithTimeout,
   getErrorMessage,
   isTimeoutError,
-} from '@flarewatch/shared';
+  success,
+  validateHttpResponse,
+} from '../utils';
 import { checkSSLCertificate } from './ssl';
 
 const log = createLogger('HTTP');

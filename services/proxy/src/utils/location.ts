@@ -1,4 +1,4 @@
-import { createLogger } from '@flarewatch/shared';
+import { createLogger } from '../log';
 
 const log = createLogger('Location');
 
