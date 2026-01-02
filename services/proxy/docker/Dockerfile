@@ -9,24 +9,19 @@ FROM cgr.dev/chainguard/node:latest-dev@sha256:5e1ebdfc0c312d785515f403e309a8f6e
 WORKDIR /app
 
 # Copy package files for dependency caching
-COPY --chown=65532:65532 pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY --chown=65532:65532 packages/shared/package.json packages/shared/
-COPY --chown=65532:65532 packages/ts-config/package.json packages/ts-config/
-COPY --chown=65532:65532 services/proxy/package.json services/proxy/
+COPY --chown=65532:65532 package.json pnpm-lock.yaml ./
 
 # Install all dependencies (including devDeps for build)
 RUN pnpm install --frozen-lockfile
 
 # Copy source files
-COPY --chown=65532:65532 packages/shared/ packages/shared/
-COPY --chown=65532:65532 packages/ts-config/ packages/ts-config/
-COPY --chown=65532:65532 services/proxy/ services/proxy/
+COPY --chown=65532:65532 . .
 
 # Type check
-RUN pnpm -F @flarewatch/proxy compile
+RUN pnpm compile
 
 # Build to JavaScript
-RUN pnpm -F @flarewatch/proxy build
+RUN pnpm build
 
 # =============================================================================
 # Stage 2: Runtime (Node 24 LTS)
@@ -50,10 +45,10 @@ RUN rm -rf \
     /usr/local/bin/yarnpkg
 
 # Copy compiled JavaScript (single bundled file)
-COPY --chown=node:node --from=builder /app/services/proxy/dist/node.mjs ./dist/node.mjs
+COPY --chown=node:node --from=builder /app/dist/index.mjs ./dist/index.mjs
 
 EXPOSE 3000
 
 USER node
 
-CMD ["node", "dist/node.mjs"]
+CMD ["node", "dist/index.mjs"]

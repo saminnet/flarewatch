@@ -1,14 +1,13 @@
+import { createLogger } from '../log';
+import type { CheckResult, MonitorTarget } from '../types';
 import {
-  type MonitorTarget,
-  type CheckResult,
-  success,
-  failure,
-  parseTcpTarget,
   DEFAULT_HTTP_TIMEOUT,
-  createLogger,
+  failure,
   getErrorMessage,
   isTimeoutError,
-} from '@flarewatch/shared';
+  parseTcpTarget,
+  success,
+} from '../utils';
 
 const log = createLogger('TCP');
 

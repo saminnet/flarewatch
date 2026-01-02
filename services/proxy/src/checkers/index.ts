@@ -1,10 +1,6 @@
-import {
-  type MonitorTarget,
-  type CheckResult,
-  failure,
-  createLogger,
-  getErrorMessage,
-} from '@flarewatch/shared';
+import { createLogger } from '../log';
+import type { CheckResult, MonitorTarget } from '../types';
+import { failure, getErrorMessage } from '../utils';
 import { checkHttp } from './http';
 import { checkTcp } from './tcp';
 

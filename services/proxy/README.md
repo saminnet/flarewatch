@@ -1,16 +1,29 @@
 # FlareWatch Proxy
 
 Self-hostable proxy for executing FlareWatch health checks from custom locations.
+This repository contains only the proxy service and can be deployed standalone.
+
+## Standalone Package
+
+This proxy is **fully self-contained** with no monorepo dependencies at runtime. You can:
+
+- Copy this folder and deploy it independently
+- Build and run with just `pnpm install && pnpm build && pnpm start`
+- Use Docker for production deployments (recommended)
+
+## Requirements
+
+- Node.js >= 24
+- pnpm 10.x (use `corepack enable`)
 
 ## Overview
 
-The FlareWatch Proxy allows you to run monitoring checks from your own infrastructure instead of (or in addition to) Cloudflare's edge network. This is useful for:
+The FlareWatch Proxy allows you to run monitoring checks from your own infrastructure. This is useful for:
 
 - **Monitoring internal services** - Check services on private IPs (192.168.x.x, 10.x.x.x) that Cloudflare can't reach
 - **Monitoring behind firewalls/VPNs** - Deploy the proxy inside your secured network
 - **Geo-specific monitoring** - Deploy proxies in specific regions for location-based checks
 - **Reducing Cloudflare Worker load** - Offload heavy checks to your own infrastructure
-- **Cloudflare outage resilience** - Continue monitoring even if Cloudflare has issues
 
 ## Architecture
 
@@ -33,7 +46,6 @@ flowchart TB
 
     subgraph ProxyTargets["Proxy Deployment Options"]
         Docker["Docker<br/>(NAS, home server, VPS)"]
-        CFWorker["Cloudflare Workers<br/>(different account/region)"]
         NodeJS["Any Node.js server"]
         Private["Inside private networks<br/>(for internal services)"]
     end
@@ -45,7 +57,10 @@ flowchart TB
 
 ## Quick Start
 
-### Docker (Recommended for self-hosting)
+All commands below assume you are in the proxy directory.
+If you're in the FlareWatch monorepo, run `cd services/proxy` first.
+
+### Docker (Recommended)
 
 The Docker image is production-optimized:
 
@@ -54,11 +69,10 @@ The Docker image is production-optimized:
 - Removes package managers (npm/yarn/corepack) to reduce attack surface
 
 ```bash
-# From the repository root
 # Optional: configure the proxy (token/location/port)
-cp services/proxy/docker/.env.example services/proxy/docker/.env
+cp docker/.env.example docker/.env
 
-docker compose -f services/proxy/docker/docker-compose.yml up -d
+docker compose -f docker/docker-compose.yml up -d
 
 # Check it's running
 curl http://localhost:3000/health
@@ -81,41 +95,31 @@ container port too, set `PORT` (example: `-e PORT=8080 -p 8080:8080`).
 
 ```bash
 # Install dependencies
-pnpm install
+pnpm install --frozen-lockfile
 
 # Development (with hot reload)
-pnpm proxy:dev
+pnpm dev
 
 # Production
-pnpm -F @flarewatch/proxy build
-pnpm proxy:start
+pnpm build
+pnpm start
 ```
 
-### Cloudflare Workers
-
-```bash
-cd services/proxy
-
-# Configure (optional - set auth token)
-wrangler secret put FLAREWATCH_PROXY_TOKEN
-
-# Deploy
-pnpm deploy
-```
+If you change dependencies, run `pnpm install` to update `pnpm-lock.yaml` and commit it.
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable                    | Description                                                | Default     |
-| --------------------------- | ---------------------------------------------------------- | ----------- |
-| `PORT`                      | Server port                                                | `3000`      |
-| `FLAREWATCH_PROXY_TOKEN`    | Bearer token for authentication (optional but recommended) | -           |
-| `FLAREWATCH_PROXY_LOCATION` | Override auto-detected location (e.g., "NYC", "London")    | Auto-detect |
+| Variable                    | Description                                             | Default     |
+| --------------------------- | ------------------------------------------------------- | ----------- |
+| `PORT`                      | Server port                                             | `3000`      |
+| `FLAREWATCH_PROXY_TOKEN`    | Bearer token for authentication (**required**)          | -           |
+| `FLAREWATCH_PROXY_LOCATION` | Override auto-detected location (e.g., "NYC", "London") | Auto-detect |
 
 ### Monitor Configuration
 
-Configure monitors to use your proxy in `packages/config/src/worker.ts`:
+Configure monitors to use your proxy in your FlareWatch worker config:
 
 ```typescript
 export const workerConfig: WorkerConfig = {
@@ -206,22 +210,20 @@ Execute a monitor check.
 }
 ```
 
-## Platform Feature Matrix
+## Features
 
-| Feature                    | Node.js / Docker | Cloudflare Workers |
-| -------------------------- | ---------------- | ------------------ |
-| HTTP/HTTPS checks          | ✅               | ✅                 |
-| TCP_PING checks            | ✅               | ❌                 |
-| SSL certificate monitoring | ✅               | ❌                 |
-| Location auto-detection    | ✅ (IP API)      | ✅ (CF Trace)      |
-
-**Note**: TCP and SSL features require Node.js runtime. If you need these features, use Docker or a Node.js server instead of Cloudflare Workers.
+| Feature                    | Supported |
+| -------------------------- | --------- |
+| HTTP/HTTPS checks          | ✅        |
+| TCP_PING checks            | ✅        |
+| SSL certificate monitoring | ✅        |
+| Location auto-detection    | ✅        |
 
 ## Security Considerations
 
 ### Authentication
 
-This proxy can (and should) require a Bearer token to prevent unauthorized check execution.
+The proxy **requires** a Bearer token to prevent unauthorized check execution.
 
 Generate a token:
 
@@ -232,12 +234,7 @@ openssl rand -base64 32
 Set the token on the proxy:
 
 ```bash
-# Docker
 docker run -e FLAREWATCH_PROXY_TOKEN="<proxy-token>" ...
-
-# Cloudflare Workers (proxy deployment)
-cd services/proxy
-wrangler secret put FLAREWATCH_PROXY_TOKEN
 ```
 
 Then set the same token on the main FlareWatch Worker so it can authenticate to the proxy:
@@ -256,12 +253,6 @@ The worker sends `Authorization: Bearer <token>` automatically for proxied check
 
 Do not put the proxy token in `monitor.headers` — those headers are forwarded by the proxy to the
 monitored target.
-
-```typescript
-{
-  checkProxy: 'https://my-proxy.example.com/check',
-}
-```
 
 ### Network Isolation
 
@@ -291,30 +282,26 @@ For production deployments:
 
 ```bash
 # Start development server with hot reload
-pnpm proxy:dev
+pnpm dev
 
-# Build for production (compiles TypeScript)
-pnpm -F @flarewatch/proxy build
+# Build for production
+pnpm build
 
 # Type check
-pnpm -F @flarewatch/proxy compile
+pnpm compile
 
-# Build Docker image (from repo root)
-docker build -t flarewatch-proxy -f services/proxy/docker/Dockerfile .
+# Run tests
+pnpm test
 
-# Deploy to Cloudflare Workers
-pnpm proxy:deploy
+# Build Docker image
+docker build -t flarewatch-proxy -f docker/Dockerfile .
 ```
 
+## License
+
+MIT License. See `LICENSE`.
+
 ## Troubleshooting
-
-### "TCP checks require Node.js runtime"
-
-TCP_PING checks only work on Node.js/Docker, not on Cloudflare Workers. Use a Docker deployment for TCP monitoring.
-
-### "SSL checks require Node.js runtime"
-
-Same as above - SSL certificate monitoring requires Node.js. Deploy with Docker for full functionality.
 
 ### Connection refused
 

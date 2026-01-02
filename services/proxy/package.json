@@ -5,36 +5,33 @@
   "description": "Self-hostable proxy for FlareWatch uptime monitoring",
   "type": "module",
   "main": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./node": "./src/adapters/node.ts",
-    "./cloudflare": "./src/adapters/cloudflare.ts"
-  },
   "scripts": {
-    "compile": "tsc --noEmit",
     "build": "node build.ts",
-    "dev": "tsx watch src/adapters/node.ts",
-    "start": "node dist/node.mjs",
-    "start:dev": "tsx src/adapters/node.ts",
-    "deploy": "wrangler deploy",
-    "docker:build": "docker build -t flarewatch-proxy -f docker/Dockerfile ../..",
+    "compile": "tsc --noEmit",
+    "dev": "tsx watch src/index.ts",
+    "docker:build": "docker build -t flarewatch-proxy -f docker/Dockerfile .",
     "docker:run": "docker run -p 3000:3000 flarewatch-proxy",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "lint": "oxlint --deny-warnings --type-aware --type-check --report-unused-disable-directives",
+    "start": "node dist/index.mjs",
+    "start:dev": "tsx src/index.ts",
     "test": "vitest run"
   },
   "dependencies": {
-    "@flarewatch/shared": "workspace:*",
     "@hono/node-server": "^1.14.3",
     "hono": "^4.11.3",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "catalog:",
-    "@flarewatch/ts-config": "workspace:*",
-    "@types/node": "catalog:",
+    "@types/node": "24.10.4",
     "esbuild": "^0.27.2",
+    "oxfmt": "0.21.0",
+    "oxlint": "1.36.0",
+    "oxlint-tsgolint": "0.10.0",
     "tsx": "^4.21.0",
-    "typescript": "catalog:",
-    "wrangler": "catalog:"
+    "typescript": "5.9.3",
+    "vitest": "4.0.16"
   },
   "engines": {
     "node": ">=24.0.0"
