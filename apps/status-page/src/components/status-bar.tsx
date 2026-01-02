@@ -87,13 +87,13 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const dailyStatus = useMemo(() => generateDailyStatus(monitorId, state), [monitorId, state]);
 
-  const { ref, width } = useContainerWidth();
+  const { ref, width, isReady } = useContainerWidth();
 
   const mobileBarCount = useMemo(() => {
     // calculate how many bars fit based on container width
-    if (width === 0) return dailyStatus.length;
+    if (!isReady) return 0;
     return Math.min(Math.floor(width / STATUS_BAR.MOBILE_BAR_WIDTH), dailyStatus.length);
-  }, [width, dailyStatus.length]);
+  }, [width, isReady, dailyStatus.length]);
 
   const mobileBars = useMemo(
     () => dailyStatus.slice(-mobileBarCount),
@@ -147,7 +147,12 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
               </DialogTitle>
               <DialogClose
                 render={
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    aria-label={t('action.close')}
+                  >
                     <IconX className="h-4 w-4" />
                   </Button>
                 }
@@ -156,9 +161,9 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
           </DialogHeader>
 
           <div className="space-y-2">
-            {selectedDay?.incidents.map((incident, idx) => (
+            {selectedDay?.incidents.map((incident) => (
               <div
-                key={idx}
+                key={`${incident.startTime}-${incident.endTime}`}
                 className="rounded-md border border-neutral-200 dark:border-neutral-800 p-3 text-sm"
               >
                 <div className="font-mono text-xs text-neutral-500 mb-1">

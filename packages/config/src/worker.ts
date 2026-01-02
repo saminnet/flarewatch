@@ -13,7 +13,7 @@ export const workerConfig: WorkerConfig = {
   monitors: [
     {
       id: 'demo_example',
-      name: 'Example Domain (demo)',
+      name: 'Example Domain',
       method: 'GET',
       target: 'https://example.com',
       expectedCodes: [200],
@@ -23,7 +23,7 @@ export const workerConfig: WorkerConfig = {
     },
     {
       id: 'demo_cloudflare_trace',
-      name: 'Cloudflare Trace (demo)',
+      name: 'Cloudflare Trace',
       method: 'GET',
       target: 'https://cloudflare.com/cdn-cgi/trace',
       expectedCodes: [200],
@@ -33,7 +33,7 @@ export const workerConfig: WorkerConfig = {
     },
     {
       id: 'demo_cloudflare_status',
-      name: 'Cloudflare Status API (demo)',
+      name: 'Cloudflare Status API',
       method: 'GET',
       target: 'https://www.cloudflarestatus.com/api/v2/status.json',
       expectedCodes: [200],

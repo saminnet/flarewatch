@@ -16,6 +16,7 @@
   "action.delete": "Delete",
   "action.deleting": "Deleting...",
   "action.clear": "Clear",
+  "action.close": "Close",
 
   "error.pageNotFound": "Page not found",
   "error.pageNotFoundDesc": "The page you're looking for doesn't exist.",

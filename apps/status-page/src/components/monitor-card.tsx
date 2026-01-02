@@ -86,7 +86,7 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-start gap-2 min-w-0">
                 {monitor.link ? (
                   <a
                     href={monitor.link}
@@ -94,14 +94,18 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     onMouseDown={(e) => e.stopPropagation()}
-                    className="group flex items-center gap-1.5 font-medium text-neutral-900 dark:text-neutral-100 truncate hover:underline"
+                    className="group flex items-start gap-1.5 font-medium text-neutral-900 dark:text-neutral-100 min-w-0 hover:underline"
                   >
-                    {monitor.name}
-                    <IconExternalLink className="h-3.5 w-3.5 shrink-0 text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
+                    <span className="line-clamp-2 wrap-break-word sm:line-clamp-1">
+                      {monitor.name}
+                    </span>
+                    <IconExternalLink className="hidden sm:inline-flex h-3.5 w-3.5 shrink-0 text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300" />
                   </a>
                 ) : (
-                  <h3 className="font-medium text-neutral-900 dark:text-neutral-100 truncate">
-                    {monitor.name}
+                  <h3 className="font-medium text-neutral-900 dark:text-neutral-100 min-w-0">
+                    <span className="line-clamp-2 wrap-break-word sm:line-clamp-1">
+                      {monitor.name}
+                    </span>
                   </h3>
                 )}
                 {monitor.tooltip && (
@@ -118,42 +122,47 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
               </div>
 
               {!isUp && error && <p className="text-xs text-red-500 truncate mt-0.5">{error}</p>}
+              {latency && (
+                <div className="sm:hidden mt-1 flex items-center gap-1.5 text-xs text-neutral-400">
+                  <span className="font-medium text-neutral-600 dark:text-neutral-300">
+                    {latency.ping}ms
+                  </span>
+                  <span aria-hidden="true">•</span>
+                  <span>{latency.loc}</span>
+                </div>
+              )}
             </div>
 
             {latency && (
-              <>
-                {/* Desktop: latency + colo stacked */}
-                <div className="hidden sm:block text-right">
-                  <div className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    {latency.ping}ms
-                  </div>
-                  {monitor.isProxy ? (
-                    <span className="text-xs text-neutral-400">{latency.loc}</span>
-                  ) : (
-                    <Tooltip>
-                      <TooltipTrigger
-                        className="text-xs text-neutral-400 cursor-help"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {latency.loc}
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <div className="flex flex-col gap-1">
-                          <div className="font-medium">
-                            <span className="font-mono">{latency.loc}</span>
-                            {coloLabel ? <span>{` — ${coloLabel}`}</span> : null}
-                          </div>
-                          <div className="opacity-80">{t('monitor.checkLocation.cloudflare')}</div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-                {/* Mobile: just colo code */}
-                <span className="sm:hidden text-xs text-neutral-400 shrink-0" aria-hidden="true">
-                  {latency.loc}
+              <div className="hidden sm:flex items-center gap-1.5 text-right whitespace-nowrap">
+                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                  {latency.ping}ms
                 </span>
-              </>
+                <span className="text-xs text-neutral-400" aria-hidden="true">
+                  •
+                </span>
+                {monitor.isProxy ? (
+                  <span className="text-xs text-neutral-400">{latency.loc}</span>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger
+                      className="text-xs text-neutral-400 cursor-help"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {latency.loc}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="flex flex-col gap-1">
+                        <div className="font-medium">
+                          <span className="font-mono">{latency.loc}</span>
+                          {coloLabel ? <span>{` — ${coloLabel}`}</span> : null}
+                        </div>
+                        <div className="opacity-80">{t('monitor.checkLocation.cloudflare')}</div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
             )}
 
             <Badge
