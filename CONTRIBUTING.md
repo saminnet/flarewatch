@@ -27,3 +27,14 @@ pnpm -F @flarewatch/proxy test # proxy only
 - Shared types: `packages/shared`
 - Infrastructure (Pulumi): `infra`
 - Optional proxy: `services/proxy`
+
+## Proxy repo workflow
+
+The proxy is maintained in its own repo: https://github.com/saminnet/flarewatch-proxy
+
+- Please open proxy PRs there (not in this repo).
+- After a proxy PR is merged, maintainers sync it into `services/proxy` with:
+
+```bash
+git subtree pull --prefix=services/proxy proxy-repo main --squash
+```
