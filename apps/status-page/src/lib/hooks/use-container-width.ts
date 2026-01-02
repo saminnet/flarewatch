@@ -1,10 +1,12 @@
 import { useRef, useState, useLayoutEffect, useEffect } from 'react';
+import { useHydrated } from './use-hydrated';
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 export function useContainerWidth<T extends HTMLElement = HTMLDivElement>() {
   const ref = useRef<T>(null);
   const [width, setWidth] = useState(0);
+  const isHydrated = useHydrated();
 
   useIsomorphicLayoutEffect(() => {
     if (!ref.current) return;
@@ -24,5 +26,5 @@ export function useContainerWidth<T extends HTMLElement = HTMLDivElement>() {
     return () => observer.disconnect();
   }, []);
 
-  return { ref, width };
+  return { ref, width, isReady: isHydrated && width > 0 };
 }
