@@ -3,6 +3,7 @@ import * as cloudflare from '@pulumi/cloudflare';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getStatusPageBuild } from './status-page-build.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,25 +79,25 @@ new cloudflare.WorkersCronTrigger('cron', {
   schedules: [{ cron: CRON_EVERY_MINUTE }],
 });
 
-const statusPagePath = path.join(__dirname, '../apps/status-page/dist/server/index.js');
-if (!fs.existsSync(statusPagePath)) {
-  throw new Error(`Status page bundle not found at "${statusPagePath}". Run: pnpm build`);
-}
-const statusPageContent = fs.readFileSync(statusPagePath, 'utf-8');
+const statusPageBuild = getStatusPageBuild(__dirname, MAIN_MODULE);
 
-const statusPageWorker = new cloudflare.WorkersScript('statusPage', {
+const statusPageWorker = new cloudflare.Worker('statusPage', {
   accountId,
-  scriptName: projectName,
-  content: statusPageContent,
+  name: projectName,
+  observability: { enabled: true },
+});
+
+const statusPageVersion = new cloudflare.WorkerVersion('statusPageVersion', {
+  accountId,
+  workerId: statusPageWorker.name,
   mainModule: MAIN_MODULE,
   compatibilityDate: COMPATIBILITY_DATE,
   compatibilityFlags: COMPATIBILITY_FLAGS,
-  observability: { enabled: true },
   assets: {
-    directory: path.join(__dirname, '../apps/status-page/dist/client'),
+    directory: statusPageBuild.clientDir,
   },
   bindings: pulumi.all([statusPageBasicAuth, adminBasicAuth]).apply(([spAuth, adminAuth]) => {
-    const bindings: cloudflare.types.input.WorkersScriptBinding[] = [
+    const bindings: cloudflare.types.input.WorkerVersionBinding[] = [
       {
         name: BINDING_NAMES.STATE,
         type: BINDING_TYPES.KV_NAMESPACE,
@@ -119,27 +120,50 @@ const statusPageWorker = new cloudflare.WorkersScript('statusPage', {
     }
     return bindings;
   }),
+  modules: statusPageBuild.modules,
+});
+
+const statusPageVersionId = statusPageVersion.id.apply((id) => id.split('/').pop() ?? id);
+
+const statusPageDeployment = new cloudflare.WorkersDeployment('statusPageDeployment', {
+  accountId,
+  scriptName: statusPageWorker.name,
+  strategy: 'percentage',
+  versions: [
+    {
+      percentage: 100,
+      versionId: statusPageVersionId,
+    },
+  ],
 });
 
 // Status page routing: custom domain OR workers.dev subdomain
 if (customDomain && customDomainZoneId) {
   // Use custom domain (e.g., status.example.com)
-  new cloudflare.WorkersCustomDomain('statusPageDomain', {
-    accountId,
-    zoneId: customDomainZoneId,
-    hostname: customDomain,
-    service: statusPageWorker.scriptName,
-  });
+  new cloudflare.WorkersCustomDomain(
+    'statusPageDomain',
+    {
+      accountId,
+      zoneId: customDomainZoneId,
+      hostname: customDomain,
+      service: statusPageWorker.name,
+    },
+    { dependsOn: statusPageDeployment },
+  );
 } else {
   // Fall back to workers.dev subdomain
-  new cloudflare.WorkersScriptSubdomain('statusPageSubdomain', {
-    accountId,
-    scriptName: statusPageWorker.scriptName,
-    enabled: true,
-  });
+  new cloudflare.WorkersScriptSubdomain(
+    'statusPageSubdomain',
+    {
+      accountId,
+      scriptName: statusPageWorker.name,
+      enabled: true,
+    },
+    { dependsOn: statusPageDeployment },
+  );
 }
 
 // Exports
 export const kvNamespaceId = kvNamespace.id;
 export const workerScriptName = worker.scriptName;
-export const statusPageWorkerName = statusPageWorker.scriptName;
+export const statusPageWorkerName = statusPageWorker.name;

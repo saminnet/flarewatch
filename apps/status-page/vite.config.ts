@@ -26,17 +26,6 @@ const config = defineConfig({
     dedupe: ['react', 'react-dom'],
   },
   environments: {
-    // Disable code splitting for SSR so Pulumi can deploy a single server bundle
-    ssr: {
-      build: {
-        rollupOptions: {
-          output: {
-            inlineDynamicImports: true,
-          },
-        },
-      },
-    },
-    // Client build uses code splitting for better caching
     client: {
       build: {
         rollupOptions: {
