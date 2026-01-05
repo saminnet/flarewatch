@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { format } from 'date-fns';
+import { formatDateTime } from '@/lib/date';
 import { IconPencil, IconTrash } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -43,11 +43,11 @@ export function MaintenanceRow({ maintenance, monitors, onEdit, onDelete }: Main
 
           <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-neutral-500">
             <span>
-              {t('field.from')}: {format(startDate, 'PPp')}
+              {t('field.from')}: {formatDateTime(startDate)}
             </span>
             {endDate && (
               <span>
-                {t('field.to')}: {format(endDate, 'PPp')}
+                {t('field.to')}: {formatDateTime(endDate)}
               </span>
             )}
           </div>

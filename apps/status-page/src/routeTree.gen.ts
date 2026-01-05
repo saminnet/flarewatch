@@ -16,6 +16,7 @@ import { Route as EmbedMonitorIdRouteImport } from './routes/embed.$monitorId'
 import { Route as ApiMaintenancesRouteImport } from './routes/api/maintenances'
 import { Route as ApiDataRouteImport } from './routes/api/data'
 import { Route as ApiBadgeRouteImport } from './routes/api/badge'
+import { Route as ApiAdminSessionRouteImport } from './routes/api/admin/session'
 import { Route as ApiAdminMaintenancesRouteImport } from './routes/api/admin/maintenances'
 
 const EventsRoute = EventsRouteImport.update({
@@ -53,6 +54,11 @@ const ApiBadgeRoute = ApiBadgeRouteImport.update({
   path: '/api/badge',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminSessionRoute = ApiAdminSessionRouteImport.update({
+  id: '/api/admin/session',
+  path: '/api/admin/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminMaintenancesRoute = ApiAdminMaintenancesRouteImport.update({
   id: '/api/admin/maintenances',
   path: '/api/admin/maintenances',
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/api/maintenances': typeof ApiMaintenancesRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
+  '/api/admin/session': typeof ApiAdminSessionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/api/maintenances': typeof ApiMaintenancesRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
+  '/api/admin/session': typeof ApiAdminSessionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/api/maintenances': typeof ApiMaintenancesRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
+  '/api/admin/session': typeof ApiAdminSessionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/api/maintenances'
     | '/embed/$monitorId'
     | '/api/admin/maintenances'
+    | '/api/admin/session'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/api/maintenances'
     | '/embed/$monitorId'
     | '/api/admin/maintenances'
+    | '/api/admin/session'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/api/maintenances'
     | '/embed/$monitorId'
     | '/api/admin/maintenances'
+    | '/api/admin/session'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,6 +144,7 @@ export interface RootRouteChildren {
   ApiMaintenancesRoute: typeof ApiMaintenancesRoute
   EmbedMonitorIdRoute: typeof EmbedMonitorIdRoute
   ApiAdminMaintenancesRoute: typeof ApiAdminMaintenancesRoute
+  ApiAdminSessionRoute: typeof ApiAdminSessionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBadgeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/session': {
+      id: '/api/admin/session'
+      path: '/api/admin/session'
+      fullPath: '/api/admin/session'
+      preLoaderRoute: typeof ApiAdminSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/maintenances': {
       id: '/api/admin/maintenances'
       path: '/api/admin/maintenances'
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMaintenancesRoute: ApiMaintenancesRoute,
   EmbedMonitorIdRoute: EmbedMonitorIdRoute,
   ApiAdminMaintenancesRoute: ApiAdminMaintenancesRoute,
+  ApiAdminSessionRoute: ApiAdminSessionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

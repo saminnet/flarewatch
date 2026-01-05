@@ -2,6 +2,7 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import { useTranslation } from 'react-i18next';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
 import { qk } from './keys';
+import { SessionExpiredError } from './auth.mutations';
 
 const API_PATH = '/api/admin/maintenances';
 
@@ -36,6 +37,10 @@ export type MaintenanceUpdatePatch = {
 async function request<T = void>(path: string, init: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) {
+    // Detect session expiry
+    if (res.status === 401) {
+      throw new SessionExpiredError();
+    }
     const text = await res.text().catch(() => '');
     throw new Error(text || `Request failed (${res.status})`);
   }

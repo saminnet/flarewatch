@@ -71,10 +71,8 @@ function isInMaintenance(
   return maintenances.some((m) => {
     const startTime = new Date(m.start).getTime() / 1000;
     const endTime = m.end ? new Date(m.end).getTime() / 1000 : Infinity;
-    const affectedMonitors = m.monitors ?? [];
-    return (
-      currentTime >= startTime && currentTime <= endTime && affectedMonitors.includes(monitorId)
-    );
+    const affectsMonitor = !m.monitors?.length || m.monitors.includes(monitorId);
+    return currentTime >= startTime && currentTime <= endTime && affectsMonitor;
   });
 }
 

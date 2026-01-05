@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MaintenanceRow } from '@/components/admin/maintenance-row';
+import { AdminLoginForm } from '@/components/admin/admin-login-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,39 +28,92 @@ import {
   useDeleteMaintenance,
   type MaintenanceUpdatePatch,
 } from '@/lib/query/maintenance.mutations';
+import { useAdminLogout, isSessionExpiredError } from '@/lib/query/auth.mutations';
+import { checkAdminAuthServerFn, type AdminAuthState } from '@/lib/auth-server';
+import { useMaintenanceForm } from '@/lib/hooks/use-maintenance-form';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
 import { SEVERITY_OPTIONS } from '@/lib/maintenance';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 
-type FormData = {
-  title: string;
-  body: string;
-  start: Date | undefined;
-  end: Date | undefined;
-  monitors: string[];
-  color: string;
-};
-
-const DEFAULT_FORM: FormData = {
-  title: '',
-  body: '',
-  start: undefined,
-  end: undefined,
-  monitors: [],
-  color: 'yellow',
-};
-
 export const Route = createFileRoute('/admin')({
-  loader: async ({ context }) => {
-    await Promise.all([
-      context.queryClient.ensureQueryData(publicMonitorsQuery()),
-      context.queryClient.ensureQueryData(maintenancesQuery()),
-    ]);
+  beforeLoad: async () => {
+    const authState = await checkAdminAuthServerFn();
+    return { authState };
   },
-  component: MaintenancesAdmin,
+  loader: async ({ context }) => {
+    // Access authState from beforeLoad context
+    const { authState } = context as {
+      authState: AdminAuthState;
+      queryClient: typeof context.queryClient;
+    };
+
+    // Only prefetch data if authenticated
+    if (authState === 'authenticated') {
+      await Promise.all([
+        context.queryClient.ensureQueryData(publicMonitorsQuery()),
+        context.queryClient.ensureQueryData(maintenancesQuery()),
+      ]);
+    }
+
+    return { authState };
+  },
+  component: AdminPage,
 });
 
-function MaintenancesAdmin() {
+function AdminPage() {
+  const { authState: initialAuthState } = Route.useLoaderData();
+  const { t } = useTranslation();
+  const [auth, setAuth] = useState<AdminAuthState>(initialAuthState);
+
+  const handleSessionExpired = useCallback(() => {
+    setAuth('unauthenticated');
+  }, []);
+
+  const logoutMutation = useAdminLogout({
+    onSuccess: handleSessionExpired,
+    onError: () => {
+      // Logout failed, but still redirect to login for safety
+      handleSessionExpired();
+    },
+  });
+
+  const handleLogout = useCallback(() => {
+    logoutMutation.mutate();
+  }, [logoutMutation]);
+
+  if (auth === 'not_configured') {
+    return (
+      <div className={PAGE_CONTAINER_CLASSES}>
+        <EmptyState
+          icon={IconTool}
+          title={t('admin.notConfigured')}
+          description={t('admin.notConfiguredDesc')}
+        />
+        <div className="mt-6">
+          <Link to="/">
+            <Button variant="outline">{t('action.goBack')}</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (auth === 'unauthenticated') {
+    return <AdminLoginForm onLoginSuccess={() => setAuth('authenticated')} />;
+  }
+
+  return (
+    <MaintenancesAdminAuthed onLogout={handleLogout} onSessionExpired={handleSessionExpired} />
+  );
+}
+
+function MaintenancesAdminAuthed({
+  onLogout,
+  onSessionExpired,
+}: {
+  onLogout: () => void;
+  onSessionExpired: () => void;
+}) {
   const { t } = useTranslation();
   const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
   const { data: maintenances } = useSuspenseQuery(maintenancesQuery());
@@ -67,16 +121,37 @@ function MaintenancesAdmin() {
   const [editingMaintenance, setEditingMaintenance] = useState<Maintenance | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<FormData>(DEFAULT_FORM);
+  const {
+    formData,
+    errorMessage,
+    setErrorMessage,
+    resetForm,
+    updateField,
+    toggleMonitor,
+    populateFromMaintenance,
+    isEndBeforeStart,
+    isValid,
+  } = useMaintenanceForm();
+
+  // Handle session expiry in mutation errors
+  const handleMutationError = useCallback(
+    (error: Error) => {
+      if (isSessionExpiredError(error)) {
+        onSessionExpired();
+      } else {
+        setErrorMessage(error.message);
+      }
+    },
+    [onSessionExpired, setErrorMessage],
+  );
 
   const createMutation = useCreateMaintenance({
     onSuccess: () => {
       setIsCreating(false);
       resetForm();
     },
-    onError: (error) => setErrorMessage(error.message),
+    onError: handleMutationError,
   });
 
   const updateMutation = useUpdateMaintenance({
@@ -84,40 +159,39 @@ function MaintenancesAdmin() {
       setEditingMaintenance(null);
       resetForm();
     },
-    onError: (error) => setErrorMessage(error.message),
+    onError: handleMutationError,
   });
 
   const deleteMutation = useDeleteMaintenance({
     onSuccess: () => setDeleteConfirm(null),
-    onError: (error) => setErrorMessage(error.message),
+    onError: handleMutationError,
   });
 
-  const resetForm = () => setFormData(DEFAULT_FORM);
+  const openEditDialog = useCallback(
+    (maintenance: Maintenance) => {
+      setEditingMaintenance(maintenance);
+      populateFromMaintenance(maintenance);
+    },
+    [populateFromMaintenance],
+  );
 
-  const openEditDialog = (maintenance: Maintenance) => {
-    setErrorMessage(null);
-    setEditingMaintenance(maintenance);
-    setFormData({
-      title: maintenance.title ?? '',
-      body: maintenance.body,
-      start: new Date(maintenance.start),
-      end: maintenance.end ? new Date(maintenance.end) : undefined,
-      monitors: maintenance.monitors ?? [],
-      color: maintenance.color ?? 'yellow',
-    });
-  };
-
-  const openCreateDialog = () => {
+  const openCreateDialog = useCallback(() => {
     setErrorMessage(null);
     setIsCreating(true);
     resetForm();
-  };
+  }, [resetForm, setErrorMessage]);
 
-  const handleSubmit = () => {
+  const closeDialog = useCallback(() => {
+    setIsCreating(false);
+    setEditingMaintenance(null);
+    resetForm();
+  }, [resetForm]);
+
+  const handleSubmit = useCallback(() => {
     setErrorMessage(null);
     const body = formData.body.trim();
     if (!body || !formData.start) return;
-    if (formData.end && formData.end.getTime() < formData.start.getTime()) {
+    if (isEndBeforeStart) {
       setErrorMessage(t('validation.endAfterStart'));
       return;
     }
@@ -143,27 +217,30 @@ function MaintenancesAdmin() {
       };
       createMutation.mutate(data);
     }
-  };
+  }, [
+    formData,
+    isEndBeforeStart,
+    editingMaintenance,
+    createMutation,
+    updateMutation,
+    setErrorMessage,
+    t,
+  ]);
 
-  const toggleMonitor = (monitorId: string) => {
-    setFormData((prev) => {
-      const current = prev.monitors ?? [];
-      if (current.includes(monitorId)) {
-        return { ...prev, monitors: current.filter((id) => id !== monitorId) };
-      } else {
-        return { ...prev, monitors: [...current, monitorId] };
-      }
-    });
-  };
+  const handleDeleteConfirm = useCallback((id: string) => {
+    setDeleteConfirm(id);
+  }, []);
+
+  const handleDelete = useCallback(() => {
+    if (deleteConfirm) {
+      deleteMutation.mutate(deleteConfirm);
+    }
+  }, [deleteConfirm, deleteMutation]);
 
   const sortedMaintenances = useMemo(
     () =>
       [...maintenances].sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime()),
     [maintenances],
-  );
-
-  const isEndBeforeStart = Boolean(
-    formData.start && formData.end && formData.end.getTime() < formData.start.getTime(),
   );
 
   return (
@@ -182,10 +259,15 @@ function MaintenancesAdmin() {
             <p className="mt-1 text-sm text-neutral-500">{t('admin.subtitle')}</p>
           </div>
         </div>
-        <Button onClick={openCreateDialog} aria-label={t('admin.addMaintenance')}>
-          <IconPlus className="mr-2 h-4 w-4" />
-          {t('admin.addMaintenance')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={onLogout}>
+            {t('action.signOut')}
+          </Button>
+          <Button onClick={openCreateDialog} aria-label={t('admin.addMaintenance')}>
+            <IconPlus className="mr-2 h-4 w-4" />
+            {t('admin.addMaintenance')}
+          </Button>
+        </div>
       </div>
 
       {errorMessage && (
@@ -208,7 +290,7 @@ function MaintenancesAdmin() {
               maintenance={maintenance}
               monitors={monitors}
               onEdit={() => openEditDialog(maintenance)}
-              onDelete={() => setDeleteConfirm(maintenance.id)}
+              onDelete={() => handleDeleteConfirm(maintenance.id)}
             />
           ))}
         </div>
@@ -217,12 +299,7 @@ function MaintenancesAdmin() {
       <Dialog
         open={isCreating || !!editingMaintenance}
         onOpenChange={(open) => {
-          if (!open) {
-            setIsCreating(false);
-            setEditingMaintenance(null);
-            resetForm();
-            setErrorMessage(null);
-          }
+          if (!open) closeDialog();
         }}
       >
         <DialogContent className="max-w-lg">
@@ -240,7 +317,7 @@ function MaintenancesAdmin() {
               <Input
                 id="title"
                 value={formData.title}
-                onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+                onChange={(e) => updateField('title', e.target.value)}
                 placeholder={t('field.titleOptional')}
               />
             </div>
@@ -252,7 +329,7 @@ function MaintenancesAdmin() {
               <Textarea
                 id="body"
                 value={formData.body}
-                onChange={(e) => setFormData((prev) => ({ ...prev, body: e.target.value }))}
+                onChange={(e) => updateField('body', e.target.value)}
                 placeholder={t('field.descriptionRequired')}
                 rows={3}
               />
@@ -263,7 +340,7 @@ function MaintenancesAdmin() {
                 <Label className="text-xs text-neutral-500">{t('field.start')} *</Label>
                 <DateTimePicker
                   value={formData.start}
-                  onChange={(date) => setFormData((prev) => ({ ...prev, start: date }))}
+                  onChange={(date) => updateField('start', date)}
                   placeholder={t('field.selectStart')}
                 />
               </div>
@@ -271,7 +348,7 @@ function MaintenancesAdmin() {
                 <Label className="text-xs text-neutral-500">{t('field.end')}</Label>
                 <DateTimePicker
                   value={formData.end}
-                  onChange={(date) => setFormData((prev) => ({ ...prev, end: date }))}
+                  onChange={(date) => updateField('end', date)}
                   placeholder={t('field.selectEnd')}
                   clearLabel={t('action.clear')}
                 />
@@ -285,12 +362,13 @@ function MaintenancesAdmin() {
 
             <div>
               <Label className="text-xs text-neutral-500">{t('field.severity')}</Label>
-              <div className="mt-1.5 flex gap-2">
+              <div className="mt-1.5 flex gap-2" role="group" aria-label={t('field.severity')}>
                 {SEVERITY_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, color: option.value }))}
+                    onClick={() => updateField('color', option.value)}
+                    aria-label={t(option.labelKey)}
                     aria-pressed={formData.color === option.value}
                     className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${
                       formData.color === option.value
@@ -298,7 +376,7 @@ function MaintenancesAdmin() {
                         : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600'
                     }`}
                   >
-                    <span className={`h-2.5 w-2.5 rounded-full ${option.dot}`} />
+                    <span className={`h-2.5 w-2.5 rounded-full ${option.dot}`} aria-hidden="true" />
                     {t(option.labelKey)}
                   </button>
                 ))}
@@ -311,11 +389,11 @@ function MaintenancesAdmin() {
                 {monitors.map((monitor) => (
                   <Badge
                     key={monitor.id}
-                    variant={formData.monitors?.includes(monitor.id) ? 'default' : 'outline'}
+                    variant={formData.monitors.includes(monitor.id) ? 'default' : 'outline'}
                     className="cursor-pointer"
                     onClick={() => toggleMonitor(monitor.id)}
                     render={<button type="button" />}
-                    aria-pressed={formData.monitors?.includes(monitor.id)}
+                    aria-pressed={formData.monitors.includes(monitor.id)}
                   >
                     {monitor.name}
                   </Badge>
@@ -328,13 +406,7 @@ function MaintenancesAdmin() {
             <DialogClose render={<Button variant="outline">{t('action.cancel')}</Button>} />
             <Button
               onClick={handleSubmit}
-              disabled={
-                !formData.body.trim() ||
-                !formData.start ||
-                isEndBeforeStart ||
-                createMutation.isPending ||
-                updateMutation.isPending
-              }
+              disabled={!isValid || createMutation.isPending || updateMutation.isPending}
             >
               {createMutation.isPending || updateMutation.isPending
                 ? t('action.saving')
@@ -354,7 +426,7 @@ function MaintenancesAdmin() {
             <DialogClose render={<Button variant="outline">{t('action.cancel')}</Button>} />
             <Button
               variant="destructive"
-              onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm)}
+              onClick={handleDelete}
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? t('action.deleting') : t('action.delete')}

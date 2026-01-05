@@ -20,10 +20,10 @@ These are **Worker secrets** (not in git):
 - `FLAREWATCH_STATUS_PAGE_BASIC_AUTH="<username>:<password>"`
   - Protects the entire status page.
 - `FLAREWATCH_ADMIN_BASIC_AUTH="<username>:<password>"`
-  - Enables and protects `/admin` and `/api/admin/*`.
-  - If unset: `/admin` returns `404` and `/api/admin/*` returns `403`.
+  - Enables and protects `/admin` and `/api/admin/*` using an in-app login (session cookie + logout button).
+  - In production, if unset: `/admin` returns `404` and `/api/admin/*` returns `403`. In dev, admin is allowed without creds.
 
-Note: browsers cache Basic Auth credentials for the session. To “log out”, close the tab/window or use a private window.
+Note: browsers cache Basic Auth credentials for the session (this applies to `FLAREWATCH_STATUS_PAGE_BASIC_AUTH`). To “log out”, close the tab/window or use a private window.
 
 ## Local development
 

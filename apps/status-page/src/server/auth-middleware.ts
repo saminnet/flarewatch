@@ -1,4 +1,5 @@
 import type { RequestServerOptions, RequestServerResult } from '@tanstack/react-start';
+import { getAdminSessionCookie, timingSafeEqual, validateSession } from '@/lib/auth-utils';
 import { resolveRuntimeEnv } from '@/lib/runtime-env';
 
 function isAdminRoute(pathname: string): boolean {
@@ -8,13 +9,6 @@ function isAdminRoute(pathname: string): boolean {
     pathname === '/api/admin' ||
     pathname.startsWith('/api/admin/')
   );
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
 }
 
 function encodeBase64(value: string): string {
@@ -34,6 +28,30 @@ function unauthorized(realm: string): Response {
     status: 401,
     headers: { 'WWW-Authenticate': `Basic realm="${realm}"` },
   });
+}
+
+function unauthorizedAdmin(): Response {
+  return new Response(JSON.stringify({ error: 'Not authenticated' }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function forbidden(message: string): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status: 403,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function isWriteMethod(method: string): boolean {
+  return method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+}
+
+function hasInvalidOrigin(request: Request): boolean {
+  const origin = request.headers.get('Origin');
+  if (!origin) return false;
+  return origin !== new URL(request.url).origin;
 }
 
 export async function authMiddlewareServer(
@@ -56,8 +74,40 @@ export async function authMiddlewareServer(
       return new Response('Admin access not configured', { status: 403 });
     }
 
-    if (!checkBasicAuth(request, adminCreds)) return unauthorized('FlareWatch Admin');
-    return await next();
+    // CSRF hardening for cookie-based sessions on admin APIs.
+    if (
+      pathname.startsWith('/api/admin/') &&
+      isWriteMethod(request.method) &&
+      hasInvalidOrigin(request)
+    ) {
+      return forbidden('Invalid origin');
+    }
+
+    // Allow the admin UI to render a login page when not authenticated.
+    if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+      return await next();
+    }
+
+    // Allow session endpoints to handle login/logout/status.
+    if (pathname === '/api/admin/session') {
+      return await next();
+    }
+
+    // Auth for admin APIs: session cookie OR legacy Basic Auth header.
+    const kv = env?.FLAREWATCH_STATE;
+    const sessionId = getAdminSessionCookie(request.headers.get('Cookie'));
+    if (kv && sessionId) {
+      const session = await validateSession(kv, sessionId);
+      if (session) {
+        return await next();
+      }
+    }
+
+    if (checkBasicAuth(request, adminCreds)) {
+      return await next();
+    }
+
+    return unauthorizedAdmin();
   }
 
   const siteCreds = env?.FLAREWATCH_STATUS_PAGE_BASIC_AUTH;
