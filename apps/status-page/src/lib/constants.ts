@@ -48,3 +48,14 @@ export const PAGE_CONTAINER_CLASSES = 'container mx-auto max-w-5xl px-4 py-8';
 export const STATUS_BAR = {
   MOBILE_BAR_WIDTH: 8, // w-1.5 (6px) + gap-0.5 (2px)
 } as const;
+
+// Auth constants
+export const AUTH = {
+  COOKIE_NAME: 'flarewatch_admin_session',
+  SESSION_KEY_PREFIX: 'admin_session:',
+  SESSION_TTL_SECONDS: 60 * 60 * 24 * 14, // 14 days
+
+  LOGIN_RATE_LIMIT_MAX_ATTEMPTS: 10,
+  LOGIN_RATE_LIMIT_WINDOW_SECONDS: 10 * 60, // 10 minutes
+  LOGIN_RATE_LIMIT_PREFIX: 'admin_login_fail:',
+} as const;
