@@ -82,9 +82,7 @@ Optional GitHub Secrets (only if you use these features):
 ```ts
 // packages/config/src/worker.ts
 export const workerConfig = {
-  monitors: [
-    { id: 'api', name: 'API', method: 'GET', target: 'https://example.com/health' },
-  ],
+  monitors: [{ id: 'api', name: 'API', method: 'GET', target: 'https://example.com/health' }],
 };
 ```
 
