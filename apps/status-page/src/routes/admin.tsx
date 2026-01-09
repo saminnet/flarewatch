@@ -2,8 +2,17 @@ import { useState, useMemo, useCallback } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { IconPlus, IconTool, IconArrowLeft } from '@tabler/icons-react';
+import {
+  IconPlus,
+  IconTool,
+  IconArrowLeft,
+  IconCalendarEvent,
+  IconAlertTriangle,
+  IconClock,
+  IconCircleCheck,
+} from '@tabler/icons-react';
 import { Link } from '@tanstack/react-router';
+import { getMaintenanceStatus, SEVERITY_OPTIONS } from '@/lib/maintenance';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -31,8 +40,8 @@ import {
 import { useAdminLogout, isSessionExpiredError } from '@/lib/query/auth.mutations';
 import { checkAdminAuthServerFn, type AdminAuthState } from '@/lib/auth-server';
 import { useMaintenanceForm } from '@/lib/hooks/use-maintenance-form';
+import { useNow } from '@/lib/hooks/use-now';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
-import { SEVERITY_OPTIONS } from '@/lib/maintenance';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 
 export const Route = createFileRoute('/admin')({
@@ -55,15 +64,22 @@ export const Route = createFileRoute('/admin')({
       ]);
     }
 
-    return { authState };
+    // Capture timestamp at load time for SSR hydration consistency
+    const loaderNowMs = Date.now();
+    return { authState, loaderNowMs };
   },
   component: AdminPage,
 });
 
 function AdminPage() {
-  const { authState: initialAuthState } = Route.useLoaderData();
+  const { authState: initialAuthState, loaderNowMs } = Route.useLoaderData();
   const { t } = useTranslation();
   const [auth, setAuth] = useState<AdminAuthState>(initialAuthState);
+
+  const nowMs = useNow({
+    serverTime: loaderNowMs,
+    enabled: auth === 'authenticated',
+  });
 
   const handleSessionExpired = useCallback(() => {
     setAuth('unauthenticated');
@@ -103,16 +119,22 @@ function AdminPage() {
   }
 
   return (
-    <MaintenancesAdminAuthed onLogout={handleLogout} onSessionExpired={handleSessionExpired} />
+    <MaintenancesAdminAuthed
+      onLogout={handleLogout}
+      onSessionExpired={handleSessionExpired}
+      nowMs={nowMs}
+    />
   );
 }
 
 function MaintenancesAdminAuthed({
   onLogout,
   onSessionExpired,
+  nowMs,
 }: {
   onLogout: () => void;
   onSessionExpired: () => void;
+  nowMs: number;
 }) {
   const { t } = useTranslation();
   const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
@@ -169,10 +191,11 @@ function MaintenancesAdminAuthed({
 
   const openEditDialog = useCallback(
     (maintenance: Maintenance) => {
+      setErrorMessage(null);
       setEditingMaintenance(maintenance);
       populateFromMaintenance(maintenance);
     },
-    [populateFromMaintenance],
+    [populateFromMaintenance, setErrorMessage],
   );
 
   const openCreateDialog = useCallback(() => {
@@ -190,11 +213,7 @@ function MaintenancesAdminAuthed({
   const handleSubmit = useCallback(() => {
     setErrorMessage(null);
     const body = formData.body.trim();
-    if (!body || !formData.start) return;
-    if (isEndBeforeStart) {
-      setErrorMessage(t('validation.endAfterStart'));
-      return;
-    }
+    if (!body || !formData.start || isEndBeforeStart) return;
 
     if (editingMaintenance) {
       const patch: MaintenanceUpdatePatch = {
@@ -224,7 +243,6 @@ function MaintenancesAdminAuthed({
     createMutation,
     updateMutation,
     setErrorMessage,
-    t,
   ]);
 
   const handleDeleteConfirm = useCallback((id: string) => {
@@ -243,31 +261,88 @@ function MaintenancesAdminAuthed({
     [maintenances],
   );
 
+  const maintenanceSummary = useMemo(() => {
+    let active = 0;
+    let upcoming = 0;
+    let past = 0;
+
+    for (const maintenance of maintenances) {
+      const status = getMaintenanceStatus(maintenance, nowMs);
+      if (status === 'active') {
+        active += 1;
+      } else if (status === 'past') {
+        past += 1;
+      } else {
+        upcoming += 1;
+      }
+    }
+
+    return { active, upcoming, past };
+  }, [maintenances, nowMs]);
+
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link to="/">
-            <Button variant="ghost" size="sm" aria-label={t('action.goBack')}>
-              <IconArrowLeft className="h-4 w-4" />
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link to="/">
+              <Button variant="ghost" size="icon-sm" aria-label={t('action.goBack')}>
+                <IconArrowLeft className="size-4" />
+              </Button>
+            </Link>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-orange-500/10">
+                <IconCalendarEvent className="size-5 text-orange-500" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
+                  {t('nav.admin')}
+                </h1>
+                <p className="text-sm text-neutral-500">{t('admin.subtitle')}</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onLogout}>
+              {t('action.signOut')}
             </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-              {t('nav.admin')}
-            </h1>
-            <p className="mt-1 text-sm text-neutral-500">{t('admin.subtitle')}</p>
+            {sortedMaintenances.length !== 0 && (
+              <Button
+                onClick={openCreateDialog}
+                aria-label={t('admin.addMaintenance')}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <IconPlus className="mr-2 size-4" />
+                {t('admin.addMaintenance')}
+              </Button>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onLogout}>
-            {t('action.signOut')}
-          </Button>
-          <Button onClick={openCreateDialog} aria-label={t('admin.addMaintenance')}>
-            <IconPlus className="mr-2 h-4 w-4" />
-            {t('admin.addMaintenance')}
-          </Button>
-        </div>
+
+        {/* Stats summary */}
+        {sortedMaintenances.length > 0 && (
+          <div className="mt-6 flex gap-4">
+            <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+              <IconAlertTriangle className="size-4 text-amber-500" />
+              <span>
+                {maintenanceSummary.active} {t('status.ongoing')}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+              <IconClock className="size-4 text-blue-500" />
+              <span>
+                {maintenanceSummary.upcoming} {t('status.upcoming')}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+              <IconCircleCheck className="size-4 text-emerald-500" />
+              <span>
+                {maintenanceSummary.past} {t('status.completed')}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {errorMessage && (
@@ -277,18 +352,30 @@ function MaintenancesAdminAuthed({
       )}
 
       {sortedMaintenances.length === 0 ? (
-        <EmptyState
-          icon={IconTool}
-          title={t('admin.noMaintenances')}
-          description={t('admin.createFirst')}
-        />
+        <div className="py-16 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-neutral-100 dark:bg-neutral-800 mb-4">
+            <IconCalendarEvent className="size-8 text-neutral-400" />
+          </div>
+          <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
+            {t('admin.noMaintenances')}
+          </h3>
+          <p className="mt-1 text-sm text-neutral-500 max-w-sm mx-auto">{t('admin.createFirst')}</p>
+          <Button
+            onClick={openCreateDialog}
+            className="mt-6 bg-orange-500 hover:bg-orange-600 text-white"
+          >
+            <IconPlus className="mr-2 size-4" />
+            {t('admin.addMaintenance')}
+          </Button>
+        </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {sortedMaintenances.map((maintenance) => (
             <MaintenanceRow
               key={maintenance.id}
               maintenance={maintenance}
               monitors={monitors}
+              nowMs={nowMs}
               onEdit={() => openEditDialog(maintenance)}
               onDelete={() => handleDeleteConfirm(maintenance.id)}
             />
@@ -402,11 +489,12 @@ function MaintenancesAdminAuthed({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 pt-2 border-t border-neutral-200 dark:border-neutral-800">
             <DialogClose render={<Button variant="outline">{t('action.cancel')}</Button>} />
             <Button
               onClick={handleSubmit}
               disabled={!isValid || createMutation.isPending || updateMutation.isPending}
+              className="bg-orange-500 hover:bg-orange-600 text-white"
             >
               {createMutation.isPending || updateMutation.isPending
                 ? t('action.saving')

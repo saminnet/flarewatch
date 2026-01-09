@@ -10,17 +10,16 @@ import { MaintenanceCard } from './maintenance-card';
 interface MaintenanceAlertsProps {
   maintenances: Maintenance[];
   monitors: PublicMonitor[];
-  nowMs?: number;
+  nowMs: number;
 }
 
 export function MaintenanceAlerts({ maintenances, monitors, nowMs }: MaintenanceAlertsProps) {
   const { t } = useTranslation();
   const monitorNamesById = useMonitorNameMap(monitors);
-  const stableNowMs = nowMs ?? Date.now();
 
   const { active: activeMaintenances, upcoming: upcomingMaintenances } = useMemo(
-    () => filterMaintenances(maintenances, { nowMs: stableNowMs }),
-    [maintenances, stableNowMs],
+    () => filterMaintenances(maintenances, { nowMs }),
+    [maintenances, nowMs],
   );
 
   if (activeMaintenances.length === 0 && upcomingMaintenances.length === 0) {
@@ -40,7 +39,7 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
               key={`active-${m.id}`}
               maintenance={m}
               monitorNames={monitorNamesById}
-              nowMs={stableNowMs}
+              nowMs={nowMs}
               variant="active"
             />
           ))}
@@ -51,7 +50,7 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
       {upcomingMaintenances.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
-            <IconCalendar className="h-5 w-5 text-blue-500" />
+            <IconCalendar className="size-5 text-blue-500" />
             {t('maintenance.upcoming')}
           </h3>
           {upcomingMaintenances.map((m) => (
@@ -59,7 +58,7 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
               key={`upcoming-${m.id}`}
               maintenance={m}
               monitorNames={monitorNamesById}
-              nowMs={stableNowMs}
+              nowMs={nowMs}
               variant="upcoming"
             />
           ))}

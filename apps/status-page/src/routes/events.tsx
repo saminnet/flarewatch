@@ -19,6 +19,7 @@ import { MaintenanceEventCard } from '@/components/events/maintenance-event-card
 import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/events/types';
 import type { PublicMonitor } from '@/lib/monitors';
 import { publicMonitorsQuery, monitorStateQuery } from '@/lib/query/monitors.queries';
+import { useNow } from '@/lib/hooks/use-now';
 import { getMaintenances } from '@/lib/kv';
 import type { Maintenance, MonitorState } from '@flarewatch/shared';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
@@ -53,7 +54,9 @@ export const Route = createFileRoute('/events')({
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(publicMonitorsQuery());
     const maintenances = await getMaintenances();
-    return { maintenances };
+
+    const loaderNowMs = Date.now();
+    return { maintenances, loaderNowMs };
   },
   component: EventsPage,
 });
@@ -126,7 +129,8 @@ function EventsPage() {
   const { t } = useTranslation();
   const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
   const { data: state } = useSuspenseQuery(monitorStateQuery());
-  const { maintenances } = Route.useLoaderData();
+  const { maintenances, loaderNowMs } = Route.useLoaderData();
+  const nowMs = useNow({ serverTime: loaderNowMs });
   const { month: selectedMonth, monitor: selectedMonitor, type: eventType } = Route.useSearch();
   const navigate = Route.useNavigate();
   const resolvedMonth = selectedMonth ?? getCurrentMonth();
@@ -303,6 +307,7 @@ function EventsPage() {
                 key={`maintenance-${event.maintenance.id}`}
                 event={event}
                 monitors={monitors}
+                nowMs={nowMs}
               />
             ),
           )}

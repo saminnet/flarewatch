@@ -63,6 +63,7 @@ export function DateTimePicker({
     const next = new Date(date);
     next.setHours(parseInt(hour, 10), parseInt(minute, 10), 0, 0);
     onChange?.(next);
+    setOpen(false);
   };
 
   const handleHourChange = (newHour: string | null) => {
@@ -98,13 +99,13 @@ export function DateTimePicker({
               className,
             )}
           >
-            <IconCalendar className="mr-2 h-4 w-4" />
+            <IconCalendar className="mr-2 size-4" />
             {value ? format(value, 'MMM d, yyyy HH:mm') : placeholder}
           </Button>
         }
       />
       <PopoverContent className="w-auto p-0" align="start">
-        <Calendar mode="single" selected={value} onSelect={handleDateSelect} initialFocus />
+        <Calendar mode="single" selected={value} onSelect={handleDateSelect} />
         <div className="border-t border-border p-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Time:</span>
