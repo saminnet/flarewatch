@@ -55,6 +55,7 @@ function InputGroupAddon({
   };
 
   return (
+    // oxlint-disable-next-line no-static-element-interactions
     <div
       role="group"
       data-slot="input-group-addon"
