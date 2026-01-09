@@ -15,14 +15,15 @@ import type { MaintenanceEvent } from './types';
 interface MaintenanceEventCardProps {
   event: MaintenanceEvent;
   monitors: PublicMonitor[];
+  nowMs: number;
 }
 
-export function MaintenanceEventCard({ event, monitors }: MaintenanceEventCardProps) {
+export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEventCardProps) {
   const { t } = useTranslation();
   const { maintenance } = event;
   const startDate = new Date(maintenance.start);
   const endDate = maintenance.end ? new Date(maintenance.end) : null;
-  const status = getMaintenanceStatus(maintenance);
+  const status = getMaintenanceStatus(maintenance, nowMs);
 
   const affectedMonitors = resolveAffectedMonitors(maintenance.monitors, monitors);
   const borderColor = getMaintenanceBorderClass(maintenance.color);

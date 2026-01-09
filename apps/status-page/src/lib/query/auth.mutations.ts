@@ -63,5 +63,12 @@ export function useAdminLogout(options?: {
  * Components can use this to redirect to login on stale auth state.
  */
 export function isSessionExpiredError(error: unknown): boolean {
-  return error instanceof SessionExpiredError && error.status === 401;
+  if (error instanceof SessionExpiredError) return true;
+  if (
+    error instanceof Error &&
+    'status' in error &&
+    (error as Error & { status: number }).status === 401
+  )
+    return true;
+  return false;
 }
