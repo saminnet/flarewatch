@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
 import { IconCalendar, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 
+import { formatUtc, parseYearMonth } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -15,20 +15,16 @@ interface MonthPickerProps {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function MonthPicker({ value, onChange, className }: MonthPickerProps) {
+  const { year: selectedYear, month: selectedMonth } = parseYearMonth(value);
   const [open, setOpen] = useState(false);
-  const [viewYear, setViewYear] = useState(() => {
-    const [year] = value.split('-');
-    return parseInt(year ?? new Date().getFullYear().toString(), 10);
-  });
+  const [viewYear, setViewYear] = useState(selectedYear);
 
   // Reset viewYear when value changes externally
   useEffect(() => {
-    const [year] = value.split('-');
-    setViewYear(parseInt(year ?? new Date().getFullYear().toString(), 10));
+    setViewYear(parseYearMonth(value).year);
   }, [value]);
 
-  const selectedYear = parseInt(value.split('-')[0] ?? '0', 10);
-  const selectedMonth = parseInt(value.split('-')[1] ?? '0', 10) - 1; // 0-indexed
+  const selectedMonthIndex = selectedMonth - 1; // 0-indexed for grid comparison
 
   const handleMonthClick = (monthIndex: number) => {
     const newValue = `${viewYear}-${(monthIndex + 1).toString().padStart(2, '0')}`;
@@ -36,7 +32,7 @@ export function MonthPicker({ value, onChange, className }: MonthPickerProps) {
     setOpen(false);
   };
 
-  const displayDate = new Date(`${value}-01`);
+  const displayDate = new Date(Date.UTC(selectedYear, selectedMonth - 1, 1));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -44,7 +40,7 @@ export function MonthPicker({ value, onChange, className }: MonthPickerProps) {
         render={
           <Button variant="outline" size="sm" className={cn('gap-1.5', className)}>
             <IconCalendar className="h-4 w-4 text-neutral-500" />
-            <span className="text-sm font-medium">{format(displayDate, 'MMM yyyy')}</span>
+            <span className="text-sm font-medium">{formatUtc(displayDate, 'MMM yyyy')}</span>
           </Button>
         }
       />
@@ -73,7 +69,7 @@ export function MonthPicker({ value, onChange, className }: MonthPickerProps) {
 
         <div className="grid grid-cols-3 gap-0.5">
           {MONTHS.map((month, i) => {
-            const isSelected = viewYear === selectedYear && i === selectedMonth;
+            const isSelected = viewYear === selectedYear && i === selectedMonthIndex;
             return (
               <Button
                 key={month}

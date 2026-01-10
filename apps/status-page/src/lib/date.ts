@@ -1,5 +1,47 @@
 import { format } from 'date-fns';
 
+/**
+ * Parse a "yyyy-MM" string into year and month numbers.
+ */
+export function parseYearMonth(value: string): { year: number; month: number } {
+  const [yearStr = '1970', monthStr = '01'] = value.split('-');
+  return {
+    year: Number(yearStr),
+    month: Number(monthStr),
+  };
+}
+
+/**
+ * Validate that a value is a valid "yyyy-MM" string.
+ */
+export function isValidYearMonth(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const match = value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return false;
+  const month = Number(match[2]);
+  return month >= 1 && month <= 12;
+}
+
+/**
+ * Shift a "yyyy-MM" string by a number of months.
+ */
+export function shiftYearMonth(value: string, deltaMonths: number): string {
+  const { year, month } = parseYearMonth(value);
+  const shifted = new Date(Date.UTC(year, month - 1 + deltaMonths, 1));
+  return shifted.toISOString().slice(0, 7);
+}
+
+/**
+ * Get UTC month boundaries for a "yyyy-MM" string.
+ */
+export function getUtcMonthBounds(value: string): { monthStart: Date; monthEnd: Date } {
+  const { year, month } = parseYearMonth(value);
+  const monthIndex = month - 1;
+  const monthStart = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0));
+  const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 0, 23, 59, 59, 999));
+  return { monthStart, monthEnd };
+}
+
 export function toUtcViewDate(date: Date): Date {
   return new Date(date.getTime() + date.getTimezoneOffset() * 60_000);
 }
