@@ -2,27 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { getMonitorState } from '@/lib/kv';
 import { isMonitorUp, getMonitorError } from '@/lib/uptime';
 import { workerConfig } from '@flarewatch/config/worker';
-import { pageConfig } from '@flarewatch/config';
-
-function getCorsHeaders(request: Request): Record<string, string> {
-  const allowedOrigins = pageConfig.apiCorsOrigins;
-  const origin = request.headers.get('Origin');
-
-  const base: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
-
-  if (!allowedOrigins || allowedOrigins.length === 0) {
-    return { ...base, 'Access-Control-Allow-Origin': '*' };
-  }
-
-  if (origin && allowedOrigins.includes(origin)) {
-    return { ...base, 'Access-Control-Allow-Origin': origin, Vary: 'Origin' };
-  }
-
-  return base;
-}
+import { getCorsHeaders } from '@/lib/cors';
 
 export const Route = createFileRoute('/api/data')({
   server: {

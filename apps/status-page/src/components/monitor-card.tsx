@@ -24,6 +24,12 @@ import { getStatusColor } from '@/lib/color';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { cn } from '@/lib/utils';
 
+function ChartSkeleton() {
+  return (
+    <div className="h-37.5 w-full rounded-md border border-dashed border-neutral-200 dark:border-neutral-800" />
+  );
+}
+
 function ChartLoadError() {
   const { t } = useTranslation();
   return (
@@ -60,12 +66,7 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
 
   return (
     <Card className="overflow-hidden p-0">
-      <Collapsible
-        open={open}
-        onOpenChange={(open) => {
-          onOpenChange?.(open);
-        }}
-      >
+      <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger
           nativeButton={false}
           render={<div />}
@@ -190,15 +191,11 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
                   {t('monitor.responseTimes')}
                 </h4>
                 {isHydrated ? (
-                  <Suspense
-                    fallback={
-                      <div className="h-37.5 w-full rounded-md border border-dashed border-neutral-200 dark:border-neutral-800" />
-                    }
-                  >
+                  <Suspense fallback={<ChartSkeleton />}>
                     <LazyLatencyChart monitor={monitor} state={state} />
                   </Suspense>
                 ) : (
-                  <div className="h-37.5 w-full rounded-md border border-dashed border-neutral-200 dark:border-neutral-800" />
+                  <ChartSkeleton />
                 )}
               </div>
             )}

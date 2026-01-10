@@ -25,6 +25,14 @@ const BINDING_TYPES = {
   SECRET_TEXT: 'secret_text',
 } as const;
 
+function createKvBinding(namespaceId: pulumi.Output<string>) {
+  return {
+    name: BINDING_NAMES.STATE,
+    type: BINDING_TYPES.KV_NAMESPACE,
+    namespaceId,
+  };
+}
+
 // Configuration (ENVs and secrets)
 const config = new pulumi.Config();
 const accountId = config.require('accountId');
@@ -56,11 +64,7 @@ const worker = new cloudflare.WorkersScript('worker', {
   compatibilityDate: COMPATIBILITY_DATE,
   compatibilityFlags: COMPATIBILITY_FLAGS,
   bindings: pulumi.output(proxyToken).apply((token) => [
-    {
-      name: BINDING_NAMES.STATE,
-      type: BINDING_TYPES.KV_NAMESPACE,
-      namespaceId: kvNamespace.id,
-    },
+    createKvBinding(kvNamespace.id),
     ...(token
       ? [
           {
@@ -98,11 +102,7 @@ const statusPageVersion = new cloudflare.WorkerVersion('statusPageVersion', {
   },
   bindings: pulumi.all([statusPageBasicAuth, adminBasicAuth]).apply(([spAuth, adminAuth]) => {
     const bindings: cloudflare.types.input.WorkerVersionBinding[] = [
-      {
-        name: BINDING_NAMES.STATE,
-        type: BINDING_TYPES.KV_NAMESPACE,
-        namespaceId: kvNamespace.id,
-      },
+      createKvBinding(kvNamespace.id),
     ];
     if (spAuth) {
       bindings.push({

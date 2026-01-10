@@ -53,6 +53,16 @@ export function OverallStatus({ state }: OverallStatusProps) {
     .replace(/\.\d{3}Z$/, ' UTC');
   const secondsAgo = currentTime - state.lastUpdate;
 
+  function getRefreshMessage() {
+    if (refreshCountdown !== null && refreshCountdown > 0) {
+      return t('status.refreshingIn', { seconds: refreshCountdown });
+    }
+    if (willRefreshSoon) {
+      return t('status.refreshing');
+    }
+    return t('status.stale');
+  }
+
   return (
     <Card className={`${config.bgClass} ${config.borderClass}`}>
       <div className="flex items-start gap-2">
@@ -87,17 +97,7 @@ export function OverallStatus({ state }: OverallStatusProps) {
               <Tooltip>
                 <TooltipTrigger className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 cursor-help">
                   <IconRefresh className={`h-3.5 w-3.5 ${willRefreshSoon ? 'animate-spin' : ''}`} />
-                  {refreshCountdown !== null && refreshCountdown > 0 ? (
-                    <span>
-                      {t('status.refreshingIn', {
-                        seconds: refreshCountdown,
-                      })}
-                    </span>
-                  ) : willRefreshSoon ? (
-                    <span>{t('status.refreshing')}</span>
-                  ) : (
-                    <span>{t('status.stale')}</span>
-                  )}
+                  <span>{getRefreshMessage()}</span>
                 </TooltipTrigger>
                 <TooltipContent>{t('status.autoRefresh')}</TooltipContent>
               </Tooltip>

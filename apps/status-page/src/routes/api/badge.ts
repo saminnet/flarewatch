@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getMonitorState } from '@/lib/kv';
+import { isMonitorUp } from '@/lib/uptime';
 import { workerConfig } from '@flarewatch/config/worker';
 
 type BadgePayload = {
@@ -57,19 +58,17 @@ export const Route = createFileRoute('/api/badge')({
             });
           }
 
-          const monitorIncidentHistory = state.incident?.[monitorId];
+          const hasIncidentHistory = Boolean(state.incident?.[monitorId]);
           const hasLatencyData = Boolean(state.latency?.[monitorId]?.recent?.length);
 
-          if (!monitorIncidentHistory || !hasLatencyData) {
+          if (!hasIncidentHistory || !hasLatencyData) {
             return new Response(JSON.stringify(errorBadge(label, 'unknown')), {
               status: 404,
               headers: jsonHeaders,
             });
           }
 
-          const lastIncident = monitorIncidentHistory[monitorIncidentHistory.length - 1];
-          const isUp =
-            monitorIncidentHistory.length === 0 || !lastIncident || lastIncident.end !== undefined;
+          const isUp = isMonitorUp(monitorId, state);
 
           const badge: BadgePayload = {
             schemaVersion: 1,

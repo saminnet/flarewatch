@@ -1,6 +1,6 @@
 import type { Maintenance } from '@flarewatch/shared';
 import { TIME_MS, UPCOMING_MAINTENANCE_DAYS } from './constants';
-import { formatUtc } from './date';
+import { formatUtc, formatDuration } from './date';
 
 export function isMaintenanceActive(maintenance: Maintenance, now = Date.now()): boolean {
   const startMs = new Date(maintenance.start).getTime();
@@ -71,17 +71,7 @@ export function filterMaintenances(
 
 export function formatTimeUntil(date: Date, now = new Date()): string {
   const diffMs = date.getTime() - now.getTime();
-  const diffMins = Math.floor(diffMs / TIME_MS.MINUTE);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffDays > 0) {
-    return `${diffDays}d ${diffHours % 24}h`;
-  }
-  if (diffHours > 0) {
-    return `${diffHours}h ${diffMins % 60}m`;
-  }
-  return `${diffMins}m`;
+  return formatDuration(diffMs, { minUnit: 'minutes' });
 }
 
 export function formatDateRange(start: Date, end: Date | null): string {

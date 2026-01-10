@@ -2,6 +2,13 @@ import { createFileRoute } from '@tanstack/react-router';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
 import { requireKv } from '@/lib/runtime-env';
 
+function jsonError(message: string, status: number): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 async function readMaintenances(kv: KVNamespace): Promise<Maintenance[]> {
   const data = await kv.get('maintenances', { type: 'json' });
   return (data as Maintenance[] | null) ?? [];
@@ -139,10 +146,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           return Response.json(maintenances);
         } catch (error) {
           console.error('Error listing maintenances:', error);
-          return new Response(JSON.stringify({ error: 'Internal server error' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonError('Internal server error', 500);
         }
       },
 
@@ -153,10 +157,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           const input = normalizeMaintenanceInput(body);
 
           if (!input) {
-            return new Response(JSON.stringify({ error: 'Invalid maintenance payload' }), {
-              status: 400,
-              headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonError('Invalid maintenance payload', 400);
           }
 
           const kv = await requireKv();
@@ -175,10 +176,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           return Response.json(maintenance, { status: 201 });
         } catch (error) {
           console.error('Error creating maintenance:', error);
-          return new Response(JSON.stringify({ error: 'Internal server error' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonError('Internal server error', 500);
         }
       },
 
@@ -188,10 +186,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           const body = (await request.json()) as { id: string; updates: unknown };
 
           if (!body.id) {
-            return new Response(JSON.stringify({ error: 'id is required' }), {
-              status: 400,
-              headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonError('id is required', 400);
           }
 
           const kv = await requireKv();
@@ -200,18 +195,12 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           const current = maintenances[index];
 
           if (!current) {
-            return new Response(JSON.stringify({ error: 'Maintenance not found' }), {
-              status: 404,
-              headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonError('Maintenance not found', 404);
           }
 
           const updates = normalizeMaintenanceUpdates(body.updates, current);
           if (!updates) {
-            return new Response(JSON.stringify({ error: 'Invalid maintenance updates' }), {
-              status: 400,
-              headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonError('Invalid maintenance updates', 400);
           }
 
           const updated: Maintenance = {
@@ -228,10 +217,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           return Response.json(updated);
         } catch (error) {
           console.error('Error updating maintenance:', error);
-          return new Response(JSON.stringify({ error: 'Internal server error' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonError('Internal server error', 500);
         }
       },
 
@@ -241,10 +227,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           const body = (await request.json()) as { id: string };
 
           if (!body.id) {
-            return new Response(JSON.stringify({ error: 'id is required' }), {
-              status: 400,
-              headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonError('id is required', 400);
           }
 
           const kv = await requireKv();
@@ -252,20 +235,14 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           const filtered = maintenances.filter((m) => m.id !== body.id);
 
           if (filtered.length === maintenances.length) {
-            return new Response(JSON.stringify({ error: 'Maintenance not found' }), {
-              status: 404,
-              headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonError('Maintenance not found', 404);
           }
 
           await kv.put('maintenances', JSON.stringify(filtered));
           return new Response(null, { status: 204 });
         } catch (error) {
           console.error('Error deleting maintenance:', error);
-          return new Response(JSON.stringify({ error: 'Internal server error' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonError('Internal server error', 500);
         }
       },
     },

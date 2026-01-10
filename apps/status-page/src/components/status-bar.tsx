@@ -11,8 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { IconX } from '@tabler/icons-react';
 import type { MonitorState } from '@flarewatch/shared';
-import { generateDailyStatus, formatDuration, type DailyStatusData } from '@/lib/uptime';
-import { formatUtc } from '@/lib/date';
+import { generateDailyStatus, type DailyStatusData } from '@/lib/uptime';
+import { formatUtc, formatDuration } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { useContainerWidth } from '@/lib/hooks/use-container-width';
 import { STATUS_BAR } from '@/lib/constants';
