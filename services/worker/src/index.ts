@@ -17,7 +17,7 @@ import {
   updateSSLCertificate,
   cleanupOldIncidents,
 } from './state/incidents';
-import { isMonitorState } from './state/validate';
+import { isMonitorState, parseMaintenances } from './state/validate';
 
 const log = createLogger('Worker');
 
@@ -33,35 +33,8 @@ export interface Env {
 /** Default KV write cooldown in minutes */
 const DEFAULT_COOLDOWN_MINUTES = 3;
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((v) => typeof v === 'string');
-}
-
-function isMaintenance(value: unknown): value is Maintenance {
-  if (!value || typeof value !== 'object') return false;
-  const obj = value as Record<string, unknown>;
-
-  if (typeof obj.id !== 'string') return false;
-  if (typeof obj.body !== 'string') return false;
-  if (typeof obj.createdAt !== 'number' || !Number.isFinite(obj.createdAt)) return false;
-  if (typeof obj.updatedAt !== 'number' || !Number.isFinite(obj.updatedAt)) return false;
-
-  if (typeof obj.start !== 'string' && typeof obj.start !== 'number') return false;
-  if (obj.end !== undefined && typeof obj.end !== 'string' && typeof obj.end !== 'number') {
-    return false;
-  }
-
-  if (obj.monitors !== undefined && !isStringArray(obj.monitors)) return false;
-  if (obj.title !== undefined && typeof obj.title !== 'string') return false;
-  if (obj.color !== undefined && typeof obj.color !== 'string') return false;
-
-  return true;
-}
-
-function parseMaintenances(value: unknown): Maintenance[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(isMaintenance);
-}
+/** Buffer (in seconds) around grace period threshold for notification timing */
+const GRACE_PERIOD_BUFFER_SECONDS = 30;
 
 function isInMaintenance(
   monitorId: string,
@@ -100,6 +73,19 @@ async function loadMaintenances(kv: KVNamespace): Promise<Maintenance[]> {
   }
 }
 
+async function safeCallback<T extends unknown[]>(
+  callback: ((...args: T) => Promise<void>) | undefined,
+  label: string,
+  ...args: T
+): Promise<void> {
+  if (!callback) return;
+  try {
+    await callback(...args);
+  } catch (error) {
+    log.error(`${label} error`, { error: String(error) });
+  }
+}
+
 /**
  * Determine if notification should be sent based on grace period
  */
@@ -119,20 +105,21 @@ function shouldNotify(
   const gracePeriodSeconds = gracePeriod * 60;
   const timeSinceIncident = currentTime - incidentStartTime;
 
+  const gracePeriodReached = timeSinceIncident >= gracePeriodSeconds - GRACE_PERIOD_BUFFER_SECONDS;
+
   if (isUp) {
     // Only notify UP if we would have notified DOWN
-    return statusChanged && timeSinceIncident >= gracePeriodSeconds - 30;
+    return statusChanged && gracePeriodReached;
   }
 
   // For DOWN: notify when grace period is reached or on subsequent changes
   if (statusChanged) {
-    return timeSinceIncident >= gracePeriodSeconds - 30;
+    return gracePeriodReached;
   }
 
   // Check if we just crossed the grace period threshold
-  return (
-    timeSinceIncident >= gracePeriodSeconds - 30 && timeSinceIncident < gracePeriodSeconds + 30
-  );
+  const justCrossedThreshold = timeSinceIncident < gracePeriodSeconds + GRACE_PERIOD_BUFFER_SECONDS;
+  return gracePeriodReached && justCrossedThreshold;
 }
 
 const Worker = {
@@ -212,33 +199,29 @@ const Worker = {
         }
       }
 
-      if (update.statusChanged && workerConfig.callbacks?.onStatusChange) {
-        try {
-          await workerConfig.callbacks.onStatusChange(
-            env,
-            monitor,
-            update.isUp,
-            update.incidentStartTime,
-            currentTime,
-            update.error,
-          );
-        } catch (error) {
-          log.error('Callback error', { error: String(error) });
-        }
+      if (update.statusChanged) {
+        await safeCallback(
+          workerConfig.callbacks?.onStatusChange,
+          'Callback',
+          env,
+          monitor,
+          update.isUp,
+          update.incidentStartTime,
+          currentTime,
+          update.error,
+        );
       }
 
-      if (!update.isUp && workerConfig.callbacks?.onIncident) {
-        try {
-          await workerConfig.callbacks.onIncident(
-            env,
-            monitor,
-            update.incidentStartTime,
-            currentTime,
-            update.error,
-          );
-        } catch (error) {
-          log.error('Incident callback error', { error: String(error) });
-        }
+      if (!update.isUp) {
+        await safeCallback(
+          workerConfig.callbacks?.onIncident,
+          'Incident callback',
+          env,
+          monitor,
+          update.incidentStartTime,
+          currentTime,
+          update.error,
+        );
       }
     }
 

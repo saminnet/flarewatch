@@ -132,24 +132,13 @@ export function updateSSLCertificate(
     state.sslCertificates = {};
   }
 
-  const cert: {
-    expiryDate: number;
-    daysUntilExpiry: number;
-    issuer?: string;
-    subject?: string;
-    lastCheck: number;
-  } = {
+  state.sslCertificates[monitorId] = {
     expiryDate: ssl.expiryDate,
     daysUntilExpiry: ssl.daysUntilExpiry,
     lastCheck: currentTime,
+    ...(ssl.issuer && { issuer: ssl.issuer }),
+    ...(ssl.subject && { subject: ssl.subject }),
   };
-  if (ssl.issuer) {
-    cert.issuer = ssl.issuer;
-  }
-  if (ssl.subject) {
-    cert.subject = ssl.subject;
-  }
-  state.sslCertificates[monitorId] = cert;
 }
 
 export function cleanupOldIncidents(

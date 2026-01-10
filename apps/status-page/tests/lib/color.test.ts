@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getStatusColor, getStatusHexColor, getStatusLabel } from '../../src/lib/color';
+import { getStatusColor, getStatusHexColor } from '../../src/lib/color';
 
 describe('color utilities', () => {
   it('maps uptime thresholds to tailwind classes', () => {
@@ -41,13 +41,5 @@ describe('color utilities', () => {
     expect(getStatusHexColor(95)).toBe('#f59e0b');
     expect(getStatusHexColor('not-a-number')).toBe('#a3a3a3');
     expect(getStatusHexColor(0)).toBe('#ef4444');
-  });
-
-  it('maps uptime thresholds to labels', () => {
-    expect(getStatusLabel(99.9)).toBe('Operational');
-    expect(getStatusLabel(99)).toBe('Good');
-    expect(getStatusLabel(95)).toBe('Degraded');
-    expect(getStatusLabel('not-a-number')).toBe('Unknown');
-    expect(getStatusLabel(0)).toBe('Down');
   });
 });

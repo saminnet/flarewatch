@@ -63,16 +63,3 @@ export function getStatusHexColor(percent: number | string, darker = false): str
     return '#ef4444'; // red-500
   }
 }
-
-/**
- * Get status label based on uptime percentage
- */
-export function getStatusLabel(percent: number | string): string {
-  const p = Number(percent);
-
-  if (p >= UPTIME_THRESHOLDS.EXCELLENT) return 'Operational';
-  if (p >= UPTIME_THRESHOLDS.GOOD) return 'Good';
-  if (p >= UPTIME_THRESHOLDS.DEGRADED) return 'Degraded';
-  if (Number.isNaN(p)) return 'Unknown';
-  return 'Down';
-}

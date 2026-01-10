@@ -1,5 +1,22 @@
 import { z } from 'zod';
-import type { MonitorState } from '@flarewatch/shared';
+import type { MonitorState, Maintenance } from '@flarewatch/shared';
+
+const MaintenanceSchema = z.object({
+  id: z.string(),
+  body: z.string(),
+  createdAt: z.number().finite(),
+  updatedAt: z.number().finite(),
+  start: z.union([z.string(), z.number()]),
+  end: z.union([z.string(), z.number()]).optional(),
+  monitors: z.array(z.string()).optional(),
+  title: z.string().optional(),
+  color: z.string().optional(),
+});
+
+export function parseMaintenances(value: unknown): Maintenance[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Maintenance => MaintenanceSchema.safeParse(item).success);
+}
 
 const IncidentSchema = z.object({
   start: z.array(z.number()),

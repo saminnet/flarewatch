@@ -9,7 +9,6 @@ export type StatusPageModule = {
 
 export type StatusPageBuild = {
   clientDir: string;
-  serverDir: string;
   modules: StatusPageModule[];
 };
 
@@ -22,13 +21,13 @@ const MODULE_CONTENT_TYPES: Record<string, string> = {
 
 const MODULE_EXTENSIONS = new Set(Object.keys(MODULE_CONTENT_TYPES));
 
-const ensureDir = (dir: string, label: string) => {
+function ensureDir(dir: string, label: string): void {
   if (!fs.existsSync(dir)) {
     throw new Error(`${label} not found at "${dir}". Run: pnpm build`);
   }
-};
+}
 
-const listModuleFiles = (rootDir: string): string[] => {
+function listModuleFiles(rootDir: string): string[] {
   const files: string[] = [];
   const stack = [rootDir];
   while (stack.length > 0) {
@@ -47,9 +46,9 @@ const listModuleFiles = (rootDir: string): string[] => {
     }
   }
   return files.sort();
-};
+}
 
-export const getStatusPageBuild = (infraDir: string, mainModule: string): StatusPageBuild => {
+export function getStatusPageBuild(infraDir: string, mainModule: string): StatusPageBuild {
   const distDir = path.join(infraDir, '../apps/status-page/dist');
   const serverDir = path.join(distDir, 'server');
   const clientDir = path.join(distDir, 'client');
@@ -75,5 +74,5 @@ export const getStatusPageBuild = (infraDir: string, mainModule: string): Status
     throw new Error(`Status page entry module "${mainModule}" not found in "${serverDir}"`);
   }
 
-  return { clientDir, serverDir, modules };
-};
+  return { clientDir, modules };
+}
