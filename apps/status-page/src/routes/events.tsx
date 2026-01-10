@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { format, subMonths, addMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { IconChevronLeft, IconChevronRight, IconCalendar } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { MonthPicker } from '@/components/ui/month-picker';
@@ -21,6 +20,7 @@ import type { PublicMonitor } from '@/lib/monitors';
 import { publicMonitorsQuery, monitorStateQuery } from '@/lib/query/monitors.queries';
 import { useNow } from '@/lib/hooks/use-now';
 import { getMaintenances } from '@/lib/kv';
+import { isValidYearMonth, shiftYearMonth, getUtcMonthBounds } from '@/lib/date';
 import type { Maintenance, MonitorState } from '@flarewatch/shared';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 
@@ -33,14 +33,6 @@ interface EventsSearch {
 function getCurrentMonth(): string {
   // Use UTC to avoid server/client timezone hydration mismatches.
   return new Date().toISOString().slice(0, 7);
-}
-
-function isValidYearMonth(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
-  const match = value.match(/^(\d{4})-(\d{2})$/);
-  if (!match) return false;
-  const month = Number(match[2]);
-  return month >= 1 && month <= 12;
 }
 
 export const Route = createFileRoute('/events')({
@@ -135,14 +127,7 @@ function EventsPage() {
   const navigate = Route.useNavigate();
   const resolvedMonth = selectedMonth ?? getCurrentMonth();
 
-  const { monthDate, monthStart, monthEnd } = useMemo(() => {
-    const monthDate = new Date(resolvedMonth + '-01');
-    return {
-      monthDate,
-      monthStart: startOfMonth(monthDate),
-      monthEnd: endOfMonth(monthDate),
-    };
-  }, [resolvedMonth]);
+  const { monthStart, monthEnd } = useMemo(() => getUtcMonthBounds(resolvedMonth), [resolvedMonth]);
 
   const allEvents = useMemo(() => {
     const incidentEvents = extractIncidentsFromState(state, monitors, monthStart, monthEnd);
@@ -179,10 +164,10 @@ function EventsPage() {
 
   const { prevMonth, nextMonth } = useMemo(
     () => ({
-      prevMonth: format(subMonths(monthDate, 1), 'yyyy-MM'),
-      nextMonth: format(addMonths(monthDate, 1), 'yyyy-MM'),
+      prevMonth: shiftYearMonth(resolvedMonth, -1),
+      nextMonth: shiftYearMonth(resolvedMonth, 1),
     }),
-    [monthDate],
+    [resolvedMonth],
   );
 
   const monitorOptions = useMemo(
