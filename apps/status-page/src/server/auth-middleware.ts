@@ -4,11 +4,12 @@ import { resolveRuntimeEnv } from '@/lib/runtime-env';
 
 function isAdminRoute(pathname: string): boolean {
   return (
-    pathname === '/admin' ||
-    pathname.startsWith('/admin/') ||
-    pathname === '/api/admin' ||
-    pathname.startsWith('/api/admin/')
+    pathname === '/admin' || pathname.startsWith('/admin/') || pathname.startsWith('/api/admin')
   );
+}
+
+function isAdminUIRoute(pathname: string): boolean {
+  return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
 function encodeBase64(value: string): string {
@@ -65,10 +66,10 @@ export async function authMiddlewareServer(
     if (!adminCreds) {
       // Allow access in development mode
       if (import.meta.env.DEV) {
-        return await next();
+        return next();
       }
       // Hide the admin UI when not configured, and block writes.
-      if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+      if (isAdminUIRoute(pathname)) {
         return new Response('Not found', { status: 404 });
       }
       return new Response('Admin access not configured', { status: 403 });
@@ -84,27 +85,27 @@ export async function authMiddlewareServer(
     }
 
     // Allow the admin UI to render a login page when not authenticated.
-    if (pathname === '/admin' || pathname.startsWith('/admin/')) {
-      return await next();
+    if (isAdminUIRoute(pathname)) {
+      return next();
     }
 
     // Allow session endpoints to handle login/logout/status.
     if (pathname === '/api/admin/session') {
-      return await next();
+      return next();
     }
 
     // Auth for admin APIs: session cookie OR legacy Basic Auth header.
-    const kv = env?.FLAREWATCH_STATE;
+    const kv = env?.STATE_KV ?? env?.FLAREWATCH_STATE;
     const sessionId = getAdminSessionCookie(request.headers.get('Cookie'));
     if (kv && sessionId) {
       const session = await validateSession(kv, sessionId);
       if (session) {
-        return await next();
+        return next();
       }
     }
 
     if (checkBasicAuth(request, adminCreds)) {
-      return await next();
+      return next();
     }
 
     return unauthorizedAdmin();
@@ -113,5 +114,5 @@ export async function authMiddlewareServer(
   const siteCreds = env?.FLAREWATCH_STATUS_PAGE_BASIC_AUTH;
   if (siteCreds && !checkBasicAuth(request, siteCreds)) return unauthorized('FlareWatch');
 
-  return await next();
+  return next();
 }

@@ -1,5 +1,5 @@
-import type { MonitorState, Maintenance } from '@flarewatch/shared';
-import { createLogger } from '@flarewatch/shared';
+import type { MonitorState, Maintenance, RuntimeConfig } from '@flarewatch/shared';
+import { createLogger, KV_KEYS, loadRuntimeConfig } from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
 
 import { getEdgeLocation } from './utils/location';
@@ -22,7 +22,9 @@ import { isMonitorState, parseMaintenances } from './state/validate';
 const log = createLogger('Worker');
 
 export interface Env {
-  FLAREWATCH_STATE: KVNamespace;
+  CONFIG_KV?: KVNamespace;
+  STATE_KV?: KVNamespace;
+  FLAREWATCH_STATE?: KVNamespace;
   /**
    * Optional Bearer token used when calling external check proxies.
    * If set, the worker sends `Authorization: Bearer <token>` with every proxied check request.
@@ -36,6 +38,32 @@ const DEFAULT_COOLDOWN_MINUTES = 3;
 /** Buffer (in seconds) around grace period threshold for notification timing */
 const GRACE_PERIOD_BUFFER_SECONDS = 30;
 
+function getStateKv(env: Env): KVNamespace {
+  const kv = env.STATE_KV ?? env.FLAREWATCH_STATE;
+  if (!kv) {
+    throw new Error('STATE_KV (or FLAREWATCH_STATE) binding not found');
+  }
+  return kv;
+}
+
+async function loadEffectiveConfig(env: Env): Promise<RuntimeConfig> {
+  if (env.CONFIG_KV) {
+    const runtimeConfig = await loadRuntimeConfig(env.CONFIG_KV);
+    if (runtimeConfig) {
+      return runtimeConfig;
+    }
+    log.error('Invalid runtime config in CONFIG_KV, falling back to static config');
+  }
+
+  return {
+    monitors: workerConfig.monitors,
+    ...(workerConfig.notification !== undefined && { notification: workerConfig.notification }),
+    ...(workerConfig.kvWriteCooldownMinutes !== undefined && {
+      kvWriteCooldownMinutes: workerConfig.kvWriteCooldownMinutes,
+    }),
+  };
+}
+
 function isInMaintenance(
   monitorId: string,
   currentTime: number,
@@ -44,8 +72,8 @@ function isInMaintenance(
   return maintenances.some((m) => {
     const startTime = new Date(m.start).getTime() / 1000;
     const endTime = m.end ? new Date(m.end).getTime() / 1000 : Infinity;
-    const affectsMonitor = !m.monitors?.length || m.monitors.includes(monitorId);
-    return currentTime >= startTime && currentTime <= endTime && affectsMonitor;
+    if (currentTime < startTime || currentTime > endTime) return false;
+    return !m.monitors?.length || m.monitors.includes(monitorId);
   });
 }
 
@@ -53,14 +81,15 @@ function shouldSkipNotification(
   monitorId: string,
   currentTime: number,
   maintenances: Maintenance[],
+  config: RuntimeConfig,
 ): boolean {
-  const skipList = workerConfig.notification?.skipNotificationIds ?? [];
+  const skipList = config.notification?.skipNotificationIds ?? [];
   return skipList.includes(monitorId) || isInMaintenance(monitorId, currentTime, maintenances);
 }
 
 async function loadMaintenances(kv: KVNamespace): Promise<Maintenance[]> {
   try {
-    const data = await kv.get('maintenances', { type: 'json' });
+    const data = await kv.get(KV_KEYS.MAINTENANCES, { type: 'json' });
     if (!data) return [];
     const maintenances = parseMaintenances(data);
     if (maintenances.length === 0 && Array.isArray(data) && data.length > 0) {
@@ -94,8 +123,9 @@ function shouldNotify(
   currentTime: number,
   statusChanged: boolean,
   isUp: boolean,
+  config: RuntimeConfig,
 ): boolean {
-  const gracePeriod = workerConfig.notification?.gracePeriod;
+  const gracePeriod = config.notification?.gracePeriod;
 
   // No grace period - always notify on change
   if (gracePeriod === undefined) {
@@ -127,19 +157,22 @@ const Worker = {
     const location = await getEdgeLocation();
     log.info('Starting scheduled check', { location });
 
-    const storedState = await env.FLAREWATCH_STATE.get('state', {
+    const config = await loadEffectiveConfig(env);
+
+    const stateKv = getStateKv(env);
+    const storedState = await stateKv.get(KV_KEYS.STATE, {
       type: 'json',
     });
     const state: MonitorState = isMonitorState(storedState) ? storedState : createInitialState();
     resetCounters(state);
 
-    const maintenances = await loadMaintenances(env.FLAREWATCH_STATE);
+    const maintenances = await loadMaintenances(stateKv);
 
     const currentTime = Math.floor(Date.now() / 1000);
-    const notifier = createNotifier(workerConfig.notification?.webhook);
+    const notifier = createNotifier(config.notification?.webhook);
 
     const checkResults = await Promise.allSettled(
-      workerConfig.monitors.map(async (monitor) => {
+      config.monitors.map(async (monitor) => {
         log.info('Checking monitor', { name: monitor.name });
         const result = await checkMonitor(monitor, env);
 
@@ -171,8 +204,8 @@ const Worker = {
 
       cleanupOldIncidents(state, monitor.id, currentTime);
 
-      if (notifier && !shouldSkipNotification(monitor.id, currentTime, maintenances)) {
-        const skipErrorChanges = Boolean(workerConfig.notification?.skipErrorChangeNotification);
+      if (notifier && !shouldSkipNotification(monitor.id, currentTime, maintenances, config)) {
+        const skipErrorChanges = Boolean(config.notification?.skipErrorChangeNotification);
         const statusChangedForNotification =
           update.changeType === 'up' ||
           update.changeType === 'down' ||
@@ -183,6 +216,7 @@ const Worker = {
           currentTime,
           statusChangedForNotification,
           update.isUp,
+          config,
         );
 
         if (shouldSend) {
@@ -192,7 +226,7 @@ const Worker = {
             incidentStartTime: update.incidentStartTime,
             currentTime,
             reason: update.error,
-            timeZone: workerConfig.notification?.timeZone ?? 'UTC',
+            timeZone: config.notification?.timeZone ?? 'UTC',
           };
           const message = formatNotificationMessage(ctx);
           await notifier.send(ctx, message);
@@ -225,13 +259,13 @@ const Worker = {
       }
     }
 
-    const cooldownSeconds = (workerConfig.kvWriteCooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES) * 60;
+    const cooldownSeconds = (config.kvWriteCooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES) * 60;
     const timeSinceUpdate = currentTime - state.lastUpdate;
 
     if (stateChanged || timeSinceUpdate >= cooldownSeconds - 10) {
       log.info('Saving state', { changed: stateChanged });
       state.lastUpdate = currentTime;
-      await env.FLAREWATCH_STATE.put('state', JSON.stringify(state));
+      await stateKv.put(KV_KEYS.STATE, JSON.stringify(state));
     } else {
       log.debug('Skipping state save', { cooldownRemaining: cooldownSeconds - timeSinceUpdate });
     }

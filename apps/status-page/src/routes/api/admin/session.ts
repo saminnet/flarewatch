@@ -1,7 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getAdminSessionCookie, timingSafeEqual, type SessionData } from '@/lib/auth-utils';
-import { resolveRuntimeEnv, requireKv } from '@/lib/runtime-env';
+import { resolveRuntimeEnv, requireStateKv } from '@/lib/runtime-env';
 import { AUTH } from '@/lib/constants';
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
+
+function jsonResponse(body: object, status: number, headers?: Record<string, string>): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...JSON_HEADERS, ...headers },
+  });
+}
 
 function parseBasicAuthCreds(value: string): { username: string; password: string } | null {
   const idx = value.indexOf(':');
@@ -71,28 +80,19 @@ export const Route = createFileRoute('/api/admin/session')({
         const env = await resolveRuntimeEnv();
         const adminCredsRaw = env?.FLAREWATCH_ADMIN_BASIC_AUTH;
         if (!adminCredsRaw) {
-          return new Response(JSON.stringify({ error: 'Admin access not configured' }), {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonResponse({ error: 'Admin access not configured' }, 404);
         }
 
         const adminCreds = parseBasicAuthCreds(adminCredsRaw);
         if (!adminCreds) {
-          return new Response(JSON.stringify({ error: 'Invalid admin credentials format' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonResponse({ error: 'Invalid admin credentials format' }, 500);
         }
 
         let body: unknown;
         try {
           body = await request.json();
         } catch {
-          return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonResponse({ error: 'Invalid JSON body' }, 400);
         }
 
         const data = body as Record<string, unknown>;
@@ -100,19 +100,13 @@ export const Route = createFileRoute('/api/admin/session')({
         const password = typeof data.password === 'string' ? data.password : '';
 
         try {
-          const kv = await requireKv();
+          const kv = await requireStateKv();
           const ip = getClientIp(request);
 
           if (ip) {
             const failures = await getLoginFailures(kv, ip);
             if (failures >= AUTH.LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
-              return new Response(
-                JSON.stringify({ error: 'Too many attempts. Try again later.' }),
-                {
-                  status: 429,
-                  headers: { 'Content-Type': 'application/json' },
-                },
-              );
+              return jsonResponse({ error: 'Too many attempts. Try again later.' }, 429);
             }
           }
 
@@ -123,10 +117,7 @@ export const Route = createFileRoute('/api/admin/session')({
             if (ip) {
               await incrementLoginFailures(kv, ip);
             }
-            return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
-              status: 401,
-              headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonResponse({ error: 'Invalid credentials' }, 401);
           }
 
           if (ip) {
@@ -142,18 +133,11 @@ export const Route = createFileRoute('/api/admin/session')({
             expirationTtl: AUTH.SESSION_TTL_SECONDS,
           });
 
-          return new Response(JSON.stringify({ ok: true }), {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'Set-Cookie': setSessionCookie(request, sessionId),
-            },
+          return jsonResponse({ ok: true }, 200, {
+            'Set-Cookie': setSessionCookie(request, sessionId),
           });
         } catch {
-          return new Response(JSON.stringify({ error: 'Internal server error' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonResponse({ error: 'Internal server error' }, 500);
         }
       },
 
@@ -161,14 +145,11 @@ export const Route = createFileRoute('/api/admin/session')({
         const env = await resolveRuntimeEnv();
         const adminCreds = env?.FLAREWATCH_ADMIN_BASIC_AUTH;
         if (!adminCreds) {
-          return new Response(JSON.stringify({ error: 'Admin access not configured' }), {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonResponse({ error: 'Admin access not configured' }, 404);
         }
 
         try {
-          const kv = await requireKv();
+          const kv = await requireStateKv();
           const sessionId = getAdminSessionCookie(request.headers.get('Cookie'));
           if (sessionId) {
             await kv.delete(`${AUTH.SESSION_KEY_PREFIX}${sessionId}`);
@@ -178,10 +159,7 @@ export const Route = createFileRoute('/api/admin/session')({
             headers: { 'Set-Cookie': clearSessionCookie(request) },
           });
         } catch {
-          return new Response(JSON.stringify({ error: 'Internal server error' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return jsonResponse({ error: 'Internal server error' }, 500);
         }
       },
     },

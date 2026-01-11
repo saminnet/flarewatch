@@ -1,7 +1,9 @@
 import { pageConfig } from '@flarewatch/config';
 
-export function getCorsHeaders(request: Request): Record<string, string> {
-  const allowedOrigins = pageConfig.apiCorsOrigins;
+export function getCorsHeaders(
+  request: Request,
+  allowedOrigins: string[] | undefined = pageConfig.apiCorsOrigins,
+): Record<string, string> {
   const origin = request.headers.get('Origin');
 
   const base: Record<string, string> = {

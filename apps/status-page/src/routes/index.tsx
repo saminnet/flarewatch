@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { OverallStatus } from '@/components/overall-status';
 import { MonitorList } from '@/components/monitor-list';
 import { MaintenanceAlerts } from '@/components/maintenance/alerts';
-import { pageConfig } from '@flarewatch/config';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 import {
   maintenancesQuery,
@@ -12,15 +11,18 @@ import {
   publicMonitorsQuery,
   uiPrefsQuery,
 } from '@/lib/query/monitors.queries';
+import { getConfig } from '@/lib/config';
 
 export const Route = createFileRoute('/')({
   loader: async ({ context }) => {
+    const config = await getConfig();
     await Promise.all([
       context.queryClient.ensureQueryData(monitorStateQuery()),
       context.queryClient.ensureQueryData(publicMonitorsQuery()),
       context.queryClient.ensureQueryData(uiPrefsQuery()),
       context.queryClient.ensureQueryData(maintenancesQuery()),
     ]);
+    return { groups: config.statusPage?.group ?? {} };
   },
   component: DashboardPage,
 });
@@ -31,6 +33,7 @@ function DashboardPage() {
   const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
   const { data: uiPrefs } = useSuspenseQuery(uiPrefsQuery());
   const { data: maintenances } = useSuspenseQuery(maintenancesQuery());
+  const { groups } = Route.useLoaderData() as { groups: Record<string, string[]> };
 
   if (!state) {
     return (
@@ -60,12 +63,7 @@ function DashboardPage() {
           <h2 className="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100">
             {t('monitor.title')}
           </h2>
-          <MonitorList
-            monitors={monitors}
-            state={state}
-            groups={pageConfig.group}
-            uiPrefs={uiPrefs}
-          />
+          <MonitorList monitors={monitors} state={state} groups={groups} uiPrefs={uiPrefs} />
         </section>
       </div>
     </div>
