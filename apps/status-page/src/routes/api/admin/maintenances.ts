@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
-import { requireKv } from '@/lib/runtime-env';
+import { KV_KEYS } from '@flarewatch/shared';
+import { requireStateKv } from '@/lib/runtime-env';
 
 function jsonError(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), {
@@ -10,7 +11,7 @@ function jsonError(message: string, status: number): Response {
 }
 
 async function readMaintenances(kv: KVNamespace): Promise<Maintenance[]> {
-  const data = await kv.get('maintenances', { type: 'json' });
+  const data = await kv.get(KV_KEYS.MAINTENANCES, { type: 'json' });
   return (data as Maintenance[] | null) ?? [];
 }
 
@@ -42,7 +43,7 @@ function normalizeMaintenanceInput(input: unknown): MaintenanceConfig | null {
   const color = typeof data.color === 'string' && data.color.trim() ? data.color.trim() : undefined;
 
   const monitors = Array.isArray(data.monitors)
-    ? (data.monitors.filter((m): m is string => typeof m === 'string' && m.length > 0) as string[])
+    ? data.monitors.filter((m): m is string => typeof m === 'string' && m.length > 0)
     : undefined;
 
   return {
@@ -55,6 +56,17 @@ function normalizeMaintenanceInput(input: unknown): MaintenanceConfig | null {
   };
 }
 
+function parseNullableString(
+  value: unknown,
+): { valid: true; value: string | undefined } | { valid: false } {
+  if (value === null) return { valid: true, value: undefined };
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return { valid: true, value: trimmed || undefined };
+  }
+  return { valid: false };
+}
+
 function normalizeMaintenanceUpdates(
   input: unknown,
   current: Maintenance,
@@ -65,13 +77,9 @@ function normalizeMaintenanceUpdates(
   const updates: Partial<MaintenanceConfig> = {};
 
   if (data.title !== undefined) {
-    if (data.title === null) {
-      updates.title = undefined;
-    } else if (typeof data.title === 'string') {
-      updates.title = data.title.trim() ? data.title.trim() : undefined;
-    } else {
-      return null;
-    }
+    const result = parseNullableString(data.title);
+    if (!result.valid) return null;
+    updates.title = result.value;
   }
 
   if (data.body !== undefined) {
@@ -81,13 +89,9 @@ function normalizeMaintenanceUpdates(
   }
 
   if (data.color !== undefined) {
-    if (data.color === null) {
-      updates.color = undefined;
-    } else if (typeof data.color === 'string') {
-      updates.color = data.color.trim() ? data.color.trim() : undefined;
-    } else {
-      return null;
-    }
+    const result = parseNullableString(data.color);
+    if (!result.valid) return null;
+    updates.color = result.value;
   }
 
   if (data.monitors !== undefined) {
@@ -141,7 +145,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
       // List all maintenances
       GET: async () => {
         try {
-          const kv = await requireKv();
+          const kv = await requireStateKv();
           const maintenances = await readMaintenances(kv);
           return Response.json(maintenances);
         } catch (error) {
@@ -160,7 +164,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             return jsonError('Invalid maintenance payload', 400);
           }
 
-          const kv = await requireKv();
+          const kv = await requireStateKv();
           const now = Date.now();
           const maintenance: Maintenance = {
             ...input,
@@ -171,7 +175,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
 
           const maintenances = await readMaintenances(kv);
           maintenances.push(maintenance);
-          await kv.put('maintenances', JSON.stringify(maintenances));
+          await kv.put(KV_KEYS.MAINTENANCES, JSON.stringify(maintenances));
 
           return Response.json(maintenance, { status: 201 });
         } catch (error) {
@@ -189,7 +193,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             return jsonError('id is required', 400);
           }
 
-          const kv = await requireKv();
+          const kv = await requireStateKv();
           const maintenances = await readMaintenances(kv);
           const index = maintenances.findIndex((m) => m.id === body.id);
           const current = maintenances[index];
@@ -212,7 +216,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           };
 
           maintenances[index] = updated;
-          await kv.put('maintenances', JSON.stringify(maintenances));
+          await kv.put(KV_KEYS.MAINTENANCES, JSON.stringify(maintenances));
 
           return Response.json(updated);
         } catch (error) {
@@ -230,7 +234,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             return jsonError('id is required', 400);
           }
 
-          const kv = await requireKv();
+          const kv = await requireStateKv();
           const maintenances = await readMaintenances(kv);
           const filtered = maintenances.filter((m) => m.id !== body.id);
 
@@ -238,7 +242,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             return jsonError('Maintenance not found', 404);
           }
 
-          await kv.put('maintenances', JSON.stringify(filtered));
+          await kv.put(KV_KEYS.MAINTENANCES, JSON.stringify(filtered));
           return new Response(null, { status: 204 });
         } catch (error) {
           console.error('Error deleting maintenance:', error);

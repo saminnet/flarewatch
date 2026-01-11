@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getMonitorState } from '@/lib/kv';
 import { isMonitorUp } from '@/lib/uptime';
-import { workerConfig } from '@flarewatch/config/worker';
+import { getConfig } from '@/lib/config';
 
 type BadgePayload = {
   schemaVersion: 1;
@@ -32,8 +32,9 @@ export const Route = createFileRoute('/api/badge')({
       GET: async ({ request }: { request: Request }) => {
         try {
           const url = new URL(request.url);
+          const config = await getConfig();
 
-          const defaultMonitorId = workerConfig.monitors[0]?.id;
+          const defaultMonitorId = config.monitors[0]?.id;
           const monitorId = url.searchParams.get('id') ?? defaultMonitorId;
           const label = url.searchParams.get('label') ?? monitorId ?? 'FlareWatch';
 

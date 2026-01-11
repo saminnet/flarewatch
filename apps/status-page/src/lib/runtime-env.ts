@@ -1,4 +1,6 @@
 export type RuntimeEnv = {
+  CONFIG_KV?: KVNamespace;
+  STATE_KV?: KVNamespace;
   FLAREWATCH_STATE?: KVNamespace;
   FLAREWATCH_STATUS_PAGE_BASIC_AUTH?: string;
   FLAREWATCH_ADMIN_BASIC_AUTH?: string;
@@ -26,9 +28,9 @@ export async function resolveRuntimeEnv(): Promise<RuntimeEnv | undefined> {
 /**
  * Gets the KV namespace or throws if not available
  */
-export async function requireKv(): Promise<KVNamespace> {
+export async function requireStateKv(): Promise<KVNamespace> {
   const env = await resolveRuntimeEnv();
-  const kv = env?.FLAREWATCH_STATE;
-  if (!kv) throw new Error('FLAREWATCH_STATE KV binding not found');
+  const kv = env?.STATE_KV ?? env?.FLAREWATCH_STATE;
+  if (!kv) throw new Error('STATE_KV (or FLAREWATCH_STATE) binding not found');
   return kv;
 }

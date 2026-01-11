@@ -22,6 +22,8 @@ export type PageConfigLink = {
   highlight?: boolean;
 };
 
+export type StatusPageConfig = PageConfig;
+
 export type MaintenanceConfig = {
   monitors?: string[];
   title?: string;
@@ -67,6 +69,8 @@ export type MonitorTarget = {
   sslIgnoreSelfSigned?: boolean;
 };
 
+export type Monitor = MonitorTarget;
+
 export type WorkerConfig = {
   kvWriteCooldownMinutes?: number;
   monitors: MonitorTarget[];
@@ -98,6 +102,8 @@ export type Notification = {
   skipErrorChangeNotification?: boolean;
 };
 
+export type NotificationConfig = Notification;
+
 export type NotificationTemplate = 'slack' | 'discord' | 'telegram' | 'text';
 
 type SingleWebhook = {
@@ -111,12 +117,43 @@ type SingleWebhook = {
   /** Payload type (required if not using template) */
   payloadType?: 'param' | 'json' | 'x-www-form-urlencoded';
   /** Payload with $MSG placeholder (required if not using template) */
-  payload?: unknown;
+  payload?: Record<string, unknown> | string;
   /** Request timeout in ms (default: 5000) */
   timeout?: number;
 };
 
+export type Webhook = SingleWebhook;
+
 export type WebhookConfig = SingleWebhook | SingleWebhook[];
+
+export type RuntimeConfig = {
+  monitors: Monitor[];
+  statusPage?: StatusPageConfig;
+  notification?: NotificationConfig;
+  kvWriteCooldownMinutes?: number;
+};
+
+export type DeploymentMeta = {
+  accountId: string;
+  configKvNamespaceId: string;
+  stateKvNamespaceId: string;
+  monitorWorkerName: string;
+  statusPageWorkerName: string;
+  createdAt: string;
+  updatedAt: string;
+  version: string;
+};
+
+export type StoredConfig = {
+  config: RuntimeConfig;
+  _deployment?: DeploymentMeta;
+};
+
+export const KV_KEYS = {
+  CONFIG: 'config',
+  STATE: 'state',
+  MAINTENANCES: 'maintenances',
+} as const;
 
 export type MonitorState = {
   /** Unix timestamp (seconds) */

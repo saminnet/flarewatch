@@ -76,6 +76,7 @@ Optional GitHub Secrets (only if you use these features):
 - `apps/status-page` reads that same KV namespace and serves the UI + `/api/*` endpoints.
 - `services/proxy` is optional and executes checks from custom locations (private networks, TCP, SSL).
   - If “where the check runs” matters (latency/region), use the proxy.
+- Optional: set a `CONFIG_KV` binding with a runtime config blob (see `packages/shared/src/config.ts`) to update monitors and status page branding without redeploying. When unset, the worker falls back to the static config in `packages/config`.
 
 ## Example monitor
 

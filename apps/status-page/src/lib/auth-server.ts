@@ -21,7 +21,7 @@ export const checkAdminAuthServerFn = createServerFn({ method: 'GET' }).handler(
     }
 
     try {
-      const kv = env?.FLAREWATCH_STATE;
+      const kv = env?.STATE_KV ?? env?.FLAREWATCH_STATE;
       if (!kv) {
         return 'unauthenticated';
       }

@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import type { Maintenance, MonitorState } from '@flarewatch/shared';
-import { resolveRuntimeEnv } from '@/lib/runtime-env';
+import { KV_KEYS } from '@flarewatch/shared';
+import { requireStateKv } from '@/lib/runtime-env';
 
 /**
  * Get the monitor state from Cloudflare KV
@@ -8,15 +9,8 @@ import { resolveRuntimeEnv } from '@/lib/runtime-env';
 export const getMonitorState = createServerFn({ method: 'GET' }).handler(
   async (): Promise<MonitorState | null> => {
     try {
-      const env = await resolveRuntimeEnv();
-      const kv = env?.FLAREWATCH_STATE;
-
-      if (!kv) {
-        console.warn('FLAREWATCH_STATE KV binding not found');
-        return null;
-      }
-
-      const state = await kv.get('state', { type: 'json' });
+      const kv = await requireStateKv();
+      const state = await kv.get(KV_KEYS.STATE, { type: 'json' });
 
       if (!state) {
         console.warn('No state found in KV');
@@ -37,15 +31,8 @@ export const getMonitorState = createServerFn({ method: 'GET' }).handler(
 export const getMaintenances = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Maintenance[]> => {
     try {
-      const env = await resolveRuntimeEnv();
-      const kv = env?.FLAREWATCH_STATE;
-
-      if (!kv) {
-        console.warn('FLAREWATCH_STATE KV binding not found');
-        return [];
-      }
-
-      const maintenances = await kv.get('maintenances', { type: 'json' });
+      const kv = await requireStateKv();
+      const maintenances = await kv.get(KV_KEYS.MAINTENANCES, { type: 'json' });
       return (maintenances as Maintenance[] | null) ?? [];
     } catch (error) {
       console.error('Error fetching maintenances:', error);

@@ -1,14 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getMonitorState } from '@/lib/kv';
 import { isMonitorUp, getMonitorError } from '@/lib/uptime';
-import { workerConfig } from '@flarewatch/config/worker';
 import { getCorsHeaders } from '@/lib/cors';
+import { getConfig } from '@/lib/config';
 
 export const Route = createFileRoute('/api/data')({
   server: {
     handlers: {
       GET: async ({ request }: { request: Request }) => {
-        const corsHeaders = getCorsHeaders(request);
+        const config = await getConfig();
+        const corsHeaders = getCorsHeaders(request, config.statusPage?.apiCorsOrigins);
         try {
           const state = await getMonitorState();
 
@@ -29,7 +30,7 @@ export const Route = createFileRoute('/api/data')({
             }
           > = {};
 
-          for (const monitor of workerConfig.monitors) {
+          for (const monitor of config.monitors) {
             const latencyData = state.latency[monitor.id]?.recent;
             const latestLatency = latencyData?.[latencyData.length - 1];
             const isUp = isMonitorUp(monitor.id, state);
@@ -61,7 +62,8 @@ export const Route = createFileRoute('/api/data')({
       },
 
       OPTIONS: async ({ request }: { request: Request }) => {
-        const corsHeaders = getCorsHeaders(request);
+        const config = await getConfig();
+        const corsHeaders = getCorsHeaders(request, config.statusPage?.apiCorsOrigins);
         return new Response(null, {
           status: 204,
           headers: corsHeaders,
