@@ -9,8 +9,8 @@ import {
   getOverallStatus,
 } from '../../src/lib/uptime';
 
-const createEmptyState = (): MonitorState => ({
-  lastUpdate: 0,
+const createEmptyState = (lastUpdate?: number): MonitorState => ({
+  lastUpdate: lastUpdate ?? Math.floor(Date.now() / 1000),
   overallUp: 0,
   overallDown: 0,
   startedAt: {},
