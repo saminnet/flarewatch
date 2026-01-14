@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -30,6 +30,9 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
     () => uiPrefs?.collapsedGroups ?? [],
   );
 
+  // Track if this is the initial mount to avoid persisting on load
+  const isInitialMount = useRef(true);
+
   const persistPrefs = useCallback(
     (next: UiPrefs) => {
       queryClient.setQueryData(qk.uiPrefs, next);
@@ -38,25 +41,48 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
     [queryClient],
   );
 
-  const onMonitorOpenChange = useCallback(
-    (monitorId: string, open: boolean) => {
-      setCollapsedMonitors((prev) => {
-        const nextSet = new Set(prev);
-        if (open) {
-          nextSet.delete(monitorId);
-        } else {
-          nextSet.add(monitorId);
-        }
+  // Persist preferences when state changes (but not on initial mount)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    persistPrefs({ collapsedGroups, collapsedMonitors });
+  }, [collapsedGroups, collapsedMonitors, persistPrefs]);
 
-        const next = Array.from(nextSet);
-        persistPrefs({ collapsedGroups, collapsedMonitors: next });
-        return next;
-      });
-    },
-    [collapsedGroups, persistPrefs],
-  );
+  const onMonitorOpenChange = useCallback((monitorId: string, open: boolean) => {
+    setCollapsedMonitors((prev) => {
+      const nextSet = new Set(prev);
+      if (open) {
+        nextSet.delete(monitorId);
+      } else {
+        nextSet.add(monitorId);
+      }
+      return Array.from(nextSet);
+    });
+  }, []);
 
-  if (!groups || Object.keys(groups).length === 0) {
+  // Filter groups to only those with monitors that actually exist
+  const activeGroups = useMemo(() => {
+    if (!groups) return [];
+    return Object.entries(groups)
+      .map(([name, ids]) => ({
+        name,
+        monitors: ids
+          .map((id) => monitors.find((m) => m.id === id))
+          .filter((m): m is PublicMonitor => m !== undefined),
+      }))
+      .filter((g) => g.monitors.length > 0);
+  }, [groups, monitors]);
+
+  // Find monitors not in any active group
+  const ungroupedMonitors = useMemo(() => {
+    const groupedMonitorIds = new Set(activeGroups.flatMap((g) => g.monitors.map((m) => m.id)));
+    return monitors.filter((m) => !groupedMonitorIds.has(m.id));
+  }, [activeGroups, monitors]);
+
+  // If no active groups exist, render as flat list (no labels needed)
+  if (activeGroups.length === 0) {
     return (
       <div className="space-y-3">
         {monitors.map((monitor) => (
@@ -72,78 +98,17 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
     );
   }
 
-  const allGroupNames = useMemo(() => Object.keys(groups), [groups]);
+  const activeGroupNames = useMemo(() => activeGroups.map((g) => g.name), [activeGroups]);
   const openGroupNames = useMemo(
-    () => allGroupNames.filter((name) => !collapsedGroups.includes(name)),
-    [allGroupNames, collapsedGroups],
+    () => activeGroupNames.filter((name) => !collapsedGroups.includes(name)),
+    [activeGroupNames, collapsedGroups],
   );
-
-  const ungroupedMonitors = useMemo(() => {
-    const groupedMonitorIds = new Set(Object.values(groups).flat());
-    return monitors.filter((m) => !groupedMonitorIds.has(m.id));
-  }, [groups, monitors]);
 
   return (
     <div className="space-y-4">
-      <Accordion
-        multiple
-        value={openGroupNames}
-        onValueChange={(value) => {
-          const open = value.filter((v): v is string => typeof v === 'string');
-          const nextCollapsed = allGroupNames.filter((name) => !open.includes(name));
-          setCollapsedGroups(nextCollapsed);
-          persistPrefs({ collapsedGroups: nextCollapsed, collapsedMonitors });
-        }}
-        className="space-y-3"
-      >
-        {Object.entries(groups).map(([groupName, monitorIds]) => {
-          const groupMonitors = monitorIds
-            .map((id) => monitors.find((m) => m.id === id))
-            .filter((m): m is PublicMonitor => m !== undefined);
-
-          if (groupMonitors.length === 0) return null;
-
-          return (
-            <AccordionItem key={groupName} value={groupName} className="border rounded-lg">
-              <AccordionTrigger
-                className="px-4 py-3 hover:no-underline hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded-lg"
-                aria-label={t('monitor.toggleGroup', {
-                  name: groupName,
-                  count: groupMonitors.length,
-                })}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{groupName}</span>
-                  <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                    ({t('monitor.count', { count: groupMonitors.length })})
-                  </span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pb-4 pt-2">
-                <div className="space-y-3">
-                  {groupMonitors.map((monitor) => (
-                    <MonitorCard
-                      key={monitor.id}
-                      monitor={monitor}
-                      state={state}
-                      open={!collapsedMonitors.includes(monitor.id)}
-                      onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
-                    />
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          );
-        })}
-      </Accordion>
-
+      {/* Ungrouped monitors shown FIRST, without label */}
       {ungroupedMonitors.length > 0 && (
         <div className="space-y-3">
-          {Object.keys(groups).length > 0 && (
-            <h3 className="text-sm font-medium text-neutral-500 dark:text-neutral-400 px-1">
-              {t('monitor.other')}
-            </h3>
-          )}
           {ungroupedMonitors.map((monitor) => (
             <MonitorCard
               key={monitor.id}
@@ -155,6 +120,50 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
           ))}
         </div>
       )}
+
+      {/* Groups shown after ungrouped monitors */}
+      <Accordion
+        multiple
+        value={openGroupNames}
+        onValueChange={(value) => {
+          const open = value.filter((v): v is string => typeof v === 'string');
+          const nextCollapsed = activeGroupNames.filter((name) => !open.includes(name));
+          setCollapsedGroups(nextCollapsed);
+        }}
+        className="space-y-3"
+      >
+        {activeGroups.map(({ name: groupName, monitors: groupMonitors }) => (
+          <AccordionItem key={groupName} value={groupName} className="border rounded-lg">
+            <AccordionTrigger
+              className="px-4 py-3 hover:no-underline hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded-lg"
+              aria-label={t('monitor.toggleGroup', {
+                name: groupName,
+                count: groupMonitors.length,
+              })}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{groupName}</span>
+                <span className="text-sm text-neutral-500 dark:text-neutral-400">
+                  ({t('monitor.count', { count: groupMonitors.length })})
+                </span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4 pt-2">
+              <div className="space-y-3">
+                {groupMonitors.map((monitor) => (
+                  <MonitorCard
+                    key={monitor.id}
+                    monitor={monitor}
+                    state={state}
+                    open={!collapsedMonitors.includes(monitor.id)}
+                    onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
+                  />
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
     </div>
   );
 }

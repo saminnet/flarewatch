@@ -4,7 +4,7 @@ import { createMiddleware } from '@tanstack/react-start';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { getThemeInitScript, getThemePreferenceServerFn } from '@/lib/theme-server';
-import { getConfig } from '@/lib/config';
+import { configQuery } from '@/lib/query/monitors.queries';
 
 // Initialize i18n
 import '@/lib/i18n';
@@ -20,8 +20,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   server: {
     middleware: [authMiddleware],
   },
-  loader: async () => {
-    const [theme, config] = await Promise.all([getThemePreferenceServerFn(), getConfig()]);
+  loader: async ({ context }) => {
+    const [theme, config] = await Promise.all([
+      getThemePreferenceServerFn(),
+      context.queryClient.ensureQueryData(configQuery()),
+    ]);
     return { theme, statusPage: config.statusPage };
   },
   head: () => {

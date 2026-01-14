@@ -3,10 +3,33 @@ import type { MonitorState } from '@flarewatch/shared';
 import { formatUtc } from './date';
 import { UPTIME_DAYS, UPTIME_THRESHOLDS } from './constants';
 
-export function calculateUptimePercent(monitorId: string, state: MonitorState): number {
-  const incidents = state.incident[monitorId];
+// Minimum time (in seconds) since monitor started before showing uptime data
+const MIN_MONITOR_AGE_SECONDS = 60;
 
-  const nowSec = state.lastUpdate > 0 ? state.lastUpdate : Math.floor(Date.now() / 1000);
+/**
+ * Returns the "current" timestamp for calculations.
+ * Uses state.lastUpdate to ensure SSR/client consistency (Date.now() would cause hydration mismatches).
+ * Returns null if no state has been written yet, signaling callers to return "unknown" status.
+ */
+function getNowSeconds(state: MonitorState): number | null {
+  return state.lastUpdate > 0 ? state.lastUpdate : null;
+}
+
+export function hasMonitorData(monitorId: string, state: MonitorState): boolean {
+  const nowSec = getNowSeconds(state);
+  if (nowSec === null) return false;
+  const startedAt = state.startedAt?.[monitorId];
+  if (!startedAt) return false;
+  return nowSec - startedAt >= MIN_MONITOR_AGE_SECONDS;
+}
+
+export function calculateUptimePercent(monitorId: string, state: MonitorState): number | null {
+  const nowSec = getNowSeconds(state);
+  if (nowSec === null) return null;
+  if (!hasMonitorData(monitorId, state)) return null;
+
+  const incidents = state.incident[monitorId];
+  if (!incidents || incidents.length === 0) return 100;
   const windowDaysAgoSec = nowSec - UPTIME_DAYS * 24 * 60 * 60;
 
   const monitorStartSec = state.startedAt?.[monitorId];
@@ -15,8 +38,6 @@ export function calculateUptimePercent(monitorId: string, state: MonitorState): 
 
   const totalTimeSec = nowSec - windowStartSec;
   if (totalTimeSec <= 0) return 100;
-
-  if (!incidents || incidents.length === 0) return 100;
 
   let totalDowntimeSec = 0;
 
@@ -97,11 +118,41 @@ export interface DailyStatusData {
 
 export function generateDailyStatus(monitorId: string, state: MonitorState): DailyStatusData[] {
   const days: DailyStatusData[] = [];
-  const nowSec = state.lastUpdate > 0 ? state.lastUpdate : Math.floor(Date.now() / 1000);
+  const nowSec = getNowSeconds(state);
+
+  const generateUnknownDays = (baseDate: Date): DailyStatusData[] => {
+    const unknownDays: DailyStatusData[] = [];
+    for (let i = UPTIME_DAYS - 1; i >= 0; i--) {
+      const date = new Date(baseDate);
+      date.setUTCDate(date.getUTCDate() - i);
+      date.setUTCHours(0, 0, 0, 0);
+      unknownDays.push({
+        date,
+        status: 'unknown',
+        uptime: 100,
+        downtime: 0,
+        incidents: [],
+      });
+    }
+    return unknownDays;
+  };
+
+  // No state data yet - return unknown days based on current UTC date
+  if (nowSec === null) {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    return generateUnknownDays(today);
+  }
+
   const nowMs = nowSec * 1000;
   const now = new Date(nowMs);
   const incidents = state.incident[monitorId] || [];
   const monitorStartSec = state.startedAt?.[monitorId];
+
+  // If monitor has no data yet, return all unknown days
+  if (!hasMonitorData(monitorId, state)) {
+    return generateUnknownDays(now);
+  }
 
   for (let i = UPTIME_DAYS - 1; i >= 0; i--) {
     const date = new Date(now);
