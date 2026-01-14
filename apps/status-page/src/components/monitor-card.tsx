@@ -1,26 +1,16 @@
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  IconCircleCheck,
-  IconCircleX,
-  IconExternalLink,
-  IconChevronDown,
-} from '@tabler/icons-react';
+import { IconExternalLink, IconChevronDown } from '@tabler/icons-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusBar } from '@/components/status-bar';
+import { StatusIcon } from '@/components/status-icon';
 import type { MonitorState } from '@flarewatch/shared';
 import { useHydrated } from '@/lib/hooks/use-hydrated';
+import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import type { PublicMonitor } from '@/lib/monitors';
-import {
-  calculateUptimePercent,
-  isMonitorUp,
-  getMonitorError,
-  getLatestLatency,
-} from '@/lib/uptime';
-import { getStatusColor } from '@/lib/color';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { cn } from '@/lib/utils';
 
@@ -42,7 +32,10 @@ function ChartLoadError() {
 const LazyLatencyChart = lazy(() =>
   import('@/components/latency-chart')
     .then((module) => ({ default: module.LatencyChart }))
-    .catch(() => ({ default: ChartLoadError })),
+    .catch((err) => {
+      console.error('Failed to load LatencyChart:', err);
+      return { default: ChartLoadError };
+    }),
 );
 
 interface MonitorCardProps {
@@ -55,12 +48,7 @@ interface MonitorCardProps {
 export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardProps) {
   const { t } = useTranslation();
   const isHydrated = useHydrated();
-
-  const isUp = isMonitorUp(monitor.id, state);
-  const uptimePercent = calculateUptimePercent(monitor.id, state);
-  const error = getMonitorError(monitor.id, state);
-  const latency = getLatestLatency(monitor.id, state);
-  const statusColor = getStatusColor(uptimePercent);
+  const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
 
   const coloLabel = latency ? formatColoLabel(latency.loc) : null;
 
@@ -74,16 +62,12 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
           aria-label={t('monitor.toggleMonitor', {
             name: monitor.name,
             status: isUp ? t('monitor.statusUp') : t('monitor.statusDown'),
-            uptime: uptimePercent.toFixed(2),
+            uptime: uptimePercent !== null ? uptimePercent.toFixed(2) : t('monitor.pending'),
           })}
         >
           <div className="flex items-center gap-3 p-3 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors">
             <div className="shrink-0">
-              {isUp ? (
-                <IconCircleCheck className="h-6 w-6 text-emerald-500" />
-              ) : (
-                <IconCircleX className="h-6 w-6 text-red-500" />
-              )}
+              <StatusIcon isUp={isUp} />
             </div>
 
             <div className="flex-1 min-w-0">
@@ -170,7 +154,7 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
               variant="outline"
               className={cn('font-mono', statusColor.text, statusColor.border)}
             >
-              {uptimePercent.toFixed(2)}%
+              {uptimePercent !== null ? `${uptimePercent.toFixed(2)}%` : t('monitor.pending')}
             </Badge>
 
             <IconChevronDown

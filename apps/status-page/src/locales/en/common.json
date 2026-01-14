@@ -44,7 +44,6 @@
   "status.completed": "Completed",
 
   "monitor.title": "Monitors",
-  "monitor.other": "Other Monitors",
   "monitor.count": "{{count}} monitors",
   "monitor.viewStatusPage": "View status page",
   "monitor.responseTimes": "Response times (ms)",
@@ -62,6 +61,7 @@
   "monitor.toggleMonitor": "{{name}}, {{status}}, {{uptime}}% uptime. Click to toggle details",
   "monitor.statusUp": "operational",
   "monitor.statusDown": "not operational",
+  "monitor.pending": "Pending",
 
   "events.subtitle": "Incidents and scheduled maintenance",
   "events.noEvents": "No events this month",

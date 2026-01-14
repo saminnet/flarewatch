@@ -6,35 +6,36 @@ import { MonitorList } from '@/components/monitor-list';
 import { MaintenanceAlerts } from '@/components/maintenance/alerts';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 import {
+  configQuery,
   maintenancesQuery,
   monitorStateQuery,
   publicMonitorsQuery,
   uiPrefsQuery,
 } from '@/lib/query/monitors.queries';
-import { getConfig } from '@/lib/config';
 
 export const Route = createFileRoute('/')({
   loader: async ({ context }) => {
-    const config = await getConfig();
     await Promise.all([
+      context.queryClient.ensureQueryData(configQuery()),
       context.queryClient.ensureQueryData(monitorStateQuery()),
       context.queryClient.ensureQueryData(publicMonitorsQuery()),
       context.queryClient.ensureQueryData(uiPrefsQuery()),
       context.queryClient.ensureQueryData(maintenancesQuery()),
     ]);
-    return { groups: config.statusPage?.group ?? {} };
   },
   component: DashboardPage,
 });
 
 function DashboardPage() {
   const { t } = useTranslation();
+  const { data: config } = useSuspenseQuery(configQuery());
   const { data: state } = useSuspenseQuery(monitorStateQuery());
   const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
   const { data: uiPrefs } = useSuspenseQuery(uiPrefsQuery());
   const { data: maintenances } = useSuspenseQuery(maintenancesQuery());
-  const { groups } = Route.useLoaderData() as { groups: Record<string, string[]> };
+  const groups = config.statusPage?.group ?? {};
 
+  // State can be null if KV has no data yet (worker hasn't run)
   if (!state) {
     return (
       <div className={PAGE_CONTAINER_CLASSES}>
