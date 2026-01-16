@@ -18,10 +18,17 @@ import { useContainerWidth } from '@/lib/hooks/use-container-width';
 import { STATUS_BAR } from '@/lib/constants';
 
 const statusColors = {
-  up: 'bg-emerald-500 hover:bg-emerald-400',
-  down: 'bg-red-500 hover:bg-red-400',
-  partial: 'bg-amber-500 hover:bg-amber-400',
-  unknown: 'bg-neutral-300 dark:bg-neutral-700 hover:bg-neutral-400 dark:hover:bg-neutral-600',
+  up: 'bg-emerald-500',
+  down: 'bg-red-500',
+  partial: 'bg-amber-500',
+  unknown: 'bg-neutral-300 dark:bg-neutral-700',
+};
+
+const hoverColors = {
+  up: 'hover:bg-emerald-400',
+  down: 'hover:bg-red-400',
+  partial: 'hover:bg-amber-400',
+  unknown: 'hover:bg-neutral-400 dark:hover:bg-neutral-600',
 };
 
 interface StatusBarSegmentProps {
@@ -49,10 +56,12 @@ const StatusBarSegment = memo(function StatusBarSegment({
               })
         }
         className={cn(
-          'h-8 rounded-sm transition-colors',
-          isMobile ? 'w-1.5 shrink-0' : 'flex-1 min-w-0',
+          'h-8 rounded-sm transition-all duration-150',
+          isMobile ? 'w-2.5 shrink-0' : 'min-w-0 flex-1',
           statusColors[day.status],
-          day.downtime > 0 ? 'cursor-pointer' : 'cursor-default',
+          day.downtime > 0
+            ? `cursor-pointer hover:scale-y-110 hover:brightness-110 ${hoverColors[day.status]}`
+            : 'cursor-default',
         )}
         onClick={() => onClick(day)}
       />
@@ -66,7 +75,7 @@ const StatusBarSegment = memo(function StatusBarSegment({
               })}
         </div>
         {day.downtime > 0 && (
-          <div className="text-neutral-400">
+          <div className="text-neutral-500">
             {t('monitor.downFor', { duration: formatDuration(day.downtime) })}
           </div>
         )}

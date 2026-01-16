@@ -7,6 +7,7 @@
   "nav.dashboard": "Dashboard",
   "nav.events": "Events",
   "nav.admin": "Admin",
+  "nav.skipToContent": "Skip to main content",
 
   "action.goBack": "Go back",
   "action.tryAgain": "Try again",

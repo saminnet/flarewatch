@@ -25,7 +25,7 @@ function ChartLoadError() {
   const { t } = useTranslation();
   return (
     <div className="h-37.5 w-full flex items-center justify-center rounded-md border border-dashed border-neutral-200 dark:border-neutral-800">
-      <span className="text-xs text-neutral-400">{t('error.chartLoadFailed')}</span>
+      <span className="text-xs text-neutral-500">{t('error.chartLoadFailed')}</span>
     </div>
   );
 }
@@ -44,9 +44,18 @@ interface MonitorCardProps {
   state: MonitorState;
   open: boolean;
   onOpenChange?: (open: boolean) => void;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
-export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardProps) {
+export function MonitorCard({
+  monitor,
+  state,
+  open,
+  onOpenChange,
+  className,
+  style,
+}: MonitorCardProps) {
   const { t } = useTranslation();
   const isHydrated = useHydrated();
   const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
@@ -55,7 +64,7 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
   const hasStarted = !!state.startedAt?.[monitor.id];
 
   return (
-    <Card className="overflow-hidden p-0">
+    <Card className={cn('overflow-hidden p-0', className)} style={style}>
       <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger
           nativeButton={false}
@@ -110,7 +119,7 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
 
               {!isUp && error && <p className="text-xs text-red-500 truncate mt-0.5">{error}</p>}
               {latency && (
-                <div className="sm:hidden mt-1 flex items-center gap-1.5 text-xs text-neutral-400">
+                <div className="sm:hidden mt-1 flex items-center gap-1.5 text-xs text-neutral-500">
                   <span className="font-medium text-neutral-600 dark:text-neutral-300">
                     {latency.ping}ms
                   </span>
@@ -125,15 +134,15 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
                 <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                   {latency.ping}ms
                 </span>
-                <span className="text-xs text-neutral-400" aria-hidden="true">
+                <span className="text-xs text-neutral-500" aria-hidden="true">
                   •
                 </span>
                 {monitor.isProxy ? (
-                  <span className="text-xs text-neutral-400">{latency.loc}</span>
+                  <span className="text-xs text-neutral-500">{latency.loc}</span>
                 ) : (
                   <Tooltip>
                     <TooltipTrigger
-                      className="text-xs text-neutral-400 cursor-help"
+                      className="text-xs text-neutral-500 cursor-help"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {latency.loc}
