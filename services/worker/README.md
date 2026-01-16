@@ -8,6 +8,7 @@ The FlareWatch monitoring worker is a **Cloudflare Worker** that runs scheduled 
 - Reads monitors from `packages/config/src/worker.ts`.
 - Writes the current state to KV key `state`.
 - Reads KV key `maintenances` to avoid flagging downtime during scheduled maintenance windows.
+- Supports an internal-only `/trigger` call via service binding (no public endpoint).
 
 ## Required binding
 

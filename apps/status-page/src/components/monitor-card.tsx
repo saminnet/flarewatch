@@ -12,6 +12,7 @@ import { useHydrated } from '@/lib/hooks/use-hydrated';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import type { PublicMonitor } from '@/lib/monitors';
 import { formatColoLabel } from '@/lib/cf-colos';
+import { formatUptimeDisplay } from '@/lib/uptime';
 import { cn } from '@/lib/utils';
 
 function ChartSkeleton() {
@@ -51,6 +52,7 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
   const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
 
   const coloLabel = latency ? formatColoLabel(latency.loc) : null;
+  const hasStarted = !!state.startedAt?.[monitor.id];
 
   return (
     <Card className="overflow-hidden p-0">
@@ -62,7 +64,7 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
           aria-label={t('monitor.toggleMonitor', {
             name: monitor.name,
             status: isUp ? t('monitor.statusUp') : t('monitor.statusDown'),
-            uptime: uptimePercent !== null ? uptimePercent.toFixed(2) : t('monitor.pending'),
+            uptime: formatUptimeDisplay(uptimePercent, hasStarted, 2, t),
           })}
         >
           <div className="flex items-center gap-3 p-3 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors">
@@ -140,7 +142,7 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
                       <div className="flex flex-col gap-1">
                         <div className="font-medium">
                           <span className="font-mono">{latency.loc}</span>
-                          {coloLabel ? <span>{` — ${coloLabel}`}</span> : null}
+                          {coloLabel && <span>{` — ${coloLabel}`}</span>}
                         </div>
                         <div className="opacity-80">{t('monitor.checkLocation.cloudflare')}</div>
                       </div>
@@ -154,7 +156,7 @@ export function MonitorCard({ monitor, state, open, onOpenChange }: MonitorCardP
               variant="outline"
               className={cn('font-mono', statusColor.text, statusColor.border)}
             >
-              {uptimePercent !== null ? `${uptimePercent.toFixed(2)}%` : t('monitor.pending')}
+              {formatUptimeDisplay(uptimePercent, hasStarted, 2, t)}
             </Badge>
 
             <IconChevronDown

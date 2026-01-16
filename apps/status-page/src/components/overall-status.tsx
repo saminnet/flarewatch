@@ -47,13 +47,27 @@ export function OverallStatus({ state }: OverallStatusProps) {
 
   const config = statusConfig[status];
   const StatusIcon = config.icon;
-  const lastUpdated = new Date(state.lastUpdate * 1000)
-    .toISOString()
-    .replace('T', ' ')
-    .replace(/\.\d{3}Z$/, ' UTC');
+  const isInitialState = state.lastUpdate === 0;
   const secondsAgo = currentTime - state.lastUpdate;
 
-  function getRefreshMessage() {
+  function formatLastUpdated(): string {
+    return new Date(state.lastUpdate * 1000)
+      .toISOString()
+      .replace('T', ' ')
+      .replace(/\.\d{3}Z$/, ' UTC');
+  }
+
+  function getStatusTitle(): string {
+    if (status === 'degraded') {
+      return t('status.someDown', {
+        down: state.overallDown,
+        total: state.overallUp + state.overallDown,
+      });
+    }
+    return t(config.titleKey);
+  }
+
+  function getRefreshMessage(): string {
     if (refreshCountdown !== null && refreshCountdown > 0) {
       return t('status.refreshingIn', { seconds: refreshCountdown });
     }
@@ -73,12 +87,7 @@ export function OverallStatus({ state }: OverallStatusProps) {
         <div className="flex-1 pr-2">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <h2 className="text-lg sm:text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-              {status === 'degraded'
-                ? t('status.someDown', {
-                    down: state.overallDown,
-                    total: state.overallUp + state.overallDown,
-                  })
-                : t(config.titleKey)}
+              {getStatusTitle()}
             </h2>
             <Badge variant={config.badgeVariant} className="shrink-0">
               {state.overallUp} up / {state.overallDown} down
@@ -87,13 +96,15 @@ export function OverallStatus({ state }: OverallStatusProps) {
 
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {t('status.lastUpdated', {
-                date: lastUpdated,
-                seconds: secondsAgo,
-              })}
+              {isInitialState
+                ? t('status.initializing')
+                : t('status.lastUpdated', {
+                    date: formatLastUpdated(),
+                    seconds: secondsAgo,
+                  })}
             </p>
 
-            {isStale && (
+            {!isInitialState && isStale && (
               <Tooltip>
                 <TooltipTrigger className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 cursor-help">
                   <IconRefresh className={`h-3.5 w-3.5 ${willRefreshSoon ? 'animate-spin' : ''}`} />
