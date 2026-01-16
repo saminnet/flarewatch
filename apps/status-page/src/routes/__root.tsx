@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { Outlet, HeadContent, Scripts, createRootRouteWithContext } from '@tanstack/react-router';
 import { createMiddleware } from '@tanstack/react-start';
+import { useTranslation } from 'react-i18next';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { getThemeInitScript, getThemePreferenceServerFn } from '@/lib/theme-server';
@@ -45,6 +46,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootComponent() {
+  const { t } = useTranslation();
   const { theme, statusPage } = Route.useLoaderData();
   const themeInitScript = getThemeInitScript(theme);
   const isDark = theme === 'dark';
@@ -52,7 +54,7 @@ function RootComponent() {
   const favicon = statusPage?.favicon;
 
   return (
-    <html lang="en" className={`h-full${isDark ? ' dark' : ''}`} suppressHydrationWarning>
+    <html lang="en" className={isDark ? 'h-full dark' : 'h-full'} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <title>{title}</title>
@@ -67,9 +69,15 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body className="flex min-h-full flex-col bg-white font-sans antialiased dark:bg-neutral-950">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-100 focus:bg-white focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg dark:focus:bg-neutral-900"
+        >
+          {t('nav.skipToContent')}
+        </a>
         <Header config={statusPage} />
 
-        <main className="flex-1">
+        <main id="main-content" className="flex-1">
           <Outlet />
         </main>
 

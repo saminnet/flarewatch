@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { MonitorState } from '@flarewatch/shared';
 import { getOverallStatus } from '@/lib/uptime';
 import { useAutoRefresh } from '@/lib/hooks/use-auto-refresh';
+import { cn } from '@/lib/utils';
 
 interface OverallStatusProps {
   state: MonitorState;
@@ -78,10 +79,10 @@ export function OverallStatus({ state }: OverallStatusProps) {
   }
 
   return (
-    <Card className={`${config.bgClass} ${config.borderClass}`}>
+    <Card className={cn(config.bgClass, config.borderClass)}>
       <div className="flex items-start gap-2">
-        <div className={`rounded-full ml-2 p-2 ${config.bgClass}`}>
-          <StatusIcon className={`h-8 w-8 ${config.iconClass}`} />
+        <div className={cn('ml-2 rounded-full p-2', config.bgClass)}>
+          <StatusIcon className={cn('h-8 w-8', config.iconClass)} />
         </div>
 
         <div className="flex-1 pr-2">
@@ -95,7 +96,7 @@ export function OverallStatus({ state }: OverallStatusProps) {
           </div>
 
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="text-xs text-neutral-600 dark:text-neutral-400">
               {isInitialState
                 ? t('status.initializing')
                 : t('status.lastUpdated', {
@@ -106,8 +107,13 @@ export function OverallStatus({ state }: OverallStatusProps) {
 
             {!isInitialState && isStale && (
               <Tooltip>
-                <TooltipTrigger className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 cursor-help">
-                  <IconRefresh className={`h-3.5 w-3.5 ${willRefreshSoon ? 'animate-spin' : ''}`} />
+                <TooltipTrigger
+                  className={cn(
+                    'flex cursor-help items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400',
+                    !willRefreshSoon && 'animate-pulse',
+                  )}
+                >
+                  <IconRefresh className={cn('h-3.5 w-3.5', willRefreshSoon && 'animate-spin')} />
                   <span>{getRefreshMessage()}</span>
                 </TooltipTrigger>
                 <TooltipContent>{t('status.autoRefresh')}</TooltipContent>

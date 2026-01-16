@@ -85,13 +85,15 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
   if (activeGroups.length === 0) {
     return (
       <div className="space-y-3">
-        {monitors.map((monitor) => (
+        {monitors.map((monitor, index) => (
           <MonitorCard
             key={monitor.id}
             monitor={monitor}
             state={state}
             open={!collapsedMonitors.includes(monitor.id)}
             onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
+            className="animate-fade-in-up opacity-0"
+            style={{ animationDelay: `${index * 50}ms` }}
           />
         ))}
       </div>
@@ -109,13 +111,15 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
       {/* Ungrouped monitors shown FIRST, without label */}
       {ungroupedMonitors.length > 0 && (
         <div className="space-y-3">
-          {ungroupedMonitors.map((monitor) => (
+          {ungroupedMonitors.map((monitor, index) => (
             <MonitorCard
               key={monitor.id}
               monitor={monitor}
               state={state}
               open={!collapsedMonitors.includes(monitor.id)}
               onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
+              className="animate-fade-in-up opacity-0"
+              style={{ animationDelay: `${index * 50}ms` }}
             />
           ))}
         </div>
@@ -150,13 +154,15 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-2">
               <div className="space-y-3">
-                {groupMonitors.map((monitor) => (
+                {groupMonitors.map((monitor, index) => (
                   <MonitorCard
                     key={monitor.id}
                     monitor={monitor}
                     state={state}
                     open={!collapsedMonitors.includes(monitor.id)}
                     onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
+                    className="animate-fade-in-up opacity-0"
+                    style={{ animationDelay: `${index * 50}ms` }}
                   />
                 ))}
               </div>
