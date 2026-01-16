@@ -18,11 +18,13 @@ const BINDING_NAMES = {
   PROXY_TOKEN: 'FLAREWATCH_PROXY_TOKEN',
   STATUS_PAGE_AUTH: 'FLAREWATCH_STATUS_PAGE_BASIC_AUTH',
   ADMIN_AUTH: 'FLAREWATCH_ADMIN_BASIC_AUTH',
+  MONITOR_WORKER: 'MONITOR_WORKER',
 } as const;
 
 const BINDING_TYPES = {
   KV_NAMESPACE: 'kv_namespace',
   SECRET_TEXT: 'secret_text',
+  SERVICE: 'service',
 } as const;
 
 function createKvBinding(namespaceId: pulumi.Output<string>) {
@@ -30,6 +32,22 @@ function createKvBinding(namespaceId: pulumi.Output<string>) {
     name: BINDING_NAMES.STATE,
     type: BINDING_TYPES.KV_NAMESPACE,
     namespaceId,
+  };
+}
+
+function createSecretBinding(name: string, text: string) {
+  return {
+    name,
+    type: BINDING_TYPES.SECRET_TEXT,
+    text,
+  };
+}
+
+function createServiceBinding(name: string, service: pulumi.Output<string>) {
+  return {
+    name,
+    type: BINDING_TYPES.SERVICE,
+    service,
   };
 }
 
@@ -63,18 +81,12 @@ const worker = new cloudflare.WorkersScript('worker', {
   mainModule: MAIN_MODULE,
   compatibilityDate: COMPATIBILITY_DATE,
   compatibilityFlags: COMPATIBILITY_FLAGS,
-  bindings: pulumi.output(proxyToken).apply((token) => [
-    createKvBinding(kvNamespace.id),
-    ...(token
-      ? [
-          {
-            name: BINDING_NAMES.PROXY_TOKEN,
-            type: BINDING_TYPES.SECRET_TEXT,
-            text: token,
-          },
-        ]
-      : []),
-  ]),
+  bindings: pulumi
+    .output(proxyToken)
+    .apply((token) => [
+      createKvBinding(kvNamespace.id),
+      ...(token ? [createSecretBinding(BINDING_NAMES.PROXY_TOKEN, token)] : []),
+    ]),
 });
 
 new cloudflare.WorkersCronTrigger('cron', {
@@ -100,26 +112,14 @@ const statusPageVersion = new cloudflare.WorkerVersion('statusPageVersion', {
   assets: {
     directory: statusPageBuild.clientDir,
   },
-  bindings: pulumi.all([statusPageBasicAuth, adminBasicAuth]).apply(([spAuth, adminAuth]) => {
-    const bindings: cloudflare.types.input.WorkerVersionBinding[] = [
+  bindings: pulumi
+    .all([statusPageBasicAuth, adminBasicAuth])
+    .apply(([spAuth, adminAuth]) => [
       createKvBinding(kvNamespace.id),
-    ];
-    if (spAuth) {
-      bindings.push({
-        name: BINDING_NAMES.STATUS_PAGE_AUTH,
-        type: BINDING_TYPES.SECRET_TEXT,
-        text: spAuth,
-      });
-    }
-    if (adminAuth) {
-      bindings.push({
-        name: BINDING_NAMES.ADMIN_AUTH,
-        type: BINDING_TYPES.SECRET_TEXT,
-        text: adminAuth,
-      });
-    }
-    return bindings;
-  }),
+      createServiceBinding(BINDING_NAMES.MONITOR_WORKER, worker.scriptName),
+      ...(spAuth ? [createSecretBinding(BINDING_NAMES.STATUS_PAGE_AUTH, spAuth)] : []),
+      ...(adminAuth ? [createSecretBinding(BINDING_NAMES.ADMIN_AUTH, adminAuth)] : []),
+    ]),
   modules: statusPageBuild.modules,
 });
 

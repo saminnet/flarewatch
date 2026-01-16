@@ -42,6 +42,7 @@
   "status.upcoming": "Upcoming",
   "status.ongoing": "Ongoing",
   "status.completed": "Completed",
+  "status.initializing": "Running first check...",
 
   "monitor.title": "Monitors",
   "monitor.count": "{{count}} monitors",
@@ -58,10 +59,11 @@
   "monitor.incidentsAt": "{{name}} incidents at {{date}}",
   "monitor.toggleDetails": "Toggle details for {{name}}",
   "monitor.toggleGroup": "Toggle {{name}} ({{count}} monitors)",
-  "monitor.toggleMonitor": "{{name}}, {{status}}, {{uptime}}% uptime. Click to toggle details",
+  "monitor.toggleMonitor": "{{name}}, {{status}}, {{uptime}}. Click to toggle details",
   "monitor.statusUp": "operational",
   "monitor.statusDown": "not operational",
   "monitor.pending": "Pending",
+  "monitor.starting": "Starting...",
 
   "events.subtitle": "Incidents and scheduled maintenance",
   "events.noEvents": "No events this month",

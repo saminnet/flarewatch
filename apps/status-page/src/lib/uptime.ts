@@ -92,6 +92,18 @@ export function formatTimestamp(timestamp: number): string {
   return format(fromUnixTime(timestamp), 'PPpp');
 }
 
+export function formatUptimeDisplay(
+  uptimePercent: number | null,
+  hasStarted: boolean,
+  decimals: number,
+  t: (key: 'monitor.starting' | 'monitor.pending') => string,
+): string {
+  if (uptimePercent !== null) {
+    return `${uptimePercent.toFixed(decimals)}%`;
+  }
+  return hasStarted ? t('monitor.starting') : t('monitor.pending');
+}
+
 export function formatRelativeTime(timestamp: number): string {
   return formatDistanceToNow(fromUnixTime(timestamp), { addSuffix: true });
 }
@@ -116,26 +128,24 @@ export interface DailyStatusData {
   incidents: DayIncidentDetail[];
 }
 
+function createUnknownDay(date: Date): DailyStatusData {
+  return { date, status: 'unknown', uptime: 100, downtime: 0, incidents: [] };
+}
+
+function generateUnknownDays(baseDate: Date): DailyStatusData[] {
+  const days: DailyStatusData[] = [];
+  for (let i = UPTIME_DAYS - 1; i >= 0; i--) {
+    const date = new Date(baseDate);
+    date.setUTCDate(date.getUTCDate() - i);
+    date.setUTCHours(0, 0, 0, 0);
+    days.push(createUnknownDay(date));
+  }
+  return days;
+}
+
 export function generateDailyStatus(monitorId: string, state: MonitorState): DailyStatusData[] {
   const days: DailyStatusData[] = [];
   const nowSec = getNowSeconds(state);
-
-  const generateUnknownDays = (baseDate: Date): DailyStatusData[] => {
-    const unknownDays: DailyStatusData[] = [];
-    for (let i = UPTIME_DAYS - 1; i >= 0; i--) {
-      const date = new Date(baseDate);
-      date.setUTCDate(date.getUTCDate() - i);
-      date.setUTCHours(0, 0, 0, 0);
-      unknownDays.push({
-        date,
-        status: 'unknown',
-        uptime: 100,
-        downtime: 0,
-        incidents: [],
-      });
-    }
-    return unknownDays;
-  };
 
   // No state data yet - return unknown days based on current UTC date
   if (nowSec === null) {
@@ -166,13 +176,7 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
 
     // Entire day is before monitoring began
     if (monitorStartSec && dayEndSec <= monitorStartSec) {
-      days.push({
-        date,
-        status: 'unknown',
-        uptime: 100,
-        downtime: 0,
-        incidents: [],
-      });
+      days.push(createUnknownDay(date));
       continue;
     }
 
@@ -230,7 +234,7 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
       status = 'unknown';
     } else if (uptimePercent >= UPTIME_THRESHOLDS.EXCELLENT) {
       status = 'up';
-    } else if (uptimePercent >= 50) {
+    } else if (uptimePercent >= UPTIME_THRESHOLDS.PARTIAL) {
       status = 'partial';
     } else {
       status = 'down';

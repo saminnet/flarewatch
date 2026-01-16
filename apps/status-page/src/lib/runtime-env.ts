@@ -4,6 +4,7 @@ export type RuntimeEnv = {
   FLAREWATCH_STATE?: KVNamespace;
   FLAREWATCH_STATUS_PAGE_BASIC_AUTH?: string;
   FLAREWATCH_ADMIN_BASIC_AUTH?: string;
+  MONITOR_WORKER?: Fetcher;
 };
 
 /**

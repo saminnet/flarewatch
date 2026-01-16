@@ -55,13 +55,14 @@ async function loadEffectiveConfig(env: Env): Promise<RuntimeConfig> {
     log.error('Invalid runtime config in CONFIG_KV, falling back to static config');
   }
 
-  return {
-    monitors: workerConfig.monitors,
-    ...(workerConfig.notification !== undefined && { notification: workerConfig.notification }),
-    ...(workerConfig.kvWriteCooldownMinutes !== undefined && {
-      kvWriteCooldownMinutes: workerConfig.kvWriteCooldownMinutes,
-    }),
-  };
+  const config: RuntimeConfig = { monitors: workerConfig.monitors };
+  if (workerConfig.notification) {
+    config.notification = workerConfig.notification;
+  }
+  if (workerConfig.kvWriteCooldownMinutes !== undefined) {
+    config.kvWriteCooldownMinutes = workerConfig.kvWriteCooldownMinutes;
+  }
+  return config;
 }
 
 function isInMaintenance(
@@ -116,7 +117,13 @@ async function safeCallback<T extends unknown[]>(
 }
 
 /**
- * Determine if notification should be sent based on grace period
+ * Determine if notification should be sent based on grace period.
+ *
+ * Grace period logic:
+ * - No grace period configured: notify immediately on any status change
+ * - With grace period: wait until grace period elapses before notifying
+ * - For UP transitions: only notify if the DOWN would have been notified
+ * - For DOWN: notify when grace period threshold is crossed
  */
 function shouldNotify(
   incidentStartTime: number,
@@ -127,150 +134,176 @@ function shouldNotify(
 ): boolean {
   const gracePeriod = config.notification?.gracePeriod;
 
-  // No grace period - always notify on change
+  // No grace period configured - notify on any status change
   if (gracePeriod === undefined) {
     return statusChanged;
   }
 
   const gracePeriodSeconds = gracePeriod * 60;
   const timeSinceIncident = currentTime - incidentStartTime;
-
   const gracePeriodReached = timeSinceIncident >= gracePeriodSeconds - GRACE_PERIOD_BUFFER_SECONDS;
 
-  if (isUp) {
-    // Only notify UP if we would have notified DOWN
-    return statusChanged && gracePeriodReached;
+  // Must have reached grace period to send any notification
+  if (!gracePeriodReached) {
+    return false;
   }
 
-  // For DOWN: notify when grace period is reached or on subsequent changes
+  // Status changed (up or down) - notify if grace period reached
   if (statusChanged) {
-    return gracePeriodReached;
+    return true;
   }
 
-  // Check if we just crossed the grace period threshold
-  const justCrossedThreshold = timeSinceIncident < gracePeriodSeconds + GRACE_PERIOD_BUFFER_SECONDS;
-  return gracePeriodReached && justCrossedThreshold;
+  // No status change but grace period just crossed - send delayed DOWN notification
+  if (!isUp) {
+    const justCrossedThreshold =
+      timeSinceIncident < gracePeriodSeconds + GRACE_PERIOD_BUFFER_SECONDS;
+    return justCrossedThreshold;
+  }
+
+  return false;
+}
+
+/**
+ * Core check logic - runs all monitors and updates state.
+ * Used by both scheduled handler and /trigger endpoint.
+ */
+async function runChecks(env: Env): Promise<void> {
+  const location = await getEdgeLocation();
+  log.info('Starting checks', { location });
+
+  const config = await loadEffectiveConfig(env);
+
+  const stateKv = getStateKv(env);
+  const storedState = await stateKv.get(KV_KEYS.STATE, {
+    type: 'json',
+  });
+  const state: MonitorState = isMonitorState(storedState) ? storedState : createInitialState();
+  resetCounters(state);
+
+  const maintenances = await loadMaintenances(stateKv);
+
+  const currentTime = Math.floor(Date.now() / 1000);
+  const notifier = createNotifier(config.notification?.webhook);
+
+  const checkResults = await Promise.allSettled(
+    config.monitors.map(async (monitor) => {
+      log.info('Checking monitor', { name: monitor.name });
+      const result = await checkMonitor(monitor, env);
+
+      return { monitor, result };
+    }),
+  );
+
+  let stateChanged = false;
+
+  for (const settled of checkResults) {
+    if (settled.status === 'rejected') {
+      log.error('Check failed', { reason: String(settled.reason) });
+      state.overallDown++;
+      continue;
+    }
+
+    const { monitor, result } = settled.value;
+    const { location: checkLocation, result: checkResult } = result;
+
+    const update = processCheckResult(state, monitor, checkResult, currentTime);
+    stateChanged ||= update.statusChanged;
+
+    const latency = checkResult.ok ? checkResult.latency : (checkResult.latency ?? 0);
+    updateLatency(state, monitor.id, checkLocation, latency, currentTime);
+
+    if (checkResult.ok && checkResult.ssl) {
+      updateSSLCertificate(state, monitor.id, checkResult.ssl, currentTime);
+    }
+
+    cleanupOldIncidents(state, monitor.id, currentTime);
+
+    if (notifier && !shouldSkipNotification(monitor.id, currentTime, maintenances, config)) {
+      const skipErrorChanges = Boolean(config.notification?.skipErrorChangeNotification);
+      const statusChangedForNotification =
+        update.changeType === 'up' ||
+        update.changeType === 'down' ||
+        (update.changeType === 'error' && !skipErrorChanges);
+
+      const shouldSend = shouldNotify(
+        update.incidentStartTime,
+        currentTime,
+        statusChangedForNotification,
+        update.isUp,
+        config,
+      );
+
+      if (shouldSend) {
+        const ctx: NotificationContext = {
+          monitor,
+          isUp: update.isUp,
+          incidentStartTime: update.incidentStartTime,
+          currentTime,
+          reason: update.error,
+          timeZone: config.notification?.timeZone ?? 'UTC',
+        };
+        const message = formatNotificationMessage(ctx);
+        await notifier.send(ctx, message);
+      }
+    }
+
+    if (update.statusChanged) {
+      await safeCallback(
+        workerConfig.callbacks?.onStatusChange,
+        'Callback',
+        env,
+        monitor,
+        update.isUp,
+        update.incidentStartTime,
+        currentTime,
+        update.error,
+      );
+    }
+
+    if (!update.isUp) {
+      await safeCallback(
+        workerConfig.callbacks?.onIncident,
+        'Incident callback',
+        env,
+        monitor,
+        update.incidentStartTime,
+        currentTime,
+        update.error,
+      );
+    }
+  }
+
+  const cooldownSeconds = (config.kvWriteCooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES) * 60;
+  const timeSinceUpdate = currentTime - state.lastUpdate;
+
+  if (stateChanged || timeSinceUpdate >= cooldownSeconds - 10) {
+    log.info('Saving state', { changed: stateChanged });
+    state.lastUpdate = currentTime;
+    await stateKv.put(KV_KEYS.STATE, JSON.stringify(state));
+  } else {
+    log.debug('Skipping state save', { cooldownRemaining: cooldownSeconds - timeSinceUpdate });
+  }
+
+  log.info('Complete', { up: state.overallUp, down: state.overallDown });
 }
 
 const Worker = {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+
+    // Trigger check (internal binding only). If you route this worker publicly,
+    // add a secret check here.
+    if (url.pathname === '/trigger' && request.method === 'POST') {
+      // Run checks in background, return immediately
+      ctx.waitUntil(runChecks(env));
+      return Response.json({ success: true, message: 'Check triggered' }, { status: 202 });
+    }
+
+    return new Response('Not Found', { status: 404 });
+  },
+
   async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
-    const location = await getEdgeLocation();
-    log.info('Starting scheduled check', { location });
-
-    const config = await loadEffectiveConfig(env);
-
-    const stateKv = getStateKv(env);
-    const storedState = await stateKv.get(KV_KEYS.STATE, {
-      type: 'json',
-    });
-    const state: MonitorState = isMonitorState(storedState) ? storedState : createInitialState();
-    resetCounters(state);
-
-    const maintenances = await loadMaintenances(stateKv);
-
-    const currentTime = Math.floor(Date.now() / 1000);
-    const notifier = createNotifier(config.notification?.webhook);
-
-    const checkResults = await Promise.allSettled(
-      config.monitors.map(async (monitor) => {
-        log.info('Checking monitor', { name: monitor.name });
-        const result = await checkMonitor(monitor, env);
-
-        return { monitor, result };
-      }),
-    );
-
-    let stateChanged = false;
-
-    for (const settled of checkResults) {
-      if (settled.status === 'rejected') {
-        log.error('Check failed', { reason: String(settled.reason) });
-        state.overallDown++;
-        continue;
-      }
-
-      const { monitor, result } = settled.value;
-      const { location: checkLocation, result: checkResult } = result;
-
-      const update = processCheckResult(state, monitor, checkResult, currentTime);
-      stateChanged ||= update.statusChanged;
-
-      const latency = checkResult.ok ? checkResult.latency : (checkResult.latency ?? 0);
-      updateLatency(state, monitor.id, checkLocation, latency, currentTime);
-
-      if (checkResult.ok && checkResult.ssl) {
-        updateSSLCertificate(state, monitor.id, checkResult.ssl, currentTime);
-      }
-
-      cleanupOldIncidents(state, monitor.id, currentTime);
-
-      if (notifier && !shouldSkipNotification(monitor.id, currentTime, maintenances, config)) {
-        const skipErrorChanges = Boolean(config.notification?.skipErrorChangeNotification);
-        const statusChangedForNotification =
-          update.changeType === 'up' ||
-          update.changeType === 'down' ||
-          (update.changeType === 'error' && !skipErrorChanges);
-
-        const shouldSend = shouldNotify(
-          update.incidentStartTime,
-          currentTime,
-          statusChangedForNotification,
-          update.isUp,
-          config,
-        );
-
-        if (shouldSend) {
-          const ctx: NotificationContext = {
-            monitor,
-            isUp: update.isUp,
-            incidentStartTime: update.incidentStartTime,
-            currentTime,
-            reason: update.error,
-            timeZone: config.notification?.timeZone ?? 'UTC',
-          };
-          const message = formatNotificationMessage(ctx);
-          await notifier.send(ctx, message);
-        }
-      }
-
-      if (update.statusChanged) {
-        await safeCallback(
-          workerConfig.callbacks?.onStatusChange,
-          'Callback',
-          env,
-          monitor,
-          update.isUp,
-          update.incidentStartTime,
-          currentTime,
-          update.error,
-        );
-      }
-
-      if (!update.isUp) {
-        await safeCallback(
-          workerConfig.callbacks?.onIncident,
-          'Incident callback',
-          env,
-          monitor,
-          update.incidentStartTime,
-          currentTime,
-          update.error,
-        );
-      }
-    }
-
-    const cooldownSeconds = (config.kvWriteCooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES) * 60;
-    const timeSinceUpdate = currentTime - state.lastUpdate;
-
-    if (stateChanged || timeSinceUpdate >= cooldownSeconds - 10) {
-      log.info('Saving state', { changed: stateChanged });
-      state.lastUpdate = currentTime;
-      await stateKv.put(KV_KEYS.STATE, JSON.stringify(state));
-    } else {
-      log.debug('Skipping state save', { cooldownRemaining: cooldownSeconds - timeSinceUpdate });
-    }
-
-    log.info('Complete', { up: state.overallUp, down: state.overallDown });
+    await runChecks(env);
   },
 };
 

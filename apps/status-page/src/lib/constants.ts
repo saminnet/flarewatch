@@ -3,15 +3,21 @@ export const UPTIME_THRESHOLDS = {
   EXCELLENT: 99.9,
   GOOD: 99,
   DEGRADED: 95,
+  PARTIAL: 50,
 } as const;
 
 // Time constants in milliseconds
+const SECOND_MS = 1000;
+const MINUTE_MS = 60 * SECOND_MS;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
 export const TIME_MS = {
-  SECOND: 1000,
-  MINUTE: 60 * 1000,
-  HOUR: 60 * 60 * 1000,
-  DAY: 24 * 60 * 60 * 1000,
-  WEEK: 7 * 24 * 60 * 60 * 1000,
+  SECOND: SECOND_MS,
+  MINUTE: MINUTE_MS,
+  HOUR: HOUR_MS,
+  DAY: DAY_MS,
+  WEEK: 7 * DAY_MS,
 } as const;
 
 // Time constants in seconds
@@ -19,6 +25,9 @@ export const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 // Stale data threshold (5 minutes)
 export const STALE_THRESHOLD_SECONDS = 300;
+
+// Retry interval for initial trigger check (1 minute)
+export const INITIAL_TRIGGER_RETRY_MS = 60_000;
 
 // Auto-refresh minimum open time before refreshing (seconds)
 export const AUTO_REFRESH_MIN_OPEN_SECONDS = 10;

@@ -3,7 +3,9 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { StatusIcon } from '@/components/status-icon';
 import { monitorStateQuery, publicMonitorsQuery } from '@/lib/query/monitors.queries';
+import type { MonitorState } from '@flarewatch/shared';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
+import { formatUptimeDisplay } from '@/lib/uptime';
 import { cn } from '@/lib/utils';
 
 interface EmbedSearch {
@@ -12,6 +14,23 @@ interface EmbedSearch {
 }
 
 const VALID_THEMES = ['light', 'dark', 'auto'] as const;
+
+interface EmbedWrapperProps {
+  children: React.ReactNode;
+  theme: EmbedSearch['theme'];
+  className?: string;
+}
+
+function EmbedWrapper({ children, theme, className }: EmbedWrapperProps): React.ReactNode {
+  return (
+    <div
+      className={cn(className, theme === 'dark' && 'dark')}
+      style={{ colorScheme: theme === 'auto' ? undefined : theme }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export const Route = createFileRoute('/embed/$monitorId')({
   validateSearch: (search: Record<string, unknown>): EmbedSearch => {
@@ -30,7 +49,23 @@ export const Route = createFileRoute('/embed/$monitorId')({
     ]);
   },
   component: EmbedPage,
+  errorComponent: ({ error }) => (
+    <div className="h-full flex items-center justify-center p-4">
+      <div className="text-sm text-red-500">
+        {error instanceof Error ? error.message : 'Failed to load monitor status'}
+      </div>
+    </div>
+  ),
 });
+
+const EMPTY_STATE: MonitorState = {
+  incident: {},
+  latency: {},
+  overallUp: 0,
+  overallDown: 0,
+  lastUpdate: 0,
+  startedAt: {},
+};
 
 function EmbedPage() {
   const { t } = useTranslation();
@@ -41,56 +76,45 @@ function EmbedPage() {
 
   const monitor = monitors.find((m) => m.id === monitorId);
 
-  // Theme handling: 'dark' forces dark mode, 'light' forces light mode, 'auto' inherits
-  // Using color-scheme CSS property ensures proper form controls and scrollbar colors
-  const themeClass = theme === 'dark' ? 'dark' : '';
-  const colorScheme = theme === 'auto' ? undefined : theme;
+  // Call hooks unconditionally to satisfy Rules of Hooks
+  const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(
+    monitorId,
+    state ?? EMPTY_STATE,
+  );
+  const hasStarted = state ? !!state.startedAt?.[monitorId] : false;
 
   if (!monitor) {
     return (
-      <div
-        className={cn('h-full flex items-center justify-center p-4', themeClass)}
-        style={{ colorScheme }}
-      >
+      <EmbedWrapper theme={theme} className="h-full flex items-center justify-center p-4">
         <div className="text-sm text-red-500">{t('error.monitorNotFound', { id: monitorId })}</div>
-      </div>
+      </EmbedWrapper>
     );
   }
 
-  // State can be null if KV has no data yet (worker hasn't run)
   if (!state) {
     return (
-      <div
-        className={cn('h-full flex items-center justify-center p-4', themeClass)}
-        style={{ colorScheme }}
-      >
+      <EmbedWrapper theme={theme} className="h-full flex items-center justify-center p-4">
         <div className="text-sm text-neutral-500">{t('error.monitorStateNotDefined')}</div>
-      </div>
+      </EmbedWrapper>
     );
   }
 
-  const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
-
-  // Minimal mode: just a status badge
   if (minimal) {
     return (
-      <div
-        className={cn(
-          'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium',
-          themeClass,
-        )}
-        style={{ colorScheme }}
+      <EmbedWrapper
+        theme={theme}
+        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium"
       >
         <span className={cn('w-2 h-2 rounded-full', isUp ? 'bg-emerald-500' : 'bg-red-500')} />
         <span className={cn('font-mono', statusColor.text)}>
-          {uptimePercent !== null ? `${uptimePercent.toFixed(1)}%` : t('monitor.pending')}
+          {formatUptimeDisplay(uptimePercent, hasStarted, 1, t)}
         </span>
-      </div>
+      </EmbedWrapper>
     );
   }
 
   return (
-    <div className={cn('p-3', themeClass)} style={{ colorScheme }}>
+    <EmbedWrapper theme={theme} className="p-3">
       <div className="flex items-center gap-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 shadow-sm">
         <div className="shrink-0">
           <StatusIcon isUp={isUp} />
@@ -120,9 +144,9 @@ function EmbedPage() {
             statusColor.text,
           )}
         >
-          {uptimePercent !== null ? `${uptimePercent.toFixed(2)}%` : t('monitor.pending')}
+          {formatUptimeDisplay(uptimePercent, hasStarted, 2, t)}
         </div>
       </div>
-    </div>
+    </EmbedWrapper>
   );
 }
