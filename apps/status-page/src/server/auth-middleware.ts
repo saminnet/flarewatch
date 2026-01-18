@@ -12,13 +12,8 @@ function isAdminUIRoute(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
-function encodeBase64(value: string): string {
-  if (typeof btoa === 'function') return btoa(value);
-  return Buffer.from(value, 'utf8').toString('base64');
-}
-
 function checkBasicAuth(request: Request, expectedCreds: string): boolean {
-  const expected = `Basic ${encodeBase64(expectedCreds)}`;
+  const expected = `Basic ${btoa(expectedCreds)}`;
   const authHeader = request.headers.get('Authorization') ?? '';
   // Always perform comparison to prevent timing attacks
   return timingSafeEqual(authHeader, expected);

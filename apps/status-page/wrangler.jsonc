@@ -14,7 +14,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "flarewatch",
   "compatibility_date": "2025-11-17",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [],
   "main": "@tanstack/react-start/server-entry",
   "observability": {
     "enabled": true,

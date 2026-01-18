@@ -10,7 +10,7 @@
 name = "flarewatch-worker"
 main = "src/index.ts"
 compatibility_date = "2025-11-17"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = []
 
 # KV namespace binding
 # - Local dev: Uses wrangler-dev.toml with persisted local state

@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const COMPATIBILITY_DATE = '2025-11-17';
-const COMPATIBILITY_FLAGS = ['nodejs_compat'];
+const COMPATIBILITY_FLAGS: string[] = [];
 const MAIN_MODULE = 'index.js';
 const CRON_EVERY_MINUTE = '* * * * *';
 
