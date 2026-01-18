@@ -9,8 +9,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const COMPATIBILITY_DATE = '2025-11-17';
-const COMPATIBILITY_FLAGS: string[] = [];
 const MAIN_MODULE = 'index.js';
+const STATUS_PAGE_COMPATIBILITY_FLAGS = ['nodejs_compat'];
+const WORKER_COMPATIBILITY_FLAGS: string[] = [];
 const CRON_EVERY_MINUTE = '* * * * *';
 
 const BINDING_NAMES = {
@@ -80,7 +81,7 @@ const worker = new cloudflare.WorkersScript('worker', {
   content: workerContent,
   mainModule: MAIN_MODULE,
   compatibilityDate: COMPATIBILITY_DATE,
-  compatibilityFlags: COMPATIBILITY_FLAGS,
+  compatibilityFlags: WORKER_COMPATIBILITY_FLAGS,
   bindings: pulumi
     .output(proxyToken)
     .apply((token) => [
@@ -108,7 +109,7 @@ const statusPageVersion = new cloudflare.WorkerVersion('statusPageVersion', {
   workerId: statusPageWorker.name,
   mainModule: MAIN_MODULE,
   compatibilityDate: COMPATIBILITY_DATE,
-  compatibilityFlags: COMPATIBILITY_FLAGS,
+  compatibilityFlags: STATUS_PAGE_COMPATIBILITY_FLAGS,
   assets: {
     directory: statusPageBuild.clientDir,
   },
