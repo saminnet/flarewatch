@@ -6,6 +6,7 @@ import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { getThemeInitScript, getThemePreferenceServerFn } from '@/lib/theme-server';
 import { configQuery } from '@/lib/query/monitors.queries';
+import { isSafeThemeCss } from '@/lib/utils';
 
 // Initialize i18n
 import '@/lib/i18n';
@@ -67,6 +68,10 @@ function RootComponent() {
           </>
         )}
         <HeadContent />
+
+        {statusPage?.themeVars && isSafeThemeCss(statusPage.themeVars) && (
+          <style dangerouslySetInnerHTML={{ __html: statusPage.themeVars }} />
+        )}
       </head>
       <body className="flex min-h-full flex-col bg-white font-sans antialiased dark:bg-neutral-950">
         <a

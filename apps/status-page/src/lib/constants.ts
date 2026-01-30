@@ -68,3 +68,5 @@ export const AUTH = {
   LOGIN_RATE_LIMIT_WINDOW_SECONDS: 10 * 60, // 10 minutes
   LOGIN_RATE_LIMIT_PREFIX: 'admin_login_fail:',
 } as const;
+
+export const DEFAULT_POWERED_BY_URL = 'https://github.com/saminnet/flarewatch';

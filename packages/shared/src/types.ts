@@ -4,14 +4,11 @@ export type PageConfig = {
   group?: PageConfigGroup;
   favicon?: string;
   logo?: string;
-  /**
-   * Allowed CORS origins for the public API endpoints (for example `/api/data`).
-   *
-   * If omitted, the API responds with `Access-Control-Allow-Origin: *` to make
-   * embedding and integrations easy by default.
-   */
   apiCorsOrigins?: string[];
-  customFooter?: string;
+  poweredByUrl?: string;
+  theme?: string;
+  customCss?: string;
+  themeVars?: string;
 };
 
 export type PageConfigGroup = { [key: string]: string[] };
