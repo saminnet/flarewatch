@@ -167,4 +167,10 @@ jobs:
           if [ -n "$FLAREWATCH_ADMIN_BASIC_AUTH" ]; then
             pulumi -C infra config set --secret adminBasicAuth "$FLAREWATCH_ADMIN_BASIC_AUTH"
           fi
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            pulumi -C infra config set customDomain "$CUSTOM_DOMAIN"
+          fi
+          if [ -n "$CUSTOM_DOMAIN_ZONE_ID" ]; then
+            pulumi -C infra config set customDomainZoneId "$CUSTOM_DOMAIN_ZONE_ID"
+          fi
           pulumi -C infra up --yes
