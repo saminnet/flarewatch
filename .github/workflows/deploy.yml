@@ -153,6 +153,8 @@ jobs:
           FLAREWATCH_PROXY_TOKEN: ${{ secrets.FLAREWATCH_PROXY_TOKEN }}
           FLAREWATCH_STATUS_PAGE_BASIC_AUTH: ${{ secrets.FLAREWATCH_STATUS_PAGE_BASIC_AUTH }}
           FLAREWATCH_ADMIN_BASIC_AUTH: ${{ secrets.FLAREWATCH_ADMIN_BASIC_AUTH }}
+          CUSTOM_DOMAIN: ${{ secrets.CUSTOM_DOMAIN }}
+          CUSTOM_DOMAIN_ZONE_ID: ${{ secrets.CUSTOM_DOMAIN_ZONE_ID }}
         run: |
           pulumi -C infra login "$PULUMI_BACKEND_URL"
           pulumi -C infra stack select production --create
@@ -166,5 +168,11 @@ jobs:
           fi
           if [ -n "$FLAREWATCH_ADMIN_BASIC_AUTH" ]; then
             pulumi -C infra config set --secret adminBasicAuth "$FLAREWATCH_ADMIN_BASIC_AUTH"
+          fi
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            pulumi -C infra config set customDomain "$CUSTOM_DOMAIN"
+          fi
+          if [ -n "$CUSTOM_DOMAIN_ZONE_ID" ]; then
+            pulumi -C infra config set customDomainZoneId "$CUSTOM_DOMAIN_ZONE_ID"
           fi
           pulumi -C infra up --yes

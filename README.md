@@ -11,12 +11,12 @@
 </p>
 
 <p align="center">
-  <a href="https://flarewatch.samin.workers.dev">Live demo</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="#docs">Docs</a>
+  <a href="https://demo.flarewatch.app">Live demo</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="#docs">Docs</a>
 </p>
 
 Cloudflare-first uptime monitoring + status page you can fork and self-host.
 
-Live demo (upstream): https://flarewatch.samin.workers.dev
+Live demo (upstream): https://demo.flarewatch.app
 
 ## ELI5
 
