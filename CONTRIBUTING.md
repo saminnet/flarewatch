@@ -16,7 +16,6 @@ Run tests with:
 pnpm test                      # all tests
 pnpm -F worker test            # worker only
 pnpm -F status-page test       # status page only
-pnpm -F @flarewatch/proxy test # proxy only
 ```
 
 ## What goes where
@@ -26,15 +25,4 @@ pnpm -F @flarewatch/proxy test # proxy only
 - User-editable config: `packages/config`
 - Shared types: `packages/shared`
 - Infrastructure (Pulumi): `infra`
-- Optional proxy: `services/proxy`
-
-## Proxy repo workflow
-
-The proxy is maintained in its own repo: https://github.com/saminnet/flarewatch-proxy
-
-- Please open proxy PRs there (not in this repo).
-- After a proxy PR is merged, maintainers sync it into `services/proxy` with:
-
-```bash
-git subtree pull --prefix=services/proxy proxy-repo main --squash
-```
+- Optional proxy (external repo): `https://github.com/saminnet/flarewatch-proxy`

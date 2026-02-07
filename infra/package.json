@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@pulumi/cloudflare": "^6.13.0",
-    "@pulumi/pulumi": "^3.218.0"
+    "@pulumi/pulumi": "^3.219.0"
   },
   "devDependencies": {
     "@flarewatch/ts-config": "workspace:*",

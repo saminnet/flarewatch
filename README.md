@@ -11,12 +11,14 @@
 </p>
 
 <p align="center">
-  <a href="https://demo.flarewatch.app">Live demo</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="#docs">Docs</a>
+  <a href="https://demo.flarewatch.app">Live demo</a> · <a href="https://flarewatch.app">Managed setup</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="#docs">Docs</a>
 </p>
 
 Cloudflare-first uptime monitoring + status page you can fork and self-host.
 
 Live demo (upstream): https://demo.flarewatch.app
+
+Need help deploying? One-time managed setup is available at https://flarewatch.app.
 
 ## ELI5
 
@@ -31,7 +33,7 @@ flowchart LR
   Worker --> KV["Cloudflare KV<br/>FLAREWATCH_STATE"]
   KV --> Page["Status Page<br/>apps/status-page"]
 
-  Worker -. optional .-> Proxy["Check Proxy<br/>services/proxy"]
+  Worker -. optional .-> Proxy["Check Proxy<br/>external repo"]
   Proxy -. checks .-> Target["Your service<br/>public or private"]
   Worker -. checks .-> Target
 ```
@@ -74,7 +76,8 @@ Optional GitHub Secrets (only if you use these features):
 
 - `services/worker` runs scheduled checks and writes `state` to the `FLAREWATCH_STATE` KV namespace.
 - `apps/status-page` reads that same KV namespace and serves the UI + `/api/*` endpoints.
-- `services/proxy` is optional and executes checks from custom locations (private networks, TCP, SSL).
+- The optional check proxy lives in a separate repo: https://github.com/saminnet/flarewatch-proxy
+  - It executes checks from custom locations (private networks, TCP, SSL).
   - If “where the check runs” matters (latency/region), use the proxy.
 - Optional: set a `CONFIG_KV` binding with a runtime config blob (see `packages/shared/src/config.ts`) to update monitors and status page branding without redeploying. When unset, the worker falls back to the static config in `packages/config`.
 
@@ -101,7 +104,7 @@ export const pageConfig = {
 - [infra/README.md](infra/README.md) — Pulumi (long-lived resources) + R2 backend
 - [apps/status-page/README.md](apps/status-page/README.md) — status page Worker, APIs, auth, local testing
 - [services/worker/README.md](services/worker/README.md) — monitoring Worker, cron, KV state
-- [services/proxy/README.md](services/proxy/README.md) — optional self-hosted check proxy
+- [flarewatch-proxy repo](https://github.com/saminnet/flarewatch-proxy) — optional self-hosted check proxy
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
 - [SECURITY.md](SECURITY.md) — security policy
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community guidelines
