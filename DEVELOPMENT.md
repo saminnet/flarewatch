@@ -10,7 +10,6 @@ pnpm install
 # Dev
 pnpm dev
 pnpm worker:dev
-pnpm proxy:dev
 
 # Quality
 pnpm format:check
@@ -27,7 +26,7 @@ pnpm build
 - `services/worker` runs scheduled checks and writes state to KV (`FLAREWATCH_STATE` binding).
 - `apps/status-page` reads the same KV state and renders the UI; deployed to Cloudflare Workers.
 - `/admin` (optional) manages maintenances stored in the same KV under the `maintenances` key.
-- `services/proxy` is optional and executes checks from custom locations (private networks, TCP, SSL).
+- Optional external proxy (`https://github.com/saminnet/flarewatch-proxy`) executes checks from custom locations (private networks, TCP, SSL).
 
 ## Deploy model
 
