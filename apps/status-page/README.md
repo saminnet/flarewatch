@@ -17,9 +17,9 @@ It serves:
 
 These are **Worker secrets** (not in git):
 
-- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH="<username>:<password>"`
+- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH='{"username":"status","kdf":"pbkdf2-sha256","iterations":310000,"salt":"<base64>","hash":"<base64>"}'`
   - Protects the entire status page.
-- `FLAREWATCH_ADMIN_BASIC_AUTH="<username>:<password>"`
+- `FLAREWATCH_ADMIN_BASIC_AUTH='{"username":"admin","kdf":"pbkdf2-sha256","iterations":310000,"salt":"<base64>","hash":"<base64>"}'`
   - Enables and protects `/admin` and `/api/admin/*` using an in-app login (session cookie + logout button).
   - In production, if unset: `/admin` returns `404` and `/api/admin/*` returns `403`. In dev, admin is allowed without creds.
 

@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { getAdminSessionCookie, timingSafeEqual, type SessionData } from '@/lib/auth-utils';
+import { getAdminSessionCookie, type SessionData } from '@/lib/auth-utils';
+import { verifyAuthSecret } from '@/lib/auth-secret';
 import { resolveRuntimeEnv, requireStateKv } from '@/lib/runtime-env';
 import { AUTH } from '@/lib/constants';
 
@@ -10,12 +11,6 @@ function jsonResponse(body: object, status: number, headers?: Record<string, str
     status,
     headers: { ...JSON_HEADERS, ...headers },
   });
-}
-
-function parseBasicAuthCreds(value: string): { username: string; password: string } | null {
-  const idx = value.indexOf(':');
-  if (idx <= 0 || idx === value.length - 1) return null;
-  return { username: value.slice(0, idx), password: value.slice(idx + 1) };
 }
 
 function clearSessionCookie(request: Request): string {
@@ -38,11 +33,6 @@ function setSessionCookie(request: Request, sessionId: string): string {
   ];
   if (secure) parts.push('Secure');
   return parts.join('; ');
-}
-
-function createSessionId(): string {
-  // crypto.randomUUID() is available in both Workers and modern Node.
-  return crypto.randomUUID();
 }
 
 function getClientIp(request: Request): string | null {
@@ -78,14 +68,9 @@ export const Route = createFileRoute('/api/admin/session')({
     handlers: {
       POST: async ({ request }: { request: Request }) => {
         const env = await resolveRuntimeEnv();
-        const adminCredsRaw = env?.FLAREWATCH_ADMIN_BASIC_AUTH;
-        if (!adminCredsRaw) {
-          return jsonResponse({ error: 'Admin access not configured' }, 404);
-        }
-
-        const adminCreds = parseBasicAuthCreds(adminCredsRaw);
+        const adminCreds = env?.FLAREWATCH_ADMIN_BASIC_AUTH;
         if (!adminCreds) {
-          return jsonResponse({ error: 'Invalid admin credentials format' }, 500);
+          return jsonResponse({ error: 'Admin access not configured' }, 404);
         }
 
         let body: unknown;
@@ -110,10 +95,8 @@ export const Route = createFileRoute('/api/admin/session')({
             }
           }
 
-          const usernameOk = timingSafeEqual(username, adminCreds.username);
-          const passwordOk = timingSafeEqual(password, adminCreds.password);
-
-          if (!usernameOk || !passwordOk) {
+          const credentialsOk = await verifyAuthSecret(adminCreds, username, password);
+          if (!credentialsOk) {
             if (ip) {
               await incrementLoginFailures(kv, ip);
             }
@@ -124,7 +107,7 @@ export const Route = createFileRoute('/api/admin/session')({
             await clearLoginFailures(kv, ip);
           }
 
-          const sessionId = createSessionId();
+          const sessionId = crypto.randomUUID();
           const sessionData: SessionData = {
             createdAt: Date.now(),
             ip,
