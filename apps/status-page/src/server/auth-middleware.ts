@@ -1,5 +1,6 @@
 import type { RequestServerOptions, RequestServerResult } from '@tanstack/react-start';
-import { getAdminSessionCookie, timingSafeEqual, validateSession } from '@/lib/auth-utils';
+import { getAdminSessionCookie, validateSession } from '@/lib/auth-utils';
+import { verifyBasicAuthHeader } from '@/lib/auth-secret';
 import { resolveRuntimeEnv } from '@/lib/runtime-env';
 
 function isAdminRoute(pathname: string): boolean {
@@ -10,13 +11,6 @@ function isAdminRoute(pathname: string): boolean {
 
 function isAdminUIRoute(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
-}
-
-function checkBasicAuth(request: Request, expectedCreds: string): boolean {
-  const expected = `Basic ${btoa(expectedCreds)}`;
-  const authHeader = request.headers.get('Authorization') ?? '';
-  // Always perform comparison to prevent timing attacks
-  return timingSafeEqual(authHeader, expected);
 }
 
 function unauthorized(realm: string): Response {
@@ -89,7 +83,7 @@ export async function authMiddlewareServer(
       return next();
     }
 
-    // Auth for admin APIs: session cookie OR legacy Basic Auth header.
+    // Auth for admin APIs: session cookie OR Basic Auth header.
     const kv = env?.STATE_KV ?? env?.FLAREWATCH_STATE;
     const sessionId = getAdminSessionCookie(request.headers.get('Cookie'));
     if (kv && sessionId) {
@@ -99,7 +93,7 @@ export async function authMiddlewareServer(
       }
     }
 
-    if (checkBasicAuth(request, adminCreds)) {
+    if (await verifyBasicAuthHeader(adminCreds, request.headers.get('Authorization'))) {
       return next();
     }
 
@@ -107,7 +101,8 @@ export async function authMiddlewareServer(
   }
 
   const siteCreds = env?.FLAREWATCH_STATUS_PAGE_BASIC_AUTH;
-  if (siteCreds && !checkBasicAuth(request, siteCreds)) return unauthorized('FlareWatch');
+  if (siteCreds && !(await verifyBasicAuthHeader(siteCreds, request.headers.get('Authorization'))))
+    return unauthorized('FlareWatch');
 
   return next();
 }
