@@ -4,7 +4,7 @@ export {};
 
 declare const process: { argv: string[]; exit: (code: number) => never };
 
-const DEFAULT_ITERATIONS = 310_000;
+const DEFAULT_ITERATIONS = 100_000;
 
 const args = process.argv.slice(2);
 const effectiveArgs = args[0] === '--' ? args.slice(1) : args;

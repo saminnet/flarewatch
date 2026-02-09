@@ -31,7 +31,7 @@ async function derivePbkdf2Hash(
 
 async function buildAuthSecret(username: string, password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await derivePbkdf2Hash(password, salt, 310_000);
+  const hash = await derivePbkdf2Hash(password, salt, 100_000);
   return JSON.stringify({
     username,
     salt: bytesToBase64(salt),
