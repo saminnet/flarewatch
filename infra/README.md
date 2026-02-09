@@ -92,8 +92,21 @@ If no custom domain is configured, the status page uses a workers.dev subdomain.
 ### Optional Secrets
 
 - `proxyToken` - Bearer token for proxy authentication
-- `statusPageBasicAuth` - Basic auth for status page (`<username>:<password>`)
-- `adminBasicAuth` - Basic auth for admin routes (`<username>:<password>`)
+- `statusPageBasicAuth` - Hashed JSON auth payload for full status page protection
+- `adminBasicAuth` - Hashed JSON auth payload for admin routes
+
+Generate values from username/password:
+
+```bash
+pnpm auth:secret -- <username> 'replace-with-strong-password'
+```
+
+Run it once per secret and use each full JSON output as the Pulumi secret value:
+
+- output for admin login username => `adminBasicAuth`
+- output for status-page username => `statusPageBasicAuth`
+
+Do not manually construct or edit JSON fields.
 
 ## Destroying
 

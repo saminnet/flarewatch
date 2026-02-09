@@ -17,11 +17,20 @@ It serves:
 
 These are **Worker secrets** (not in git):
 
-- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH='{"username":"status","kdf":"pbkdf2-sha256","iterations":310000,"salt":"<base64>","hash":"<base64>"}'`
+- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH='<output of pnpm auth:secret -- <username> "<password>">'`
   - Protects the entire status page.
-- `FLAREWATCH_ADMIN_BASIC_AUTH='{"username":"admin","kdf":"pbkdf2-sha256","iterations":310000,"salt":"<base64>","hash":"<base64>"}'`
+- `FLAREWATCH_ADMIN_BASIC_AUTH='<output of pnpm auth:secret -- <username> "<password>">'`
   - Enables and protects `/admin` and `/api/admin/*` using an in-app login (session cookie + logout button).
   - In production, if unset: `/admin` returns `404` and `/api/admin/*` returns `403`. In dev, admin is allowed without creds.
+
+Generate these values from username/password:
+
+```bash
+# From repo root:
+pnpm auth:secret -- <username> 'replace-with-strong-password'
+```
+
+Run once per secret and copy each full JSON output into your Worker secret (or GitHub Secret). Do not edit JSON fields manually.
 
 Note: browsers cache Basic Auth credentials for the session (this applies to `FLAREWATCH_STATUS_PAGE_BASIC_AUTH`). To “log out”, close the tab/window or use a private window.
 

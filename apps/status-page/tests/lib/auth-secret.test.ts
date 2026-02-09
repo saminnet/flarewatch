@@ -29,17 +29,11 @@ async function derivePbkdf2Hash(
   return bytesToBase64(new Uint8Array(bits));
 }
 
-async function buildAuthSecret(
-  username: string,
-  password: string,
-  iterations = 120_000,
-): Promise<string> {
+async function buildAuthSecret(username: string, password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await derivePbkdf2Hash(password, salt, iterations);
+  const hash = await derivePbkdf2Hash(password, salt, 310_000);
   return JSON.stringify({
     username,
-    kdf: 'pbkdf2-sha256',
-    iterations,
     salt: bytesToBase64(salt),
     hash,
   });
@@ -53,6 +47,33 @@ describe('auth-secret', () => {
     expect(parsed?.username).toBe('status');
   });
 
+  it('parses payload wrapped in single quotes', async () => {
+    const secret = await buildAuthSecret('status', 'secret123');
+    const quoted = `'${secret}'`;
+    const parsed = parseAuthSecret(quoted);
+    expect(parsed).toBeTruthy();
+    expect(parsed?.username).toBe('status');
+  });
+
+  it('parses payload when JSON was stringified twice', async () => {
+    const secret = await buildAuthSecret('status', 'secret123');
+    const stringifiedTwice = JSON.stringify(secret);
+    const parsed = parseAuthSecret(stringifiedTwice);
+    expect(parsed).toBeTruthy();
+    expect(parsed?.username).toBe('status');
+  });
+
+  it('parses payload when plus signs were converted to spaces', () => {
+    const payload = JSON.stringify({
+      username: 'status',
+      salt: 'VGa8dmx12TIui2dId enHA==',
+      hash: 'qZjC5zK ZB5AaW6j8fzDW96IiZNVyjyFg69hOTVqDJE=',
+    });
+    const parsed = parseAuthSecret(payload);
+    expect(parsed).toBeTruthy();
+    expect(parsed?.username).toBe('status');
+  });
+
   it('rejects non-JSON secret format', () => {
     expect(parseAuthSecret('admin:password')).toBeNull();
     expect(parseAuthSecret('invalid')).toBeNull();
@@ -61,7 +82,7 @@ describe('auth-secret', () => {
   });
 
   it('rejects invalid secret payload', () => {
-    const invalid = '{"username":"admin","kdf":"pbkdf2-sha256","iterations":1000}';
+    const invalid = '{"username":"admin","salt":"not-base64"}';
     expect(parseAuthSecret(invalid)).toBeNull();
   });
 
