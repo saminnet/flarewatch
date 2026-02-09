@@ -1,6 +1,6 @@
 import { timingSafeEqual } from './auth-utils';
 
-const AUTH_SECRET_ITERATIONS = 310_000;
+const AUTH_SECRET_ITERATIONS = 100_000;
 const PBKDF2_HASH_BITS = 256;
 
 export type ParsedAuthSecret = {
