@@ -68,9 +68,22 @@ The repo ships with safe demo monitors, so a fresh deploy shows a working page i
 
 Optional GitHub Secrets (only if you use these features):
 
-- `FLAREWATCH_ADMIN_BASIC_AUTH` — protects `/admin` and `/api/admin/*` (`<username>:<password>`)
-- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` — protects the whole site (`<username>:<password>`)
+- `FLAREWATCH_ADMIN_BASIC_AUTH` — protects `/admin` and `/api/admin/*` (hashed JSON payload)
+- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` — protects the whole site (hashed JSON payload)
 - `FLAREWATCH_PROXY_TOKEN` — bearer token for authenticating to a check proxy
+
+Generate auth secret payload from username/password:
+
+```bash
+pnpm auth:secret -- <username> 'replace-with-strong-password'
+```
+
+Run it once per secret and paste each full JSON output into the matching GitHub Secret value:
+
+- output generated for your admin login username => `FLAREWATCH_ADMIN_BASIC_AUTH`
+- output generated for your status-page username => `FLAREWATCH_STATUS_PAGE_BASIC_AUTH`
+
+Do not manually construct or edit JSON fields.
 
 ## How it works
 

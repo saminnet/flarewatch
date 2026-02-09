@@ -29,17 +29,11 @@ async function derivePbkdf2Hash(
   return bytesToBase64(new Uint8Array(bits));
 }
 
-async function buildAuthSecret(
-  username: string,
-  password: string,
-  iterations = 120_000,
-): Promise<string> {
+async function buildAuthSecret(username: string, password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await derivePbkdf2Hash(password, salt, iterations);
+  const hash = await derivePbkdf2Hash(password, salt, 310_000);
   return JSON.stringify({
     username,
-    kdf: 'pbkdf2-sha256',
-    iterations,
     salt: bytesToBase64(salt),
     hash,
   });
@@ -61,7 +55,7 @@ describe('auth-secret', () => {
   });
 
   it('rejects invalid secret payload', () => {
-    const invalid = '{"username":"admin","kdf":"pbkdf2-sha256","iterations":1000}';
+    const invalid = '{"username":"admin","salt":"not-base64"}';
     expect(parseAuthSecret(invalid)).toBeNull();
   });
 

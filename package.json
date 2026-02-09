@@ -7,6 +7,7 @@
     "dev": "pnpm -F status-page dev",
     "build": "pnpm -F status-page build",
     "compile": "pnpm -r compile",
+    "auth:secret": "node --experimental-strip-types scripts/generate-auth-secret.ts",
     "deploy": "pnpm worker:build && pnpm build && pnpm infra:up",
     "worker:build": "pnpm -F worker build",
     "worker:dev": "pnpm -F worker dev",
