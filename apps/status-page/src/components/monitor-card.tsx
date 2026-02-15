@@ -17,14 +17,14 @@ import { cn } from '@/lib/utils';
 
 function ChartSkeleton() {
   return (
-    <div className="h-37.5 w-full rounded-md border border-dashed border-neutral-200 dark:border-neutral-800" />
+    <div className="h-32 w-full rounded-md border border-dashed border-neutral-200 dark:border-neutral-800" />
   );
 }
 
 function ChartLoadError() {
   const { t } = useTranslation();
   return (
-    <div className="h-37.5 w-full flex items-center justify-center rounded-md border border-dashed border-neutral-200 dark:border-neutral-800">
+    <div className="h-32 w-full flex items-center justify-center rounded-md border border-dashed border-neutral-200 dark:border-neutral-800">
       <span className="text-xs text-neutral-500">{t('error.chartLoadFailed')}</span>
     </div>
   );
@@ -76,7 +76,7 @@ export function MonitorCard({
             uptime: formatUptimeDisplay(uptimePercent, hasStarted, 2, t),
           })}
         >
-          <div className="flex items-center gap-3 p-3 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors">
+          <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors">
             <div className="shrink-0">
               <StatusIcon isUp={isUp} />
             </div>
@@ -175,7 +175,7 @@ export function MonitorCard({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="border-t border-neutral-200 dark:border-neutral-800 p-3 bg-neutral-50/50 dark:bg-neutral-900/50">
+          <div className="border-t border-neutral-200 dark:border-neutral-800 px-3 py-2 bg-neutral-50/50 dark:bg-neutral-900/50">
             <div className="mb-2">
               <StatusBar monitorId={monitor.id} monitorName={monitor.name} state={state} />
             </div>

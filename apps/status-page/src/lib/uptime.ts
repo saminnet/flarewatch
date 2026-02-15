@@ -114,15 +114,29 @@ export function getOverallStatus(state: MonitorState): 'operational' | 'degraded
   return 'down';
 }
 
+export type DayStatus = 'up' | 'down' | 'partial' | 'unknown';
+
 export interface DayIncidentDetail {
   startTime: string;
   endTime: string;
   error: string;
 }
 
+export interface AggregatedDayIncident extends DayIncidentDetail {
+  monitorName: string;
+}
+
+export interface AggregatedDayData {
+  date: Date;
+  status: DayStatus;
+  uptime: number | null;
+  totalDowntime: number;
+  incidents: AggregatedDayIncident[];
+}
+
 export interface DailyStatusData {
   date: Date;
-  status: 'up' | 'down' | 'partial' | 'unknown';
+  status: DayStatus;
   uptime: number;
   downtime: number;
   incidents: DayIncidentDetail[];
@@ -229,7 +243,7 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
     const uptimePercent =
       dayDuration > 0 ? ((dayDuration - downtimeInDay) / dayDuration) * 100 : 100;
 
-    let status: 'up' | 'down' | 'partial' | 'unknown';
+    let status: DayStatus;
     if (dayStart > nowMs || effectiveDayEndSec <= effectiveDayStartSec) {
       status = 'unknown';
     } else if (uptimePercent >= UPTIME_THRESHOLDS.EXCELLENT) {
@@ -250,4 +264,72 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
   }
 
   return days;
+}
+
+export function generateAggregateDailyStatus(
+  monitorIds: string[],
+  monitorNameMap: Map<string, string>,
+  state: MonitorState,
+): AggregatedDayData[] {
+  if (monitorIds.length === 0) {
+    return [];
+  }
+
+  const allMonitorDays = monitorIds.map((id) => generateDailyStatus(id, state));
+  const dayCount = allMonitorDays[0]?.length ?? 0;
+  const result: AggregatedDayData[] = [];
+
+  for (let dayIndex = 0; dayIndex < dayCount; dayIndex++) {
+    const date = allMonitorDays[0]![dayIndex]!.date;
+
+    let hasDown = false;
+    let hasPartial = false;
+    let allUnknown = true;
+    let uptimeSum = 0;
+    let uptimeCount = 0;
+    let totalDowntime = 0;
+    const incidents: AggregatedDayIncident[] = [];
+
+    for (let m = 0; m < monitorIds.length; m++) {
+      const dayData = allMonitorDays[m]![dayIndex]!;
+      const monitorId = monitorIds[m]!;
+      const monitorName = monitorNameMap.get(monitorId) ?? monitorId;
+
+      if (dayData.status !== 'unknown') {
+        allUnknown = false;
+        uptimeSum += dayData.uptime;
+        uptimeCount++;
+      }
+
+      if (dayData.status === 'down') hasDown = true;
+      if (dayData.status === 'partial') hasPartial = true;
+
+      totalDowntime += dayData.downtime;
+
+      for (const incident of dayData.incidents) {
+        incidents.push({ ...incident, monitorName });
+      }
+    }
+
+    let status: DayStatus;
+    if (allUnknown) {
+      status = 'unknown';
+    } else if (hasDown) {
+      status = 'down';
+    } else if (hasPartial) {
+      status = 'partial';
+    } else {
+      status = 'up';
+    }
+
+    result.push({
+      date,
+      status,
+      uptime: uptimeCount > 0 ? uptimeSum / uptimeCount : null,
+      totalDowntime,
+      incidents,
+    });
+  }
+
+  return result;
 }

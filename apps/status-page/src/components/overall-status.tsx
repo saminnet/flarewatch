@@ -79,15 +79,15 @@ export function OverallStatus({ state }: OverallStatusProps) {
   }
 
   return (
-    <Card className={cn(config.bgClass, config.borderClass)}>
-      <div className="flex items-start gap-2">
-        <div className={cn('ml-2 rounded-full p-2', config.bgClass)}>
-          <StatusIcon className={cn('h-8 w-8', config.iconClass)} />
+    <Card className={cn('p-0', config.bgClass, config.borderClass)}>
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <div className={cn('rounded-full p-1.5', config.bgClass)}>
+          <StatusIcon className={cn('h-6 w-6', config.iconClass)} />
         </div>
 
-        <div className="flex-1 pr-2">
+        <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <h2 className="text-lg sm:text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+            <h2 className="text-base sm:text-lg font-semibold text-neutral-900 dark:text-neutral-100">
               {getStatusTitle()}
             </h2>
             <Badge variant={config.badgeVariant} className="shrink-0">
@@ -95,7 +95,7 @@ export function OverallStatus({ state }: OverallStatusProps) {
             </Badge>
           </div>
 
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <p className="text-xs text-neutral-600 dark:text-neutral-400">
               {isInitialState
                 ? t('status.initializing')

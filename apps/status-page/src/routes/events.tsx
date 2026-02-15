@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { EmptyState } from '@/components/ui/empty-state';
+import { UptimeCalendar } from '@/components/uptime-calendar/uptime-calendar';
 import { IncidentCard } from '@/components/events/incident-card';
 import { MaintenanceEventCard } from '@/components/events/maintenance-event-card';
 import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/events/types';
@@ -189,12 +190,14 @@ function EventsPage() {
 
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
-      <div className="mb-8">
+      <div className="mb-4">
         <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
           {t('nav.events')}
         </h1>
         <p className="mt-1 text-sm text-neutral-500">{t('events.subtitle')}</p>
       </div>
+
+      {state && <UptimeCalendar monitors={monitors} state={state} selectedMonth={resolvedMonth} />}
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
@@ -232,7 +235,7 @@ function EventsPage() {
               })
             }
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-44">
               <SelectValue>
                 {typeOptions.find((o) => o.value === (eventType ?? 'all'))?.label}
               </SelectValue>
@@ -280,7 +283,7 @@ function EventsPage() {
           description={t('events.noIncidentsOrMaintenance')}
         />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {allEvents.map((event) =>
             event.type === 'incident' ? (
               <IncidentCard

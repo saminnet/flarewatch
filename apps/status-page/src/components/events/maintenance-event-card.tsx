@@ -39,7 +39,7 @@ export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEven
         <MaintenanceStatusBadge status={status} />
       </AlertTitle>
 
-      <AlertDescription className="mt-2">
+      <AlertDescription className="mt-1.5">
         <p className="text-neutral-700 dark:text-neutral-300">{maintenance.body}</p>
         <DateRange
           start={startDate}
@@ -48,7 +48,7 @@ export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEven
         />
 
         {affectedMonitors.length > 0 && (
-          <div className="mt-3">
+          <div className="mt-2">
             <span className="text-xs text-neutral-500">
               {t('field.affectedMonitors')}
               {': '}

@@ -12,7 +12,7 @@ export function DateRange({ start, end, noEndLabel, noEndClassName }: DateRangeP
   const { t } = useTranslation();
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-neutral-500">
+    <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-neutral-500">
       <span>
         <strong>{t('field.from')}</strong> {formatUtc(start, 'PPp')}
       </span>

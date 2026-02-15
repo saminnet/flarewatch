@@ -5,26 +5,26 @@ packages:
   - infra
 
 catalog:
-  '@cloudflare/workers-types': 4.20260207.0
+  '@cloudflare/workers-types': 4.20260214.0
   '@tailwindcss/vite': 4.1.18
-  '@tanstack/devtools-vite': 0.5.0
-  '@tanstack/react-devtools': 0.9.4
-  '@tanstack/react-query': 5.90.20
-  '@tanstack/react-router': 1.158.4
-  '@tanstack/react-router-devtools': 1.158.4
-  '@tanstack/react-router-ssr-query': 1.158.4
-  '@tanstack/react-start': 1.159.0
-  '@tanstack/router-plugin': 1.158.4
+  '@tanstack/devtools-vite': 0.5.1
+  '@tanstack/react-devtools': 0.9.5
+  '@tanstack/react-query': 5.90.21
+  '@tanstack/react-router': 1.160.0
+  '@tanstack/react-router-devtools': 1.160.0
+  '@tanstack/react-router-ssr-query': 1.160.0
+  '@tanstack/react-start': 1.160.0
+  '@tanstack/router-plugin': 1.160.0
   '@types/node': 24.10.4
   date-fns: 4.1.0
-  i18next: 25.8.4
+  i18next: 25.8.7
   react: 19.2.4
   react-dom: 19.2.4
   react-i18next: 16.5.4
   tailwindcss: 4.1.18
   typescript: 5.9.3
   vite: 7.3.1
-  wrangler: 4.63.0
+  wrangler: 4.65.0
 
 ignoredBuiltDependencies:
   - esbuild

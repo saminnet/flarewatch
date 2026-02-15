@@ -84,7 +84,7 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
   // If no active groups exist, render as flat list (no labels needed)
   if (activeGroups.length === 0) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-2">
         {monitors.map((monitor, index) => (
           <MonitorCard
             key={monitor.id}
@@ -93,7 +93,7 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
             open={!collapsedMonitors.includes(monitor.id)}
             onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
             className="animate-fade-in-up opacity-0"
-            style={{ animationDelay: `${index * 50}ms` }}
+            style={{ animationDelay: `${index * 30}ms` }}
           />
         ))}
       </div>
@@ -107,10 +107,10 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Ungrouped monitors shown FIRST, without label */}
       {ungroupedMonitors.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {ungroupedMonitors.map((monitor, index) => (
             <MonitorCard
               key={monitor.id}
@@ -119,7 +119,7 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
               open={!collapsedMonitors.includes(monitor.id)}
               onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
               className="animate-fade-in-up opacity-0"
-              style={{ animationDelay: `${index * 50}ms` }}
+              style={{ animationDelay: `${index * 30}ms` }}
             />
           ))}
         </div>
@@ -134,12 +134,12 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
           const nextCollapsed = activeGroupNames.filter((name) => !open.includes(name));
           setCollapsedGroups(nextCollapsed);
         }}
-        className="space-y-3"
+        className="space-y-2"
       >
         {activeGroups.map(({ name: groupName, monitors: groupMonitors }) => (
           <AccordionItem key={groupName} value={groupName} className="border rounded-lg">
             <AccordionTrigger
-              className="px-4 py-3 hover:no-underline hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded-lg"
+              className="px-3 py-2.5 hover:no-underline hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded-lg"
               aria-label={t('monitor.toggleGroup', {
                 name: groupName,
                 count: groupMonitors.length,
@@ -152,8 +152,8 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
                 </span>
               </div>
             </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4 pt-2">
-              <div className="space-y-3">
+            <AccordionContent className="px-3 pb-3 pt-1.5">
+              <div className="space-y-2">
                 {groupMonitors.map((monitor, index) => (
                   <MonitorCard
                     key={monitor.id}
@@ -162,7 +162,7 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
                     open={!collapsedMonitors.includes(monitor.id)}
                     onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
                     className="animate-fade-in-up opacity-0"
-                    style={{ animationDelay: `${index * 50}ms` }}
+                    style={{ animationDelay: `${index * 30}ms` }}
                   />
                 ))}
               </div>

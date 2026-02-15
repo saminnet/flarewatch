@@ -4,7 +4,6 @@ import type { PageConfig } from '@flarewatch/shared';
 import { ThemeToggle } from '@/components/theme-toggle';
 import type { ThemePreference } from '@/lib/theme-server';
 import { DEFAULT_POWERED_BY_URL, PAGE_CONTAINER_CLASSES } from '@/lib/constants';
-import { cn } from '@/lib/utils';
 
 interface FooterProps {
   config?: PageConfig;
@@ -17,7 +16,7 @@ export function Footer({ config, theme = 'system' }: FooterProps) {
 
   return (
     <footer className="mt-auto border-t border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
-      <div className={cn(PAGE_CONTAINER_CLASSES, 'py-6')}>
+      <div className={PAGE_CONTAINER_CLASSES}>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
             <IconFlame className="h-4 w-4 text-orange-500" />

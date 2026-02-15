@@ -4,7 +4,7 @@ import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 export function PageSkeleton() {
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
-      <div className="animate-pulse space-y-6">
+      <div className="animate-pulse space-y-3">
         <div className="h-7 w-56 rounded bg-neutral-200 dark:bg-neutral-800" />
 
         <Card className="p-6">
