@@ -29,6 +29,7 @@ interface MaintenanceRowProps {
 const STATUS_ICONS = {
   active: IconAlertTriangle,
   upcoming: IconClock,
+  scheduled: IconClock,
   past: IconCircleCheck,
 } as const;
 
@@ -60,7 +61,7 @@ export function MaintenanceRow({
                 className={cn(
                   'size-4 shrink-0',
                   status === 'active' && 'text-amber-500',
-                  status === 'upcoming' && 'text-blue-500',
+                  (status === 'upcoming' || status === 'scheduled') && 'text-blue-500',
                   status === 'past' && 'text-emerald-500',
                 )}
               />

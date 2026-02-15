@@ -21,6 +21,7 @@ import type { PublicMonitor } from '@/lib/monitors';
 import { publicMonitorsQuery, monitorStateQuery } from '@/lib/query/monitors.queries';
 import { useNow } from '@/lib/hooks/use-now';
 import { getMaintenances } from '@/lib/kv';
+import { getMaintenanceStatus } from '@/lib/maintenance';
 import { isValidYearMonth, shiftYearMonth, getUtcMonthBounds } from '@/lib/date';
 import type { Maintenance, MonitorState } from '@flarewatch/shared';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
@@ -130,7 +131,7 @@ function EventsPage() {
 
   const { monthStart, monthEnd } = useMemo(() => getUtcMonthBounds(resolvedMonth), [resolvedMonth]);
 
-  const allEvents = useMemo(() => {
+  const { pinned, timeline } = useMemo(() => {
     const incidentEvents = extractIncidentsFromState(state, monitors, monthStart, monthEnd);
     const maintenanceEvents = extractMaintenanceEvents(maintenances, monthStart, monthEnd);
     let events: TimelineEvent[] = [...incidentEvents, ...maintenanceEvents];
@@ -154,14 +155,35 @@ function EventsPage() {
     }
 
     // Sort by start date (newest first)
-    return events.sort((a, b) => {
+    const sortedEvents = events.sort((a, b) => {
       const aStart =
         a.type === 'incident' ? a.start * 1000 : new Date(a.maintenance.start).getTime();
       const bStart =
         b.type === 'incident' ? b.start * 1000 : new Date(b.maintenance.start).getTime();
       return bStart - aStart;
     });
-  }, [state, monitors, monthStart, monthEnd, maintenances, eventType, selectedMonitor]);
+
+    // Only pin when showing all event types
+    if (eventType !== 'all') {
+      return { pinned: [] as MaintenanceEvent[], timeline: sortedEvents };
+    }
+
+    const pinned: MaintenanceEvent[] = [];
+    const timeline: TimelineEvent[] = [];
+
+    for (const event of sortedEvents) {
+      if (event.type === 'maintenance') {
+        const status = getMaintenanceStatus(event.maintenance, nowMs);
+        if (status === 'active' || status === 'upcoming') {
+          pinned.push(event);
+          continue;
+        }
+      }
+      timeline.push(event);
+    }
+
+    return { pinned, timeline };
+  }, [state, monitors, monthStart, monthEnd, maintenances, eventType, selectedMonitor, nowMs]);
 
   const { prevMonth, nextMonth } = useMemo(
     () => ({
@@ -274,7 +296,7 @@ function EventsPage() {
         </div>
       </div>
 
-      {allEvents.length === 0 ? (
+      {pinned.length === 0 && timeline.length === 0 ? (
         <EmptyState
           icon={IconCalendar}
           iconClassName="text-emerald-600 dark:text-emerald-400"
@@ -283,21 +305,42 @@ function EventsPage() {
           description={t('events.noIncidentsOrMaintenance')}
         />
       ) : (
-        <div className="space-y-3">
-          {allEvents.map((event) =>
-            event.type === 'incident' ? (
-              <IncidentCard
-                key={`incident-${event.monitorId}-${event.start}-${event.end ?? 'open'}`}
-                event={event}
-              />
-            ) : (
-              <MaintenanceEventCard
-                key={`maintenance-${event.maintenance.id}`}
-                event={event}
-                monitors={monitors}
-                nowMs={nowMs}
-              />
-            ),
+        <div className="space-y-4">
+          {pinned.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+                {t('events.activeAndUpcoming')}
+              </h3>
+              {pinned.map((event) => (
+                <MaintenanceEventCard
+                  key={`maintenance-${event.maintenance.id}`}
+                  event={event}
+                  monitors={monitors}
+                  nowMs={nowMs}
+                />
+              ))}
+            </div>
+          )}
+
+          {timeline.length > 0 && (
+            <div className="space-y-3">
+              {pinned.length > 0 && <hr className="border-neutral-200 dark:border-neutral-800" />}
+              {timeline.map((event) =>
+                event.type === 'incident' ? (
+                  <IncidentCard
+                    key={`incident-${event.monitorId}-${event.start}-${event.end ?? 'open'}`}
+                    event={event}
+                  />
+                ) : (
+                  <MaintenanceEventCard
+                    key={`maintenance-${event.maintenance.id}`}
+                    event={event}
+                    monitors={monitors}
+                    nowMs={nowMs}
+                  />
+                ),
+              )}
+            </div>
           )}
         </div>
       )}

@@ -69,6 +69,7 @@
   "events.subtitle": "Incidents and scheduled maintenance",
   "events.noEvents": "No events this month",
   "events.noIncidentsOrMaintenance": "No incidents or maintenance scheduled for this period.",
+  "events.activeAndUpcoming": "Active & Upcoming Maintenance",
   "event.incident": "Incident",
   "event.maintenance": "Maintenance",
 
