@@ -70,3 +70,17 @@ export const AUTH = {
 } as const;
 
 export const DEFAULT_POWERED_BY_URL = 'https://github.com/saminnet/flarewatch';
+
+// Shared status color mappings (background fills for calendar cells, legend dots, etc.)
+export const STATUS_COLORS = {
+  up: 'bg-emerald-500',
+  down: 'bg-red-500',
+  partial: 'bg-amber-500',
+  unknown: 'bg-neutral-200 dark:bg-neutral-800',
+} as const;
+
+// Slightly brighter "unknown" variant for small dots and status-bar segments
+export const STATUS_DOT_COLORS = {
+  ...STATUS_COLORS,
+  unknown: 'bg-neutral-300 dark:bg-neutral-700',
+} as const;

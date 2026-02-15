@@ -51,11 +51,105 @@ export function formatUtc(date: Date, pattern: string): string {
 }
 
 /**
+ * Get an ISO date key (yyyy-MM-dd) for a UTC midnight Date, suitable for Map lookups.
+ */
+export function getDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
  * Format a date/time using a fixed, locale-independent format.
  * This avoids SSR hydration mismatches caused by different server/client locales.
  */
 export function formatDateTime(date: Date): string {
   return format(date, 'MMM d, yyyy h:mm a');
+}
+
+export interface CalendarDay {
+  date: Date;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+export interface CalendarMonthGrid {
+  yearMonth: string;
+  label: string;
+  weeks: (CalendarDay | null)[][];
+}
+
+/**
+ * Generate calendar grids for the given number of months.
+ * When `endYearMonth` is provided (e.g. "2026-02"), the window ends at that month.
+ * Otherwise it ends at the month of `nowUtc`.
+ * Each grid uses ISO week layout (Mon–Sun columns), with `null` padding for cells outside the month.
+ */
+export function generateCalendarGrids(
+  nowUtc: Date,
+  monthCount: number,
+  endYearMonth?: string,
+): CalendarMonthGrid[] {
+  const todayYear = nowUtc.getUTCFullYear();
+  const todayMonth = nowUtc.getUTCMonth();
+  const todayDate = nowUtc.getUTCDate();
+  const todayMidnight = Date.UTC(todayYear, todayMonth, todayDate);
+
+  // Determine the "end" month for the window
+  let endYear = todayYear;
+  let endMonth = todayMonth;
+  if (endYearMonth) {
+    const parsed = parseYearMonth(endYearMonth);
+    endYear = parsed.year;
+    endMonth = parsed.month - 1; // 0-indexed
+  }
+
+  const grids: CalendarMonthGrid[] = [];
+
+  for (let i = monthCount - 1; i >= 0; i--) {
+    const firstOfMonth = new Date(Date.UTC(endYear, endMonth - i, 1));
+    const year = firstOfMonth.getUTCFullYear();
+    const month = firstOfMonth.getUTCMonth();
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+
+    // Mon=0, Tue=1, ..., Sun=6
+    const firstDayOfWeek = (firstOfMonth.getUTCDay() + 6) % 7;
+
+    const weeks: (CalendarDay | null)[][] = [];
+    let currentWeek: (CalendarDay | null)[] = [];
+
+    for (let p = 0; p < firstDayOfWeek; p++) {
+      currentWeek.push(null);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(Date.UTC(year, month, d));
+      const dateMs = date.getTime();
+
+      currentWeek.push({
+        date,
+        isToday: dateMs === todayMidnight,
+        isFuture: dateMs > todayMidnight,
+      });
+
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+    }
+
+    if (currentWeek.length > 0) {
+      while (currentWeek.length < 7) {
+        currentWeek.push(null);
+      }
+      weeks.push(currentWeek);
+    }
+
+    const yearMonth = firstOfMonth.toISOString().slice(0, 7);
+    const label = formatUtc(firstOfMonth, 'MMMM yyyy');
+
+    grids.push({ yearMonth, label, weeks });
+  }
+
+  return grids;
 }
 
 /**

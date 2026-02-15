@@ -120,5 +120,18 @@
 
   "validation.endAfterStart": "End must be after start",
 
+  "calendar.title": "Uptime History",
+  "calendar.operational": "Operational",
+  "calendar.partial": "Partial outage",
+  "calendar.down": "Major outage",
+  "calendar.noData": "No data",
+  "calendar.uptimeAt": "{{percent}}% uptime on {{date}}",
+  "calendar.noDataAt": "No data for {{date}}",
+  "calendar.incidentCount_one": "{{count}} incident",
+  "calendar.incidentCount_other": "{{count}} incidents",
+  "calendar.incidentsOnDate": "Incidents on {{date}}",
+  "calendar.overallUptime": "Overall uptime: {{percent}}%",
+  "calendar.weekdays": "M,T,W,T,F,S,S",
+
   "footer.poweredBy": "Powered by"
 }
