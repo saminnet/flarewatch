@@ -235,7 +235,7 @@ function EventsPage() {
               })
             }
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-44">
               <SelectValue>
                 {typeOptions.find((o) => o.value === (eventType ?? 'all'))?.label}
               </SelectValue>
@@ -283,7 +283,7 @@ function EventsPage() {
           description={t('events.noIncidentsOrMaintenance')}
         />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {allEvents.map((event) =>
             event.type === 'incident' ? (
               <IncidentCard

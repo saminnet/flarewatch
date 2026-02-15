@@ -123,7 +123,7 @@ export function LatencyChart({ monitor, state }: LatencyChartProps) {
 
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT_PX}>
-      <LineChart data={chartData} margin={{ top: 5, right: 0, bottom: 5, left: 0 }}>
+      <LineChart data={chartData} margin={{ top: 5, right: 0, bottom: 0, left: 0 }}>
         <CartesianGrid
           strokeDasharray="3 3"
           stroke="#e5e7eb"
@@ -154,9 +154,9 @@ export function LatencyChart({ monitor, state }: LatencyChartProps) {
           type="monotone"
           dataKey="ping"
           stroke="#6b7280"
-          strokeWidth={2}
+          strokeWidth={1.2}
           dot={false}
-          activeDot={{ r: 4, fill: '#6b7280' }}
+          activeDot={{ r: 3, fill: '#6b7280' }}
         />
       </LineChart>
     </ResponsiveContainer>

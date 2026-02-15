@@ -29,22 +29,16 @@ export function UptimeCalendar({ monitors, state, selectedMonth }: UptimeCalenda
     return generateAggregateDailyStatus(ids, nameMap, state);
   }, [monitors, state]);
 
-  // Use state.lastUpdate as the stable time source for SSR hydration safety.
-  // When lastUpdate is 0 (no data yet), the parent guards rendering, but we
-  // fall back to epoch to avoid Date.now() which differs between server/client.
-  const nowMs = state.lastUpdate > 0 ? state.lastUpdate * 1000 : 0;
-
-  // Stabilize to day precision so refetches within the same day don't recompute grids
-  const todayKey = nowMs > 0 ? new Date(nowMs).toISOString().slice(0, 10) : '';
+  // Snap to UTC day boundary so refetches within the same day don't recompute grids
+  const dayMs = useMemo(() => {
+    if (state.lastUpdate <= 0) return Date.UTC(2000, 0, 1);
+    const d = new Date(state.lastUpdate * 1000);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }, [state.lastUpdate]);
 
   const calendarGrids = useMemo(
-    () =>
-      generateCalendarGrids(
-        new Date(nowMs || Date.UTC(2000, 0, 1)),
-        MONTHS_PER_PAGE,
-        selectedMonth,
-      ),
-    [todayKey, selectedMonth],
+    () => generateCalendarGrids(new Date(dayMs), MONTHS_PER_PAGE, selectedMonth),
+    [dayMs, selectedMonth],
   );
 
   const dataMap = useMemo(

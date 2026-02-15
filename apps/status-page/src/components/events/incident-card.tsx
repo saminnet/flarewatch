@@ -31,7 +31,7 @@ export function IncidentCard({ event }: IncidentCardProps) {
         )}
       </AlertTitle>
 
-      <AlertDescription className="mt-2">
+      <AlertDescription className="mt-1.5">
         <p className="text-neutral-700 dark:text-neutral-300">{latestError}</p>
         <DateRange
           start={startDate}

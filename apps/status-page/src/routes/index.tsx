@@ -51,7 +51,7 @@ function DashboardPage() {
 
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
-      <div className="space-y-4">
+      <div className="space-y-3">
         <OverallStatus state={state} />
 
         <MaintenanceAlerts
@@ -61,7 +61,7 @@ function DashboardPage() {
         />
 
         <section>
-          <h2 className="mb-4 text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+          <h2 className="mb-3 text-base font-semibold text-neutral-900 dark:text-neutral-100">
             {t('monitor.title')}
           </h2>
           <MonitorList monitors={monitors} state={state} groups={groups} uiPrefs={uiPrefs} />

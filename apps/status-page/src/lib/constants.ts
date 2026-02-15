@@ -51,7 +51,7 @@ export const COOKIE_NAMES = {
 } as const;
 
 // Page layout
-export const PAGE_CONTAINER_CLASSES = 'container mx-auto max-w-5xl px-4 py-8';
+export const PAGE_CONTAINER_CLASSES = 'container mx-auto max-w-5xl px-4 py-6';
 
 // Status bar mobile display
 export const STATUS_BAR = {

@@ -49,7 +49,7 @@ const StatusBarSegment = memo(function StatusBarSegment({
               })
         }
         className={cn(
-          'h-8 rounded-sm transition-all duration-150',
+          'h-6 rounded-sm transition-all duration-150',
           isMobile ? 'w-2.5 shrink-0' : 'min-w-0 flex-1',
           STATUS_DOT_COLORS[day.status],
           day.downtime > 0
