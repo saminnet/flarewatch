@@ -26,10 +26,11 @@ export function isMaintenancePast(maintenance: Maintenance, now = Date.now()): b
 export function getMaintenanceStatus(
   maintenance: Maintenance,
   now = Date.now(),
-): 'active' | 'upcoming' | 'past' {
+): 'active' | 'upcoming' | 'scheduled' | 'past' {
   if (isMaintenanceActive(maintenance, now)) return 'active';
   if (isMaintenancePast(maintenance, now)) return 'past';
-  return 'upcoming';
+  if (isMaintenanceUpcoming(maintenance, now)) return 'upcoming';
+  return 'scheduled';
 }
 
 export interface FilteredMaintenances {
