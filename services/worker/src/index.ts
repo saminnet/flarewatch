@@ -1,5 +1,10 @@
 import type { MonitorState, Maintenance, RuntimeConfig } from '@flarewatch/shared';
-import { createLogger, KV_KEYS, loadRuntimeConfig } from '@flarewatch/shared';
+import {
+  createLogger,
+  KV_KEYS,
+  loadRuntimeConfig,
+  readMaintenancesFromStorage,
+} from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
 
 import { getEdgeLocation } from './utils/location';
@@ -17,7 +22,7 @@ import {
   updateSSLCertificate,
   cleanupOldIncidents,
 } from './state/incidents';
-import { isMonitorState, parseMaintenances } from './state/validate';
+import { isMonitorState } from './state/validate';
 
 const log = createLogger('Worker');
 
@@ -90,13 +95,7 @@ function shouldSkipNotification(
 
 async function loadMaintenances(kv: KVNamespace): Promise<Maintenance[]> {
   try {
-    const data = await kv.get(KV_KEYS.MAINTENANCES, { type: 'json' });
-    if (!data) return [];
-    const maintenances = parseMaintenances(data);
-    if (maintenances.length === 0 && Array.isArray(data) && data.length > 0) {
-      log.error('Invalid maintenance data format in KV');
-    }
-    return maintenances;
+    return readMaintenancesFromStorage(kv);
   } catch (error) {
     log.error('Failed to load maintenances from KV', { error: String(error) });
     return [];

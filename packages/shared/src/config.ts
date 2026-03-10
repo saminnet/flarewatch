@@ -6,6 +6,7 @@ import type {
   DeploymentMeta,
   NotificationConfig,
   Webhook,
+  Maintenance,
 } from './types';
 import { KV_KEYS } from './types';
 
@@ -111,6 +112,30 @@ function isBoolean(value: unknown): value is boolean {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+export function isValidMaintenance(value: unknown): value is Maintenance {
+  const obj = asRecord(value);
+  if (!obj) return false;
+
+  if (typeof obj.id !== 'string' || obj.id.length === 0) return false;
+  if (typeof obj.body !== 'string' || obj.body.length === 0) return false;
+  if (typeof obj.createdAt !== 'number' || !Number.isFinite(obj.createdAt)) return false;
+  if (typeof obj.updatedAt !== 'number' || !Number.isFinite(obj.updatedAt)) return false;
+  if (!(typeof obj.start === 'string' || typeof obj.start === 'number')) return false;
+  if (obj.end !== undefined && !(typeof obj.end === 'string' || typeof obj.end === 'number')) {
+    return false;
+  }
+  if (!isOptionalType(obj.title, isString)) return false;
+  if (!isOptionalType(obj.color, isString)) return false;
+  if (!isOptionalType(obj.monitors, isStringArray)) return false;
+
+  return true;
+}
+
+export function parseMaintenances(value: unknown): Maintenance[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Maintenance => isValidMaintenance(item));
 }
 
 export function isValidNotificationConfig(value: unknown): value is NotificationConfig {
