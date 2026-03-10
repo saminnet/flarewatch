@@ -12,7 +12,7 @@ import {
   IconCircleCheck,
 } from '@tabler/icons-react';
 import { Link } from '@tanstack/react-router';
-import { getMaintenanceStatus } from '@/lib/maintenance';
+import { compareByStart, getMaintenanceStatus } from '@/lib/maintenance';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MaintenanceRow } from '@/components/admin/maintenance-row';
@@ -252,8 +252,7 @@ function MaintenancesAdminAuthed({
   }, [deleteConfirm, deleteMutation]);
 
   const sortedMaintenances = useMemo(
-    () =>
-      [...maintenances].sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime()),
+    () => [...maintenances].sort((a, b) => compareByStart(b, a)),
     [maintenances],
   );
 
@@ -309,7 +308,7 @@ function MaintenancesAdminAuthed({
                 aria-label={t('admin.addMaintenance')}
                 className="bg-orange-500 hover:bg-orange-600 text-white"
               >
-                <IconPlus className="mr-2 size-4" />
+                <IconPlus className="size-4" />
                 {t('admin.addMaintenance')}
               </Button>
             )}

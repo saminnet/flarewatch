@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
+import { compareByStart } from '../maintenance';
 import { qk } from './keys';
 import { SessionExpiredError } from './auth.mutations';
 
@@ -8,13 +9,31 @@ const API_PATH = '/api/admin/maintenances';
 
 type TranslateFn = ReturnType<typeof useTranslation>['t'];
 
-function createMutationHandlers<TResult>(
+function setMaintenances(
   queryClient: QueryClient,
-  t: TranslateFn,
-  callbacks?: { onSuccess?: (result: TResult) => void; onError?: (error: Error) => void },
-) {
+  updater: (current: Maintenance[]) => Maintenance[],
+  { sort = false } = {},
+): void {
+  queryClient.setQueryData<Maintenance[]>(qk.maintenances, (current) => {
+    const result = updater(current ?? []);
+    return sort ? result.sort((a, b) => compareByStart(b, a)) : result;
+  });
+}
+
+function createMutationHandlers<TResult>({
+  queryClient,
+  t,
+  callbacks,
+  updateCache,
+}: {
+  queryClient: QueryClient;
+  t: TranslateFn;
+  callbacks?: { onSuccess?: (result: TResult) => void; onError?: (error: Error) => void };
+  updateCache?: (result: TResult) => void;
+}) {
   return {
     onSuccess: (result: TResult) => {
+      updateCache?.(result);
       void queryClient.invalidateQueries({ queryKey: qk.maintenances });
       callbacks?.onSuccess?.(result);
     },
@@ -67,7 +86,14 @@ export function useCreateMaintenance(callbacks?: MutationCallbacks) {
         body: JSON.stringify(data),
       });
     },
-    ...createMutationHandlers(queryClient, t, callbacks),
+    ...createMutationHandlers({
+      queryClient,
+      t,
+      callbacks,
+      updateCache: (result) => {
+        setMaintenances(queryClient, (current) => [...current, result], { sort: true });
+      },
+    }),
   });
 }
 
@@ -83,7 +109,18 @@ export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
         body: JSON.stringify({ id, updates }),
       });
     },
-    ...createMutationHandlers(queryClient, t, callbacks),
+    ...createMutationHandlers({
+      queryClient,
+      t,
+      callbacks,
+      updateCache: (result) => {
+        setMaintenances(
+          queryClient,
+          (current) => current.map((m) => (m.id === result.id ? result : m)),
+          { sort: true },
+        );
+      },
+    }),
   });
 }
 
@@ -100,6 +137,13 @@ export function useDeleteMaintenance(callbacks?: MutationCallbacks<string>) {
       });
       return id;
     },
-    ...createMutationHandlers(queryClient, t, callbacks),
+    ...createMutationHandlers({
+      queryClient,
+      t,
+      callbacks,
+      updateCache: (id) => {
+        setMaintenances(queryClient, (current) => current.filter((m) => m.id !== id));
+      },
+    }),
   });
 }

@@ -39,6 +39,11 @@ export interface FilteredMaintenances {
   past: Maintenance[];
 }
 
+/** ISO 8601 strings sort lexicographically — no Date parsing needed. */
+export function compareByStart(a: Maintenance, b: Maintenance): number {
+  return a.start < b.start ? -1 : a.start > b.start ? 1 : 0;
+}
+
 export function filterMaintenances(
   maintenances: Maintenance[],
   options?: { upcomingDays?: number; nowMs?: number },
@@ -60,12 +65,9 @@ export function filterMaintenances(
     }
   }
 
-  const sortByStart = (a: Maintenance, b: Maintenance) =>
-    new Date(a.start).getTime() - new Date(b.start).getTime();
-
-  active.sort(sortByStart);
-  upcoming.sort(sortByStart);
-  past.sort((a, b) => sortByStart(b, a)); // newest first
+  active.sort(compareByStart);
+  upcoming.sort(compareByStart);
+  past.sort((a, b) => compareByStart(b, a)); // newest first
 
   return { active, upcoming, past };
 }
