@@ -81,6 +81,12 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
     return monitors.filter((m) => !groupedMonitorIds.has(m.id));
   }, [activeGroups, monitors]);
 
+  const activeGroupNames = useMemo(() => activeGroups.map((g) => g.name), [activeGroups]);
+  const openGroupNames = useMemo(
+    () => activeGroupNames.filter((name) => !collapsedGroups.includes(name)),
+    [activeGroupNames, collapsedGroups],
+  );
+
   // If no active groups exist, render as flat list (no labels needed)
   if (activeGroups.length === 0) {
     return (
@@ -99,12 +105,6 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
       </div>
     );
   }
-
-  const activeGroupNames = useMemo(() => activeGroups.map((g) => g.name), [activeGroups]);
-  const openGroupNames = useMemo(
-    () => activeGroupNames.filter((name) => !collapsedGroups.includes(name)),
-    [activeGroupNames, collapsedGroups],
-  );
 
   return (
     <div className="space-y-3">
