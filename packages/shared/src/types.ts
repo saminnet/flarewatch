@@ -146,6 +146,11 @@ export type StoredConfig = {
   _deployment?: DeploymentMeta;
 };
 
+export interface KvStore {
+  get(key: string, options?: { type?: 'json' | 'text' }): Promise<unknown>;
+  put(key: string, value: string): Promise<void>;
+}
+
 export const KV_KEYS = {
   CONFIG: 'config',
   STATE: 'state',
