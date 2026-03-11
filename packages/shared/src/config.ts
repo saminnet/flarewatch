@@ -7,6 +7,7 @@ import type {
   NotificationConfig,
   Webhook,
   Maintenance,
+  KvStore,
 } from './types';
 import { KV_KEYS } from './types';
 
@@ -20,7 +21,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-export function isValidHttpUrl(value: string): boolean {
+function isValidHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === 'http:' || url.protocol === 'https:';
@@ -28,8 +29,6 @@ export function isValidHttpUrl(value: string): boolean {
     return false;
   }
 }
-
-export const isValidWebhookUrl = isValidHttpUrl;
 
 function isValidHostPort(value: string): boolean {
   const trimmed = value.trim();
@@ -50,7 +49,7 @@ function isValidHostPort(value: string): boolean {
   }
 }
 
-export function isValidMonitorTarget(target: string, method?: string): boolean {
+function isValidMonitorTarget(target: string, method?: string): boolean {
   const trimmed = target.trim();
   if (!trimmed) return false;
 
@@ -78,11 +77,11 @@ function isValidWebhookHeaders(value: unknown): boolean {
   );
 }
 
-export function isValidWebhook(value: unknown): value is Webhook {
+function isValidWebhook(value: unknown): value is Webhook {
   const obj = asRecord(value);
   if (!obj) return false;
 
-  if (typeof obj.url !== 'string' || !isValidWebhookUrl(obj.url)) return false;
+  if (typeof obj.url !== 'string' || !isValidHttpUrl(obj.url)) return false;
   if (obj.template !== undefined && !WEBHOOK_TEMPLATES.has(String(obj.template))) return false;
   if (obj.method !== undefined && !WEBHOOK_METHODS.has(String(obj.method).toUpperCase()))
     return false;
@@ -114,7 +113,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
-export function isValidMaintenance(value: unknown): value is Maintenance {
+function isValidMaintenance(value: unknown): value is Maintenance {
   const obj = asRecord(value);
   if (!obj) return false;
 
@@ -138,7 +137,7 @@ export function parseMaintenances(value: unknown): Maintenance[] {
   return value.filter((item): item is Maintenance => isValidMaintenance(item));
 }
 
-export function isValidNotificationConfig(value: unknown): value is NotificationConfig {
+function isValidNotificationConfig(value: unknown): value is NotificationConfig {
   const obj = asRecord(value);
   if (!obj) return false;
 
@@ -155,7 +154,7 @@ export function isValidNotificationConfig(value: unknown): value is Notification
   return true;
 }
 
-export function isValidMonitor(value: unknown): value is Monitor {
+function isValidMonitor(value: unknown): value is Monitor {
   const obj = asRecord(value);
   if (!obj) return false;
 
@@ -170,13 +169,13 @@ export function isValidMonitor(value: unknown): value is Monitor {
   );
 }
 
-export function isValidStatusPageConfig(value: unknown): value is StatusPageConfig {
+function isValidStatusPageConfig(value: unknown): value is StatusPageConfig {
   const obj = asRecord(value);
   if (!obj) return false;
   return isOptionalType(obj.title, isString);
 }
 
-export function isValidRuntimeConfig(value: unknown): value is RuntimeConfig {
+function isValidRuntimeConfig(value: unknown): value is RuntimeConfig {
   const obj = asRecord(value);
   if (!obj) return false;
 
@@ -188,7 +187,7 @@ export function isValidRuntimeConfig(value: unknown): value is RuntimeConfig {
   return true;
 }
 
-export function isValidDeploymentMeta(value: unknown): value is DeploymentMeta {
+function isValidDeploymentMeta(value: unknown): value is DeploymentMeta {
   const obj = asRecord(value);
   if (!obj) return false;
 
@@ -201,7 +200,7 @@ export function isValidDeploymentMeta(value: unknown): value is DeploymentMeta {
   );
 }
 
-export function isValidStoredConfig(value: unknown): value is StoredConfig {
+function isValidStoredConfig(value: unknown): value is StoredConfig {
   const obj = asRecord(value);
   if (!obj) return false;
 
@@ -211,29 +210,7 @@ export function isValidStoredConfig(value: unknown): value is StoredConfig {
   return true;
 }
 
-export interface KVStore {
-  get(key: string, options?: { type?: 'json' | 'text' }): Promise<unknown>;
-  put(key: string, value: string): Promise<void>;
-}
-
-export async function loadStoredConfig(kv: KVStore): Promise<StoredConfig | null> {
-  try {
-    const data = await kv.get(KV_KEYS.CONFIG, { type: 'json' });
-    if (!data) return null;
-
-    if (!isValidStoredConfig(data)) {
-      console.error('[Config] Invalid stored config format');
-      return null;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('[Config] Failed to load from KV:', error);
-    return null;
-  }
-}
-
-export async function loadRuntimeConfig(kv: KVStore): Promise<RuntimeConfig | null> {
+export async function loadRuntimeConfig(kv: KvStore): Promise<RuntimeConfig | null> {
   try {
     const data = await kv.get(KV_KEYS.CONFIG, { type: 'json' });
     if (!data) return null;
@@ -247,46 +224,4 @@ export async function loadRuntimeConfig(kv: KVStore): Promise<RuntimeConfig | nu
     console.error('[Config] Failed to load runtime config:', error);
     return null;
   }
-}
-
-export async function saveStoredConfig(kv: KVStore, stored: StoredConfig): Promise<void> {
-  if (!isValidStoredConfig(stored)) {
-    throw new Error('Invalid stored config');
-  }
-  await kv.put(KV_KEYS.CONFIG, JSON.stringify(stored));
-}
-
-export function createStoredConfig(
-  config: RuntimeConfig,
-  deployment: Omit<DeploymentMeta, 'createdAt' | 'updatedAt' | 'version'>,
-  version: string = '1.0.0',
-): StoredConfig {
-  const now = new Date().toISOString();
-  return {
-    config,
-    _deployment: {
-      ...deployment,
-      createdAt: now,
-      updatedAt: now,
-      version,
-    },
-  };
-}
-
-export function updateStoredConfig(
-  existing: StoredConfig,
-  newConfig: RuntimeConfig,
-  version?: string,
-): StoredConfig {
-  if (!existing._deployment) {
-    return { config: newConfig };
-  }
-  return {
-    config: newConfig,
-    _deployment: {
-      ...existing._deployment,
-      updatedAt: new Date().toISOString(),
-      version: version ?? existing._deployment.version,
-    },
-  };
 }

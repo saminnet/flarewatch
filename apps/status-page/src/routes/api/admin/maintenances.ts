@@ -1,12 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
-import {
-  deleteMaintenanceRecord,
-  ensureMaintenanceStorageV2,
-  putMaintenanceRecord,
-  readMaintenancesFromStorage,
-  syncLegacyMaintenancesSnapshot,
-} from '@flarewatch/shared';
+import { writeMaintenancesToStorage, readMaintenancesFromStorage } from '@flarewatch/shared';
 import { requireStateKv } from '@/lib/runtime-env';
 
 function jsonError(message: string, status: number): Response {
@@ -14,10 +8,6 @@ function jsonError(message: string, status: number): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
-}
-
-async function readMaintenances(kv: KVNamespace): Promise<Maintenance[]> {
-  return readMaintenancesFromStorage(kv);
 }
 
 function generateMaintenanceId(): string {
@@ -151,7 +141,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
       GET: async () => {
         try {
           const kv = await requireStateKv();
-          const maintenances = await readMaintenances(kv);
+          const maintenances = await readMaintenancesFromStorage(kv);
           return Response.json(maintenances);
         } catch (error) {
           console.error('Error listing maintenances:', error);
@@ -178,10 +168,8 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             updatedAt: now,
           };
 
-          const maintenances = await ensureMaintenanceStorageV2(kv);
-          const nextMaintenances = [...maintenances, maintenance];
-          await putMaintenanceRecord(kv, maintenance);
-          await syncLegacyMaintenancesSnapshot(kv, nextMaintenances);
+          const maintenances = await readMaintenancesFromStorage(kv);
+          await writeMaintenancesToStorage(kv, [...maintenances, maintenance]);
 
           return Response.json(maintenance, { status: 201 });
         } catch (error) {
@@ -200,7 +188,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           }
 
           const kv = await requireStateKv();
-          const maintenances = await ensureMaintenanceStorageV2(kv);
+          const maintenances = await readMaintenancesFromStorage(kv);
           const index = maintenances.findIndex((m) => m.id === body.id);
           const current = maintenances[index];
 
@@ -223,8 +211,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
 
           const nextMaintenances = [...maintenances];
           nextMaintenances[index] = updated;
-          await putMaintenanceRecord(kv, updated);
-          await syncLegacyMaintenancesSnapshot(kv, nextMaintenances);
+          await writeMaintenancesToStorage(kv, nextMaintenances);
 
           return Response.json(updated);
         } catch (error) {
@@ -243,15 +230,14 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           }
 
           const kv = await requireStateKv();
-          const maintenances = await ensureMaintenanceStorageV2(kv);
+          const maintenances = await readMaintenancesFromStorage(kv);
           const filtered = maintenances.filter((m) => m.id !== body.id);
 
           if (filtered.length === maintenances.length) {
             return jsonError('Maintenance not found', 404);
           }
 
-          await deleteMaintenanceRecord(kv, body.id);
-          await syncLegacyMaintenancesSnapshot(kv, filtered);
+          await writeMaintenancesToStorage(kv, filtered);
           return new Response(null, { status: 204 });
         } catch (error) {
           console.error('Error deleting maintenance:', error);

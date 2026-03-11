@@ -1,13 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Maintenance } from '../src/types';
+import type { KvStore } from '../src/types';
 import {
-  MAINTENANCE_STORAGE,
-  type MaintenanceKvStore,
-  ensureMaintenanceStorageV2,
-  getMaintenanceItemKey,
   readMaintenancesFromStorage,
+  writeMaintenancesToStorage,
 } from '../src/maintenance-storage';
-import { KV_KEYS } from '../src/types';
 
 class MockKv {
   readonly store = new Map<string, string>();
@@ -23,24 +20,6 @@ class MockKv {
 
   async put(key: string, value: string): Promise<void> {
     this.store.set(key, value);
-  }
-
-  async delete(key: string): Promise<void> {
-    this.store.delete(key);
-  }
-
-  async list(options?: { cursor?: string; prefix?: string }) {
-    const prefix = options?.prefix ?? '';
-    const keys = [...this.store.keys()]
-      .filter((key) => key.startsWith(prefix))
-      .sort()
-      .map((name) => ({ name }));
-
-    return {
-      keys,
-      list_complete: true,
-      cursor: '',
-    };
   }
 }
 
@@ -62,30 +41,21 @@ describe('maintenance storage', () => {
     kv = new MockKv();
   });
 
-  it('reads legacy array storage when v2 marker is absent', async () => {
-    const legacy = [createMaintenance('legacy-1')];
-    await kv.put(KV_KEYS.MAINTENANCES, JSON.stringify(legacy));
-
-    await expect(readMaintenancesFromStorage(kv as MaintenanceKvStore)).resolves.toEqual(legacy);
+  it('returns an empty list when the snapshot key is absent', async () => {
+    await expect(readMaintenancesFromStorage(kv as KvStore)).resolves.toEqual([]);
   });
 
-  it('migrates legacy array storage to v2 item keys without losing data', async () => {
-    const legacy = [createMaintenance('legacy-1'), createMaintenance('legacy-2')];
-    await kv.put(KV_KEYS.MAINTENANCES, JSON.stringify(legacy));
+  it('reads a valid maintenances snapshot', async () => {
+    const maintenances = [createMaintenance('maintenance-1')];
+    await writeMaintenancesToStorage(kv as KvStore, maintenances);
 
-    await expect(ensureMaintenanceStorageV2(kv as MaintenanceKvStore)).resolves.toEqual(legacy);
-    await expect(readMaintenancesFromStorage(kv as MaintenanceKvStore)).resolves.toEqual(legacy);
-    await expect(kv.get(MAINTENANCE_STORAGE.VERSION_KEY)).resolves.toBe(
-      MAINTENANCE_STORAGE.VERSION,
-    );
-    await expect(kv.get(getMaintenanceItemKey('legacy-1'))).resolves.toBeTruthy();
+    await expect(readMaintenancesFromStorage(kv as KvStore)).resolves.toEqual(maintenances);
   });
 
-  it('ignores partial v2 keys until the version marker is written', async () => {
-    const legacy = [createMaintenance('legacy-1')];
-    await kv.put(KV_KEYS.MAINTENANCES, JSON.stringify(legacy));
-    await kv.put(getMaintenanceItemKey('partial'), JSON.stringify(createMaintenance('partial')));
+  it('writes the maintenance snapshot to the supported KV key', async () => {
+    const maintenances = [createMaintenance('maintenance-1'), createMaintenance('maintenance-2')];
+    await writeMaintenancesToStorage(kv as KvStore, maintenances);
 
-    await expect(readMaintenancesFromStorage(kv as MaintenanceKvStore)).resolves.toEqual(legacy);
+    await expect(kv.get('maintenances', { type: 'json' })).resolves.toEqual(maintenances);
   });
 });
