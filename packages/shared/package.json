@@ -8,8 +8,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "compile": "tsc --noEmit",
-    "test": "vitest run"
+    "compile": "vp check --no-fmt --no-lint",
+    "test": "vp test run"
   },
   "devDependencies": {
     "@flarewatch/ts-config": "workspace:*",

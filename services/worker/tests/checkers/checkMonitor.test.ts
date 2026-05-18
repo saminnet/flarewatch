@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import type { MonitorTarget } from '@flarewatch/shared';
 
 const getEdgeLocationMock = vi.fn<() => Promise<string>>();

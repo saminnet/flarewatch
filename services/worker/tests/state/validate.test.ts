@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import { createInitialState } from '../../src/state/incidents';
 import { isMonitorState } from '../../src/state/validate';
 

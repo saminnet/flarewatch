@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve FlareWatch.
+Thanks for helping with FlareWatch.
 
 ## Development setup
 
@@ -8,14 +8,14 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for commands and local setup.
 
 ## Tests
 
-If you're adding a feature or fixing a bug, a test supporting the change is appreciated.
+If you add a feature or fix a bug, include a focused test when it makes sense.
 
 Run tests with:
 
 ```bash
-pnpm test                      # all tests
-pnpm -F worker test            # worker only
-pnpm -F status-page test       # status page only
+vp run test                    # all tests
+vp run worker-test             # worker only
+vp run status-page-test        # status page only
 ```
 
 ## What goes where

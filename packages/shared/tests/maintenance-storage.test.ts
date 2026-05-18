@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vite-plus/test';
 import type { Maintenance } from '../src/types';
 import type { KvStore } from '../src/types';
 import {

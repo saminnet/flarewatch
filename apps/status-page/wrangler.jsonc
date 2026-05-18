@@ -2,10 +2,10 @@
  * Wrangler configuration for status page
  *
  * Usage:
- *   Local dev:  pnpm dev
+ *   Local dev:  vp run dev-status-page
  *   Deploy:     wrangler deploy (alternative to Pulumi)
  *
- * Note: Pulumi (pnpm infra:up) is the recommended deployment method
+ * Note: Pulumi (vp run infra:up) is the recommended deployment method
  * as it manages all resources together (KV, workers, custom domains).
  *
  * For more details: https://developers.cloudflare.com/workers/wrangler/configuration/

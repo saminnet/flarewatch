@@ -82,12 +82,18 @@ function isValidWebhook(value: unknown): value is Webhook {
   if (!obj) return false;
 
   if (typeof obj.url !== 'string' || !isValidHttpUrl(obj.url)) return false;
-  if (obj.template !== undefined && !WEBHOOK_TEMPLATES.has(String(obj.template))) return false;
-  if (obj.method !== undefined && !WEBHOOK_METHODS.has(String(obj.method).toUpperCase()))
-    return false;
+  if (obj.template !== undefined) {
+    if (typeof obj.template !== 'string' || !WEBHOOK_TEMPLATES.has(obj.template)) return false;
+  }
+  if (obj.method !== undefined) {
+    if (typeof obj.method !== 'string' || !WEBHOOK_METHODS.has(obj.method.toUpperCase()))
+      return false;
+  }
   if (obj.headers !== undefined && !isValidWebhookHeaders(obj.headers)) return false;
-  if (obj.payloadType !== undefined && !WEBHOOK_PAYLOAD_TYPES.has(String(obj.payloadType)))
-    return false;
+  if (obj.payloadType !== undefined) {
+    if (typeof obj.payloadType !== 'string' || !WEBHOOK_PAYLOAD_TYPES.has(obj.payloadType))
+      return false;
+  }
   if (obj.timeout !== undefined && typeof obj.timeout !== 'number') return false;
 
   return true;

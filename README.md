@@ -11,10 +11,10 @@
 </p>
 
 <p align="center">
-  <a href="https://demo.flarewatch.app">Live demo</a> · <a href="https://flarewatch.app">Managed setup</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="#docs">Docs</a>
+  <a href="https://demo.flarewatch.app">Live demo</a> | <a href="https://flarewatch.app">Managed setup</a> | <a href="#quick-start">Quick start</a> | <a href="#how-it-works">How it works</a> | <a href="#docs">Docs</a>
 </p>
 
-Cloudflare-first uptime monitoring + status page you can fork and self-host.
+Cloudflare-first uptime monitoring and a status page you can fork and self-host.
 
 Live demo (upstream): https://demo.flarewatch.app
 
@@ -38,50 +38,50 @@ flowchart LR
   Worker -. checks .-> Target
 ```
 
-## What’s included
+## What's included
 
 - 1-minute cron checks on Cloudflare Workers
-- Public status page UI + JSON/SVG APIs
-- Uptime history + latency charts
+- Public status page UI and JSON/SVG APIs
+- Uptime history and latency charts
 - Scheduled maintenance announcements (managed in `/admin`)
 - Webhook notifications (Slack/Discord/Telegram/templates)
 - Optional self-hosted check proxy (private networks, TCP, SSL)
 
 ## Quick start
 
-1. Fork (or “Use this template”) and enable GitHub Actions.
-2. Add the required GitHub Secrets (see `infra/README.md` for exact permissions and where to create them):
+1. Fork the repo, or use it as a template, and enable GitHub Actions.
+2. Add the required GitHub Secrets. See `infra/README.md` for permissions and where to create them.
    - `CLOUDFLARE_ACCOUNT_ID`
    - `CLOUDFLARE_API_TOKEN`
    - `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`
    - `PULUMI_CONFIG_PASSPHRASE`
-   - Create `CLOUDFLARE_API_TOKEN` with permissions for Workers scripts, Workers KV, and Workers Cron Triggers (plus R2 bucket create if you want CI to bootstrap the Pulumi state bucket).
+   - Create `CLOUDFLARE_API_TOKEN` with permissions for Workers scripts, Workers KV, and Workers Cron Triggers. Add R2 bucket create permission if CI should bootstrap the Pulumi state bucket.
 3. Edit your config:
    - Monitoring: `packages/config/src/worker.ts`
    - Status page: `packages/config/src/public.ts`
-4. Push to `main` → the `Deploy to Cloudflare` workflow builds and deploys everything via Pulumi.
+4. Push to `main`. The `Deploy to Cloudflare` workflow builds and deploys everything via Pulumi.
 5. Find your status page URL:
-   - If you configured `customDomain`, it’s `https://<customDomain>`.
-   - Otherwise it’s on `workers.dev`: `https://<projectName>.<your-workers-subdomain>.workers.dev` (Cloudflare Dashboard → Workers & Pages → Overview).
+   - If you configured `customDomain`, use `https://<customDomain>`.
+   - Otherwise, use `https://<projectName>.<your-workers-subdomain>.workers.dev`. Find the subdomain in Cloudflare Dashboard > Workers & Pages > Overview.
 
 The repo ships with safe demo monitors, so a fresh deploy shows a working page immediately.
 
-Optional GitHub Secrets (only if you use these features):
+Optional GitHub Secrets:
 
-- `FLAREWATCH_ADMIN_BASIC_AUTH` — protects `/admin` and `/api/admin/*` (hashed JSON payload)
-- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` — protects the whole site (hashed JSON payload)
-- `FLAREWATCH_PROXY_TOKEN` — bearer token for authenticating to a check proxy
+- `FLAREWATCH_ADMIN_BASIC_AUTH` - protects `/admin` and `/api/admin/*`
+- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` - protects the whole site
+- `FLAREWATCH_PROXY_TOKEN` - bearer token for a check proxy
 
-Generate auth secret payload from username/password:
+Generate an auth secret payload from a username and password:
 
 ```bash
 pnpm auth:secret -- <username> 'replace-with-strong-password'
 ```
 
-Run it once per secret and paste each full JSON output into the matching GitHub Secret value:
+Run it once per secret and paste the full JSON output into the matching GitHub Secret value:
 
-- output generated for your admin login username => `FLAREWATCH_ADMIN_BASIC_AUTH`
-- output generated for your status-page username => `FLAREWATCH_STATUS_PAGE_BASIC_AUTH`
+- output for the admin login username => `FLAREWATCH_ADMIN_BASIC_AUTH`
+- output for the status-page username => `FLAREWATCH_STATUS_PAGE_BASIC_AUTH`
 
 Do not manually construct or edit JSON fields.
 
@@ -90,9 +90,9 @@ Do not manually construct or edit JSON fields.
 - `services/worker` runs scheduled checks and writes `state` to the `FLAREWATCH_STATE` KV namespace.
 - `apps/status-page` reads that same KV namespace and serves the UI + `/api/*` endpoints.
 - The optional check proxy lives in a separate repo: https://github.com/saminnet/flarewatch-proxy
-  - It executes checks from custom locations (private networks, TCP, SSL).
-  - If “where the check runs” matters (latency/region), use the proxy.
-- Optional: set a `CONFIG_KV` binding with a runtime config blob (see `packages/shared/src/config.ts`) to update monitors and status page branding without redeploying. When unset, the worker falls back to the static config in `packages/config`.
+  - It runs checks from custom locations (private networks, TCP, SSL).
+  - If where the check runs matters (latency/region), use the proxy.
+- Optional: set a `CONFIG_KV` binding with a runtime config blob. See `packages/shared/src/config.ts`. This lets you update monitors and status page branding without redeploying. If unset, FlareWatch uses the static config in `packages/config`.
 
 ## Example monitor
 
@@ -113,15 +113,16 @@ export const pageConfig = {
 
 ## Docs
 
-- [DEVELOPMENT.md](DEVELOPMENT.md) — local dev commands + repo structure
-- [infra/README.md](infra/README.md) — Pulumi (long-lived resources) + R2 backend
-- [apps/status-page/README.md](apps/status-page/README.md) — status page Worker, APIs, auth, local testing
-- [services/worker/README.md](services/worker/README.md) — monitoring Worker, cron, KV state
-- [flarewatch-proxy repo](https://github.com/saminnet/flarewatch-proxy) — optional self-hosted check proxy
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
-- [SECURITY.md](SECURITY.md) — security policy
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community guidelines
+- Development uses Vite+: `vp install`, `vp check`, `vp run test`, `vp run build`, and `vp config` for local hooks.
+- [DEVELOPMENT.md](DEVELOPMENT.md) - local dev commands and repo structure
+- [infra/README.md](infra/README.md) - Pulumi resources and R2 backend
+- [apps/status-page/README.md](apps/status-page/README.md) - status page Worker, APIs, auth, local testing
+- [services/worker/README.md](services/worker/README.md) - monitoring Worker, cron, KV state
+- [flarewatch-proxy repo](https://github.com/saminnet/flarewatch-proxy) - optional self-hosted check proxy
+- [CONTRIBUTING.md](CONTRIBUTING.md) - how to contribute
+- [SECURITY.md](SECURITY.md) - security policy
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - community guidelines
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

@@ -4,35 +4,19 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "pnpm -F status-page dev",
-    "build": "pnpm -F status-page build",
-    "compile": "pnpm -r compile",
+    "compile": "vp check --no-fmt --no-lint",
+    "check": "vp check",
     "auth:secret": "node --experimental-strip-types scripts/generate-auth-secret.ts",
-    "deploy": "pnpm worker:build && pnpm build && pnpm infra:up",
-    "worker:build": "pnpm -F worker build",
-    "worker:dev": "pnpm -F worker dev",
-    "infra:up": "pulumi -C infra up",
-    "infra:preview": "pulumi -C infra preview",
-    "infra:destroy": "pulumi -C infra destroy",
-    "test": "pnpm -r test",
-    "lint": "oxlint --deny-warnings --type-aware --type-check --report-unused-disable-directives",
-    "format:check": "oxfmt --check",
-    "format": "oxfmt",
-    "prepare": "husky"
+    "format": "vp fmt . --write",
+    "format:check": "vp fmt . --check",
+    "lint": "vp lint"
   },
   "devDependencies": {
-    "husky": "^9.1.7",
-    "lint-staged": "^16.3.3",
-    "oxfmt": "^0.37.0",
-    "oxlint": "^1.52.0",
-    "oxlint-tsgolint": "^0.16.0",
-    "vitest": "^4.0.18"
-  },
-  "lint-staged": {
-    "*": "oxfmt --no-error-on-unmatched-pattern"
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "vite-plus": "^0.1.20"
   },
   "engines": {
     "node": ">=24.0.0"
   },
-  "packageManager": "pnpm@10.20.0"
+  "packageManager": "pnpm@11.1.0"
 }
