@@ -23,7 +23,7 @@ const MODULE_EXTENSIONS = new Set(Object.keys(MODULE_CONTENT_TYPES));
 
 function ensureDir(dir: string, label: string): void {
   if (!fs.existsSync(dir)) {
-    throw new Error(`${label} not found at "${dir}". Run: pnpm build`);
+    throw new Error(`${label} not found at "${dir}". Run: vp run status-page-build`);
   }
 }
 
@@ -58,7 +58,9 @@ export function getStatusPageBuild(infraDir: string, mainModule: string): Status
 
   const files = listModuleFiles(serverDir);
   if (files.length === 0) {
-    throw new Error(`No status page server modules found in "${serverDir}". Run: pnpm build`);
+    throw new Error(
+      `No status page server modules found in "${serverDir}". Run: vp run status-page-build`,
+    );
   }
 
   const modules = files.map((filePath) => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import type { MonitorState } from '@flarewatch/shared';
 import { createEmptyMonitorState, resolveMonitorState } from '../../src/lib/monitor-state';
 

@@ -1,10 +1,10 @@
 # Wrangler configuration for monitoring worker
 #
 # Usage:
-#   Local dev:  pnpm worker:dev
+#   Local dev:  vp run dev-worker
 #   Deploy:     wrangler deploy (alternative to Pulumi)
 #
-# Note: Pulumi (pnpm infra:up) is the recommended deployment method
+# Note: Pulumi (vp run infra:up) is the recommended deployment method
 # as it manages all resources together (KV, workers, cron triggers).
 
 name = "flarewatch-worker"
@@ -14,6 +14,6 @@ compatibility_flags = []
 
 # KV namespace binding
 # - Local dev: Uses wrangler-dev.toml with persisted local state
-# - Build (pnpm worker:build): Placeholder ID is shown but ignored
+# - Build (vp run worker-build): Placeholder ID is shown but ignored
 # - Deploy: Pulumi injects the real KV namespace ID
 kv_namespaces = [{ binding = "FLAREWATCH_STATE", id = "placeholder-for-build" }]

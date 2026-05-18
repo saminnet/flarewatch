@@ -1,6 +1,6 @@
 # Infra (Pulumi)
 
-This folder contains FlareWatch infrastructure-as-code.
+Pulumi code for FlareWatch infrastructure lives here.
 
 ## Deployment model
 
@@ -13,16 +13,16 @@ Pulumi manages all Cloudflare resources:
 | Cron trigger       | Schedules monitoring Worker |
 | Status page Worker | Serves the status page UI   |
 
-All deployments go through `pulumi up`, all teardowns through `pulumi destroy`.
+Deploy with `pulumi up`. Tear down with `pulumi destroy`.
 
 ## Pulumi state in Cloudflare R2
 
-FlareWatch uses an S3-compatible Pulumi backend pointing at R2.
+FlareWatch stores Pulumi state in Cloudflare R2 through Pulumi's S3-compatible backend.
 
 You need:
 
-- `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` to provision Cloudflare resources (Workers, KV, cron triggers, and optionally the R2 bucket).
-- R2 S3 credentials to set `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (Dashboard → R2 → Manage R2 API Tokens).
+- `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` to provision Cloudflare resources: Workers, KV, cron triggers, and optionally the R2 bucket.
+- R2 S3 credentials for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Create them in Dashboard > R2 > Manage R2 API Tokens.
 - A bucket for Pulumi state.
   - CI bootstraps it once via `wrangler r2 bucket create ...` (this is the only place Wrangler is used in the deploy workflow).
   - Locally, you can create it via the dashboard or with `wrangler r2 bucket create <name>`.
@@ -43,13 +43,13 @@ Create a Cloudflare API token that can:
 - Create/update Workers cron triggers
 - (Optional) create the R2 bucket used for Pulumi state
 
-Scope it to your account. For the first deploy, it’s simplest to allow “all buckets” for R2; once the state bucket exists you can rotate to a token scoped to that bucket.
+Scope it to your account. For the first deploy, allowing all R2 buckets is simplest. Once the state bucket exists, rotate to a token scoped to that bucket.
 
 ## Local flow (manual)
 
 ```bash
 # Build the monitoring worker bundle used by Pulumi.
-pnpm worker:build
+vp run build
 
 # Login + select stack.
 pulumi -C infra login "$PULUMI_BACKEND_URL"
@@ -65,31 +65,31 @@ pulumi -C infra config set --secret statusPageBasicAuth
 pulumi -C infra config set --secret adminBasicAuth
 
 # Provision.
-pulumi -C infra up --yes
+vp run infra:up
 ```
 
-## Configuration Reference
+## Configuration reference
 
 ### Required
 
 - `accountId` - Cloudflare account ID
-- `projectName` - Name prefix for all resources
+- `projectName` - name prefix for all resources
 
 ### Optional
 
-- `customDomain` - Custom domain for status page (e.g., `status.example.com`)
-- `customDomainZoneId` - Zone ID for the custom domain (required if `customDomain` is set)
+- `customDomain` - custom domain for the status page, for example `status.example.com`
+- `customDomainZoneId` - zone ID for the custom domain, required if `customDomain` is set
 
-If no custom domain is configured, the status page uses a workers.dev subdomain.
+Without a custom domain, the status page uses a workers.dev subdomain.
 
 ## Finding your status page URL
 
-- If you configured `customDomain`, visit `https://<customDomain>`.
+- If you configured `customDomain`, use `https://<customDomain>`.
 - Otherwise the Worker is reachable via `workers.dev`:
   - URL format: `https://<projectName>.<your-workers-subdomain>.workers.dev`
-  - Find your workers.dev subdomain in Cloudflare Dashboard → Workers & Pages → Overview.
+  - Find your workers.dev subdomain in Cloudflare Dashboard > Workers & Pages > Overview.
 
-### Optional Secrets
+### Optional secrets
 
 - `proxyToken` - Bearer token for proxy authentication
 - `statusPageBasicAuth` - Hashed JSON auth payload for full status page protection
@@ -101,7 +101,7 @@ Generate values from username/password:
 pnpm auth:secret -- <username> 'replace-with-strong-password'
 ```
 
-Run it once per secret and use each full JSON output as the Pulumi secret value:
+Run it once per secret and use the full JSON output as the Pulumi secret value:
 
 - output for admin login username => `adminBasicAuth`
 - output for status-page username => `statusPageBasicAuth`
@@ -110,8 +110,8 @@ Do not manually construct or edit JSON fields.
 
 ## Destroying
 
-To tear down all resources:
+Tear down all resources with:
 
 ```bash
-pulumi -C infra destroy
+vp run infra:destroy
 ```

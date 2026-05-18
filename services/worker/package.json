@@ -5,20 +5,22 @@
   "type": "module",
   "scripts": {
     "build": "wrangler deploy src/index.ts --outdir dist --dry-run",
-    "compile": "tsc --noEmit",
+    "compile": "vp check --no-fmt --no-lint",
     "deploy:wrangler": "wrangler deploy",
     "dev": "wrangler dev --config wrangler-dev.toml --test-scheduled --persist-to ../../apps/status-page/.wrangler/state",
     "start": "wrangler dev",
-    "test": "vitest run"
+    "test": "vp test run",
+    "test:watch": "vp test"
   },
   "dependencies": {
     "@flarewatch/config": "workspace:*",
     "@flarewatch/shared": "workspace:*",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
     "@flarewatch/ts-config": "workspace:*",
+    "@types/node": "catalog:",
     "typescript": "catalog:",
     "wrangler": "catalog:"
   }

@@ -1,6 +1,6 @@
 # Monitoring Worker (`services/worker`)
 
-The FlareWatch monitoring worker is a **Cloudflare Worker** that runs scheduled checks (cron) and writes the latest state to **Cloudflare KV**.
+The FlareWatch monitoring worker is a Cloudflare Worker. It runs scheduled checks and writes the latest state to Cloudflare KV.
 
 ## What it does
 
@@ -8,7 +8,7 @@ The FlareWatch monitoring worker is a **Cloudflare Worker** that runs scheduled 
 - Reads monitors from `packages/config/src/worker.ts`.
 - Writes the current state to KV key `state`.
 - Reads maintenance windows from KV key `maintenances`.
-- Supports an internal-only `/trigger` call via service binding (no public endpoint).
+- Supports an internal-only `/trigger` call through a service binding. There is no public endpoint.
 
 ## Required binding
 
@@ -16,18 +16,18 @@ The FlareWatch monitoring worker is a **Cloudflare Worker** that runs scheduled 
 
 ## Optional secrets
 
-- `FLAREWATCH_PROXY_TOKEN` — bearer token used when a monitor is configured with a self-hosted check proxy.
+- `FLAREWATCH_PROXY_TOKEN` - bearer token used when a monitor uses a self-hosted check proxy.
 
 ## Local development
 
 ```bash
-pnpm worker:dev
+vp run dev-worker
 ```
 
 This runs `wrangler dev` with:
 
-- `--test-scheduled` (so you can trigger a run by visiting `http://localhost:8787/__scheduled`)
-- `--persist-to ../../apps/status-page/.wrangler/state` (so the status page can read the same local KV state)
+- `--test-scheduled`, so you can trigger a run at `http://localhost:8787/__scheduled`
+- `--persist-to ../../apps/status-page/.wrangler/state`, so the status page can read the same local KV state
 
 Trigger a run:
 
@@ -35,7 +35,7 @@ Trigger a run:
 curl http://localhost:8787/__scheduled
 ```
 
-## Build & deploy
+## Build and deploy
 
-- `pnpm worker:build` builds a bundle to `services/worker/dist/` (used by Pulumi).
-- `pnpm -F worker deploy:wrangler` deploys the worker directly with Wrangler (optional; CI deploys via Pulumi).
+- `vp run worker-build` builds a bundle to `services/worker/dist/` (used by Pulumi).
+- `vp exec --filter worker -- wrangler deploy` deploys the worker directly with Wrangler (optional; CI deploys via Pulumi).

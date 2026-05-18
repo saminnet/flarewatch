@@ -71,7 +71,7 @@ const kvNamespace = new cloudflare.WorkersKvNamespace('kv', {
 // Read the compiled worker script
 const workerScriptPath = path.join(__dirname, '../services/worker/dist/index.js');
 if (!fs.existsSync(workerScriptPath)) {
-  throw new Error(`Worker bundle not found at "${workerScriptPath}". Run: pnpm worker:build`);
+  throw new Error(`Worker bundle not found at "${workerScriptPath}". Run: vp run worker-build`);
 }
 const workerContent = fs.readFileSync(workerScriptPath, 'utf-8');
 

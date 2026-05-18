@@ -9,7 +9,7 @@
     ".": "./src/public.ts"
   },
   "scripts": {
-    "compile": "tsc --noEmit"
+    "compile": "vp check --no-fmt --no-lint"
   },
   "dependencies": {
     "@flarewatch/shared": "workspace:*"

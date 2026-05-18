@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import { getTemplate, hasTemplate, type TemplateContext } from '../../src/notifications/templates';
 
 const baseContext: TemplateContext = {

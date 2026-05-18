@@ -1,34 +1,37 @@
 # Development
 
-Developer notes for working on FlareWatch locally.
+Notes for working on FlareWatch locally.
 
 ## Commands
 
 ```bash
-pnpm install
+vp install
 
 # Dev
-pnpm dev
-pnpm worker:dev
+vp run dev
+vp run dev-worker
 
 # Quality
-pnpm format:check
-pnpm lint
-pnpm compile
+vp check
+vp fmt . --check
+vp fmt . --write
 
 # Builds (used by CI and Pulumi)
-pnpm worker:build
-pnpm build
+vp run build
+vp run status-page-build
+vp run worker-build
 ```
 
-## Architecture (high level)
+Run `vp config` once after cloning if you want the local Vite+ pre-commit hook.
+
+## Architecture
 
 - `services/worker` runs scheduled checks and writes state to KV (`FLAREWATCH_STATE` binding).
-- `apps/status-page` reads the same KV state and renders the UI; deployed to Cloudflare Workers.
+- `apps/status-page` reads the same KV state and renders the UI on Cloudflare Workers.
 - `/admin` (optional) manages maintenances stored in the same KV under the `maintenances` key.
 - Optional external proxy (`https://github.com/saminnet/flarewatch-proxy`) executes checks from custom locations (private networks, TCP, SSL).
 
-## Deploy model
+## Deployment model
 
 All resources are managed by Pulumi:
 
@@ -39,7 +42,7 @@ All resources are managed by Pulumi:
 | Cron trigger       | Attached to monitoring Worker (every minute)    |
 | Status page Worker | Reads built bundle from `apps/status-page/dist` |
 
-**Important:** Do NOT use `wrangler deploy` for production. The `wrangler.toml` files are for local development only.
+Do not use `wrangler deploy` for production. The `wrangler.toml` files are for local development only.
 
 ## Configuration
 
@@ -57,8 +60,7 @@ See [infra/README.md](infra/README.md#optional-secrets) for Pulumi secret config
   1. Install the Pulumi CLI (version in `.pulumi.version`)
   2. Build everything:
      ```bash
-     pnpm worker:build
-     pnpm build
+     vp run build
      ```
   3. Configure Pulumi:
      ```bash
@@ -69,29 +71,29 @@ See [infra/README.md](infra/README.md#optional-secrets) for Pulumi secret config
      ```
   4. Deploy:
      ```bash
-     pnpm infra:up
+     vp run infra:up
      ```
 
-## SSR / Hydration safety (status page)
+## SSR and hydration safety
 
-To avoid React hydration errors (e.g. minified `#418`) in `apps/status-page`, keep server-rendered output deterministic:
+To avoid React hydration errors, such as minified `#418`, keep server-rendered output deterministic in `apps/status-page`:
 
-- Don’t render `Date.now()`, `new Date()`, `Math.random()`, or locale-dependent formatting during SSR.
-- Prefer a single “now” snapshot from loader/state (e.g. `state.lastUpdate`) and pass it down.
+- Don't render `Date.now()`, `new Date()`, `Math.random()`, or locale-dependent formatting during SSR.
+- Prefer one "now" snapshot from loader/state, such as `state.lastUpdate`, and pass it down.
 - If you must format dates, use a fixed timezone (UTC) or a deterministic helper.
 - For browser-only behavior (localStorage/window), gate on `useHydrated()`.
 
 Quick sanity check (production-like local runtime):
 
 ```bash
-pnpm -F status-page build
-pnpm -C apps/status-page exec wrangler dev --local --config dist/server/wrangler.json --port 3000 --persist-to .wrangler/state
+vp run status-page-build
+vp exec --filter status-page -- wrangler dev --local --config dist/server/wrangler.json --port 3000 --persist-to .wrangler/state
 ```
 
-## Destroying Infrastructure
+## Destroying infrastructure
 
-All resources are managed by Pulumi. Simply run:
+All resources are managed by Pulumi:
 
 ```bash
-pnpm infra:destroy
+vp run infra:destroy
 ```

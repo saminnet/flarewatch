@@ -1,8 +1,9 @@
 import path from 'node:path';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vite-plus';
 import { devtools } from '@tanstack/devtools-vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-import viteReact from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
+import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 
@@ -12,9 +13,8 @@ const config = defineConfig({
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
     tailwindcss(),
     tanstackStart(),
-    viteReact({
-      babel: { plugins: ['babel-plugin-react-compiler'] },
-    }),
+    viteReact(),
+    babel({ presets: [reactCompilerPreset()] }),
   ],
   optimizeDeps: {
     include: ['react', 'react-dom', '@tanstack/react-query'],

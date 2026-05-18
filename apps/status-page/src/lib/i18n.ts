@@ -5,7 +5,7 @@ import en from '@/locales/en/common.json';
 if (!i18n.isInitialized) {
   i18n.use(initReactI18next);
 
-  i18n.init({
+  void i18n.init({
     resources: {
       en: { common: en },
     },
@@ -14,7 +14,6 @@ if (!i18n.isInitialized) {
     interpolation: {
       escapeValue: false,
     },
-    showSupportNotice: false,
   });
 }
 

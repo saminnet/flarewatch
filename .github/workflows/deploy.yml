@@ -11,7 +11,6 @@ permissions:
   contents: read
 
 env:
-  # Enable gzip compression for Pulumi state files
   PULUMI_DIY_BACKEND_GZIP: 'true'
   AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -23,33 +22,42 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 #v4.2.0
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@ca1c46663915d6c1042ae23bd39ab85718bfb0fa #v1.10
         with:
-          version: 10.20.0
+          node-version: '24'
+          cache: true
+          run-install: true
 
-      - name: Use Node.js 24.x
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f #v6.1.0
+      - name: Restore Vite task cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
-          node-version: 24.x
-          cache: 'pnpm'
+          path: node_modules/.vite/task-cache
+          key: ${{ runner.os }}-vite-task-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'vite.config.ts', 'apps/status-page/vite.config.ts', 'apps/status-page/vitest.config.ts', 'services/worker/vitest.config.ts', 'packages/shared/vitest.config.ts') }}
+          restore-keys: |
+            ${{ runner.os }}-vite-task-
 
-      - name: Install packages
-        run: pnpm install
-
-      - name: Check formatting
-        run: pnpm format:check
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Type check
-        run: pnpm compile
+      - name: Check repo
+        run: vp check
 
       - name: Run tests
-        run: pnpm test
+        run: vp run test
+
+      - name: Build packages
+        run: vp run build
+
+      - name: Upload build outputs
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flarewatch-build-${{ github.sha }}
+          path: |
+            apps/status-page/dist
+            services/worker/dist
+          if-no-files-found: error
+          retention-days: 1
 
   build-and-deploy:
     if: ${{ github.event_name != 'pull_request' }}
@@ -78,21 +86,20 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 #v4.2.0
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@ca1c46663915d6c1042ae23bd39ab85718bfb0fa #v1.10
         with:
-          version: 10.20.0
+          node-version: '24'
+          cache: true
+          run-install: true
 
-      - name: Use Node.js 24.x
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f #v6.1.0
+      - name: Download build outputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          node-version: 24.x
-          cache: 'pnpm'
-
-      - name: Install packages
-        run: pnpm install
+          name: flarewatch-build-${{ github.sha }}
+          path: .
 
       - name: Set project variables
         shell: bash
@@ -102,11 +109,10 @@ jobs:
             RAW_SLUG="flarewatch"
           fi
 
-          # Must fit R2 bucket naming limits once "-pulumi-state" is appended.
           MAX_LEN=50
           if [ ${#RAW_SLUG} -gt $MAX_LEN ]; then
             HASH="$(echo -n "$RAW_SLUG" | sha1sum | cut -c1-8)"
-            PREFIX_LEN=$((MAX_LEN - 9)) # "-" + 8-char hash
+            PREFIX_LEN=$((MAX_LEN - 9))
             PREFIX="$(echo -n "${RAW_SLUG:0:$PREFIX_LEN}" | sed -E 's/-+$//')"
             PROJECT_NAME="${PREFIX}-${HASH}"
           else
@@ -115,17 +121,11 @@ jobs:
           echo "PROJECT_NAME=$PROJECT_NAME" >> "$GITHUB_ENV"
           echo "PULUMI_BACKEND_URL=s3://$PROJECT_NAME-pulumi-state?endpoint=https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com&region=auto" >> "$GITHUB_ENV"
 
-      - name: Build worker
-        run: pnpm worker:build
-
-      - name: Build status page
-        run: pnpm run build
-
       - name: Ensure R2 bucket exists
         shell: bash
         run: |
           set +e
-          OUTPUT="$(pnpm -C apps/status-page exec wrangler r2 bucket create "$PROJECT_NAME-pulumi-state" 2>&1)"
+          OUTPUT="$(vp exec --filter status-page -- wrangler r2 bucket create "$PROJECT_NAME-pulumi-state" 2>&1)"
           EXIT_CODE="$?"
           set -e
 
@@ -147,7 +147,6 @@ jobs:
         with:
           pulumi-version-file: .pulumi.version
 
-      # Pulumi deployment (all resources including status page)
       - name: Deploy with Pulumi
         env:
           FLAREWATCH_PROXY_TOKEN: ${{ secrets.FLAREWATCH_PROXY_TOKEN }}
@@ -156,23 +155,18 @@ jobs:
           CUSTOM_DOMAIN: ${{ secrets.CUSTOM_DOMAIN }}
           CUSTOM_DOMAIN_ZONE_ID: ${{ secrets.CUSTOM_DOMAIN_ZONE_ID }}
         run: |
+          set_secret() { if [ -n "$2" ]; then pulumi -C infra config set --secret "$1" "$2"; fi; }
+          set_config() { if [ -n "$2" ]; then pulumi -C infra config set "$1" "$2"; fi; }
+
           pulumi -C infra login "$PULUMI_BACKEND_URL"
           pulumi -C infra stack select production --create
+
           pulumi -C infra config set accountId "$CLOUDFLARE_ACCOUNT_ID"
           pulumi -C infra config set projectName "$PROJECT_NAME"
-          if [ -n "$FLAREWATCH_PROXY_TOKEN" ]; then
-            pulumi -C infra config set --secret proxyToken "$FLAREWATCH_PROXY_TOKEN"
-          fi
-          if [ -n "$FLAREWATCH_STATUS_PAGE_BASIC_AUTH" ]; then
-            pulumi -C infra config set --secret statusPageBasicAuth "$FLAREWATCH_STATUS_PAGE_BASIC_AUTH"
-          fi
-          if [ -n "$FLAREWATCH_ADMIN_BASIC_AUTH" ]; then
-            pulumi -C infra config set --secret adminBasicAuth "$FLAREWATCH_ADMIN_BASIC_AUTH"
-          fi
-          if [ -n "$CUSTOM_DOMAIN" ]; then
-            pulumi -C infra config set customDomain "$CUSTOM_DOMAIN"
-          fi
-          if [ -n "$CUSTOM_DOMAIN_ZONE_ID" ]; then
-            pulumi -C infra config set customDomainZoneId "$CUSTOM_DOMAIN_ZONE_ID"
-          fi
+          set_secret proxyToken "$FLAREWATCH_PROXY_TOKEN"
+          set_secret statusPageBasicAuth "$FLAREWATCH_STATUS_PAGE_BASIC_AUTH"
+          set_secret adminBasicAuth "$FLAREWATCH_ADMIN_BASIC_AUTH"
+          set_config customDomain "$CUSTOM_DOMAIN"
+          set_config customDomainZoneId "$CUSTOM_DOMAIN_ZONE_ID"
+
           pulumi -C infra up --yes

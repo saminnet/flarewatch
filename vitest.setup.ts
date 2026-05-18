@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, vi } from 'vitest';
+import { beforeEach, afterEach, vi } from 'vite-plus/test';
 
 let spies: Array<ReturnType<typeof vi.spyOn>> = [];
 

@@ -22,7 +22,7 @@ export function CalendarMonth({
   onDayClick,
 }: CalendarMonthProps) {
   const { t } = useTranslation();
-  const weekdays = useMemo(() => t('calendar.weekdays').split(','), [t]);
+  const weekdays = useMemo(() => (t('calendar.weekdays') as string).split(','), [t]);
 
   return (
     <div className="rounded-lg border border-border bg-card p-2.5">
