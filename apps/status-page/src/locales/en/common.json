@@ -126,6 +126,7 @@
   "calendar.partial": "Partial outage",
   "calendar.down": "Major outage",
   "calendar.noData": "No data",
+  "calendar.incident": "Incident",
   "calendar.uptimeAt": "{{percent}}% uptime on {{date}}",
   "calendar.noDataAt": "No data for {{date}}",
   "calendar.incidentCount_one": "{{count}} incident",
