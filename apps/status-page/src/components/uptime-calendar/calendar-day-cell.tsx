@@ -44,6 +44,7 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
   const status = data?.status ?? 'unknown';
   const dateStr = formatUtc(day.date, 'MMM d, yyyy');
   const incidentCount = data?.incidents.length ?? 0;
+  const hasIncidents = incidentCount > 0;
 
   const label =
     data?.uptime != null
@@ -51,13 +52,13 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
       : t('calendar.noDataAt', { date: dateStr });
 
   const cellClasses = cn(
-    'h-6 rounded flex items-center justify-center',
+    'relative h-6 rounded flex items-center justify-center',
     'text-[10px] leading-none tabular-nums font-medium select-none',
     'animate-calendar-cell transition-all duration-150',
     'hover:brightness-110',
     STATUS_COLORS[status],
     DAY_TEXT_COLORS[status],
-    incidentCount > 0 ? 'cursor-pointer hover:z-10' : 'cursor-default',
+    hasIncidents ? 'cursor-pointer hover:z-10' : 'cursor-default',
     day.isToday && 'ring-[1.5px] ring-foreground/40 ring-offset-1 ring-offset-background',
   );
 
@@ -67,14 +68,26 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
     style: { animationDelay: `${animationDelay}ms` },
   } as const;
 
+  const contents = (
+    <>
+      {dayNum}
+      {hasIncidents && (
+        <span
+          className="absolute right-1 top-1 size-1.5 rounded-full bg-sky-600 ring-1 ring-white/90 dark:ring-neutral-950"
+          aria-hidden
+        />
+      )}
+    </>
+  );
+
   const cell =
-    data && incidentCount > 0 ? (
+    data && hasIncidents ? (
       <TooltipTrigger {...sharedProps} onClick={() => onClick(data)}>
-        {dayNum}
+        {contents}
       </TooltipTrigger>
     ) : (
       <TooltipTrigger {...sharedProps} render={<span />}>
-        {dayNum}
+        {contents}
       </TooltipTrigger>
     );
 
@@ -83,7 +96,7 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
       {cell}
       <TooltipContent side="top" className="text-xs">
         <div className="font-medium">{label}</div>
-        {incidentCount > 0 && (
+        {hasIncidents && (
           <div className="text-neutral-400">
             {t('calendar.incidentCount', { count: incidentCount })}
           </div>
