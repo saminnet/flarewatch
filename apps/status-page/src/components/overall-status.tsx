@@ -25,7 +25,7 @@ const statusConfig = {
     icon: IconAlertTriangle,
     titleKey: 'status.someDown' as const,
     bgClass: 'bg-amber-50 dark:bg-amber-950/30',
-    borderClass: 'border-amber-200 dark:border-amber-900',
+    borderClass: 'border border-amber-200 dark:border-amber-900',
     iconClass: 'text-amber-500',
     badgeVariant: 'secondary' as const,
   },
@@ -33,7 +33,7 @@ const statusConfig = {
     icon: IconCircleX,
     titleKey: 'status.allDown' as const,
     bgClass: 'bg-red-50 dark:bg-red-950/30',
-    borderClass: 'border-red-200 dark:border-red-900',
+    borderClass: 'border border-red-200 dark:border-red-900',
     iconClass: 'text-red-500',
     badgeVariant: 'destructive' as const,
   },
@@ -79,7 +79,7 @@ export function OverallStatus({ state }: OverallStatusProps) {
   }
 
   return (
-    <Card className={cn('p-0', config.bgClass, config.borderClass)}>
+    <Card className={cn('p-0 shadow-none ring-0', config.bgClass, config.borderClass)}>
       <div className="flex items-center gap-2 px-3 py-2.5">
         <div className={cn('rounded-full p-1.5', config.bgClass)}>
           <StatusIcon className={cn('h-6 w-6', config.iconClass)} />

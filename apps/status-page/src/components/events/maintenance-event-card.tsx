@@ -4,9 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MaintenanceStatusBadge } from '@/components/maintenance/status-badge';
 import type { PublicMonitor } from '@/lib/monitors';
+import { cn } from '@/lib/utils';
 import {
   getMaintenanceStatus,
-  getMaintenanceBorderClass,
+  getMaintenanceColors,
   resolveAffectedMonitors,
 } from '@/lib/maintenance';
 import { DateRange } from './date-range';
@@ -26,12 +27,12 @@ export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEven
   const status = getMaintenanceStatus(maintenance, nowMs);
 
   const affectedMonitors = resolveAffectedMonitors(maintenance.monitors, monitors);
-  const borderColor = getMaintenanceBorderClass(maintenance.color);
+  const colors = getMaintenanceColors(maintenance.color);
 
   return (
-    <Alert className={`border-l-4 ${borderColor}`}>
+    <Alert className={colors.bg}>
       <AlertTitle className="flex items-center gap-2">
-        <IconTool className="h-4 w-4 text-amber-500" />
+        <IconTool className={cn('h-4 w-4', colors.icon)} />
         {maintenance.title ?? t('maintenance.scheduled')}
         <Badge variant="outline" className="text-xs">
           {t('event.maintenance')}

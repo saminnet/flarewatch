@@ -46,7 +46,7 @@ export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
           <p className="mt-1 text-sm text-neutral-500">{t('admin.signInSubtitle')}</p>
         </div>
 
-        <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
+        <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
           {loginError && (
             <Alert variant="destructive" className="mb-6" id="login-error" role="alert">
               <AlertDescription>{loginError}</AlertDescription>

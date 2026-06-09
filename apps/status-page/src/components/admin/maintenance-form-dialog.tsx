@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import type { Maintenance } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/monitors';
-import { SEVERITY_OPTIONS } from '@/lib/maintenance';
+import { SEVERITY_OPTIONS, getMaintenanceColors } from '@/lib/maintenance';
 import type { MaintenanceFormData } from '@/lib/hooks/use-maintenance-form';
 
 interface MaintenanceFormDialogProps {
@@ -106,28 +106,35 @@ export function MaintenanceFormDialog({
             </div>
           </div>
 
-          <div>
-            <Label className="text-xs text-neutral-500">{t('field.severity')}</Label>
-            <div className="mt-1.5 flex gap-2" role="group" aria-label={t('field.severity')}>
-              {SEVERITY_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => updateField('color', option.value)}
-                  aria-label={t(option.labelKey)}
-                  aria-pressed={formData.color === option.value}
-                  className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                    formData.color === option.value
-                      ? 'border-neutral-900 bg-neutral-100 dark:border-neutral-100 dark:bg-neutral-800'
-                      : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600'
-                  }`}
-                >
-                  <span className={`h-2.5 w-2.5 rounded-full ${option.dot}`} aria-hidden="true" />
-                  {t(option.labelKey)}
-                </button>
-              ))}
+          <fieldset>
+            <legend className="text-xs text-neutral-500">{t('field.severity')}</legend>
+            <div className="mt-1.5 flex gap-2">
+              {SEVERITY_OPTIONS.map((option) => {
+                const optionLabel = t(option.labelKey);
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateField('color', option.value)}
+                    aria-label={optionLabel}
+                    aria-pressed={formData.color === option.value}
+                    className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                      formData.color === option.value
+                        ? 'border-neutral-900 bg-neutral-100 dark:border-neutral-100 dark:bg-neutral-800'
+                        : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600'
+                    }`}
+                  >
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${getMaintenanceColors(option.value).dot}`}
+                      aria-hidden="true"
+                    />
+                    {optionLabel}
+                  </button>
+                );
+              })}
             </div>
-          </div>
+          </fieldset>
 
           <div>
             <Label className="text-xs text-neutral-500">{t('field.affectedMonitors')}</Label>
@@ -138,7 +145,7 @@ export function MaintenanceFormDialog({
                   variant={formData.monitors.includes(monitor.id) ? 'default' : 'outline'}
                   className="cursor-pointer"
                   onClick={() => toggleMonitor(monitor.id)}
-                  render={<button type="button" />}
+                  render={<button type="button" aria-label={monitor.name} />}
                   aria-pressed={formData.monitors.includes(monitor.id)}
                 >
                   {monitor.name}

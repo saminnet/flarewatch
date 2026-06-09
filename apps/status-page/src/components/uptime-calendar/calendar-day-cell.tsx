@@ -73,7 +73,7 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
       {dayNum}
       {hasIncidents && (
         <span
-          className="absolute right-1 top-1 size-1.5 rounded-full bg-sky-600 ring-1 ring-white/90 dark:ring-neutral-950"
+          className="absolute right-1 top-1 size-1.5 rounded-full bg-neutral-500 ring-1 ring-white/90 dark:bg-neutral-400 dark:ring-neutral-950"
           aria-hidden
         />
       )}
