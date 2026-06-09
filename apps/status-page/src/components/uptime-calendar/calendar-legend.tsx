@@ -5,7 +5,6 @@ const legendItems = [
   { key: 'calendar.operational', color: STATUS_COLORS.up },
   { key: 'calendar.partial', color: STATUS_COLORS.partial },
   { key: 'calendar.down', color: STATUS_COLORS.down },
-  { key: 'calendar.noData', color: STATUS_COLORS.unknown },
 ] as const;
 
 export function CalendarLegend() {
@@ -20,8 +19,12 @@ export function CalendarLegend() {
         </li>
       ))}
       <li className="flex items-center gap-1">
-        <div className="size-2 rounded-full bg-sky-600 ring-1 ring-white/90 dark:ring-neutral-950" />
+        <div className="size-2 rounded-full bg-neutral-500 ring-1 ring-white/90 dark:bg-neutral-400 dark:ring-neutral-950" />
         <span className="text-[10px] text-muted-foreground">{t('calendar.incident')}</span>
+      </li>
+      <li className="flex items-center gap-1">
+        <div className={`size-2 rounded-sm ${STATUS_COLORS.unknown}`} />
+        <span className="text-[10px] text-muted-foreground">{t('calendar.noData')}</span>
       </li>
     </ul>
   );

@@ -3,12 +3,7 @@ import { IconAlertTriangle, IconCalendar, IconClock } from '@tabler/icons-react'
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { Maintenance } from '@flarewatch/shared';
-import {
-  formatTimeUntil,
-  formatDateRange,
-  getMaintenanceColors,
-  getSeverityOption,
-} from '@/lib/maintenance';
+import { formatTimeUntil, formatDateRange, getMaintenanceColors } from '@/lib/maintenance';
 
 interface MaintenanceCardProps {
   maintenance: Maintenance;
@@ -24,9 +19,7 @@ export function MaintenanceCard({
   variant,
 }: MaintenanceCardProps) {
   const { t } = useTranslation();
-  const color = maintenance.color ?? 'yellow';
-  const colors = getMaintenanceColors(color);
-  const severity = getSeverityOption(color);
+  const colors = getMaintenanceColors(maintenance.color);
   const start = new Date(maintenance.start);
   const end = maintenance.end ? new Date(maintenance.end) : null;
   const now = new Date(nowMs);
@@ -41,58 +34,52 @@ export function MaintenanceCard({
         colors.border,
       )}
     >
-      <div className={cn('w-1.5 shrink-0', severity.dot)} />
-
-      <div className={cn('flex-1', isActive ? 'px-3 py-2' : 'px-3 py-2.5')}>
-        <div className="flex items-start gap-2">
-          <Icon className={cn('size-4 mt-0.5 shrink-0', colors.icon)} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="font-medium text-neutral-900 dark:text-neutral-100">
-                {maintenance.title ?? t('maintenance.scheduled')}
-              </h4>
-              {isActive ? (
-                <Badge variant="secondary" className="text-xs">
-                  {t('status.ongoing')}
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-xs">
-                  {t('maintenance.startsIn', { time: formatTimeUntil(start, now) })}
-                </Badge>
-              )}
-            </div>
-            {maintenance.body && (
-              <p className="mt-1.5 text-sm text-neutral-600 dark:text-neutral-400">
-                {maintenance.body}
-              </p>
-            )}
-            <div
-              className={cn(
-                'mt-2 flex items-center text-xs text-neutral-500',
-                isActive ? 'gap-2 flex-wrap' : 'gap-4',
-              )}
-            >
-              <span className="flex items-center gap-1">
-                <IconClock className="size-3.5" />
-                {formatDateRange(start, end)}
-              </span>
-              {isActive && end && (
-                <span className="text-amber-600 dark:text-amber-400 font-medium">
-                  {t('maintenance.endsIn', { time: formatTimeUntil(end, now) })}
-                </span>
-              )}
-            </div>
-            {maintenance.monitors && maintenance.monitors.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {maintenance.monitors.map((id) => (
-                  <Badge key={id} variant="outline" className="text-xs">
-                    {monitorNames.get(id) ?? id}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
+      <div className={cn('flex-1 min-w-0', isActive ? 'px-3 py-2' : 'px-3 py-2.5')}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Icon className={cn('size-4 shrink-0', colors.icon)} />
+          <h4 className="font-medium text-neutral-900 dark:text-neutral-100">
+            {maintenance.title ?? t('maintenance.scheduled')}
+          </h4>
+          {isActive ? (
+            <Badge variant="secondary" className="text-xs">
+              {t('status.ongoing')}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs">
+              {t('maintenance.startsIn', { time: formatTimeUntil(start, now) })}
+            </Badge>
+          )}
         </div>
+        {maintenance.body && (
+          <p className="mt-1.5 text-sm text-neutral-600 dark:text-neutral-400">
+            {maintenance.body}
+          </p>
+        )}
+        <div
+          className={cn(
+            'mt-2 flex items-center text-xs text-neutral-500',
+            isActive ? 'gap-2 flex-wrap' : 'gap-4',
+          )}
+        >
+          <span className="flex items-center gap-1">
+            <IconClock className="size-3.5" />
+            {formatDateRange(start, end)}
+          </span>
+          {isActive && end && (
+            <span className="text-amber-600 dark:text-amber-400 font-medium">
+              {t('maintenance.endsIn', { time: formatTimeUntil(end, now) })}
+            </span>
+          )}
+        </div>
+        {maintenance.monitors && maintenance.monitors.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {maintenance.monitors.map((id) => (
+              <Badge key={id} variant="outline" className="text-xs">
+                {monitorNames.get(id) ?? id}
+              </Badge>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -17,7 +17,7 @@ export function IncidentCard({ event }: IncidentCardProps) {
   const latestError = event.errors.at(-1) ?? t('error.unknown');
 
   return (
-    <Alert className="border-l-4 border-red-500 bg-red-50 dark:bg-red-950/30">
+    <Alert className="bg-red-50/60 dark:bg-red-950/20">
       <AlertTitle className="flex items-center gap-2">
         <IconAlertTriangle className="h-4 w-4 text-red-500" />
         {event.monitorName}

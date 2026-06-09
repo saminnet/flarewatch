@@ -13,6 +13,7 @@ import { MaintenanceStatusBadge } from '@/components/maintenance/status-badge';
 import type { Maintenance } from '@flarewatch/shared';
 import {
   getMaintenanceStatus,
+  getMaintenanceColors,
   getSeverityOption,
   resolveAffectedMonitors,
 } from '@/lib/maintenance';
@@ -46,11 +47,12 @@ export function MaintenanceRow({
   const status = getMaintenanceStatus(maintenance, nowMs);
   const affectedMonitors = resolveAffectedMonitors(maintenance.monitors, monitors);
   const severity = getSeverityOption(maintenance.color);
+  const colors = getMaintenanceColors(maintenance.color);
   const StatusIcon = STATUS_ICONS[status];
 
   return (
     <div className="flex items-stretch rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
-      <div className={cn('w-1.5 shrink-0', severity.dot)} />
+      <div className={cn('w-1.5 shrink-0', colors.dot)} />
 
       <div className="flex-1 p-4">
         <div className="flex items-start justify-between gap-4">
@@ -100,7 +102,7 @@ export function MaintenanceRow({
             )}
           </div>
 
-          <div className="flex items-center gap-1 shrink-0" role="group" aria-label="Actions">
+          <div className="flex items-center gap-1 shrink-0">
             <Button
               variant="ghost"
               size="icon-sm"

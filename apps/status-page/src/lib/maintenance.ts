@@ -88,71 +88,62 @@ export function formatDateRange(start: Date, end: Date | null): string {
 export type MaintenanceColors = {
   bg: string;
   border: string;
-  borderAccent: string;
   icon: string;
+  dot: string;
 };
 
 const MAINTENANCE_COLOR_MAP: Record<string, MaintenanceColors> = {
   blue: {
     bg: 'bg-blue-50 dark:bg-blue-950/30',
     border: 'border-blue-200 dark:border-blue-800',
-    borderAccent: 'border-blue-500',
     icon: 'text-blue-500',
+    dot: 'bg-blue-500',
   },
   yellow: {
     bg: 'bg-amber-50 dark:bg-amber-950/30',
     border: 'border-amber-200 dark:border-amber-800',
-    borderAccent: 'border-amber-500',
     icon: 'text-amber-500',
+    dot: 'bg-amber-500',
   },
   red: {
     bg: 'bg-red-50 dark:bg-red-950/30',
     border: 'border-red-200 dark:border-red-800',
-    borderAccent: 'border-red-500',
     icon: 'text-red-500',
+    dot: 'bg-red-500',
   },
   green: {
     bg: 'bg-emerald-50 dark:bg-emerald-950/30',
     border: 'border-emerald-200 dark:border-emerald-800',
-    borderAccent: 'border-emerald-500',
     icon: 'text-emerald-500',
+    dot: 'bg-emerald-500',
   },
 };
 
-const DEFAULT_COLOR = MAINTENANCE_COLOR_MAP.blue!;
+const DEFAULT_COLOR = MAINTENANCE_COLOR_MAP.yellow!;
 
 export function getMaintenanceColors(color?: string): MaintenanceColors {
-  return MAINTENANCE_COLOR_MAP[color ?? 'blue'] ?? DEFAULT_COLOR;
-}
-
-export function getMaintenanceBorderClass(color?: string): string {
-  const colors = getMaintenanceColors(color ?? 'yellow');
-  return `${colors.borderAccent} ${colors.bg}`;
+  return MAINTENANCE_COLOR_MAP[color ?? 'yellow'] ?? DEFAULT_COLOR;
 }
 
 export const SEVERITY_OPTIONS = [
   {
     value: 'green',
     labelKey: 'severity.minor',
-    dot: 'bg-emerald-500',
     badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
   },
   {
     value: 'yellow',
     labelKey: 'event.maintenance',
-    dot: 'bg-amber-500',
     badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
   },
   {
     value: 'blue',
     labelKey: 'severity.info',
-    dot: 'bg-blue-500',
     badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
   },
   {
     value: 'red',
     labelKey: 'severity.critical',
-    dot: 'bg-red-500',
     badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
   },
 ] as const;
