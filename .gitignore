@@ -25,6 +25,10 @@ Pulumi.*.yaml
 
 # Testing
 /coverage
+/test-results
+/playwright-report
+apps/status-page/test-results
+apps/status-page/playwright-report
 
 # Environment
 .env
