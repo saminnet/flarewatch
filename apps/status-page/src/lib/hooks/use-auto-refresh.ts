@@ -24,20 +24,23 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
   const isWindowVisible = useWindowVisibility();
   const isHydrated = useHydrated();
 
-  const [openTime] = useState(Math.round(Date.now() / 1000));
   const [currentTime, setCurrentTime] = useState(lastUpdate);
+  const [openTime, setOpenTime] = useState(lastUpdate);
+  const openTimeRef = useRef(lastUpdate);
+  const openTimeInitialized = useRef(false);
   const lastInvalidateAt = useRef(0);
 
   // Use stable time for SSR to avoid hydration mismatch
   const displayTime = isHydrated ? currentTime : lastUpdate;
+  const displayOpenTime = isHydrated ? openTime : lastUpdate;
 
   // Calculate refresh state
   const dataAge = displayTime - lastUpdate;
   const isStale = dataAge > STALE_THRESHOLD_SECONDS;
-  const pageOpenedLongEnough = currentTime - openTime > AUTO_REFRESH_MIN_OPEN_SECONDS;
+  const pageOpenedLongEnough = currentTime - displayOpenTime > AUTO_REFRESH_MIN_OPEN_SECONDS;
   const willRefreshSoon = isStale && pageOpenedLongEnough && isWindowVisible;
   const refreshCountdown = isStale
-    ? Math.max(0, AUTO_REFRESH_MIN_OPEN_SECONDS - (currentTime - openTime))
+    ? Math.max(0, AUTO_REFRESH_MIN_OPEN_SECONDS - (currentTime - displayOpenTime))
     : null;
 
   // Auto-refresh if data is stale (>5 minutes old)
@@ -45,6 +48,14 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
     const interval = setInterval(() => {
       if (!isWindowVisible) return;
       const now = Math.round(Date.now() / 1000);
+
+      if (!openTimeInitialized.current) {
+        openTimeInitialized.current = true;
+        openTimeRef.current = now;
+        setOpenTime(now);
+      }
+
+      const openTime = openTimeRef.current;
 
       // Revalidate loader data instead of doing a full page reload.
       // Use a cooldown to avoid hammering KV if the worker isn't updating.
@@ -61,7 +72,7 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
       setCurrentTime(now);
     }, 1000);
     return () => clearInterval(interval);
-  }, [isWindowVisible, lastUpdate, openTime, queryClient, router]);
+  }, [isWindowVisible, lastUpdate, queryClient, router]);
 
   return {
     currentTime: displayTime,

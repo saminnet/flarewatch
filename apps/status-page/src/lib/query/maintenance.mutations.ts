@@ -20,28 +20,8 @@ function setMaintenances(
   });
 }
 
-function createMutationHandlers<TResult>({
-  queryClient,
-  t,
-  callbacks,
-  updateCache,
-}: {
-  queryClient: QueryClient;
-  t: TranslateFn;
-  callbacks?: { onSuccess?: (result: TResult) => void; onError?: (error: Error) => void };
-  updateCache?: (result: TResult) => void;
-}) {
-  return {
-    onSuccess: (result: TResult) => {
-      updateCache?.(result);
-      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
-      callbacks?.onSuccess?.(result);
-    },
-    onError: (error: unknown) => {
-      const err = error instanceof Error ? error : new Error(t('error.somethingWrong'));
-      callbacks?.onError?.(err);
-    },
-  };
+function normalizeMutationError(error: unknown, t: TranslateFn): Error {
+  return error instanceof Error ? error : new Error(t('error.somethingWrong'));
 }
 
 export type MaintenanceUpdatePatch = {
@@ -80,20 +60,20 @@ export function useCreateMaintenance(callbacks?: MutationCallbacks) {
 
   return useMutation({
     mutationFn: async (data: MaintenanceConfig) => {
-      return await request<Maintenance>(API_PATH, {
+      return request<Maintenance>(API_PATH, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
     },
-    ...createMutationHandlers({
-      queryClient,
-      t,
-      callbacks,
-      updateCache: (result) => {
-        setMaintenances(queryClient, (current) => [...current, result], { sort: true });
-      },
-    }),
+    onSuccess: (result) => {
+      setMaintenances(queryClient, (current) => [...current, result], { sort: true });
+      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
+      callbacks?.onSuccess?.(result);
+    },
+    onError: (error) => {
+      callbacks?.onError?.(normalizeMutationError(error, t));
+    },
   });
 }
 
@@ -103,24 +83,24 @@ export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: MaintenanceUpdatePatch }) => {
-      return await request<Maintenance>(API_PATH, {
+      return request<Maintenance>(API_PATH, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, updates }),
       });
     },
-    ...createMutationHandlers({
-      queryClient,
-      t,
-      callbacks,
-      updateCache: (result) => {
-        setMaintenances(
-          queryClient,
-          (current) => current.map((m) => (m.id === result.id ? result : m)),
-          { sort: true },
-        );
-      },
-    }),
+    onSuccess: (result) => {
+      setMaintenances(
+        queryClient,
+        (current) => current.map((m) => (m.id === result.id ? result : m)),
+        { sort: true },
+      );
+      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
+      callbacks?.onSuccess?.(result);
+    },
+    onError: (error) => {
+      callbacks?.onError?.(normalizeMutationError(error, t));
+    },
   });
 }
 
@@ -137,13 +117,13 @@ export function useDeleteMaintenance(callbacks?: MutationCallbacks<string>) {
       });
       return id;
     },
-    ...createMutationHandlers({
-      queryClient,
-      t,
-      callbacks,
-      updateCache: (id) => {
-        setMaintenances(queryClient, (current) => current.filter((m) => m.id !== id));
-      },
-    }),
+    onSuccess: (id) => {
+      setMaintenances(queryClient, (current) => current.filter((m) => m.id !== id));
+      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
+      callbacks?.onSuccess?.(id);
+    },
+    onError: (error) => {
+      callbacks?.onError?.(normalizeMutationError(error, t));
+    },
   });
 }

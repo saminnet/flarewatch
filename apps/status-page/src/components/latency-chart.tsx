@@ -1,14 +1,5 @@
-import { useMemo } from 'react';
+import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from 'recharts';
 import { format } from 'date-fns';
 import type { MonitorState } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/monitors';
@@ -33,6 +24,19 @@ interface TooltipProps {
   }>;
 }
 
+type ChartPoint = {
+  timeMs: number;
+  ping: number;
+  loc: string;
+};
+
+interface RechartsLatencyChartProps {
+  chartData: ChartPoint[];
+  yAxisWidth: number;
+  xDomain: [number, number] | undefined;
+  xTicks: number[] | undefined;
+}
+
 function CustomTooltip({ active, payload }: TooltipProps) {
   if (!active || !payload || !payload[0]) return null;
 
@@ -47,6 +51,61 @@ function CustomTooltip({ active, payload }: TooltipProps) {
     </div>
   );
 }
+
+const RechartsLatencyChart = lazy(async () => {
+  const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } =
+    await import('recharts');
+
+  return {
+    default: function RechartsLatencyChart({
+      chartData,
+      yAxisWidth,
+      xDomain,
+      xTicks,
+    }: RechartsLatencyChartProps) {
+      return (
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT_PX}>
+          <LineChart data={chartData} margin={{ top: 5, right: 0, bottom: 0, left: 0 }}>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="#e5e7eb"
+              className="dark:stroke-neutral-700"
+              horizontal={true}
+              vertical={true}
+            />
+            <XAxis
+              dataKey="timeMs"
+              type="number"
+              domain={xDomain}
+              ticks={xTicks}
+              allowDataOverflow={true}
+              tickFormatter={(value) => format(new Date(value), 'HH:mm')}
+              tick={{ fontSize: 10, fill: '#9ca3af' }}
+              axisLine={{ stroke: '#e5e7eb' }}
+              tickLine={false}
+            />
+            <YAxis
+              tickFormatter={(value) => `${value}ms`}
+              tick={{ fontSize: 10, fill: '#9ca3af' }}
+              axisLine={false}
+              tickLine={false}
+              width={yAxisWidth}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Line
+              type="monotone"
+              dataKey="ping"
+              stroke="#6b7280"
+              strokeWidth={1.2}
+              dot={false}
+              activeDot={{ r: 3, fill: '#6b7280' }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      );
+    },
+  };
+});
 
 function floorToStep(valueMs: number, stepMs: number): number {
   return Math.floor(valueMs / stepMs) * stepMs;
@@ -70,25 +129,17 @@ export function LatencyChart({ monitor, state }: LatencyChartProps) {
   const { t } = useTranslation();
   const recentLatency = state.latency[monitor.id]?.recent;
 
-  // Transform data for recharts
-  const chartData = useMemo(
-    () =>
-      (recentLatency ?? []).map((point) => ({
-        timeMs: point.time * 1000,
-        ping: point.ping,
-        loc: point.loc,
-      })),
-    [recentLatency],
-  );
+  const chartData = (recentLatency ?? []).map((point) => ({
+    timeMs: point.time * 1000,
+    ping: point.ping,
+    loc: point.loc,
+  }));
 
   const domainMin = chartData[0]?.timeMs;
   const domainMax = chartData[chartData.length - 1]?.timeMs;
 
-  // Calculate dynamic Y-axis width based on max value
-  const yAxisWidth = useMemo(() => {
-    const maxPing = Math.max(...chartData.map((d) => d.ping), 0);
-    return maxPing >= 10000 ? 60 : maxPing >= 1000 ? 50 : 40;
-  }, [chartData]);
+  const maxPing = Math.max(...chartData.map((d) => d.ping), 0);
+  const yAxisWidth = maxPing >= 10000 ? 60 : maxPing >= 1000 ? 50 : 40;
 
   const tickStepMs =
     domainMin !== undefined && domainMax !== undefined
@@ -98,17 +149,18 @@ export function LatencyChart({ monitor, state }: LatencyChartProps) {
   const xDomain: [number, number] | undefined =
     domainMin !== undefined && domainMax !== undefined ? [domainMin, domainMax] : undefined;
 
-  // Generate rounded tick positions, filtered to within data range
-  const xTicks = useMemo(() => {
-    if (domainMin === undefined || domainMax === undefined || tickStepMs <= 0) return undefined;
-    const tickStart = floorToStep(domainMin, tickStepMs);
-    const tickEnd = ceilToStep(domainMax, tickStepMs);
-    const allTicks = Array.from(
-      { length: Math.floor((tickEnd - tickStart) / tickStepMs) + 1 },
-      (_, i) => tickStart + i * tickStepMs,
-    );
-    return allTicks.filter((tick) => tick >= domainMin && tick <= domainMax);
-  }, [domainMin, domainMax, tickStepMs]);
+  const xTicks =
+    domainMin === undefined || domainMax === undefined || tickStepMs <= 0
+      ? undefined
+      : (() => {
+          const tickStart = floorToStep(domainMin, tickStepMs);
+          const tickEnd = ceilToStep(domainMax, tickStepMs);
+          const allTicks = Array.from(
+            { length: Math.floor((tickEnd - tickStart) / tickStepMs) + 1 },
+            (_, i) => tickStart + i * tickStepMs,
+          );
+          return allTicks.filter((tick) => tick >= domainMin && tick <= domainMax);
+        })();
 
   if (chartData.length === 0) {
     return (
@@ -122,43 +174,20 @@ export function LatencyChart({ monitor, state }: LatencyChartProps) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={CHART_HEIGHT_PX}>
-      <LineChart data={chartData} margin={{ top: 5, right: 0, bottom: 0, left: 0 }}>
-        <CartesianGrid
-          strokeDasharray="3 3"
-          stroke="#e5e7eb"
-          className="dark:stroke-neutral-700"
-          horizontal={true}
-          vertical={true}
+    <Suspense
+      fallback={
+        <div
+          className="w-full rounded-md border border-dashed border-neutral-200 dark:border-neutral-800"
+          style={{ height: CHART_HEIGHT_PX }}
         />
-        <XAxis
-          dataKey="timeMs"
-          type="number"
-          domain={xDomain}
-          ticks={xTicks}
-          allowDataOverflow={true}
-          tickFormatter={(value) => format(new Date(value), 'HH:mm')}
-          tick={{ fontSize: 10, fill: '#9ca3af' }}
-          axisLine={{ stroke: '#e5e7eb' }}
-          tickLine={false}
-        />
-        <YAxis
-          tickFormatter={(value) => `${value}ms`}
-          tick={{ fontSize: 10, fill: '#9ca3af' }}
-          axisLine={false}
-          tickLine={false}
-          width={yAxisWidth}
-        />
-        <Tooltip content={<CustomTooltip />} />
-        <Line
-          type="monotone"
-          dataKey="ping"
-          stroke="#6b7280"
-          strokeWidth={1.2}
-          dot={false}
-          activeDot={{ r: 3, fill: '#6b7280' }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+      }
+    >
+      <RechartsLatencyChart
+        chartData={chartData}
+        yAxisWidth={yAxisWidth}
+        xDomain={xDomain}
+        xTicks={xTicks}
+      />
+    </Suspense>
   );
 }

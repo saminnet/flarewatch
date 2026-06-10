@@ -42,7 +42,7 @@ export function getUtcMonthBounds(value: string): { monthStart: Date; monthEnd: 
   return { monthStart, monthEnd };
 }
 
-export function toUtcViewDate(date: Date): Date {
+function toUtcViewDate(date: Date): Date {
   return new Date(date.getTime() + date.getTimezoneOffset() * 60_000);
 }
 

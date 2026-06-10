@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare
+name: CI and Deploy
 
 on:
   push:
@@ -9,6 +9,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   PULUMI_DIY_BACKEND_GZIP: 'true'
@@ -21,6 +25,7 @@ env:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
 
@@ -31,7 +36,7 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Restore Vite task cache
+      - name: Restore task cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: node_modules/.vite/task-cache
@@ -39,13 +44,49 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-vite-task-
 
-      - name: Check repo
+      - name: Check formatting and types
+        timeout-minutes: 5
         run: vp check
 
-      - name: Run tests
+      - name: Run unit tests
+        timeout-minutes: 5
         run: vp run test
 
-      - name: Build packages
+      - name: Restore browser cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml', 'apps/status-page/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Chromium for browser tests
+        timeout-minutes: 10
+        run: vp exec --filter status-page -- playwright install --with-deps --only-shell chromium
+
+      - name: Run status page browser tests
+        timeout-minutes: 10
+        run: vp exec --filter status-page -- playwright test
+
+      - name: Upload browser test artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: |
+            apps/status-page/playwright-report
+            apps/status-page/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Build worker for pull requests
+        if: ${{ github.event_name == 'pull_request' && success() }}
+        timeout-minutes: 5
+        run: vp run --filter worker build
+
+      - name: Build packages for deployment
+        if: ${{ github.event_name != 'pull_request' && success() }}
+        timeout-minutes: 10
         run: vp run build
 
       - name: Upload build outputs
@@ -60,6 +101,7 @@ jobs:
           retention-days: 1
 
   build-and-deploy:
+    name: Deploy to Cloudflare
     if: ${{ github.event_name != 'pull_request' }}
     concurrency:
       group: deploy-${{ github.repository }}-${{ github.ref }}

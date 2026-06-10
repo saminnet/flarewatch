@@ -4,6 +4,7 @@ import {
   isValidYearMonth,
   shiftYearMonth,
   getUtcMonthBounds,
+  formatUtc,
   formatDuration,
 } from '../../src/lib/date';
 
@@ -77,6 +78,12 @@ describe('getUtcMonthBounds', () => {
   it('handles February in non-leap year', () => {
     const { monthEnd } = getUtcMonthBounds('2023-02');
     expect(monthEnd.getUTCDate()).toBe(28);
+  });
+});
+
+describe('formatUtc', () => {
+  it('formats a UTC date independent of the local timezone offset', () => {
+    expect(formatUtc(new Date('2026-06-09T12:30:00.000Z'), 'MMM d, HH:mm')).toBe('Jun 9, 12:30');
   });
 });
 

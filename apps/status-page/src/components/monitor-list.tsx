@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -30,27 +30,19 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
     () => uiPrefs?.collapsedGroups ?? [],
   );
 
-  // Track if this is the initial mount to avoid persisting on load
   const isInitialMount = useRef(true);
 
-  const persistPrefs = useCallback(
-    (next: UiPrefs) => {
-      queryClient.setQueryData(qk.uiPrefs, next);
-      void setUiPrefsServerFn({ data: next });
-    },
-    [queryClient],
-  );
-
-  // Persist preferences when state changes (but not on initial mount)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
-    persistPrefs({ collapsedGroups, collapsedMonitors });
-  }, [collapsedGroups, collapsedMonitors, persistPrefs]);
+    const next = { collapsedGroups, collapsedMonitors };
+    queryClient.setQueryData(qk.uiPrefs, next);
+    void setUiPrefsServerFn({ data: next });
+  }, [collapsedGroups, collapsedMonitors, queryClient]);
 
-  const onMonitorOpenChange = useCallback((monitorId: string, open: boolean) => {
+  function onMonitorOpenChange(monitorId: string, open: boolean) {
     setCollapsedMonitors((prev) => {
       const nextSet = new Set(prev);
       if (open) {
@@ -60,72 +52,57 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
       }
       return Array.from(nextSet);
     });
-  }, []);
+  }
 
-  // Filter groups to only those with monitors that actually exist
-  const activeGroups = useMemo(() => {
-    if (!groups) return [];
-    return Object.entries(groups)
-      .map(([name, ids]) => ({
-        name,
-        monitors: ids
-          .map((id) => monitors.find((m) => m.id === id))
-          .filter((m): m is PublicMonitor => m !== undefined),
-      }))
-      .filter((g) => g.monitors.length > 0);
-  }, [groups, monitors]);
+  function renderMonitorCard(monitor: PublicMonitor, index: number) {
+    return (
+      <MonitorCard
+        key={monitor.id}
+        monitor={monitor}
+        state={state}
+        open={!collapsedMonitors.includes(monitor.id)}
+        onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
+        className="animate-fade-in-up opacity-0"
+        style={{ animationDelay: `${index * 30}ms` }}
+      />
+    );
+  }
 
-  // Find monitors not in any active group
-  const ungroupedMonitors = useMemo(() => {
-    const groupedMonitorIds = new Set(activeGroups.flatMap((g) => g.monitors.map((m) => m.id)));
-    return monitors.filter((m) => !groupedMonitorIds.has(m.id));
-  }, [activeGroups, monitors]);
+  const activeGroups: Array<{ name: string; monitors: PublicMonitor[] }> = [];
+  if (groups) {
+    const monitorById = new Map(monitors.map((monitor) => [monitor.id, monitor]));
 
-  const activeGroupNames = useMemo(() => activeGroups.map((g) => g.name), [activeGroups]);
-  const openGroupNames = useMemo(
-    () => activeGroupNames.filter((name) => !collapsedGroups.includes(name)),
-    [activeGroupNames, collapsedGroups],
-  );
+    for (const [name, ids] of Object.entries(groups)) {
+      const groupMonitors: PublicMonitor[] = [];
+      for (const id of ids) {
+        const monitor = monitorById.get(id);
+        if (monitor) groupMonitors.push(monitor);
+      }
+
+      if (groupMonitors.length > 0) {
+        activeGroups.push({ name, monitors: groupMonitors });
+      }
+    }
+  }
+
+  const groupedMonitorIds = new Set(activeGroups.flatMap((g) => g.monitors.map((m) => m.id)));
+  const ungroupedMonitors = monitors.filter((m) => !groupedMonitorIds.has(m.id));
+
+  const activeGroupNames = activeGroups.map((g) => g.name);
+  const collapsedGroupNames = new Set(collapsedGroups);
+  const openGroupNames = activeGroupNames.filter((name) => !collapsedGroupNames.has(name));
 
   // If no active groups exist, render as flat list (no labels needed)
   if (activeGroups.length === 0) {
-    return (
-      <div className="space-y-2">
-        {monitors.map((monitor, index) => (
-          <MonitorCard
-            key={monitor.id}
-            monitor={monitor}
-            state={state}
-            open={!collapsedMonitors.includes(monitor.id)}
-            onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
-            className="animate-fade-in-up opacity-0"
-            style={{ animationDelay: `${index * 30}ms` }}
-          />
-        ))}
-      </div>
-    );
+    return <div className="space-y-2">{monitors.map(renderMonitorCard)}</div>;
   }
 
   return (
     <div className="space-y-3">
-      {/* Ungrouped monitors shown FIRST, without label */}
       {ungroupedMonitors.length > 0 && (
-        <div className="space-y-2">
-          {ungroupedMonitors.map((monitor, index) => (
-            <MonitorCard
-              key={monitor.id}
-              monitor={monitor}
-              state={state}
-              open={!collapsedMonitors.includes(monitor.id)}
-              onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
-              className="animate-fade-in-up opacity-0"
-              style={{ animationDelay: `${index * 30}ms` }}
-            />
-          ))}
-        </div>
+        <div className="space-y-2">{ungroupedMonitors.map(renderMonitorCard)}</div>
       )}
 
-      {/* Groups shown after ungrouped monitors */}
       <Accordion
         multiple
         value={openGroupNames}
@@ -153,19 +130,7 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-3 pb-3 pt-1.5">
-              <div className="space-y-2">
-                {groupMonitors.map((monitor, index) => (
-                  <MonitorCard
-                    key={monitor.id}
-                    monitor={monitor}
-                    state={state}
-                    open={!collapsedMonitors.includes(monitor.id)}
-                    onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
-                    className="animate-fade-in-up opacity-0"
-                    style={{ animationDelay: `${index * 30}ms` }}
-                  />
-                ))}
-              </div>
+              <div className="space-y-2">{groupMonitors.map(renderMonitorCard)}</div>
             </AccordionContent>
           </AccordionItem>
         ))}

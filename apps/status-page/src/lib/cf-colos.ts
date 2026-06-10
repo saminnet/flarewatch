@@ -1,5 +1,10 @@
 import { CF_COLO_MAP } from '@/lib/cf-colos-data';
 
+const REGION_NAMES =
+  typeof Intl.DisplayNames === 'function'
+    ? new Intl.DisplayNames(['en'], { type: 'region' })
+    : null;
+
 export type CloudflareColoInfo = {
   code: string;
   city: string;
@@ -10,7 +15,7 @@ function isIataCode(value: string): boolean {
   return /^[A-Z]{3}$/.test(value);
 }
 
-export function lookupCloudflareColo(code: string): CloudflareColoInfo | null {
+function lookupCloudflareColo(code: string): CloudflareColoInfo | null {
   const normalized = code.trim().toUpperCase();
   if (!isIataCode(normalized)) return null;
 
@@ -19,13 +24,12 @@ export function lookupCloudflareColo(code: string): CloudflareColoInfo | null {
   return { code: normalized, city: entry.city, countryCode: entry.countryCode };
 }
 
-export function countryNameFromCode(countryCode: string): string {
+function countryNameFromCode(countryCode: string): string {
   const code = countryCode.trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(code)) return countryCode;
 
   try {
-    const dn = new Intl.DisplayNames(['en'], { type: 'region' });
-    return dn.of(code) ?? code;
+    return REGION_NAMES?.of(code) ?? code;
   } catch {
     return code;
   }

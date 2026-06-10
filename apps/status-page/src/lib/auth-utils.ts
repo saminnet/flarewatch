@@ -17,15 +17,15 @@ export function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export function parseCookies(header: string | null): Record<string, string> {
+function parseCookies(header: string | null): Record<string, string> {
   if (!header) return {};
   const out: Record<string, string> = {};
   for (const part of header.split(';')) {
-    const idx = part.indexOf('=');
-    if (idx === -1) continue;
-    const key = part.slice(0, idx).trim();
+    const [rawKey, ...rawValueParts] = part.split('=');
+    if (!rawKey || rawValueParts.length === 0) continue;
+    const key = rawKey.trim();
     if (!key) continue;
-    const val = part.slice(idx + 1).trim();
+    const val = rawValueParts.join('=').trim();
     try {
       out[key] = decodeURIComponent(val);
     } catch {

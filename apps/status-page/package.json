@@ -9,7 +9,8 @@
     "serve": "vp preview",
     "deploy:wrangler": "vp build && wrangler deploy --config dist/server/wrangler.json",
     "preview": "vp build && vp preview",
-    "test": "vp test run"
+    "test": "vp test run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -22,7 +23,6 @@
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-router-ssr-query": "catalog:",
-    "@tanstack/router-plugin": "catalog:",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "catalog:",
@@ -40,19 +40,19 @@
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
     "@flarewatch/ts-config": "workspace:*",
+    "@playwright/test": "^1.60.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tanstack/devtools-vite": "catalog:",
-    "@tanstack/react-devtools": "catalog:",
-    "@tanstack/react-router-devtools": "catalog:",
     "@tanstack/react-start": "catalog:",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "catalog:",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
+    "jsdom": "^29.1.1",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "web-vitals": "^5.2.0",
     "wrangler": "catalog:"
   }
 }

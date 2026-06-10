@@ -1,5 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { qk } from './keys';
 
 type LoginCredentials = {
   username: string;
@@ -24,6 +25,7 @@ export function useAdminLogin(options?: {
   onError?: (error: Error) => void;
 }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (credentials: LoginCredentials): Promise<LoginResult> => {
@@ -40,7 +42,11 @@ export function useAdminLogin(options?: {
 
       return { ok: true };
     },
-    onSuccess: options?.onSuccess,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.publicMonitors });
+      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
+      options?.onSuccess?.();
+    },
     onError: options?.onError,
   });
 }
@@ -49,11 +55,17 @@ export function useAdminLogout(options?: {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
 }) {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (): Promise<void> => {
       await fetch('/api/admin/session', { method: 'DELETE' });
     },
-    onSuccess: options?.onSuccess,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.publicMonitors });
+      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
+      options?.onSuccess?.();
+    },
     onError: options?.onError,
   });
 }

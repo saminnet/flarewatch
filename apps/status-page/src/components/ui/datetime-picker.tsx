@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { IconCalendar } from '@tabler/icons-react';
 
@@ -23,10 +23,17 @@ interface DateTimePickerProps {
   disabled?: boolean;
 }
 
-// Generate hour options (00-23)
 const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
-// Generate minute options in 5-minute increments (00, 05, ... 55)
 const minutes = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
+
+function formatHour(value: Date): string {
+  return value.getHours().toString().padStart(2, '0');
+}
+
+function formatMinute(value: Date): string {
+  const roundedMinute = Math.round(value.getMinutes() / 5) * 5;
+  return (roundedMinute === 60 ? 0 : roundedMinute).toString().padStart(2, '0');
+}
 
 export function DateTimePicker({
   value,
@@ -37,26 +44,10 @@ export function DateTimePicker({
   disabled,
 }: DateTimePickerProps) {
   const [open, setOpen] = useState(false);
-  const [hour, setHour] = useState(() =>
-    value ? value.getHours().toString().padStart(2, '0') : '00',
-  );
-  const [minute, setMinute] = useState(() => {
-    if (value) {
-      // Round to nearest 5 minutes
-      const m = Math.round(value.getMinutes() / 5) * 5;
-      return (m === 60 ? 0 : m).toString().padStart(2, '0');
-    }
-    return '00';
-  });
-
-  // Update time when value changes externally
-  useEffect(() => {
-    if (value) {
-      setHour(value.getHours().toString().padStart(2, '0'));
-      const m = Math.round(value.getMinutes() / 5) * 5;
-      setMinute((m === 60 ? 0 : m).toString().padStart(2, '0'));
-    }
-  }, [value]);
+  const [draftHour, setDraftHour] = useState('00');
+  const [draftMinute, setDraftMinute] = useState('00');
+  const hour = value ? formatHour(value) : draftHour;
+  const minute = value ? formatMinute(value) : draftMinute;
 
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return onChange?.(undefined);
@@ -68,7 +59,7 @@ export function DateTimePicker({
 
   const handleHourChange = (newHour: string | null) => {
     if (!newHour) return;
-    setHour(newHour);
+    setDraftHour(newHour);
     if (value) {
       const newDate = new Date(value);
       newDate.setHours(parseInt(newHour, 10), parseInt(minute, 10), 0, 0);
@@ -78,7 +69,7 @@ export function DateTimePicker({
 
   const handleMinuteChange = (newMinute: string | null) => {
     if (!newMinute) return;
-    setMinute(newMinute);
+    setDraftMinute(newMinute);
     if (value) {
       const newDate = new Date(value);
       newDate.setHours(parseInt(hour, 10), parseInt(newMinute, 10), 0, 0);
@@ -143,6 +134,8 @@ export function DateTimePicker({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
+                  setDraftHour('00');
+                  setDraftMinute('00');
                   onChange?.(undefined);
                   setOpen(false);
                 }}

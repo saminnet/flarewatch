@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getDateKey, type CalendarMonthGrid } from '@/lib/date';
 import type { AggregatedDayData } from '@/lib/uptime';
@@ -22,7 +21,7 @@ export function CalendarMonth({
   onDayClick,
 }: CalendarMonthProps) {
   const { t } = useTranslation();
-  const weekdays = useMemo(() => (t('calendar.weekdays') as string).split(','), [t]);
+  const weekdays = (t('calendar.weekdays') as string).split(',');
 
   return (
     <div className="rounded-lg border border-border bg-card p-2.5">

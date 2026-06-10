@@ -1,9 +1,7 @@
-import { format, formatDistanceToNow, fromUnixTime } from 'date-fns';
 import type { MonitorState } from '@flarewatch/shared';
 import { formatUtc } from './date';
 import { UPTIME_DAYS, UPTIME_THRESHOLDS } from './constants';
 
-// Minimum time (in seconds) since monitor started before showing uptime data
 const MIN_MONITOR_AGE_SECONDS = 60;
 
 /**
@@ -15,7 +13,7 @@ function getNowSeconds(state: MonitorState): number | null {
   return state.lastUpdate > 0 ? state.lastUpdate : null;
 }
 
-export function hasMonitorData(monitorId: string, state: MonitorState): boolean {
+function hasMonitorData(monitorId: string, state: MonitorState): boolean {
   const nowSec = getNowSeconds(state);
   if (nowSec === null) return false;
   const startedAt = state.startedAt?.[monitorId];
@@ -88,10 +86,6 @@ export function getLatestLatency(
   return lastRecord ?? null;
 }
 
-export function formatTimestamp(timestamp: number): string {
-  return format(fromUnixTime(timestamp), 'PPpp');
-}
-
 export function formatUptimeDisplay(
   uptimePercent: number | null,
   hasStarted: boolean,
@@ -102,10 +96,6 @@ export function formatUptimeDisplay(
     return `${uptimePercent.toFixed(decimals)}%`;
   }
   return hasStarted ? t('monitor.starting') : t('monitor.pending');
-}
-
-export function formatRelativeTime(timestamp: number): string {
-  return formatDistanceToNow(fromUnixTime(timestamp), { addSuffix: true });
 }
 
 export function getOverallStatus(state: MonitorState): 'operational' | 'degraded' | 'down' {

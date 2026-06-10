@@ -63,11 +63,6 @@ export async function getConfig(): Promise<RuntimeConfig> {
   return cacheAndReturn(buildFallbackConfig(), now);
 }
 
-export function invalidateConfigCache(): void {
-  cachedConfig = null;
-  cacheTime = 0;
-}
-
 // Export a simplified config type that only includes what the status page needs
 // This avoids complex type inference issues with createServerFn
 export type StatusPageConfig = {
