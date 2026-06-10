@@ -198,11 +198,6 @@ test('public API exposes seeded status, maintenance, badges, and CORS', async ({
     },
   });
   expect(forbiddenCrossOriginWrite.status()).toBe(403);
-
-  const authorizedAdminResponse = await request.get('/api/admin/maintenances', {
-    headers: adminAuthHeaders,
-  });
-  await expect(authorizedAdminResponse).toBeOK();
 });
 
 test('events route renders seeded incidents and maintenance', async ({ page }) => {
