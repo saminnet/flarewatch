@@ -143,6 +143,20 @@ describe('checkMonitor', () => {
     expect(result.result.error).toBe('Proxy returned invalid response');
   });
 
+  it('returns a failure when proxy result payload is invalid', async () => {
+    fetchWithTimeoutMock.mockResolvedValue(
+      new Response(JSON.stringify({ location: 'FRA', result: { ok: true } }), { status: 200 }),
+    );
+
+    const { checkMonitor } = await import('../../src/checkers');
+    const result = await checkMonitor(createTarget({ checkProxy: 'https://proxy.example.com' }));
+
+    expect(result.location).toBe('ERROR');
+    expect(result.result.ok).toBe(false);
+    if (result.result.ok) throw new Error('Expected failure');
+    expect(result.result.error).toBe('Proxy returned invalid response');
+  });
+
   it('returns a failure when proxy request throws', async () => {
     fetchWithTimeoutMock.mockRejectedValue(new Error('boom'));
 
@@ -153,6 +167,79 @@ describe('checkMonitor', () => {
     expect(result.result.ok).toBe(false);
     if (result.result.ok) throw new Error('Expected failure');
     expect(result.result.error).toBe('Proxy error: boom');
+    expect(getEdgeLocationMock).not.toHaveBeenCalled();
+    expect(httpCheckMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to direct HTTP check when proxy fails and fallback is enabled', async () => {
+    fetchWithTimeoutMock.mockRejectedValue(new Error('boom'));
+    httpCheckMock.mockResolvedValue({ ok: true, latency: 9 });
+
+    const { checkMonitor } = await import('../../src/checkers');
+    const result = await checkMonitor(
+      createTarget({
+        checkProxy: 'https://proxy.example.com',
+        checkProxyFallback: true,
+      }),
+    );
+
+    expect(result).toEqual({ location: 'SFO', result: { ok: true, latency: 9 } });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
+    expect(getEdgeLocationMock).toHaveBeenCalledTimes(1);
+    expect(httpCheckMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fall back when GlobalPing fails and fallback is disabled', async () => {
+    globalPingCheckMock.mockResolvedValue({
+      location: 'LON',
+      result: { ok: false, error: 'GlobalPing failed' },
+    });
+
+    const { checkMonitor } = await import('../../src/checkers');
+    const result = await checkMonitor(createTarget({ checkProxy: 'globalping://TOKEN' }));
+
+    expect(result).toEqual({ location: 'LON', result: { ok: false, error: 'GlobalPing failed' } });
+    expect(globalPingCheckMock).toHaveBeenCalledTimes(1);
+    expect(getEdgeLocationMock).not.toHaveBeenCalled();
+    expect(httpCheckMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to direct check when GlobalPing fails and fallback is enabled', async () => {
+    globalPingCheckMock.mockResolvedValue({
+      location: 'LON',
+      result: { ok: false, error: 'GlobalPing failed' },
+    });
+    httpCheckMock.mockResolvedValue({ ok: true, latency: 7 });
+
+    const { checkMonitor } = await import('../../src/checkers');
+    const result = await checkMonitor(
+      createTarget({
+        checkProxy: 'globalping://TOKEN',
+        checkProxyFallback: true,
+      }),
+    );
+
+    expect(result).toEqual({ location: 'SFO', result: { ok: true, latency: 7 } });
+    expect(globalPingCheckMock).toHaveBeenCalledTimes(1);
+    expect(getEdgeLocationMock).toHaveBeenCalledTimes(1);
+    expect(httpCheckMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to direct check for worker:// proxy when fallback is enabled', async () => {
+    httpCheckMock.mockResolvedValue({ ok: true, latency: 11 });
+
+    const { checkMonitor } = await import('../../src/checkers');
+    const result = await checkMonitor(
+      createTarget({
+        checkProxy: 'worker://local',
+        checkProxyFallback: true,
+      }),
+    );
+
+    expect(result).toEqual({ location: 'SFO', result: { ok: true, latency: 11 } });
+    expect(getEdgeLocationMock).toHaveBeenCalledTimes(1);
+    expect(httpCheckMock).toHaveBeenCalledTimes(1);
+    expect(fetchWithTimeoutMock).not.toHaveBeenCalled();
   });
 
   it('delegates to TCP checker when method is TCP_PING', async () => {

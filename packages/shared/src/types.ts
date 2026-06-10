@@ -130,6 +130,16 @@ export type RuntimeConfig = {
   kvWriteCooldownMinutes?: number;
 };
 
+export type RuntimeConfigEnvelopeMetadata = Record<string, unknown>;
+
+export type RuntimeConfigEnvelope = RuntimeConfigEnvelopeMetadata & {
+  config: RuntimeConfig;
+  _deployment?: unknown;
+};
+
+/**
+ * @deprecated Runtime config envelope metadata is intentionally opaque.
+ */
 export type DeploymentMeta = {
   accountId: string;
   configKvNamespaceId: string;
@@ -141,10 +151,7 @@ export type DeploymentMeta = {
   version: string;
 };
 
-export type StoredConfig = {
-  config: RuntimeConfig;
-  _deployment?: DeploymentMeta;
-};
+export type StoredConfig = RuntimeConfigEnvelope;
 
 export interface KvStore {
   get(key: string, options?: { type?: 'json' | 'text' }): Promise<unknown>;
@@ -229,3 +236,13 @@ export interface CheckResultWithLocation {
 export interface MonitorChecker {
   check(target: MonitorTarget): Promise<CheckResult>;
 }
+
+export type FlareWatchRuntimeContract = {
+  monitor: MonitorTarget;
+  config: RuntimeConfig;
+  storedConfig: RuntimeConfigEnvelope;
+  maintenances: Maintenance[];
+  state: MonitorState;
+  checkResult: CheckResultWithLocation;
+  kvKeys: typeof KV_KEYS;
+};

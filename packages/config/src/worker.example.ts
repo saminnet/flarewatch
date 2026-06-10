@@ -54,13 +54,14 @@ export const workerConfig: WorkerConfig = {
     //   checkProxy: 'globalping://YOUR_GLOBALPING_TOKEN?magic=fra&ipVersion=4',
     // },
 
-    // TCP port check (requires a self-hosted proxy)
+    // TCP port check (requires a check proxy)
     // {
     //   id: 'database',
     //   name: 'Database',
     //   method: 'TCP_PING',
     //   target: 'db.internal:5432',
     //   checkProxy: 'https://your-proxy.example.com/check',
+    //   checkProxyFallback: true, // Optional: try a direct check if the proxy fails
     //   link: 'https://status.example.com/database', // Custom link for non-HTTP targets
     // },
 
@@ -73,7 +74,7 @@ export const workerConfig: WorkerConfig = {
     //   link: false, // Don't expose internal URL to status page visitors
     // },
 
-    // SSL certificate monitoring (requires self-hosted proxy)
+    // SSL certificate monitoring (requires a check proxy)
     // {
     //   id: 'ssl-check',
     //   name: 'SSL Certificate',
@@ -82,6 +83,7 @@ export const workerConfig: WorkerConfig = {
     //   sslCheckEnabled: true,
     //   sslCheckDaysBeforeExpiry: 14,
     //   checkProxy: 'https://your-proxy.example.com/check',
+    //   checkProxyFallback: true, // Optional: try a direct check if the proxy fails
     // },
   ],
 

@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getMonitorState } from '@/lib/kv';
-import { isMonitorUp } from '@/lib/uptime';
 import { getConfig } from '@/lib/config';
+import { projectBadgeStatus } from '@/lib/status-projection';
 
 type BadgePayload = {
   schemaVersion: 1;
@@ -59,23 +59,19 @@ export const Route = createFileRoute('/api/badge')({
             });
           }
 
-          const hasIncidentHistory = Boolean(state.incident?.[monitorId]);
-          const hasLatencyData = Boolean(state.latency?.[monitorId]?.recent?.length);
-
-          if (!hasIncidentHistory || !hasLatencyData) {
+          const projected = projectBadgeStatus(monitorId, state);
+          if (projected.status === 'unknown') {
             return new Response(JSON.stringify(errorBadge(label, 'unknown')), {
               status: 404,
               headers: jsonHeaders,
             });
           }
 
-          const isUp = isMonitorUp(monitorId, state);
-
           const badge: BadgePayload = {
             schemaVersion: 1,
             label,
-            message: isUp ? upMsg : downMsg,
-            color: isUp ? colorUp : colorDown,
+            message: projected.up ? upMsg : downMsg,
+            color: projected.up ? colorUp : colorDown,
           };
 
           return new Response(JSON.stringify(badge), { headers: jsonHeaders });

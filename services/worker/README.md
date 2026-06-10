@@ -16,7 +16,11 @@ The FlareWatch monitoring worker is a Cloudflare Worker. It runs scheduled check
 
 ## Optional secrets
 
-- `FLAREWATCH_PROXY_TOKEN` - bearer token used when a monitor uses a self-hosted check proxy.
+- `FLAREWATCH_PROXY_TOKEN` - bearer token used when a monitor uses a check proxy.
+
+## Proxy checks
+
+Monitors can set `checkProxy` to send checks through a proxy endpoint. By default, a proxy failure marks the monitor check as failed. Set `checkProxyFallback: true` on that monitor to try the direct Worker check after the proxy fails.
 
 ## Local development
 

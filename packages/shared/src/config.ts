@@ -3,7 +3,7 @@ import type {
   StoredConfig,
   Monitor,
   StatusPageConfig,
-  DeploymentMeta,
+  RuntimeConfigEnvelope,
   NotificationConfig,
   Webhook,
   Maintenance,
@@ -181,7 +181,7 @@ function isValidStatusPageConfig(value: unknown): value is StatusPageConfig {
   return isOptionalType(obj.title, isString);
 }
 
-function isValidRuntimeConfig(value: unknown): value is RuntimeConfig {
+export function isValidRuntimeConfig(value: unknown): value is RuntimeConfig {
   const obj = asRecord(value);
   if (!obj) return false;
 
@@ -193,27 +193,21 @@ function isValidRuntimeConfig(value: unknown): value is RuntimeConfig {
   return true;
 }
 
-function isValidDeploymentMeta(value: unknown): value is DeploymentMeta {
+export function isStoredConfigEnvelope(value: unknown): value is RuntimeConfigEnvelope {
   const obj = asRecord(value);
   if (!obj) return false;
 
-  return (
-    typeof obj.accountId === 'string' &&
-    typeof obj.configKvNamespaceId === 'string' &&
-    typeof obj.stateKvNamespaceId === 'string' &&
-    typeof obj.monitorWorkerName === 'string' &&
-    typeof obj.statusPageWorkerName === 'string'
-  );
+  return isValidRuntimeConfig(obj.config);
 }
 
-function isValidStoredConfig(value: unknown): value is StoredConfig {
-  const obj = asRecord(value);
-  if (!obj) return false;
+export function isValidStoredConfig(value: unknown): value is StoredConfig {
+  return isStoredConfigEnvelope(value);
+}
 
-  if (!isValidRuntimeConfig(obj.config)) return false;
-  if (obj._deployment !== undefined && !isValidDeploymentMeta(obj._deployment)) return false;
-
-  return true;
+export function parseRuntimeConfig(value: unknown): RuntimeConfig | null {
+  if (isStoredConfigEnvelope(value)) return value.config;
+  if (isValidRuntimeConfig(value)) return value;
+  return null;
 }
 
 export async function loadRuntimeConfig(kv: KvStore): Promise<RuntimeConfig | null> {
@@ -221,8 +215,8 @@ export async function loadRuntimeConfig(kv: KvStore): Promise<RuntimeConfig | nu
     const data = await kv.get(KV_KEYS.CONFIG, { type: 'json' });
     if (!data) return null;
 
-    if (isValidStoredConfig(data)) return data.config;
-    if (isValidRuntimeConfig(data)) return data;
+    const config = parseRuntimeConfig(data);
+    if (config) return config;
 
     console.error('[Config] Invalid runtime config format');
     return null;
