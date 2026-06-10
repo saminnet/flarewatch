@@ -6,9 +6,10 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: './tests/e2e',
   outputDir: './test-results/e2e',
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
+  workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? [['github'], ['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,
@@ -28,7 +29,14 @@ export default defineConfig({
       },
   projects: [
     {
-      name: 'chromium',
+      name: 'chromium-public',
+      grepInvert: /admin maintenance lifecycle/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'chromium-admin',
+      grep: /admin maintenance lifecycle/,
+      dependencies: ['chromium-public'],
       use: { ...devices['Desktop Chrome'] },
     },
   ],
