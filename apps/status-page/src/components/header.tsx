@@ -61,8 +61,13 @@ export function Header({ config }: HeaderProps) {
           {hasExternalLinks && (
             <>
               <div className="hidden sm:flex items-center gap-1">
-                {config?.links?.map((link, i) => (
-                  <a key={i} href={link.link} target="_blank" rel="noopener noreferrer">
+                {config?.links?.map((link) => (
+                  <a
+                    key={`${link.label}:${link.link}`}
+                    href={link.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     <Button
                       variant={link.highlight ? 'default' : 'ghost'}
                       size="sm"
@@ -85,9 +90,9 @@ export function Header({ config }: HeaderProps) {
                     <IconMenu2 className="h-5 w-5" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" sideOffset={8}>
-                    {config?.links?.map((link, i) => (
+                    {config?.links?.map((link) => (
                       <DropdownMenuItem
-                        key={i}
+                        key={`${link.label}:${link.link}`}
                         render={
                           <a
                             href={link.link}

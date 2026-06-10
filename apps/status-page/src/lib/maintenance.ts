@@ -2,13 +2,13 @@ import type { Maintenance } from '@flarewatch/shared';
 import { TIME_MS, UPCOMING_MAINTENANCE_DAYS } from './constants';
 import { formatUtc, formatDuration } from './date';
 
-export function isMaintenanceActive(maintenance: Maintenance, now = Date.now()): boolean {
+function isMaintenanceActive(maintenance: Maintenance, now = Date.now()): boolean {
   const startMs = new Date(maintenance.start).getTime();
   const endMs = maintenance.end ? new Date(maintenance.end).getTime() : undefined;
   return startMs <= now && (endMs === undefined || endMs > now);
 }
 
-export function isMaintenanceUpcoming(
+function isMaintenanceUpcoming(
   maintenance: Maintenance,
   now = Date.now(),
   daysAhead = UPCOMING_MAINTENANCE_DAYS,
@@ -18,7 +18,7 @@ export function isMaintenanceUpcoming(
   return startMs > now && startMs <= futureMs;
 }
 
-export function isMaintenancePast(maintenance: Maintenance, now = Date.now()): boolean {
+function isMaintenancePast(maintenance: Maintenance, now = Date.now()): boolean {
   const endMs = maintenance.end ? new Date(maintenance.end).getTime() : undefined;
   return endMs !== undefined && endMs <= now;
 }

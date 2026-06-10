@@ -13,10 +13,8 @@ export type RuntimeEnv = {
 export async function resolveRuntimeEnv(): Promise<RuntimeEnv | undefined> {
   if (import.meta.env.SSR) {
     try {
-      const moduleName = 'cloudflare' + ':workers';
-      const mod = await import(/* @vite-ignore */ moduleName);
-      const workers = (mod as unknown as { default?: unknown }).default ?? mod;
-      const env = (workers as { env?: RuntimeEnv } | undefined)?.env;
+      const { getCloudflareWorkersEnv } = await import('./cloudflare-workers-env');
+      const env = getCloudflareWorkersEnv();
       if (env) return env;
     } catch {
       // Ignore - likely not running in the Workers runtime.

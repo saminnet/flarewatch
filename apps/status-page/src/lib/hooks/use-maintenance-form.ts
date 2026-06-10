@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState } from 'react';
 import type { Maintenance } from '@flarewatch/shared';
 
 export type MaintenanceFormData = {
@@ -23,19 +23,19 @@ export function useMaintenanceForm() {
   const [formData, setFormData] = useState<MaintenanceFormData>(DEFAULT_FORM);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const resetForm = useCallback(() => {
+  function resetForm() {
     setFormData(DEFAULT_FORM);
     setErrorMessage(null);
-  }, []);
+  }
 
-  const updateField = useCallback(
-    <K extends keyof MaintenanceFormData>(field: K, value: MaintenanceFormData[K]) => {
-      setFormData((prev) => ({ ...prev, [field]: value }));
-    },
-    [],
-  );
+  function updateField<K extends keyof MaintenanceFormData>(
+    field: K,
+    value: MaintenanceFormData[K],
+  ) {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  }
 
-  const toggleMonitor = useCallback((monitorId: string) => {
+  function toggleMonitor(monitorId: string) {
     setFormData((prev) => {
       const current = prev.monitors;
       if (current.includes(monitorId)) {
@@ -43,9 +43,9 @@ export function useMaintenanceForm() {
       }
       return { ...prev, monitors: [...current, monitorId] };
     });
-  }, []);
+  }
 
-  const populateFromMaintenance = useCallback((maintenance: Maintenance) => {
+  function populateFromMaintenance(maintenance: Maintenance) {
     setFormData({
       title: maintenance.title ?? '',
       body: maintenance.body,
@@ -55,18 +55,13 @@ export function useMaintenanceForm() {
       color: maintenance.color ?? 'yellow',
     });
     setErrorMessage(null);
-  }, []);
+  }
 
-  const isEndBeforeStart = useMemo(
-    () =>
-      Boolean(formData.start && formData.end && formData.end.getTime() < formData.start.getTime()),
-    [formData.start, formData.end],
+  const isEndBeforeStart = Boolean(
+    formData.start && formData.end && formData.end.getTime() < formData.start.getTime(),
   );
 
-  const isValid = useMemo(
-    () => formData.body.trim() !== '' && formData.start !== undefined && !isEndBeforeStart,
-    [formData.body, formData.start, isEndBeforeStart],
-  );
+  const isValid = formData.body.trim() !== '' && formData.start !== undefined && !isEndBeforeStart;
 
   return {
     formData,

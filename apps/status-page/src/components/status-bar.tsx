@@ -1,4 +1,4 @@
-import { memo, useState, useMemo, useCallback } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -30,11 +30,7 @@ interface StatusBarSegmentProps {
   onClick: (day: DailyStatusData) => void;
 }
 
-const StatusBarSegment = memo(function StatusBarSegment({
-  day,
-  isMobile,
-  onClick,
-}: StatusBarSegmentProps) {
+function StatusBarSegment({ day, isMobile, onClick }: StatusBarSegmentProps) {
   const { t } = useTranslation();
 
   return (
@@ -75,7 +71,7 @@ const StatusBarSegment = memo(function StatusBarSegment({
       </TooltipContent>
     </Tooltip>
   );
-});
+}
 
 interface StatusBarProps {
   monitorId: string;
@@ -86,32 +82,24 @@ interface StatusBarProps {
 export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
   const { t } = useTranslation();
   const [selectedDay, setSelectedDay] = useState<DailyStatusData | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const dailyStatus = useMemo(() => generateDailyStatus(monitorId, state), [monitorId, state]);
+  const dailyStatus = generateDailyStatus(monitorId, state);
 
   const { ref, width, isReady } = useContainerWidth();
 
-  const mobileBarCount = useMemo(() => {
-    // calculate how many bars fit based on container width
-    if (!isReady) return 0;
-    return Math.min(Math.floor(width / STATUS_BAR.MOBILE_BAR_WIDTH), dailyStatus.length);
-  }, [width, isReady, dailyStatus.length]);
+  const mobileBarCount = isReady
+    ? Math.min(Math.floor(width / STATUS_BAR.MOBILE_BAR_WIDTH), dailyStatus.length)
+    : 0;
 
-  const mobileBars = useMemo(
-    () => dailyStatus.slice(-mobileBarCount),
-    [dailyStatus, mobileBarCount],
-  );
+  const mobileBars = dailyStatus.slice(-mobileBarCount);
 
-  const handleDayClick = useCallback((day: DailyStatusData) => {
+  function handleDayClick(day: DailyStatusData) {
     if (day.downtime > 0 && day.incidents.length > 0) {
       setSelectedDay(day);
-      setModalOpen(true);
     }
-  }, []);
+  }
 
   return (
     <>
-      {/* Desktop: all 90 bars with flex-1 */}
       <div className="hidden sm:flex items-center gap-0.5 overflow-hidden rounded">
         {dailyStatus.map((day) => (
           <StatusBarSegment
@@ -123,7 +111,6 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
         ))}
       </div>
 
-      {/* Mobile: fewer bars with fixed width based on container */}
       <div ref={ref} className="flex sm:hidden items-center gap-0.5 overflow-hidden rounded">
         {mobileBars.map((day) => (
           <StatusBarSegment
@@ -135,8 +122,7 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
         ))}
       </div>
 
-      {/* Incident Detail Modal */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+      <Dialog open={!!selectedDay} onOpenChange={(open) => !open && setSelectedDay(null)}>
         <DialogContent>
           <DialogHeader>
             <div className="flex items-center justify-between">

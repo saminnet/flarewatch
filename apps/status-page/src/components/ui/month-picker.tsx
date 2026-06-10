@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { IconCalendar, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 
 import { formatUtc, parseYearMonth } from '@/lib/date';
@@ -17,12 +17,8 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export function MonthPicker({ value, onChange, className }: MonthPickerProps) {
   const { year: selectedYear, month: selectedMonth } = parseYearMonth(value);
   const [open, setOpen] = useState(false);
-  const [viewYear, setViewYear] = useState(selectedYear);
-
-  // Reset viewYear when value changes externally
-  useEffect(() => {
-    setViewYear(parseYearMonth(value).year);
-  }, [value]);
+  const [viewYearOffset, setViewYearOffset] = useState(0);
+  const viewYear = selectedYear + viewYearOffset;
 
   const selectedMonthIndex = selectedMonth - 1; // 0-indexed for grid comparison
 
@@ -35,7 +31,13 @@ export function MonthPicker({ value, onChange, className }: MonthPickerProps) {
   const displayDate = new Date(Date.UTC(selectedYear, selectedMonth - 1, 1));
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) setViewYearOffset(0);
+      }}
+    >
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm" className={cn('gap-1.5', className)}>
@@ -50,7 +52,7 @@ export function MonthPicker({ value, onChange, className }: MonthPickerProps) {
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            onClick={() => setViewYear((y) => y - 1)}
+            onClick={() => setViewYearOffset((offset) => offset - 1)}
             aria-label="Previous year"
           >
             <IconChevronLeft className="h-3.5 w-3.5" />
@@ -60,7 +62,7 @@ export function MonthPicker({ value, onChange, className }: MonthPickerProps) {
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            onClick={() => setViewYear((y) => y + 1)}
+            onClick={() => setViewYearOffset((offset) => offset + 1)}
             aria-label="Next year"
           >
             <IconChevronRight className="h-3.5 w-3.5" />

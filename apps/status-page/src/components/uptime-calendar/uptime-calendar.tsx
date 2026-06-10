@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import type { PublicMonitor } from '@/lib/monitors';
@@ -21,62 +21,46 @@ interface UptimeCalendarProps {
 export function UptimeCalendar({ monitors, state, selectedMonth }: UptimeCalendarProps) {
   const { t } = useTranslation();
   const [selectedDay, setSelectedDay] = useState<AggregatedDayData | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
 
-  const aggregatedDays = useMemo(() => {
-    const ids = monitors.map((m) => m.id);
-    const nameMap = new Map(monitors.map((m) => [m.id, m.name]));
-    return generateAggregateDailyStatus(ids, nameMap, state);
-  }, [monitors, state]);
+  const ids = monitors.map((m) => m.id);
+  const nameMap = new Map(monitors.map((m) => [m.id, m.name]));
+  const aggregatedDays = generateAggregateDailyStatus(ids, nameMap, state);
 
-  // Snap to UTC day boundary so refetches within the same day don't recompute grids
-  const dayMs = useMemo(() => {
-    if (state.lastUpdate <= 0) return Date.UTC(2000, 0, 1);
-    const d = new Date(state.lastUpdate * 1000);
-    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  }, [state.lastUpdate]);
+  const dayMs =
+    state.lastUpdate <= 0
+      ? Date.UTC(2000, 0, 1)
+      : (() => {
+          const d = new Date(state.lastUpdate * 1000);
+          return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+        })();
 
-  const calendarGrids = useMemo(
-    () => generateCalendarGrids(new Date(dayMs), MONTHS_PER_PAGE, selectedMonth),
-    [dayMs, selectedMonth],
-  );
+  const calendarGrids = generateCalendarGrids(new Date(dayMs), MONTHS_PER_PAGE, selectedMonth);
 
-  const dataMap = useMemo(
-    () => new Map(aggregatedDays.map((day) => [getDateKey(day.date), day])),
-    [aggregatedDays],
-  );
+  const dataMap = new Map(aggregatedDays.map((day) => [getDateKey(day.date), day]));
 
-  // Per-month uptime: average of daily uptimes for days with data
-  const monthUptimes = useMemo(() => {
-    const result = new Map<string, number | null>();
-    for (const grid of calendarGrids) {
-      let sum = 0;
-      let count = 0;
-      for (const week of grid.weeks) {
-        for (const day of week) {
-          if (!day) continue;
-          const data = dataMap.get(getDateKey(day.date));
-          if (data && data.status !== 'unknown' && data.uptime != null) {
-            sum += data.uptime;
-            count++;
-          }
+  const monthUptimes = new Map<string, number | null>();
+  for (const grid of calendarGrids) {
+    let sum = 0;
+    let count = 0;
+    for (const week of grid.weeks) {
+      for (const day of week) {
+        if (!day) continue;
+        const data = dataMap.get(getDateKey(day.date));
+        if (data && data.status !== 'unknown' && data.uptime != null) {
+          sum += data.uptime;
+          count++;
         }
       }
-      result.set(grid.yearMonth, count > 0 ? sum / count : null);
     }
-    return result;
-  }, [calendarGrids, dataMap]);
+    monthUptimes.set(grid.yearMonth, count > 0 ? sum / count : null);
+  }
 
-  const dateRangeLabel = useMemo(() => {
-    const first = calendarGrids[0];
-    const last = calendarGrids[calendarGrids.length - 1];
-    if (!first || !last) return '';
-    return `${first.label} — ${last.label}`;
-  }, [calendarGrids]);
+  const firstGrid = calendarGrids[0];
+  const lastGrid = calendarGrids[calendarGrids.length - 1];
+  const dateRangeLabel = firstGrid && lastGrid ? `${firstGrid.label} — ${lastGrid.label}` : '';
 
   function handleDayClick(data: AggregatedDayData) {
     setSelectedDay(data);
-    setModalOpen(true);
   }
 
   const monthCards = calendarGrids.map((grid, i) => (
@@ -106,7 +90,11 @@ export function UptimeCalendar({ monitors, state, selectedMonth }: UptimeCalenda
         </div>
       </Card>
 
-      <CalendarDayModal data={selectedDay} open={modalOpen} onOpenChange={setModalOpen} />
+      <CalendarDayModal
+        data={selectedDay}
+        open={!!selectedDay}
+        onOpenChange={(open) => !open && setSelectedDay(null)}
+      />
     </>
   );
 }

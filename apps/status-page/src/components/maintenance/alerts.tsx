@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconCalendar } from '@tabler/icons-react';
 import type { Maintenance } from '@flarewatch/shared';
@@ -16,10 +15,9 @@ interface MaintenanceAlertsProps {
 export function MaintenanceAlerts({ maintenances, monitors, nowMs }: MaintenanceAlertsProps) {
   const { t } = useTranslation();
   const monitorNamesById = useMonitorNameMap(monitors);
-
-  const { active: activeMaintenances, upcoming: upcomingMaintenances } = useMemo(
-    () => filterMaintenances(maintenances, { nowMs }),
-    [maintenances, nowMs],
+  const { active: activeMaintenances, upcoming: upcomingMaintenances } = filterMaintenances(
+    maintenances,
+    { nowMs },
   );
 
   if (activeMaintenances.length === 0 && upcomingMaintenances.length === 0) {

@@ -3,7 +3,11 @@ import { IconChevronDown, IconChevronLeft, IconChevronRight } from '@tabler/icon
 import { DayPicker, getDefaultClassNames, type DayButton } from 'react-day-picker';
 
 import { cn } from '@/lib/utils';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
+
+const RTL_NEXT_ICON_CLASS = 'rtl:**:[.rdp-button\\_next>svg]:rotate-180';
+const RTL_PREVIOUS_ICON_CLASS = 'rtl:**:[.rdp-button\\_previous>svg]:rotate-180';
 
 function Calendar({
   className,
@@ -24,8 +28,8 @@ function Calendar({
       showOutsideDays={showOutsideDays}
       className={cn(
         'bg-background group/calendar p-3 [--cell-size:--spacing(8)] in-data-[slot=card-content]:bg-transparent in-data-[slot=popover-content]:bg-transparent',
-        String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
-        String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
+        RTL_NEXT_ICON_CLASS,
+        RTL_PREVIOUS_ICON_CLASS,
         className,
       )}
       captionLayout={captionLayout}

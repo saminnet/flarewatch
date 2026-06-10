@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dialog,
@@ -37,12 +36,9 @@ interface CalendarDayModalProps {
 export function CalendarDayModal({ data, open, onOpenChange }: CalendarDayModalProps) {
   const { t } = useTranslation();
 
-  const grouped = useMemo(
-    () => (data ? groupByMonitor(data.incidents) : new Map<string, AggregatedDayIncident[]>()),
-    [data],
-  );
-
   if (!data) return null;
+
+  const grouped = groupByMonitor(data.incidents);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

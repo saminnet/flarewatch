@@ -20,11 +20,12 @@ export function useNow({ serverTime, interval = 60_000, enabled = true }: UseNow
   useEffect(() => {
     if (!enabled) return;
 
-    // Sync to real time immediately after hydration
-    setClientTime(Date.now());
-
+    const initialTick = setTimeout(() => setClientTime(Date.now()), 0);
     const id = setInterval(() => setClientTime(Date.now()), interval);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(initialTick);
+      clearInterval(id);
+    };
   }, [interval, enabled]);
 
   return isHydrated ? clientTime : serverTime;
