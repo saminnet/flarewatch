@@ -62,7 +62,7 @@ jobs:
 
       - name: Install Chromium for browser tests
         timeout-minutes: 10
-        run: vp exec --filter status-page -- playwright install --with-deps chromium
+        run: vp exec --filter status-page -- playwright install --with-deps --only-shell chromium
 
       - name: Run status page browser tests
         timeout-minutes: 10
@@ -79,8 +79,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Build packages after validation
-        if: ${{ success() }}
+      - name: Build worker for pull requests
+        if: ${{ github.event_name == 'pull_request' && success() }}
+        timeout-minutes: 5
+        run: vp run --filter worker build
+
+      - name: Build packages for deployment
+        if: ${{ github.event_name != 'pull_request' && success() }}
         timeout-minutes: 10
         run: vp run build
 
