@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getMonitorState } from '@/lib/kv';
-import { isMonitorUp, getMonitorError } from '@/lib/uptime';
 import { getCorsHeaders } from '@/lib/cors';
 import { getConfig } from '@/lib/config';
+import { projectPublicData } from '@/lib/status-projection';
 
 export const Route = createFileRoute('/api/data')({
   server: {
@@ -20,38 +20,7 @@ export const Route = createFileRoute('/api/data')({
             });
           }
 
-          const monitors: Record<
-            string,
-            {
-              up: boolean;
-              latency: number | null;
-              location: string | null;
-              message: string;
-            }
-          > = {};
-
-          for (const monitor of config.monitors) {
-            const latencyData = state.latency[monitor.id]?.recent;
-            const latestLatency = latencyData?.[latencyData.length - 1];
-            const isUp = isMonitorUp(monitor.id, state);
-            const error = getMonitorError(monitor.id, state);
-
-            monitors[monitor.id] = {
-              up: isUp,
-              latency: latestLatency?.ping ?? null,
-              location: latestLatency?.loc ?? null,
-              message: isUp ? 'OK' : (error ?? 'Unknown error'),
-            };
-          }
-
-          const response = {
-            up: state.overallUp,
-            down: state.overallDown,
-            updatedAt: state.lastUpdate,
-            monitors,
-          };
-
-          return Response.json(response, { headers: corsHeaders });
+          return Response.json(projectPublicData(config.monitors, state), { headers: corsHeaders });
         } catch (error) {
           console.error('Error in /api/data:', error);
           return new Response(JSON.stringify({ error: 'Internal server error' }), {

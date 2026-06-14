@@ -15,92 +15,16 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { UptimeCalendar } from '@/components/uptime-calendar/uptime-calendar';
 import { IncidentCard } from '@/components/events/incident-card';
 import { MaintenanceEventCard } from '@/components/events/maintenance-event-card';
-import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/events/types';
-import type { PublicMonitor } from '@/lib/monitors';
 import { publicMonitorsQuery, monitorStateQuery } from '@/lib/query/monitors.queries';
 import { useNow } from '@/lib/hooks/use-now';
-import { getMaintenanceStatus } from '@/lib/maintenance';
 import { shiftYearMonth, getUtcMonthBounds } from '@/lib/date';
-import type { Maintenance, MonitorState } from '@flarewatch/shared';
+import { projectTimeline } from '@/lib/status-projection';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 
 const eventsRoute = getRouteApi('/events');
-const SECOND_MS = 1000;
 
 function getCurrentMonth(): string {
   return new Date().toISOString().slice(0, 7);
-}
-
-function getEventStartMs(event: TimelineEvent): number {
-  return event.type === 'incident'
-    ? event.start * SECOND_MS
-    : new Date(event.maintenance.start).getTime();
-}
-
-function extractIncidentsFromState(
-  state: MonitorState | null,
-  monitors: PublicMonitor[],
-  monthStart: Date,
-  monthEnd: Date,
-): IncidentEvent[] {
-  if (!state) return [];
-
-  const events: IncidentEvent[] = [];
-  const monthStartSec = Math.floor(monthStart.getTime() / SECOND_MS);
-  const monthEndSec = Math.floor(monthEnd.getTime() / SECOND_MS);
-  const nowSec = state.lastUpdate > 0 ? state.lastUpdate : Math.floor(Date.now() / 1000);
-
-  for (const monitor of monitors) {
-    const incidents = state.incident[monitor.id];
-    if (!incidents) continue;
-
-    for (const incident of incidents) {
-      const startTime = incident.start[0];
-      if (startTime === undefined) continue;
-
-      const endTime = incident.end;
-      const incidentStart = startTime;
-      const incidentEnd = endTime ?? nowSec;
-
-      if (incidentEnd < monthStartSec || incidentStart > monthEndSec) {
-        continue;
-      }
-
-      events.push({
-        type: 'incident',
-        monitorId: monitor.id,
-        monitorName: monitor.name,
-        start: startTime,
-        end: endTime,
-        errors: incident.error,
-      });
-    }
-  }
-
-  return events;
-}
-
-function extractMaintenanceEvents(
-  maintenances: Maintenance[],
-  monthStart: Date,
-  monthEnd: Date,
-): MaintenanceEvent[] {
-  const events: MaintenanceEvent[] = [];
-  const monthStartMs = monthStart.getTime();
-  const monthEndMs = monthEnd.getTime();
-
-  for (const maintenance of maintenances) {
-    const start = new Date(maintenance.start);
-    const end = maintenance.end ? new Date(maintenance.end) : null;
-    const startTime = start.getTime();
-    const endTime = end?.getTime() ?? Infinity;
-
-    if (endTime >= monthStartMs && startTime <= monthEndMs) {
-      events.push({ type: 'maintenance', maintenance });
-    }
-  }
-
-  return events;
 }
 
 export function EventsPage() {
@@ -119,47 +43,16 @@ export function EventsPage() {
 
   const { monthStart, monthEnd } = getUtcMonthBounds(resolvedMonth);
 
-  const incidentEvents = extractIncidentsFromState(state, monitors, monthStart, monthEnd);
-  const maintenanceEvents = extractMaintenanceEvents(maintenances, monthStart, monthEnd);
-  let events: TimelineEvent[] = [...incidentEvents, ...maintenanceEvents];
-
-  if (eventType === 'incident') {
-    events = events.filter((e) => e.type === 'incident');
-  } else if (eventType === 'maintenance') {
-    events = events.filter((e) => e.type === 'maintenance');
-  }
-
-  if (selectedMonitor) {
-    events = events.filter((e) => {
-      if (e.type === 'incident') {
-        return e.monitorId === selectedMonitor;
-      } else {
-        return e.maintenance.monitors?.includes(selectedMonitor) ?? false;
-      }
-    });
-  }
-
-  const sortedEvents = events.sort((a, b) => {
-    return getEventStartMs(b) - getEventStartMs(a);
+  const { pinned, timeline } = projectTimeline({
+    state,
+    monitors,
+    maintenances,
+    monthStart,
+    monthEnd,
+    nowMs,
+    selectedMonitor,
+    eventType: eventType ?? 'all',
   });
-
-  const pinned: MaintenanceEvent[] = [];
-  const timeline: TimelineEvent[] = [];
-
-  if (eventType === 'all') {
-    for (const event of sortedEvents) {
-      if (event.type === 'maintenance') {
-        const status = getMaintenanceStatus(event.maintenance, nowMs);
-        if (status === 'active' || status === 'upcoming') {
-          pinned.push(event);
-          continue;
-        }
-      }
-      timeline.push(event);
-    }
-  } else {
-    timeline.push(...sortedEvents);
-  }
 
   const prevMonth = shiftYearMonth(resolvedMonth, -1);
   const nextMonth = shiftYearMonth(resolvedMonth, 1);

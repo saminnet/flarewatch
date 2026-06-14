@@ -11,21 +11,19 @@
 </p>
 
 <p align="center">
-  <a href="https://demo.flarewatch.app">Live demo</a> | <a href="https://flarewatch.app">Managed setup</a> | <a href="#quick-start">Quick start</a> | <a href="#how-it-works">How it works</a> | <a href="#docs">Docs</a>
+  <a href="https://demo.flarewatch.app">Live demo</a> | <a href="#quick-start">Quick start</a> | <a href="#how-it-works">How it works</a> | <a href="#docs">Docs</a>
 </p>
 
 Cloudflare-first uptime monitoring and a status page you can fork and self-host.
 
 Live demo (upstream): https://demo.flarewatch.app
 
-Need help deploying? One-time managed setup is available at https://flarewatch.app.
-
 ## ELI5
 
 - You define monitors (what to check) in `packages/config`.
 - A Cloudflare Worker runs every minute, checks them, and stores results in Cloudflare KV.
 - The status page (also a Cloudflare Worker) reads KV and renders a public dashboard.
-- Optional: run checks through a self-hosted proxy for private networks / TCP / SSL.
+- Optional: run checks through a check proxy for private networks / TCP / SSL.
 
 ```mermaid
 flowchart LR
@@ -43,9 +41,9 @@ flowchart LR
 - 1-minute cron checks on Cloudflare Workers
 - Public status page UI and JSON/SVG APIs
 - Uptime history and latency charts
-- Scheduled maintenance announcements (managed in `/admin`)
+- Scheduled maintenance announcements (configured in `/admin`)
 - Webhook notifications (Slack/Discord/Telegram/templates)
-- Optional self-hosted check proxy (private networks, TCP, SSL)
+- Optional check proxy support (private networks, TCP, SSL)
 
 ## Quick start
 
@@ -92,7 +90,8 @@ Do not manually construct or edit JSON fields.
 - The optional check proxy lives in a separate repo: https://github.com/saminnet/flarewatch-proxy
   - It runs checks from custom locations (private networks, TCP, SSL).
   - If where the check runs matters (latency/region), use the proxy.
-- Optional: set a `CONFIG_KV` binding with a runtime config blob. See `packages/shared/src/config.ts`. This lets you update monitors and status page branding without redeploying. If unset, FlareWatch uses the static config in `packages/config`.
+  - By default, proxy failures mark the check as failed. Set `checkProxyFallback: true` on a monitor if it should try a direct check after the proxy fails.
+- Optional: set a `CONFIG_KV` binding with runtime config JSON. It can be the config object itself or an envelope like `{ "config": { ... } }`; extra envelope fields are ignored. If unset, FlareWatch uses the static config in `packages/config`.
 
 ## Example monitor
 
@@ -118,7 +117,7 @@ export const pageConfig = {
 - [infra/README.md](infra/README.md) - Pulumi resources and R2 backend
 - [apps/status-page/README.md](apps/status-page/README.md) - status page Worker, APIs, auth, local testing
 - [services/worker/README.md](services/worker/README.md) - monitoring Worker, cron, KV state
-- [flarewatch-proxy repo](https://github.com/saminnet/flarewatch-proxy) - optional self-hosted check proxy
+- [flarewatch-proxy repo](https://github.com/saminnet/flarewatch-proxy) - optional check proxy
 - [CONTRIBUTING.md](CONTRIBUTING.md) - how to contribute
 - [SECURITY.md](SECURITY.md) - security policy
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - community guidelines
