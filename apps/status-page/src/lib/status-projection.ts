@@ -89,13 +89,14 @@ function projectIncidentEvents(
   monitors: PublicMonitor[],
   monthStart: Date,
   monthEnd: Date,
+  nowMs: number,
 ): IncidentEvent[] {
   if (!state) return [];
 
   const events: IncidentEvent[] = [];
   const monthStartSec = Math.floor(monthStart.getTime() / SECOND_MS);
   const monthEndSec = Math.floor(monthEnd.getTime() / SECOND_MS);
-  const nowSec = state.lastUpdate > 0 ? state.lastUpdate : Math.floor(Date.now() / SECOND_MS);
+  const nowSec = state.lastUpdate > 0 ? state.lastUpdate : Math.floor(nowMs / SECOND_MS);
 
   for (const monitor of monitors) {
     const incidents = state.incident[monitor.id];
@@ -156,6 +157,7 @@ export function projectTimeline(input: TimelineProjectionInput): TimelineProject
     input.monitors,
     input.monthStart,
     input.monthEnd,
+    input.nowMs,
   );
   const maintenanceEvents = projectMaintenanceEvents(
     input.maintenances,

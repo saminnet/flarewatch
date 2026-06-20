@@ -189,6 +189,24 @@ describe('checkMonitor', () => {
     expect(httpCheckMock).toHaveBeenCalledTimes(1);
   });
 
+  it('does not fall back when the external proxy succeeds and fallback is enabled', async () => {
+    fetchWithTimeoutMock.mockResolvedValue(
+      new Response(JSON.stringify({ location: 'FRA', result: { ok: true, latency: 21 } }), {
+        status: 200,
+      }),
+    );
+
+    const { checkMonitor } = await import('../../src/checkers');
+    const result = await checkMonitor(
+      createTarget({ checkProxy: 'https://proxy.example.com/check', checkProxyFallback: true }),
+    );
+
+    expect(result).toEqual({ location: 'FRA', result: { ok: true, latency: 21 } });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
+    expect(httpCheckMock).not.toHaveBeenCalled();
+    expect(getEdgeLocationMock).not.toHaveBeenCalled();
+  });
+
   it('does not fall back when GlobalPing fails and fallback is disabled', async () => {
     globalPingCheckMock.mockResolvedValue({
       location: 'LON',

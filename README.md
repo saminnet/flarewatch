@@ -90,7 +90,7 @@ Do not manually construct or edit JSON fields.
 - The optional check proxy lives in a separate repo: https://github.com/saminnet/flarewatch-proxy
   - It runs checks from custom locations (private networks, TCP, SSL).
   - If where the check runs matters (latency/region), use the proxy.
-  - By default, proxy failures mark the check as failed. Set `checkProxyFallback: true` on a monitor if it should try a direct check after the proxy fails.
+  - By default, proxy failures mark the check as failed. Set `checkProxyFallback: true` on a monitor to fall back to a direct check after the proxy fails.
 - Optional: set a `CONFIG_KV` binding with runtime config JSON. It can be the config object itself or an envelope like `{ "config": { ... } }`; extra envelope fields are ignored. If unset, FlareWatch uses the static config in `packages/config`.
 
 ## Example monitor

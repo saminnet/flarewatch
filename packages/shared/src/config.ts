@@ -1,6 +1,5 @@
 import type {
   RuntimeConfig,
-  StoredConfig,
   Monitor,
   StatusPageConfig,
   RuntimeConfigEnvelope,
@@ -198,10 +197,6 @@ export function isStoredConfigEnvelope(value: unknown): value is RuntimeConfigEn
   if (!obj) return false;
 
   return isValidRuntimeConfig(obj.config);
-}
-
-export function isValidStoredConfig(value: unknown): value is StoredConfig {
-  return isStoredConfigEnvelope(value);
 }
 
 export function parseRuntimeConfig(value: unknown): RuntimeConfig | null {

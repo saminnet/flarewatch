@@ -80,6 +80,35 @@ describe('status projection', () => {
     });
   });
 
+  it('projects null latency and a fallback message for monitors without data', () => {
+    const state = createState({
+      overallUp: 0,
+      overallDown: 1,
+      incident: {
+        web: [{ start: [1_788_999_000], end: undefined, error: [] }],
+      },
+      latency: {},
+    });
+
+    expect(projectPublicData([monitor('web', 'Web')], state)).toEqual({
+      up: 0,
+      down: 1,
+      updatedAt: 1_789_000_000,
+      monitors: {
+        web: {
+          up: false,
+          latency: null,
+          location: null,
+          message: 'Unknown error',
+        },
+      },
+    });
+  });
+
+  it('projects badge status as unknown when the monitor has no state', () => {
+    expect(projectBadgeStatus('api', createState())).toEqual({ status: 'unknown' });
+  });
+
   it('projects badge status as unknown until a monitor has state and latency', () => {
     const state = createState({
       incident: { api: [] },
@@ -102,7 +131,7 @@ describe('status projection', () => {
     expect(projectBadgeStatus('api', state)).toEqual({ status: 'known', up: false });
   });
 
-  it('projects incident and maintenance timeline events in descending order', () => {
+  it('orders incident and maintenance timeline events by start descending', () => {
     const monthStart = new Date('2026-06-01T00:00:00.000Z');
     const monthEnd = new Date('2026-07-01T00:00:00.000Z');
     const state = createState({
@@ -112,7 +141,49 @@ describe('status projection', () => {
           {
             start: [Date.parse('2026-06-05T10:00:00.000Z') / 1000],
             end: Date.parse('2026-06-05T10:30:00.000Z') / 1000,
-            error: ['Error'],
+            error: ['API error'],
+          },
+        ],
+        web: [
+          {
+            start: [Date.parse('2026-06-07T10:00:00.000Z') / 1000],
+            end: Date.parse('2026-06-07T10:30:00.000Z') / 1000,
+            error: ['Web error'],
+          },
+        ],
+      },
+      latency: {},
+    });
+
+    const result = projectTimeline({
+      state,
+      monitors: [publicMonitor('api', 'API'), publicMonitor('web', 'Web')],
+      maintenances: [maintenance('past', '2026-06-03T00:00:00.000Z', '2026-06-03T01:00:00.000Z')],
+      monthStart,
+      monthEnd,
+      nowMs: Date.parse('2026-06-10T12:00:00.000Z'),
+      eventType: 'all',
+    });
+
+    expect(result.pinned).toEqual([]);
+    expect(
+      result.timeline.map((event) =>
+        event.type === 'incident' ? event.monitorId : event.maintenance.id,
+      ),
+    ).toEqual(['web', 'api', 'past']);
+  });
+
+  it('uses the provided now for open incidents when state has no last update', () => {
+    const monthStart = new Date('2026-06-01T00:00:00.000Z');
+    const monthEnd = new Date('2026-07-01T00:00:00.000Z');
+    const state = createState({
+      lastUpdate: 0,
+      incident: {
+        api: [
+          {
+            start: [Date.parse('2026-06-05T10:00:00.000Z') / 1000],
+            end: undefined,
+            error: ['Still down'],
           },
         ],
       },
@@ -122,20 +193,18 @@ describe('status projection', () => {
     const result = projectTimeline({
       state,
       monitors: [publicMonitor('api', 'API')],
-      maintenances: [maintenance('past', '2026-06-03T00:00:00.000Z', '2026-06-03T01:00:00.000Z')],
+      maintenances: [],
       monthStart,
       monthEnd,
       nowMs: Date.parse('2026-06-10T12:00:00.000Z'),
       eventType: 'incident',
     });
 
-    expect(result.pinned).toEqual([]);
     expect(result.timeline).toHaveLength(1);
     expect(result.timeline[0]).toMatchObject({
       type: 'incident',
       monitorId: 'api',
-      monitorName: 'API',
-      errors: ['Error'],
+      end: undefined,
     });
   });
 
