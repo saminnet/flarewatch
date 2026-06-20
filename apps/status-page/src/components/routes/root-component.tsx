@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { getThemeInitScript } from '@/lib/theme-server';
-import { isSafeThemeCss } from '@/lib/utils';
+import { sanitizeThemeVars } from '@flarewatch/shared';
 
 const rootRoute = getRouteApi('__root__');
 
@@ -14,6 +14,7 @@ export function RootComponent() {
   const isDark = theme === 'dark';
   const title = statusPage?.title || 'FlareWatch';
   const favicon = statusPage?.favicon;
+  const themeVars = sanitizeThemeVars(statusPage?.themeVars);
 
   return (
     <html lang="en" className={isDark ? 'h-full dark' : 'h-full'} suppressHydrationWarning>
@@ -30,9 +31,7 @@ export function RootComponent() {
         )}
         <HeadContent />
 
-        {statusPage?.themeVars && isSafeThemeCss(statusPage.themeVars) && (
-          <style>{statusPage.themeVars}</style>
-        )}
+        {themeVars && <style>{themeVars}</style>}
       </head>
       <body className="flex min-h-full flex-col bg-white font-sans antialiased dark:bg-neutral-950">
         <a
