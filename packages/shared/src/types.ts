@@ -137,22 +137,6 @@ export type RuntimeConfigEnvelope = RuntimeConfigEnvelopeMetadata & {
   _deployment?: unknown;
 };
 
-/**
- * @deprecated Runtime config envelope metadata is intentionally opaque.
- */
-export type DeploymentMeta = {
-  accountId: string;
-  configKvNamespaceId: string;
-  stateKvNamespaceId: string;
-  monitorWorkerName: string;
-  statusPageWorkerName: string;
-  createdAt: string;
-  updatedAt: string;
-  version: string;
-};
-
-export type StoredConfig = RuntimeConfigEnvelope;
-
 export interface KvStore {
   get(key: string, options?: { type?: 'json' | 'text' }): Promise<unknown>;
   put(key: string, value: string): Promise<void>;
@@ -236,13 +220,3 @@ export interface CheckResultWithLocation {
 export interface MonitorChecker {
   check(target: MonitorTarget): Promise<CheckResult>;
 }
-
-export type FlareWatchRuntimeContract = {
-  monitor: MonitorTarget;
-  config: RuntimeConfig;
-  storedConfig: RuntimeConfigEnvelope;
-  maintenances: Maintenance[];
-  state: MonitorState;
-  checkResult: CheckResultWithLocation;
-  kvKeys: typeof KV_KEYS;
-};
