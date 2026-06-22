@@ -57,7 +57,9 @@ export function EmbedPage() {
   if (!monitor) {
     return (
       <EmbedWrapper theme={theme} className="h-full flex items-center justify-center p-4">
-        <div className="text-sm text-red-500">{t('error.monitorNotFound', { id: monitorId })}</div>
+        <div className="text-sm text-destructive">
+          {t('error.monitorNotFound', { id: monitorId })}
+        </div>
       </EmbedWrapper>
     );
   }
@@ -65,7 +67,7 @@ export function EmbedPage() {
   if (!state) {
     return (
       <EmbedWrapper theme={theme} className="h-full flex items-center justify-center p-4">
-        <div className="text-sm text-neutral-500">{t('error.monitorStateNotDefined')}</div>
+        <div className="text-sm text-muted-foreground">{t('error.monitorStateNotDefined')}</div>
       </EmbedWrapper>
     );
   }
@@ -76,7 +78,9 @@ export function EmbedPage() {
         theme={theme}
         className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium"
       >
-        <span className={cn('w-2 h-2 rounded-full', isUp ? 'bg-emerald-500' : 'bg-red-500')} />
+        <span
+          className={cn('w-2 h-2 rounded-full', isUp ? 'bg-status-operational' : 'bg-status-down')}
+        />
         <span className={cn('font-mono', statusColor.text)}>
           {formatUptimeDisplay(uptimePercent, hasStarted, 1, t)}
         </span>
@@ -86,20 +90,18 @@ export function EmbedPage() {
 
   return (
     <EmbedWrapper theme={theme} className="p-3">
-      <div className="flex items-center gap-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 shadow-sm">
+      <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 shadow-sm">
         <div className="shrink-0">
           <StatusIcon isUp={isUp} />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-medium text-sm text-neutral-900 dark:text-neutral-100 truncate">
-              {monitor.name}
-            </h3>
+            <h3 className="font-medium text-sm text-foreground truncate">{monitor.name}</h3>
           </div>
-          {!isUp && error && <p className="text-xs text-red-500 truncate mt-0.5">{error}</p>}
+          {!isUp && error && <p className="text-xs text-status-down truncate mt-0.5">{error}</p>}
           {isUp && latency && (
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {t('monitor.latency', {
                 ping: latency.ping,
                 loc: latency.loc,
@@ -111,7 +113,7 @@ export function EmbedPage() {
         <div
           className={cn(
             'px-2 py-1 rounded text-xs font-mono font-medium',
-            isUp ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30',
+            isUp ? 'bg-status-operational-bg' : 'bg-status-down-bg',
             statusColor.text,
           )}
         >

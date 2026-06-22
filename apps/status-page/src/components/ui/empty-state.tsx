@@ -11,8 +11,8 @@ interface EmptyStateProps {
 
 export function EmptyState({
   icon: Icon,
-  iconClassName = 'text-neutral-500',
-  iconContainerClassName = 'bg-neutral-100 dark:bg-neutral-800',
+  iconClassName = 'text-muted-foreground',
+  iconContainerClassName = 'bg-muted',
   title,
   description,
 }: EmptyStateProps) {
@@ -26,8 +26,8 @@ export function EmptyState({
       >
         <Icon className={cn('h-6 w-6', iconClassName)} />
       </div>
-      <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">{title}</h3>
-      {description && <p className="mt-1 text-sm text-neutral-500">{description}</p>}
+      <h3 className="text-lg font-medium text-foreground">{title}</h3>
+      {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
     </Card>
   );
 }

@@ -8,8 +8,8 @@ interface StatusIconProps {
 
 export function StatusIcon({ isUp, className }: StatusIconProps) {
   return isUp ? (
-    <IconCircleCheck className={cn('h-5 w-5 text-emerald-500', className)} />
+    <IconCircleCheck className={cn('h-5 w-5 text-status-operational', className)} />
   ) : (
-    <IconCircleX className={cn('h-5 w-5 text-red-500', className)} />
+    <IconCircleX className={cn('h-5 w-5 text-status-down', className)} />
   );
 }

@@ -15,10 +15,10 @@ export function Footer({ config, theme = 'system' }: FooterProps) {
   const poweredByUrl = config?.poweredByUrl ?? DEFAULT_POWERED_BY_URL;
 
   return (
-    <footer className="mt-auto border-t border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
+    <footer className="mt-auto border-t border-border bg-muted/30">
       <div className={PAGE_CONTAINER_CLASSES}>
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <IconFlame className="h-4 w-4 text-orange-500" />
             <span>
               {t('footer.poweredBy')}{' '}
@@ -26,7 +26,7 @@ export function Footer({ config, theme = 'system' }: FooterProps) {
                 href={poweredByUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-medium text-neutral-900 hover:underline dark:text-neutral-100"
+                className="font-medium text-foreground hover:underline"
               >
                 FlareWatch
               </a>

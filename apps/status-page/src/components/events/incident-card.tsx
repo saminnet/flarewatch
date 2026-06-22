@@ -17,9 +17,9 @@ export function IncidentCard({ event }: IncidentCardProps) {
   const latestError = event.errors.at(-1) ?? t('error.unknown');
 
   return (
-    <Alert className="bg-red-50/60 dark:bg-red-950/20">
+    <Alert className="bg-status-down-bg">
       <AlertTitle className="flex items-center gap-2">
-        <IconAlertTriangle className="h-4 w-4 text-red-500" />
+        <IconAlertTriangle className="h-4 w-4 text-status-down" />
         {event.monitorName}
         <Badge variant="outline" className="text-xs">
           {t('event.incident')}
@@ -32,12 +32,12 @@ export function IncidentCard({ event }: IncidentCardProps) {
       </AlertTitle>
 
       <AlertDescription className="mt-1.5">
-        <p className="text-neutral-700 dark:text-neutral-300">{latestError}</p>
+        <p className="text-foreground">{latestError}</p>
         <DateRange
           start={startDate}
           end={endDate}
           noEndLabel={t('status.ongoing')}
-          noEndClassName="text-red-500"
+          noEndClassName="text-status-down"
         />
       </AlertDescription>
     </Alert>

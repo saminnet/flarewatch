@@ -20,7 +20,7 @@ export function Header({ config }: HeaderProps) {
   const hasExternalLinks = config?.links && config.links.length > 0;
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-neutral-200 bg-white/80 backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-950/80">
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-sm">
       <div className="container mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
         <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity group">
           {config?.logo ? (
@@ -28,7 +28,7 @@ export function Header({ config }: HeaderProps) {
           ) : (
             <IconFlame className="h-7 w-7 text-orange-500" />
           )}
-          <span className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+          <span className="text-lg font-semibold text-foreground group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
             {config?.title || 'FlareWatch'}
           </span>
         </Link>
@@ -84,7 +84,7 @@ export function Header({ config }: HeaderProps) {
               <div className="flex sm:hidden">
                 <DropdownMenu>
                   <DropdownMenuTrigger
-                    className="inline-flex items-center justify-center rounded-md p-2 text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                    className="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-muted"
                     aria-label="More links"
                   >
                     <IconMenu2 className="h-5 w-5" />

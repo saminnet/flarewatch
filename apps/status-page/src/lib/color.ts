@@ -6,31 +6,37 @@ export type StatusColor = {
   border: string;
 };
 
-const NEUTRAL: StatusColor = {
-  bg: 'bg-neutral-400',
-  text: 'text-neutral-400',
-  border: 'border-neutral-400',
+const UNKNOWN: StatusColor = {
+  bg: 'bg-status-unknown',
+  text: 'text-status-unknown',
+  border: 'border-status-unknown',
 };
 
 /**
- * Get Tailwind color classes based on uptime percentage
+ * Get token-backed status classes based on uptime percentage.
+ * Colors resolve from the `--status-*` runtime contract tokens.
  */
 export function getStatusColor(percent: number | string | null): StatusColor {
-  if (percent === null) return NEUTRAL;
+  if (percent === null) return UNKNOWN;
 
   const p = Number(percent);
-  if (Number.isNaN(p)) return NEUTRAL;
+  if (Number.isNaN(p)) return UNKNOWN;
 
-  if (p >= UPTIME_THRESHOLDS.EXCELLENT) {
-    return { bg: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500' };
-  }
   if (p >= UPTIME_THRESHOLDS.GOOD) {
-    return { bg: 'bg-emerald-400', text: 'text-emerald-400', border: 'border-emerald-400' };
+    return {
+      bg: 'bg-status-operational',
+      text: 'text-status-operational',
+      border: 'border-status-operational',
+    };
   }
   if (p >= UPTIME_THRESHOLDS.DEGRADED) {
-    return { bg: 'bg-amber-500', text: 'text-amber-500', border: 'border-amber-500' };
+    return {
+      bg: 'bg-status-degraded',
+      text: 'text-status-degraded',
+      border: 'border-status-degraded',
+    };
   }
-  return { bg: 'bg-red-500', text: 'text-red-500', border: 'border-red-500' };
+  return { bg: 'bg-status-down', text: 'text-status-down', border: 'border-status-down' };
 }
 
 const HEX_NEUTRAL = '#a3a3a3'; // neutral-400

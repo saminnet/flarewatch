@@ -39,7 +39,7 @@ function DialogContent({ className, children, ...props }: DialogPrimitive.Popup.
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 bg-white dark:bg-neutral-900 rounded-lg p-6 shadow-lg duration-150 fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 outline-none max-h-[85vh] overflow-auto',
+          'data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 bg-card text-card-foreground rounded-lg p-6 shadow-lg duration-150 fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 outline-none max-h-[85vh] overflow-auto',
           className,
         )}
         {...props}

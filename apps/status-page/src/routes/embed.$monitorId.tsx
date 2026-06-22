@@ -28,7 +28,7 @@ export const Route = createFileRoute('/embed/$monitorId')({
   component: EmbedPage,
   errorComponent: ({ error }) => (
     <div className="h-full flex items-center justify-center p-4">
-      <div className="text-sm text-red-500">
+      <div className="text-sm text-destructive">
         {error instanceof Error ? error.message : 'Failed to load monitor status'}
       </div>
     </div>

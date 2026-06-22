@@ -44,10 +44,10 @@ function CustomTooltip({ active, payload }: TooltipProps) {
   const coloLabel = formatColoLabel(data.loc);
 
   return (
-    <div className="rounded border border-neutral-200 bg-white px-2 py-1.5 text-xs shadow-sm dark:border-neutral-700 dark:bg-neutral-800">
-      <div className="font-medium text-neutral-900 dark:text-neutral-100">{data.ping}ms</div>
-      <div className="text-neutral-500">{coloLabel || data.loc}</div>
-      <div className="text-neutral-400">{format(new Date(data.timeMs), 'MMM d, HH:mm')}</div>
+    <div className="rounded border border-border bg-popover px-2 py-1.5 text-xs shadow-sm">
+      <div className="font-medium text-popover-foreground">{data.ping}ms</div>
+      <div className="text-muted-foreground">{coloLabel || data.loc}</div>
+      <div className="text-muted-foreground">{format(new Date(data.timeMs), 'MMM d, HH:mm')}</div>
     </div>
   );
 }

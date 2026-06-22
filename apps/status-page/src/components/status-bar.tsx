@@ -18,10 +18,10 @@ import { useContainerWidth } from '@/lib/hooks/use-container-width';
 import { STATUS_BAR, STATUS_DOT_COLORS } from '@/lib/constants';
 
 const hoverColors = {
-  up: 'hover:bg-emerald-400',
-  down: 'hover:bg-red-400',
-  partial: 'hover:bg-amber-400',
-  unknown: 'hover:bg-neutral-400 dark:hover:bg-neutral-600',
+  up: 'hover:bg-status-operational',
+  down: 'hover:bg-status-down',
+  partial: 'hover:bg-status-degraded',
+  unknown: 'hover:bg-status-unknown-bg',
 };
 
 interface StatusBarSegmentProps {
@@ -64,7 +64,7 @@ function StatusBarSegment({ day, isMobile, onClick }: StatusBarSegmentProps) {
               })}
         </div>
         {day.downtime > 0 && (
-          <div className="text-neutral-500">
+          <div className="text-muted-foreground">
             {t('monitor.downFor', { duration: formatDuration(day.downtime) })}
           </div>
         )}
@@ -152,12 +152,12 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
             {selectedDay?.incidents.map((incident) => (
               <div
                 key={`${incident.startTime}-${incident.endTime}`}
-                className="rounded-md border border-neutral-200 dark:border-neutral-800 p-3 text-sm"
+                className="rounded-md border border-border p-3 text-sm"
               >
-                <div className="font-mono text-xs text-neutral-500 mb-1">
+                <div className="font-mono text-xs text-muted-foreground mb-1">
                   [{incident.startTime} - {incident.endTime}]
                 </div>
-                <div className="text-neutral-700 dark:text-neutral-300">{incident.error}</div>
+                <div className="text-foreground">{incident.error}</div>
               </div>
             ))}
           </div>

@@ -29,7 +29,7 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
       {/* Active Maintenances */}
       {activeMaintenances.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
+          <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
             {t('maintenance.active')}
           </h3>
           {activeMaintenances.map((m) => (
@@ -47,8 +47,8 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
       {/* Upcoming Maintenances */}
       {upcomingMaintenances.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
-            <IconCalendar className="size-4 text-blue-500" />
+          <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
+            <IconCalendar className="size-4 text-status-maintenance" />
             {t('maintenance.upcoming')}
           </h3>
           {upcomingMaintenances.map((m) => (

@@ -17,7 +17,11 @@ export function RootComponent() {
   const themeVars = sanitizeThemeVars(statusPage?.themeVars);
 
   return (
-    <html lang="en" className={isDark ? 'h-full dark' : 'h-full'} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={isDark ? 'h-full bg-background dark' : 'h-full bg-background'}
+      suppressHydrationWarning
+    >
       <head>
         <script>{themeInitScript}</script>
         <title>{title}</title>
@@ -33,10 +37,10 @@ export function RootComponent() {
 
         {themeVars && <style>{themeVars}</style>}
       </head>
-      <body className="flex min-h-full flex-col bg-white font-sans antialiased dark:bg-neutral-950">
+      <body className="flex min-h-full flex-col bg-background font-sans text-foreground antialiased">
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-100 focus:bg-white focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg dark:focus:bg-neutral-900"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-100 focus:bg-card focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg"
         >
           {t('nav.skipToContent')}
         </a>
