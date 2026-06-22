@@ -70,6 +70,23 @@ code {
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Status tokens — public runtime contract (see runtime-contract.ts). */
+  --status-operational: oklch(0.696 0.17 162.48);
+  --status-operational-bg: oklch(0.979 0.021 166.113);
+  --status-operational-border: oklch(0.905 0.093 164.15);
+  --status-degraded: oklch(0.769 0.188 70.08);
+  --status-degraded-bg: oklch(0.987 0.022 95.277);
+  --status-degraded-border: oklch(0.924 0.12 95.746);
+  --status-down: oklch(0.637 0.237 25.331);
+  --status-down-bg: oklch(0.971 0.013 17.38);
+  --status-down-border: oklch(0.885 0.062 18.334);
+  --status-maintenance: oklch(0.623 0.214 259.815);
+  --status-maintenance-bg: oklch(0.97 0.014 254.604);
+  --status-maintenance-border: oklch(0.882 0.059 254.128);
+  --status-unknown: oklch(0.708 0 0);
+  --status-unknown-bg: oklch(0.97 0 0);
+  --status-unknown-border: oklch(0.922 0 0);
 }
 
 .dark {
@@ -104,6 +121,23 @@ code {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* Status tokens — public runtime contract (see runtime-contract.ts). */
+  --status-operational: oklch(0.696 0.17 162.48);
+  --status-operational-bg: oklch(0.262 0.051 172.552 / 30%);
+  --status-operational-border: oklch(0.378 0.077 168.94);
+  --status-degraded: oklch(0.769 0.188 70.08);
+  --status-degraded-bg: oklch(0.279 0.077 45.635 / 30%);
+  --status-degraded-border: oklch(0.473 0.137 46.201);
+  --status-down: oklch(0.637 0.237 25.331);
+  --status-down-bg: oklch(0.258 0.092 26.042 / 30%);
+  --status-down-border: oklch(0.396 0.141 25.723);
+  --status-maintenance: oklch(0.623 0.214 259.815);
+  --status-maintenance-bg: oklch(0.282 0.091 267.935 / 30%);
+  --status-maintenance-border: oklch(0.379 0.146 265.522);
+  --status-unknown: oklch(0.708 0 0);
+  --status-unknown-bg: oklch(0.269 0 0);
+  --status-unknown-border: oklch(1 0 0 / 10%);
 }
 
 @theme inline {
@@ -139,6 +173,21 @@ code {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-status-operational: var(--status-operational);
+  --color-status-operational-bg: var(--status-operational-bg);
+  --color-status-operational-border: var(--status-operational-border);
+  --color-status-degraded: var(--status-degraded);
+  --color-status-degraded-bg: var(--status-degraded-bg);
+  --color-status-degraded-border: var(--status-degraded-border);
+  --color-status-down: var(--status-down);
+  --color-status-down-bg: var(--status-down-bg);
+  --color-status-down-border: var(--status-down-border);
+  --color-status-maintenance: var(--status-maintenance);
+  --color-status-maintenance-bg: var(--status-maintenance-bg);
+  --color-status-maintenance-border: var(--status-maintenance-border);
+  --color-status-unknown: var(--status-unknown);
+  --color-status-unknown-bg: var(--status-unknown-bg);
+  --color-status-unknown-border: var(--status-unknown-border);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

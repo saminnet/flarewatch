@@ -18,12 +18,12 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
     <div className="container mx-auto flex min-h-[60vh] max-w-5xl items-center justify-center px-4 py-8">
       <Card className="w-full max-w-3xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-semibold text-red-600 dark:text-red-500">
+          <CardTitle className="text-2xl font-semibold text-destructive">
             {t('error.somethingWrong')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="rounded-lg bg-neutral-50 p-4 text-sm text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
+          <div className="rounded-lg bg-muted p-4 text-sm text-foreground">
             <ErrorComponent error={error} />
           </div>
 

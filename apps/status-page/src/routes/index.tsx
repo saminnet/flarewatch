@@ -39,11 +39,9 @@ function DashboardPage() {
   if (!state) {
     return (
       <div className={PAGE_CONTAINER_CLASSES}>
-        <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-8 text-center dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
-            {t('error.noMonitoringData')}
-          </h2>
-          <p className="mt-2 text-sm text-neutral-500">{t('error.workerNotConfigured')}</p>
+        <div className="rounded-lg border border-border bg-muted p-8 text-center">
+          <h2 className="text-lg font-medium text-foreground">{t('error.noMonitoringData')}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{t('error.workerNotConfigured')}</p>
         </div>
       </div>
     );

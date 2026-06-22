@@ -30,14 +30,14 @@ export function MaintenanceCard({
     <div
       className={cn(
         'flex items-stretch rounded-lg border overflow-hidden',
-        isActive ? colors.bg : 'bg-white dark:bg-neutral-900',
+        isActive ? colors.bg : 'bg-card',
         colors.border,
       )}
     >
       <div className={cn('flex-1 min-w-0', isActive ? 'px-3 py-2' : 'px-3 py-2.5')}>
         <div className="flex items-center gap-2 flex-wrap">
           <Icon className={cn('size-4 shrink-0', colors.icon)} />
-          <h4 className="font-medium text-neutral-900 dark:text-neutral-100">
+          <h4 className="font-medium text-foreground">
             {maintenance.title ?? t('maintenance.scheduled')}
           </h4>
           {isActive ? (
@@ -51,13 +51,11 @@ export function MaintenanceCard({
           )}
         </div>
         {maintenance.body && (
-          <p className="mt-1.5 text-sm text-neutral-600 dark:text-neutral-400">
-            {maintenance.body}
-          </p>
+          <p className="mt-1.5 text-sm text-muted-foreground">{maintenance.body}</p>
         )}
         <div
           className={cn(
-            'mt-2 flex items-center text-xs text-neutral-500',
+            'mt-2 flex items-center text-xs text-muted-foreground',
             isActive ? 'gap-2 flex-wrap' : 'gap-4',
           )}
         >
@@ -66,7 +64,7 @@ export function MaintenanceCard({
             {formatDateRange(start, end)}
           </span>
           {isActive && end && (
-            <span className="text-amber-600 dark:text-amber-400 font-medium">
+            <span className="text-status-degraded font-medium">
               {t('maintenance.endsIn', { time: formatTimeUntil(end, now) })}
             </span>
           )}

@@ -48,6 +48,7 @@ Do not use `wrangler deploy` for production. The `wrangler.toml` files are for l
 
 - Worker: `packages/config/src/worker.ts` (examples: `packages/config/src/worker.example.ts`)
 - Status page: `packages/config/src/public.ts` (examples: `packages/config/src/public.example.ts`)
+- Theming (supported tokens, `themeVars`, safety floor): [apps/status-page/THEMING.md](apps/status-page/THEMING.md)
 
 ## Secrets
 

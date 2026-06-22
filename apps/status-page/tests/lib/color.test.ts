@@ -2,35 +2,41 @@ import { describe, it, expect } from 'vite-plus/test';
 import { getStatusColor, getStatusHexColor } from '../../src/lib/color';
 
 describe('color utilities', () => {
-  it('maps uptime thresholds to tailwind classes', () => {
+  it('maps uptime thresholds to status token classes', () => {
     expect(getStatusColor(99.9)).toEqual({
-      bg: 'bg-emerald-500',
-      text: 'text-emerald-500',
-      border: 'border-emerald-500',
+      bg: 'bg-status-operational',
+      text: 'text-status-operational',
+      border: 'border-status-operational',
     });
 
     expect(getStatusColor(99)).toEqual({
-      bg: 'bg-emerald-400',
-      text: 'text-emerald-400',
-      border: 'border-emerald-400',
+      bg: 'bg-status-operational',
+      text: 'text-status-operational',
+      border: 'border-status-operational',
     });
 
     expect(getStatusColor(95)).toEqual({
-      bg: 'bg-amber-500',
-      text: 'text-amber-500',
-      border: 'border-amber-500',
+      bg: 'bg-status-degraded',
+      text: 'text-status-degraded',
+      border: 'border-status-degraded',
     });
 
     expect(getStatusColor('not-a-number')).toEqual({
-      bg: 'bg-neutral-400',
-      text: 'text-neutral-400',
-      border: 'border-neutral-400',
+      bg: 'bg-status-unknown',
+      text: 'text-status-unknown',
+      border: 'border-status-unknown',
+    });
+
+    expect(getStatusColor(null)).toEqual({
+      bg: 'bg-status-unknown',
+      text: 'text-status-unknown',
+      border: 'border-status-unknown',
     });
 
     expect(getStatusColor(0)).toEqual({
-      bg: 'bg-red-500',
-      text: 'text-red-500',
-      border: 'border-red-500',
+      bg: 'bg-status-down',
+      text: 'text-status-down',
+      border: 'border-status-down',
     });
   });
 

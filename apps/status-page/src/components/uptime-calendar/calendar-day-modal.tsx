@@ -81,15 +81,13 @@ export function CalendarDayModal({ data, open, onOpenChange }: CalendarDayModalP
                 {incidents.map((incident, i) => (
                   <div
                     key={`${incident.startTime}-${incident.endTime}-${i}`}
-                    className="rounded-md border border-neutral-200 dark:border-neutral-800 p-3"
+                    className="rounded-md border border-border p-3"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
                         [{incident.startTime} – {incident.endTime}]
                       </span>
-                      <span className="text-sm text-neutral-700 dark:text-neutral-300 text-right">
-                        {incident.error}
-                      </span>
+                      <span className="text-sm text-foreground text-right">{incident.error}</span>
                     </div>
                   </div>
                 ))}

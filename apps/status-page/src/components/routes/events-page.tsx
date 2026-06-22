@@ -157,8 +157,8 @@ export function EventsPage() {
       {pinned.length === 0 && timeline.length === 0 ? (
         <EmptyState
           icon={IconCalendar}
-          iconClassName="text-emerald-600 dark:text-emerald-400"
-          iconContainerClassName="bg-emerald-100 dark:bg-emerald-900/30"
+          iconClassName="text-status-operational"
+          iconContainerClassName="bg-status-operational-bg"
           title={t('events.noEvents')}
           description={t('events.noIncidentsOrMaintenance')}
         />
@@ -166,7 +166,7 @@ export function EventsPage() {
         <div className="space-y-4">
           {pinned.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-xs font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {t('events.activeAndUpcoming')}
               </h3>
               {pinned.map((event) => (

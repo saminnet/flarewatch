@@ -119,10 +119,20 @@ const MAINTENANCE_COLOR_MAP: Record<string, MaintenanceColors> = {
   },
 };
 
-const DEFAULT_COLOR = MAINTENANCE_COLOR_MAP.yellow!;
+/**
+ * Default surface for maintenances with no authored severity color — backed by the
+ * `--status-maintenance-*` runtime tokens. Authored severity colors keep the palette above.
+ */
+const DEFAULT_MAINTENANCE_COLORS: MaintenanceColors = {
+  bg: 'bg-status-maintenance-bg',
+  border: 'border-status-maintenance-border',
+  icon: 'text-status-maintenance',
+  dot: 'bg-status-maintenance',
+};
 
 export function getMaintenanceColors(color?: string): MaintenanceColors {
-  return MAINTENANCE_COLOR_MAP[color ?? 'yellow'] ?? DEFAULT_COLOR;
+  if (!color) return DEFAULT_MAINTENANCE_COLORS;
+  return MAINTENANCE_COLOR_MAP[color] ?? DEFAULT_MAINTENANCE_COLORS;
 }
 
 export const SEVERITY_OPTIONS = [

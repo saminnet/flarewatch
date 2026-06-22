@@ -82,9 +82,20 @@ describe('maintenance helpers', () => {
 
   it('resolves display metadata with defaults', () => {
     expect(getMaintenanceColors('green').dot).toBe('bg-emerald-500');
-    expect(getMaintenanceColors('missing').dot).toBe('bg-amber-500');
     expect(getSeverityOption('red').labelKey).toBe('severity.critical');
     expect(getSeverityOption('missing').value).toBe('yellow');
+  });
+
+  it('falls back to status-maintenance tokens when no severity color is authored', () => {
+    // No color and unknown colors use the runtime maintenance tokens, not the severity palette.
+    for (const colors of [getMaintenanceColors(), getMaintenanceColors('missing')]) {
+      expect(colors).toEqual({
+        bg: 'bg-status-maintenance-bg',
+        border: 'border-status-maintenance-border',
+        icon: 'text-status-maintenance',
+        dot: 'bg-status-maintenance',
+      });
+    }
   });
 
   it('resolves affected monitors in configured order and skips unknown ids', () => {

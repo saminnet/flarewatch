@@ -5,11 +5,12 @@ import { formatUtc, type CalendarDay } from '@/lib/date';
 import type { AggregatedDayData, DayStatus } from '@/lib/uptime';
 import { STATUS_COLORS } from '@/lib/constants';
 
+// White/amber overlays are tuned for contrast on the solid status fills.
 const DAY_TEXT_COLORS: Record<DayStatus, string> = {
   up: 'text-white/70',
   down: 'text-white/80',
   partial: 'text-amber-900/50 dark:text-white/70',
-  unknown: 'text-neutral-400 dark:text-neutral-500',
+  unknown: 'text-muted-foreground',
 };
 
 interface CalendarDayCellProps {
@@ -33,7 +34,7 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
   if (day.isFuture) {
     return (
       <div
-        className="h-6 rounded flex items-center justify-center bg-neutral-100 dark:bg-neutral-800/40 text-[10px] leading-none tabular-nums text-neutral-300 dark:text-neutral-600 select-none"
+        className="h-6 rounded flex items-center justify-center bg-muted/40 text-[10px] leading-none tabular-nums text-muted-foreground/40 select-none"
         aria-hidden
       >
         {dayNum}
