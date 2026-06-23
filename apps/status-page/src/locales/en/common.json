@@ -30,7 +30,6 @@
   "error.monitorStateNotDefined": "Monitor state is unavailable. Check the worker status and KV binding.",
   "error.noMonitoringData": "No monitoring data available yet",
   "error.unknown": "Unknown error",
-  "error.chartLoadFailed": "Failed to load chart",
 
   "status.allOperational": "All systems operational",
   "status.allDown": "All systems down",
@@ -49,6 +48,7 @@
   "monitor.count": "{{count}} monitors",
   "monitor.viewStatusPage": "View status page",
   "monitor.responseTimes": "Response times (ms)",
+  "monitor.responseTimesChart": "Response time chart, latest {{ping}}ms from {{loc}}",
   "monitor.noResponseData": "No response data yet",
   "monitor.latency": "{{ping}}ms (edge {{loc}})",
   "monitor.checkLocation.cloudflare": "Last check ran at this Cloudflare edge location (may differ from yours).",

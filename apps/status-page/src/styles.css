@@ -250,3 +250,12 @@ code {
     opacity: 1;
   }
 }
+
+/* Latency chart: thin x-axis ticks/labels as the plot area narrows. The plot box sets
+   container-type: inline-size; tier 0 (round boundaries) always shows, tier 1 (the
+   in-between ticks) drops on narrow widths. */
+@container (max-width: 28rem) {
+  [data-chart-tier='1'] {
+    display: none;
+  }
+}

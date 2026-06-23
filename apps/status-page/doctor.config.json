@@ -1,0 +1,5 @@
+{
+  "rules": {
+    "react-doctor/prefer-tag-over-role": "off"
+  }
+}
