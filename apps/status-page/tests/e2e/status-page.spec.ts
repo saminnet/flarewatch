@@ -5,7 +5,7 @@ type SeededMonitor = {
   id: string;
   name: string;
   status: 'operational' | 'not operational';
-  latency: string;
+  latency?: string;
   error?: string;
   href?: string;
 };
@@ -13,7 +13,7 @@ type SeededMonitor = {
 type PublicData = {
   up: number;
   down: number;
-  monitors: Record<string, { up: boolean; latency: number }>;
+  monitors: Record<string, { up: boolean; latency: number | null }>;
 };
 
 const seededMonitors: SeededMonitor[] = [
@@ -27,7 +27,6 @@ const seededMonitors: SeededMonitor[] = [
     id: 'demo_cloudflare_trace',
     name: 'Cloudflare Trace',
     status: 'operational',
-    latency: '118ms',
   },
   {
     id: 'demo_cloudflare_status',
@@ -103,7 +102,9 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
         name: new RegExp(`${monitor.name}, ${monitor.status}.*Click to toggle details`),
       }),
     ).toBeVisible();
-    await expect(page.getByText(monitor.latency).filter({ visible: true }).first()).toBeVisible();
+    if (monitor.latency) {
+      await expect(page.getByText(monitor.latency).filter({ visible: true }).first()).toBeVisible();
+    }
     if (monitor.error) await expect(page.getByText(monitor.error)).toBeVisible();
     if (monitor.href) {
       await expect(page.getByRole('link', { name: new RegExp(monitor.name) })).toHaveAttribute(
@@ -114,7 +115,7 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
   }
 
   await expect(page.getByRole('heading', { name: 'Response times (ms)' }).first()).toBeVisible();
-  await expect(page.locator('.recharts-wrapper').first()).toBeVisible();
+  await expect(page.getByTestId('latency-chart').first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Toggle Demo (3 monitors)' }).click();
   await expect(page.getByRole('button', { name: 'Toggle Demo (3 monitors)' })).toHaveAttribute(
@@ -126,6 +127,62 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
   await page.getByRole('button', { name: 'Toggle Demo (3 monitors)' }).click();
   await expect(page.getByRole('button', { name: /Example Domain, operational/ })).toBeVisible();
   expect(clientErrors).toEqual([]);
+});
+
+test('latency chart is server-rendered, labeled, and supports hover', async ({ page, request }) => {
+  // SSR: the chart container and its SVG line/grid are in the raw server HTML, before any JS.
+  const html = await (await request.get('/')).text();
+  expect(html).toContain('data-testid="latency-chart"');
+  expect(html).toContain('vector-effect="non-scaling-stroke"');
+
+  await page.goto('/');
+  const chart = page.getByTestId('latency-chart').first();
+  await chart.scrollIntoViewIfNeeded();
+  await expect(chart).toBeVisible();
+
+  // Exposed to assistive tech as a single labeled graphic.
+  await expect(
+    page.getByRole('img', { name: /Response time chart, latest \d+ms from/ }).first(),
+  ).toBeVisible();
+
+  // The line path and a y-axis label render from real data.
+  await expect(chart.locator('path').first()).toBeVisible();
+  await expect(chart.getByText(/^\d+ms$/).first()).toBeVisible();
+
+  // Hovering reveals the tooltip; its "MMM d, HH:mm" line is unique to the tooltip.
+  await chart.hover();
+  await expect(chart.getByText(/\w{3} \d{1,2}, \d{1,2}:\d{2}/)).toBeVisible();
+});
+
+test('shows the chart empty state for a monitor with no latency data', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByText('No response data yet')).toBeVisible();
+});
+
+test.describe('latency chart touch', () => {
+  test.use({ hasTouch: true });
+  test('tooltip appears on touch press and clears on lift', async ({ page }) => {
+    await page.goto('/');
+    const chart = page.getByTestId('latency-chart').first();
+    await chart.scrollIntoViewIfNeeded();
+    await chart.waitFor({ state: 'visible' });
+
+    const box = (await chart.boundingBox())!;
+    const at = {
+      clientX: box.x + box.width * 0.55,
+      clientY: box.y + box.height * 0.5,
+      pointerType: 'touch',
+      isPrimary: true,
+      pointerId: 1,
+      bubbles: true,
+    };
+    const dot = chart.locator('span.rounded-full');
+
+    await chart.dispatchEvent('pointerdown', at);
+    await expect(dot).toBeVisible();
+    await chart.dispatchEvent('pointerup', at);
+    await expect(dot).toHaveCount(0);
+  });
 });
 
 test('public API exposes seeded status, maintenance, badges, and CORS', async ({ request }) => {
@@ -152,6 +209,8 @@ test('public API exposes seeded status, maintenance, badges, and CORS', async ({
     },
   });
   expect(getPublicMonitor(data, 'demo_example').latency).toEqual(expect.any(Number));
+  // demo_cloudflare_trace has no recent latency, so the API reports null.
+  expect(getPublicMonitor(data, 'demo_cloudflare_trace').latency).toBeNull();
 
   const maintenancesResponse = await request.get('/api/maintenances');
   const maintenances = await readOkJson<{ title?: string }[]>(maintenancesResponse);

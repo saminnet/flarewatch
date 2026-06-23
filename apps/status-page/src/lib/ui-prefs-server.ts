@@ -72,7 +72,7 @@ export const getUiPrefsServerFn = createServerFn({ method: 'GET' }).handler(asyn
 });
 
 export const setUiPrefsServerFn = createServerFn({ method: 'POST' })
-  .inputValidator(validateUiPrefs)
+  .validator(validateUiPrefs)
   .handler(async ({ data }) => {
     setCookie(COOKIE_NAMES.UI_PREFS, JSON.stringify(data), {
       maxAge: ONE_YEAR_SECONDS,

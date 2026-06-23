@@ -1,4 +1,3 @@
-import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconExternalLink, IconChevronDown } from '@tabler/icons-react';
 import { Card } from '@/components/ui/card';
@@ -8,34 +7,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { StatusBar } from '@/components/status-bar';
 import { StatusIcon } from '@/components/status-icon';
 import type { MonitorState } from '@flarewatch/shared';
-import { useHydrated } from '@/lib/hooks/use-hydrated';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import type { PublicMonitor } from '@/lib/monitors';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { formatUptimeDisplay } from '@/lib/uptime';
+import { LatencyChart } from '@/components/latency-chart';
 import { cn } from '@/lib/utils';
-
-function ChartSkeleton() {
-  return <div className="h-32 w-full rounded-md border border-dashed border-border" />;
-}
-
-function ChartLoadError() {
-  const { t } = useTranslation();
-  return (
-    <div className="h-32 w-full flex items-center justify-center rounded-md border border-dashed border-border">
-      <span className="text-xs text-muted-foreground">{t('error.chartLoadFailed')}</span>
-    </div>
-  );
-}
-
-const LazyLatencyChart = lazy(() =>
-  import('@/components/latency-chart')
-    .then((module) => ({ default: module.LatencyChart }))
-    .catch((err) => {
-      console.error('Failed to load LatencyChart:', err);
-      return { default: ChartLoadError };
-    }),
-);
 
 interface MonitorCardProps {
   monitor: PublicMonitor;
@@ -55,7 +32,6 @@ export function MonitorCard({
   style,
 }: MonitorCardProps) {
   const { t } = useTranslation();
-  const isHydrated = useHydrated();
   const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
 
   const coloLabel = latency ? formatColoLabel(latency.loc) : null;
@@ -184,13 +160,7 @@ export function MonitorCard({
                 <h4 className="mb-2 text-xs font-medium text-muted-foreground">
                   {t('monitor.responseTimes')}
                 </h4>
-                {isHydrated ? (
-                  <Suspense fallback={<ChartSkeleton />}>
-                    <LazyLatencyChart monitor={monitor} state={state} />
-                  </Suspense>
-                ) : (
-                  <ChartSkeleton />
-                )}
+                <LatencyChart monitor={monitor} state={state} />
               </div>
             )}
           </div>

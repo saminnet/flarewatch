@@ -9,8 +9,8 @@
     "compile": "vp check --no-fmt --no-lint"
   },
   "dependencies": {
-    "@pulumi/cloudflare": "^6.13.0",
-    "@pulumi/pulumi": "^3.239.0"
+    "@pulumi/cloudflare": "^6.17.0",
+    "@pulumi/pulumi": "^3.247.0"
   },
   "devDependencies": {
     "@flarewatch/ts-config": "workspace:*",

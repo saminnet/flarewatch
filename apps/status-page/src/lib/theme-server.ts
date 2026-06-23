@@ -16,7 +16,7 @@ export const getThemePreferenceServerFn = createServerFn({
 });
 
 export const setThemePreferenceServerFn = createServerFn({ method: 'POST' })
-  .inputValidator((data: unknown): ThemePreference => {
+  .validator((data: unknown): ThemePreference => {
     if (!isThemePreference(data)) {
       throw new Error('Invalid theme preference');
     }

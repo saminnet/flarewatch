@@ -3,19 +3,28 @@ import { defineConfig } from 'vite-plus';
 import { devtools } from '@tanstack/devtools-vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import babel from '@rolldown/plugin-babel';
+import transformImports from '@rolldown/plugin-transform-imports';
 import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 
+// Avoid TS 6's deep plugin-type comparison across Vite/Rolldown packages.
+const plugins = [
+  devtools(),
+  cloudflare({ viteEnvironment: { name: 'ssr' } }),
+  tailwindcss(),
+  transformImports({
+    '@tabler/icons-react': {
+      transform: '@tabler/icons-react/dist/esm/icons/{{member}}.mjs',
+    },
+  }),
+  tanstackStart(),
+  viteReact(),
+  babel({ presets: [reactCompilerPreset()] }),
+] as never;
+
 const config = defineConfig({
-  plugins: [
-    devtools(),
-    cloudflare({ viteEnvironment: { name: 'ssr' } }),
-    tailwindcss(),
-    tanstackStart(),
-    viteReact(),
-    babel({ presets: [reactCompilerPreset()] }),
-  ],
+  plugins,
   optimizeDeps: {
     include: ['react', 'react-dom', '@tanstack/react-query'],
   },
@@ -28,20 +37,15 @@ const config = defineConfig({
   environments: {
     client: {
       build: {
-        rollupOptions: {
+        rolldownOptions: {
           output: {
-            manualChunks(id) {
-              if (!id.includes('node_modules')) return;
-              if (id.includes('@base-ui/')) return 'ui';
-              if (id.includes('@tabler/')) return 'icons';
-              if (id.includes('recharts') || id.includes('/d3-')) return 'charts';
-              if (id.includes('i18next') || id.includes('react-i18next')) return 'i18n';
-              if (id.includes('@tanstack/')) return 'tanstack';
-              if (id.includes('/node_modules/react-dom/') || id.includes('/node_modules/react/')) {
-                return 'react';
-              }
-              if (id.includes('/node_modules/scheduler/')) return 'react';
-              return 'vendor';
+            codeSplitting: {
+              groups: [
+                {
+                  name: 'react',
+                  test: /node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
+                },
+              ],
             },
           },
         },

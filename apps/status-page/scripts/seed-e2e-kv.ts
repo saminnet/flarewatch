@@ -101,7 +101,7 @@ const state: MonitorState = {
   },
   latency: {
     demo_example: latency(42, 'HEL'),
-    demo_cloudflare_trace: latency(86, 'LHR'),
+    demo_cloudflare_trace: { recent: [] },
     demo_cloudflare_status: latency(210, 'SFO'),
   },
 };

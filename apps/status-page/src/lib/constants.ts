@@ -53,6 +53,9 @@ export const COOKIE_NAMES = {
 // Page layout
 export const PAGE_CONTAINER_CLASSES = 'container mx-auto max-w-5xl px-4 py-6';
 
+// Latency chart / skeleton height
+export const CHART_HEIGHT_PX = 150;
+
 // Status bar mobile display
 export const STATUS_BAR = {
   MOBILE_BAR_WIDTH: 12, // w-2.5 (10px) + gap-0.5 (2px)
