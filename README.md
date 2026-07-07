@@ -42,7 +42,7 @@ flowchart LR
 - Public status page UI and JSON/SVG APIs
 - Uptime history and latency charts
 - Scheduled maintenance announcements (configured in `/admin`)
-- Webhook notifications (Slack/Discord/Telegram/templates)
+- Webhook notifications (Slack/Discord/Telegram/ntfy/templates)
 - Optional check proxy support (private networks, TCP, SSL)
 
 ## Quick start

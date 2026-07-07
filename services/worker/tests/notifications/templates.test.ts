@@ -26,6 +26,7 @@ describe('notification templates', () => {
     expect(hasTemplate('slack')).toBe(true);
     expect(hasTemplate('discord')).toBe(true);
     expect(hasTemplate('telegram')).toBe(true);
+    expect(hasTemplate('ntfy')).toBe(true);
     expect(hasTemplate('text')).toBe(true);
     expect(hasTemplate('unknown')).toBe(false);
   });
@@ -45,6 +46,41 @@ describe('notification templates', () => {
     expect(payload.text).toContain('&lt;Monitor &amp; &quot;1&quot;&gt;');
     expect(payload.text).toContain('&lt;bad &amp; &quot;x&quot;&gt;');
     expect(payload.text).toContain('q=&lt;&gt;&amp;x=&quot;y&quot;&amp;z=1');
+  });
+
+  it('ntfy template maps status to priority and tags', () => {
+    const ntfy = getTemplate('ntfy');
+
+    const down = ntfy(baseContext);
+    expect(down.headers.Title).toBe('Test Monitor is down');
+    expect(down.headers.Priority).toBe('urgent');
+    expect(down.headers.Tags).toBe('rotating_light');
+    expect(down.body).toContain('Connection refused');
+    expect(down.body).toContain('https://example.com');
+
+    const recovered = ntfy({
+      ...baseContext,
+      isUp: true,
+      isRecovery: true,
+      isInitialOutage: false,
+    });
+    expect(recovered.headers.Title).toBe('Test Monitor is up');
+    expect(recovered.headers.Priority).toBe('default');
+    expect(recovered.headers.Tags).toBe('white_check_mark');
+    expect(recovered.body).toContain('Recovered after 5 minutes');
+  });
+
+  it('ntfy template RFC 2047-encodes non-ASCII titles', () => {
+    const ntfy = getTemplate('ntfy');
+
+    const output = ntfy({ ...baseContext, monitorName: 'Überwachung' });
+    const title = output.headers.Title ?? '';
+    expect(title).toMatch(/^=\?UTF-8\?B\?[A-Za-z0-9+/=]+\?=$/);
+    // Headers constructor rejects non-ISO-8859-1 values; must not throw
+    expect(() => new Headers(output.headers)).not.toThrow();
+    expect(atob(title.slice(10, -2))).toBe(
+      String.fromCharCode(...new TextEncoder().encode('Überwachung is down')),
+    );
   });
 
   it('slack template includes reason section only when down with a reason', () => {
