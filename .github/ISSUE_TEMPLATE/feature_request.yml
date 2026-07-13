@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest an improvement or new capability
+title: '[Feature]: '
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that FlareWatch does not handle well today?
+      placeholder: I want to monitor...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would the feature look like from the user's point of view?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Monitoring checks
+        - Notifications
+        - Status page UI
+        - Deploy/self-hosting
+        - Admin/maintenance
+        - API/embed/badges
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: deploy-impact
+    attributes:
+      label: Deploy impact
+      description: Would this require new Cloudflare resources, secrets, or config?
+      options:
+        - No deploy impact expected
+        - New config only
+        - New GitHub secret or Worker secret
+        - New Cloudflare resource or permission
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing tools, workarounds, or config patterns you tried.
+  - type: textarea
+    id: config-shape
+    attributes:
+      label: Possible config shape
+      description: Optional TypeScript/config sketch.
+      render: ts

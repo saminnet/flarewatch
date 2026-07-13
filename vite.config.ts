@@ -99,18 +99,6 @@ export default defineConfig({
         command: 'vp run --filter worker dev',
         cache: false,
       },
-      'infra:preview': {
-        command: 'pulumi -C infra preview',
-        cache: false,
-      },
-      'infra:up': {
-        command: 'pulumi -C infra up',
-        cache: false,
-      },
-      'infra:destroy': {
-        command: 'pulumi -C infra destroy',
-        cache: false,
-      },
     },
   },
 });

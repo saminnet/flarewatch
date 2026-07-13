@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Live demo
+    url: https://demo.flarewatch.app
+    about: Check the hosted demo before opening a UI issue.
+  - name: Security policy
+    url: https://github.com/saminnet/flarewatch/security/policy
+    about: Report vulnerabilities privately through the security policy.

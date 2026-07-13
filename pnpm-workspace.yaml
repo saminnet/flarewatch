@@ -4,7 +4,6 @@ packages:
   - apps/*
   - packages/*
   - services/*
-  - infra
 
 allowBuilds:
   esbuild: false

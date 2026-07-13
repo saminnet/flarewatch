@@ -1,12 +1,11 @@
 /**
- * Wrangler configuration for status page
+ * Wrangler configuration for status page.
  *
  * Usage:
  *   Local dev:  vp run dev-status-page
- *   Deploy:     wrangler deploy (alternative to Pulumi)
+ *   Deploy:     vp run --filter status-page deploy:wrangler
  *
- * Note: Pulumi (vp run infra:up) is the recommended deployment method
- * as it manages all resources together (KV, workers, custom domains).
+ * The Cloudflare Vite plugin emits the deployable dist/server/wrangler.json from this file.
  *
  * For more details: https://developers.cloudflare.com/workers/wrangler/configuration/
  */
@@ -17,17 +16,25 @@
   // TanStack Start requires nodejs_compat for SSR (async_hooks, streams)
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
+  "workers_dev": true,
+  // Example custom domain route:
+  // "routes": [{ "pattern": "status.example.com", "custom_domain": true }],
   "observability": {
     "enabled": true,
   },
   /**
-   * KV Namespace for storing monitor state
-   * Replace the id with your actual KV namespace ID from Cloudflare dashboard
+   * CI creates/adopts the flarewatch-state namespace and replaces this placeholder before build.
    */
   "kv_namespaces": [
     {
       "binding": "FLAREWATCH_STATE",
-      "id": "FLAREWATCH_STATE",
+      "id": "__FLAREWATCH_STATE_KV_NAMESPACE_ID__",
+    },
+  ],
+  "services": [
+    {
+      "binding": "MONITOR_WORKER",
+      "service": "flarewatch-worker",
     },
   ],
   /**
@@ -53,9 +60,4 @@
    * https://developers.cloudflare.com/workers/static-assets/binding/
    */
   // "assets": {  "directory": "./public/",  "binding": "ASSETS" }
-  /**
-   * Service Bindings (communicate between multiple Workers)
-   * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-   */
-  // "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
 }

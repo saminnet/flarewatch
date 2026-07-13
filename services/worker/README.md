@@ -4,7 +4,7 @@ The FlareWatch monitoring worker is a Cloudflare Worker. It runs scheduled check
 
 ## What it does
 
-- Runs on a 1-minute cron schedule (provisioned by `infra/`).
+- Runs on a 1-minute cron schedule configured in `wrangler.toml`.
 - Reads monitors from `packages/config/src/worker.ts`.
 - Writes the current state to KV key `state`.
 - Reads maintenance windows from KV key `maintenances`.
@@ -41,5 +41,5 @@ curl http://localhost:8787/__scheduled
 
 ## Build and deploy
 
-- `vp run worker-build` builds a bundle to `services/worker/dist/` (used by Pulumi).
-- `vp exec --filter worker -- wrangler deploy` deploys the worker directly with Wrangler (optional; CI deploys via Pulumi).
+- `vp run worker-build` validates the Worker bundle with `wrangler deploy --dry-run`.
+- `vp exec --filter worker -- wrangler deploy --config wrangler.toml` deploys the worker with Wrangler.
