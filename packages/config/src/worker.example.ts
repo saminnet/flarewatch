@@ -94,13 +94,17 @@ export const workerConfig: WorkerConfig = {
   //   // Single webhook (templates)
   //   webhook: {
   //     url: 'https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>',
-  //     template: 'telegram', // 'slack', 'discord', 'telegram', or 'text'
+  //     template: 'telegram', // 'slack', 'discord', 'telegram', 'ntfy', or 'text'
   //   },
   //
   //   // Multiple webhooks
   //   // webhook: [
   //   //   { url: 'https://hooks.slack.com/services/...', template: 'slack' },
   //   //   { url: 'https://discord.com/api/webhooks/...', template: 'discord' },
+  //   //   // ntfy: on the public ntfy.sh server the topic name is the only secret,
+  //   //   // so use a long random topic. Self-hosted servers with auth work too:
+  //   //   // add an Authorization header via `headers`.
+  //   //   { url: 'https://ntfy.sh/<long-random-topic>', template: 'ntfy' },
   //   // ],
   //
   //   // Custom webhook with $MSG placeholder

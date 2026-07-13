@@ -101,11 +101,11 @@ export type Notification = {
 
 export type NotificationConfig = Notification;
 
-export type NotificationTemplate = 'slack' | 'discord' | 'telegram' | 'text';
+export type NotificationTemplate = 'slack' | 'discord' | 'telegram' | 'ntfy' | 'text';
 
 type SingleWebhook = {
   url: string;
-  /** Use a pre-built template (slack, discord, telegram, text) */
+  /** Use a pre-built template (slack, discord, telegram, ntfy, text) */
   template?: NotificationTemplate;
   /** HTTP method (default: POST for templates, depends on payloadType otherwise) */
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH';

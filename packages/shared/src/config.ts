@@ -11,7 +11,7 @@ import type {
 import { KV_KEYS } from './types';
 
 const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
-const WEBHOOK_TEMPLATES = new Set(['slack', 'discord', 'telegram', 'text']);
+const WEBHOOK_TEMPLATES = new Set(['slack', 'discord', 'telegram', 'ntfy', 'text']);
 const WEBHOOK_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH']);
 const WEBHOOK_PAYLOAD_TYPES = new Set(['param', 'json', 'x-www-form-urlencoded']);
 

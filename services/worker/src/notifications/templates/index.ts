@@ -2,6 +2,7 @@ import type { NotificationTemplate } from '@flarewatch/shared';
 import { slackTemplate } from './slack';
 import { discordTemplate } from './discord';
 import { telegramTemplate } from './telegram';
+import { ntfyTemplate } from './ntfy';
 
 /** Context passed to templates for formatting */
 export interface TemplateContext {
@@ -53,6 +54,7 @@ const templates: Record<NotificationTemplate, TemplateFunction> = {
   slack: slackTemplate,
   discord: discordTemplate,
   telegram: telegramTemplate,
+  ntfy: ntfyTemplate,
   text: textTemplate,
 };
 
