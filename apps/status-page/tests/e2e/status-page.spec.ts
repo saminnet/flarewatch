@@ -36,6 +36,34 @@ const seededMonitors: SeededMonitor[] = [
     error: 'Synthetic E2E outage',
     href: 'https://www.cloudflarestatus.com',
   },
+  {
+    id: 'demo_flarewatch_site',
+    name: 'flarewatch.app',
+    status: 'operational',
+    latency: '67ms',
+    // Auto-linked targets are URL-normalized, hence the trailing slash.
+    href: 'https://flarewatch.app/',
+  },
+  {
+    id: 'demo_cloudflare_docs',
+    name: 'Cloudflare Docs',
+    status: 'operational',
+    latency: '60ms',
+    href: 'https://developers.cloudflare.com/',
+  },
+  {
+    id: 'demo_one_dns_trace',
+    name: '1.1.1.1 Trace',
+    status: 'operational',
+    latency: '44ms',
+  },
+  {
+    id: 'demo_github_status',
+    name: 'GitHub Status API',
+    status: 'operational',
+    latency: '127ms',
+    href: 'https://www.githubstatus.com',
+  },
 ] as const;
 
 const adminCredentials = {
@@ -82,16 +110,22 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
   await expect(page).toHaveTitle(/FlareWatch/);
   await expect(page.getByRole('banner').getByRole('link', { name: /FlareWatch/ })).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: /Some systems are down \(1 out of 3\)/i }),
+    page.getByRole('heading', { name: /Some systems are down \(1 out of 7\)/i }),
   ).toBeVisible();
-  await expect(page.getByText('2 up / 1 down')).toBeVisible();
-  expect(data.up).toBe(2);
+  await expect(page.getByText('6 up / 1 down')).toBeVisible();
+  expect(data.up).toBe(6);
   expect(data.down).toBe(1);
 
-  await expect(page.getByRole('button', { name: 'Toggle Demo (3 monitors)' })).toHaveAttribute(
-    'aria-expanded',
-    'true',
-  );
+  for (const groupToggle of [
+    'Toggle Websites (3 monitors)',
+    'Toggle APIs (2 monitors)',
+    'Toggle Status Feeds (2 monitors)',
+  ]) {
+    await expect(page.getByRole('button', { name: groupToggle })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  }
   await expect(page.getByText('E2E active maintenance')).toBeVisible();
   await expect(page.getByText('E2E upcoming maintenance')).toBeVisible();
 
@@ -117,14 +151,14 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
   await expect(page.getByRole('heading', { name: 'Response times (ms)' }).first()).toBeVisible();
   await expect(page.getByTestId('latency-chart').first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Toggle Demo (3 monitors)' }).click();
-  await expect(page.getByRole('button', { name: 'Toggle Demo (3 monitors)' })).toHaveAttribute(
+  await page.getByRole('button', { name: 'Toggle Websites (3 monitors)' }).click();
+  await expect(page.getByRole('button', { name: 'Toggle Websites (3 monitors)' })).toHaveAttribute(
     'aria-expanded',
     'false',
   );
   await expect(page.getByRole('button', { name: /Example Domain, operational/ })).not.toBeVisible();
 
-  await page.getByRole('button', { name: 'Toggle Demo (3 monitors)' }).click();
+  await page.getByRole('button', { name: 'Toggle Websites (3 monitors)' }).click();
   await expect(page.getByRole('button', { name: /Example Domain, operational/ })).toBeVisible();
   expect(clientErrors).toEqual([]);
 });
@@ -202,7 +236,7 @@ test('public API exposes seeded status, maintenance, badges, and CORS', async ({
   expect(dataResponse.headers()['access-control-allow-origin']).toBe('*');
 
   expect(data).toMatchObject({
-    up: 2,
+    up: 6,
     down: 1,
     monitors: {
       demo_example: {
