@@ -150,8 +150,13 @@ test('latency chart is server-rendered, labeled, and supports hover', async ({ p
   await expect(chart.getByText(/^\d+ms$/).first()).toBeVisible();
 
   // Hovering reveals the tooltip; its "MMM d, HH:mm" line is unique to the tooltip.
-  await chart.hover();
-  await expect(chart.getByText(/\w{3} \d{1,2}, \d{1,2}:\d{2}/)).toBeVisible();
+  // The pointer handler only exists after hydration, and a mousemove that lands
+  // before it never re-fires — retry from a neutral position until it sticks.
+  await expect(async () => {
+    await page.mouse.move(0, 0);
+    await chart.hover();
+    await expect(chart.getByText(/\w{3} \d{1,2}, \d{1,2}:\d{2}/)).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
 });
 
 test('shows the chart empty state for a monitor with no latency data', async ({ page }) => {
@@ -178,8 +183,12 @@ test.describe('latency chart touch', () => {
     };
     const dot = chart.locator('span.rounded-full');
 
-    await chart.dispatchEvent('pointerdown', at);
-    await expect(dot).toBeVisible();
+    // Same hydration race as the hover test: a pointerdown dispatched before
+    // the handler attaches is lost, so retry until the tooltip dot appears.
+    await expect(async () => {
+      await chart.dispatchEvent('pointerdown', at);
+      await expect(dot).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 15_000 });
     await chart.dispatchEvent('pointerup', at);
     await expect(dot).toHaveCount(0);
   });
