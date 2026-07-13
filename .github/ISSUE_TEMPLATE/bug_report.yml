@@ -1,0 +1,63 @@
+name: Bug report
+description: Report something broken in FlareWatch
+title: '[Bug]: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please redact secrets, tokens, webhook URLs, and private hostnames.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the broken behavior and what you expected instead.
+      placeholder: The deploy succeeds, but the status page returns 500...
+    validations:
+      required: true
+  - type: dropdown
+    id: deploy-method
+    attributes:
+      label: Deploy method
+      options:
+        - GitHub Actions self-deploy
+        - Manual Wrangler deploy
+        - Local development
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: FlareWatch version
+      description: Commit SHA, branch, or release.
+      placeholder: main@abc1234
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config
+      description: Paste the relevant monitor/page config only. Remove secrets and private targets if needed.
+      render: ts
+  - type: textarea
+    id: logs
+    attributes:
+      label: Workflow or Wrangler logs
+      description: Paste the failing GitHub Actions step, `wrangler deploy`, or Worker log output. Redact secrets.
+      render: shell
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Cloudflare plan, workers.dev/custom domain, browser, OS, or anything else that matters.
+      placeholder: Cloudflare Free, workers.dev, Chrome 126, macOS...
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked existing issues.
+          required: true
+        - label: I redacted secrets and private credentials.
+          required: true
