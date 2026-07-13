@@ -1,6 +1,0 @@
-name: flarewatch
-runtime:
-  name: nodejs
-  options:
-    typescript: true
-description: FlareWatch infrastructure on Cloudflare

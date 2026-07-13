@@ -24,5 +24,5 @@ vp run status-page-test        # status page only
 - Status page UI: `apps/status-page`
 - User-editable config: `packages/config`
 - Shared types: `packages/shared`
-- Infrastructure (Pulumi): `infra`
+- Deploy workflow and Wrangler config: `.github/workflows/deploy.yml`, `services/worker/wrangler.toml`, `apps/status-page/wrangler.jsonc`
 - Optional proxy (external repo): `https://github.com/saminnet/flarewatch-proxy`

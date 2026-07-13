@@ -17,9 +17,9 @@ It serves:
 
 These are Worker secrets. Do not commit them.
 
-- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH='<output of pnpm auth:secret -- <username> "<password>">'`
+- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH='<output of vp run auth:secret -- <username> "<password>">'`
   - Protects the entire status page.
-- `FLAREWATCH_ADMIN_BASIC_AUTH='<output of pnpm auth:secret -- <username> "<password>">'`
+- `FLAREWATCH_ADMIN_BASIC_AUTH='<output of vp run auth:secret -- <username> "<password>">'`
   - Enables and protects `/admin` and `/api/admin/*` with an in-app login, session cookie, and logout button.
   - In production, if unset: `/admin` returns `404` and `/api/admin/*` returns `403`. In dev, admin is allowed without creds.
 
@@ -27,7 +27,7 @@ Generate these values from a username and password:
 
 ```bash
 # From repo root:
-pnpm auth:secret -- <username> 'replace-with-strong-password'
+vp run auth:secret -- <username> 'replace-with-strong-password'
 ```
 
 Run once per secret and copy the full JSON output into your Worker secret or GitHub Secret. Do not edit JSON fields manually.
@@ -84,21 +84,11 @@ Requires `FLAREWATCH_ADMIN_BASIC_AUTH`.
 
 ## Deployment notes
 
-`apps/status-page/wrangler.jsonc` exists for local development.
+`apps/status-page/wrangler.jsonc` is the source config. The Cloudflare Vite plugin emits `dist/server/wrangler.json` during the build, and production deploys use that generated config.
 
-Production deployments are managed by Pulumi (`infra/`). Pulumi reads the build outputs from:
-
-- `apps/status-page/dist/server/index.js` (Worker bundle)
-- `apps/status-page/dist/client` (static assets)
-
-There is no KV ID injection step. Do not use `wrangler deploy` for production.
-
-### Manual deploy (Pulumi)
+Before a manual deploy, replace the `__FLAREWATCH_STATE_KV_NAMESPACE_ID__` placeholder in `wrangler.jsonc` with your real KV namespace ID (CI does this automatically — see DEVELOPMENT.md for the namespace creation step).
 
 ```bash
-vp run build
-
-pulumi -C infra login "$PULUMI_BACKEND_URL"
-pulumi -C infra stack select production --create
-vp run infra:up
+vp run --filter status-page build
+vp exec --filter status-page -- wrangler deploy --config dist/server/wrangler.json
 ```
