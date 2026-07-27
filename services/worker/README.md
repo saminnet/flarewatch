@@ -22,6 +22,8 @@ The FlareWatch monitoring worker is a Cloudflare Worker. It runs scheduled check
 
 Monitors can set `checkProxy` to send checks through a proxy endpoint. By default, a proxy failure marks the monitor check as failed. Set `checkProxyFallback: true` on that monitor to try the direct Worker check after the proxy fails.
 
+A monitor whose target is in the same zone as this Worker needs a check proxy. Cloudflare routes a Worker's fetch to its own zone straight to the origin and skips the Worker that serves the site, so a direct check returns a 503 even when the site is up. Targets in other zones, including other Cloudflare-hosted sites, work with direct checks.
+
 ## Local development
 
 ```bash

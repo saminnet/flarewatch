@@ -219,6 +219,9 @@ https://flarewatch.<your-workers-dev-subdomain>.workers.dev
   locations. By default, proxy failures mark the check as failed. Set
   `checkProxyFallback: true` on a monitor to fall back to a direct check after
   the proxy fails.
+- A monitor for a site in the same zone as the monitoring Worker also needs the
+  check proxy. Cloudflare sends a Worker's same-zone fetches straight to the
+  origin, so a direct check fails with a 503 even when the site is up.
 
 ## Example monitor
 
