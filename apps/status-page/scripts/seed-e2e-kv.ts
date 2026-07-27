@@ -81,13 +81,12 @@ const latency = (base: number, loc: string) => ({
 
 const state: MonitorState = {
   lastUpdate: nowSec,
-  overallUp: 6,
+  overallUp: 5,
   overallDown: 1,
   startedAt: {
     demo_example: startedAt,
     demo_cloudflare_trace: startedAt,
     demo_cloudflare_status: startedAt,
-    demo_flarewatch_site: startedAt,
     demo_cloudflare_docs: startedAt,
     demo_one_dns_trace: startedAt,
     demo_github_status: startedAt,
@@ -102,7 +101,6 @@ const state: MonitorState = {
         error: ['Synthetic E2E outage'],
       },
     ],
-    demo_flarewatch_site: [],
     demo_cloudflare_docs: [],
     demo_one_dns_trace: [],
     demo_github_status: [],
@@ -111,7 +109,6 @@ const state: MonitorState = {
     demo_example: latency(42, 'HEL'),
     demo_cloudflare_trace: { recent: [] },
     demo_cloudflare_status: latency(210, 'SFO'),
-    demo_flarewatch_site: latency(35, 'FRA'),
     demo_cloudflare_docs: latency(28, 'AMS'),
     demo_one_dns_trace: latency(12, 'ZRH'),
     demo_github_status: latency(95, 'IAD'),
