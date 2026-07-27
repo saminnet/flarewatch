@@ -37,14 +37,6 @@ const seededMonitors: SeededMonitor[] = [
     href: 'https://www.cloudflarestatus.com',
   },
   {
-    id: 'demo_flarewatch_site',
-    name: 'flarewatch.app',
-    status: 'operational',
-    latency: '67ms',
-    // Auto-linked targets are URL-normalized, hence the trailing slash.
-    href: 'https://flarewatch.app/',
-  },
-  {
     id: 'demo_cloudflare_docs',
     name: 'Cloudflare Docs',
     status: 'operational',
@@ -110,14 +102,14 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
   await expect(page).toHaveTitle(/FlareWatch/);
   await expect(page.getByRole('banner').getByRole('link', { name: /FlareWatch/ })).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: /Some systems are down \(1 out of 7\)/i }),
+    page.getByRole('heading', { name: /Some systems are down \(1 out of 6\)/i }),
   ).toBeVisible();
-  await expect(page.getByText('6 up / 1 down')).toBeVisible();
-  expect(data.up).toBe(6);
+  await expect(page.getByText('5 up / 1 down')).toBeVisible();
+  expect(data.up).toBe(5);
   expect(data.down).toBe(1);
 
   for (const groupToggle of [
-    'Toggle Websites (3 monitors)',
+    'Toggle Websites (2 monitors)',
     'Toggle APIs (2 monitors)',
     'Toggle Status Feeds (2 monitors)',
   ]) {
@@ -151,14 +143,14 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
   await expect(page.getByRole('heading', { name: 'Response times (ms)' }).first()).toBeVisible();
   await expect(page.getByTestId('latency-chart').first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Toggle Websites (3 monitors)' }).click();
-  await expect(page.getByRole('button', { name: 'Toggle Websites (3 monitors)' })).toHaveAttribute(
+  await page.getByRole('button', { name: 'Toggle Websites (2 monitors)' }).click();
+  await expect(page.getByRole('button', { name: 'Toggle Websites (2 monitors)' })).toHaveAttribute(
     'aria-expanded',
     'false',
   );
   await expect(page.getByRole('button', { name: /Example Domain, operational/ })).not.toBeVisible();
 
-  await page.getByRole('button', { name: 'Toggle Websites (3 monitors)' }).click();
+  await page.getByRole('button', { name: 'Toggle Websites (2 monitors)' }).click();
   await expect(page.getByRole('button', { name: /Example Domain, operational/ })).toBeVisible();
   expect(clientErrors).toEqual([]);
 });
@@ -236,7 +228,7 @@ test('public API exposes seeded status, maintenance, badges, and CORS', async ({
   expect(dataResponse.headers()['access-control-allow-origin']).toBe('*');
 
   expect(data).toMatchObject({
-    up: 6,
+    up: 5,
     down: 1,
     monitors: {
       demo_example: {

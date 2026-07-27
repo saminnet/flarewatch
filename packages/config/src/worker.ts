@@ -42,15 +42,6 @@ export const workerConfig: WorkerConfig = {
       link: 'https://www.cloudflarestatus.com', // Links to status page, not the API endpoint
     },
     {
-      id: 'demo_flarewatch_site',
-      name: 'flarewatch.app',
-      method: 'GET',
-      target: 'https://flarewatch.app',
-      expectedCodes: [200],
-      responseKeyword: 'FlareWatch',
-      timeout: 10000,
-    },
-    {
       id: 'demo_cloudflare_docs',
       name: 'Cloudflare Docs',
       method: 'GET',
