@@ -6,6 +6,7 @@ import {
   failure,
   fetchWithTimeout,
   validateHttpStatusAndBody,
+  parseTcpTarget,
   DEFAULT_HTTP_TIMEOUT,
   DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   createLogger,
@@ -61,15 +62,11 @@ function parseProxyUrl(proxyUrl: string): GlobalPingConfig {
 }
 
 function buildTcpRequest(target: MonitorTarget, config: GlobalPingConfig) {
-  const targetUrl = new URL(`https://${target.target}`);
-  const port = Number(targetUrl.port);
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    throw new Error('TCP_PING target must include a valid port (hostname:port)');
-  }
+  const { hostname, port } = parseTcpTarget(target.target);
 
   return {
     type: 'ping',
-    target: targetUrl.hostname,
+    target: hostname,
     locations: config.magic ? [{ magic: config.magic }] : undefined,
     measurementOptions: {
       port,
