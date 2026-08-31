@@ -9,19 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as EventsRouteImport } from './routes/events'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as EmbedMonitorIdRouteImport } from './routes/embed.$monitorId'
-import { Route as ApiMaintenancesRouteImport } from './routes/api/maintenances'
-import { Route as ApiDataRouteImport } from './routes/api/data'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as EventsRouteImport } from './routes/events'
 import { Route as ApiBadgeRouteImport } from './routes/api/badge'
-import { Route as ApiAdminSessionRouteImport } from './routes/api/admin/session'
+import { Route as ApiDataRouteImport } from './routes/api/data'
+import { Route as ApiMaintenancesRouteImport } from './routes/api/maintenances'
+import { Route as EmbedMonitorIdRouteImport } from './routes/embed.$monitorId'
 import { Route as ApiAdminMaintenancesRouteImport } from './routes/api/admin/maintenances'
+import { Route as ApiAdminSessionRouteImport } from './routes/api/admin/session'
 
-const EventsRoute = EventsRouteImport.update({
-  id: '/events',
-  path: '/events',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -29,24 +29,9 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EmbedMonitorIdRoute = EmbedMonitorIdRouteImport.update({
-  id: '/embed/$monitorId',
-  path: '/embed/$monitorId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiMaintenancesRoute = ApiMaintenancesRouteImport.update({
-  id: '/api/maintenances',
-  path: '/api/maintenances',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiDataRoute = ApiDataRouteImport.update({
-  id: '/api/data',
-  path: '/api/data',
+const EventsRoute = EventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiBadgeRoute = ApiBadgeRouteImport.update({
@@ -54,14 +39,29 @@ const ApiBadgeRoute = ApiBadgeRouteImport.update({
   path: '/api/badge',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAdminSessionRoute = ApiAdminSessionRouteImport.update({
-  id: '/api/admin/session',
-  path: '/api/admin/session',
+const ApiDataRoute = ApiDataRouteImport.update({
+  id: '/api/data',
+  path: '/api/data',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMaintenancesRoute = ApiMaintenancesRouteImport.update({
+  id: '/api/maintenances',
+  path: '/api/maintenances',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbedMonitorIdRoute = EmbedMonitorIdRouteImport.update({
+  id: '/embed/$monitorId',
+  path: '/embed/$monitorId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAdminMaintenancesRoute = ApiAdminMaintenancesRouteImport.update({
   id: '/api/admin/maintenances',
   path: '/api/admin/maintenances',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminSessionRoute = ApiAdminSessionRouteImport.update({
+  id: '/api/admin/session',
+  path: '/api/admin/session',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -149,11 +149,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/events': {
-      id: '/events'
-      path: '/events'
-      fullPath: '/events'
-      preLoaderRoute: typeof EventsRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -163,32 +163,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/embed/$monitorId': {
-      id: '/embed/$monitorId'
-      path: '/embed/$monitorId'
-      fullPath: '/embed/$monitorId'
-      preLoaderRoute: typeof EmbedMonitorIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/maintenances': {
-      id: '/api/maintenances'
-      path: '/api/maintenances'
-      fullPath: '/api/maintenances'
-      preLoaderRoute: typeof ApiMaintenancesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/data': {
-      id: '/api/data'
-      path: '/api/data'
-      fullPath: '/api/data'
-      preLoaderRoute: typeof ApiDataRouteImport
+    '/events': {
+      id: '/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof EventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/badge': {
@@ -198,11 +177,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBadgeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/admin/session': {
-      id: '/api/admin/session'
-      path: '/api/admin/session'
-      fullPath: '/api/admin/session'
-      preLoaderRoute: typeof ApiAdminSessionRouteImport
+    '/api/data': {
+      id: '/api/data'
+      path: '/api/data'
+      fullPath: '/api/data'
+      preLoaderRoute: typeof ApiDataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/maintenances': {
+      id: '/api/maintenances'
+      path: '/api/maintenances'
+      fullPath: '/api/maintenances'
+      preLoaderRoute: typeof ApiMaintenancesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embed/$monitorId': {
+      id: '/embed/$monitorId'
+      path: '/embed/$monitorId'
+      fullPath: '/embed/$monitorId'
+      preLoaderRoute: typeof EmbedMonitorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/admin/maintenances': {
@@ -210,6 +203,13 @@ declare module '@tanstack/react-router' {
       path: '/api/admin/maintenances'
       fullPath: '/api/admin/maintenances'
       preLoaderRoute: typeof ApiAdminMaintenancesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/session': {
+      id: '/api/admin/session'
+      path: '/api/admin/session'
+      fullPath: '/api/admin/session'
+      preLoaderRoute: typeof ApiAdminSessionRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
