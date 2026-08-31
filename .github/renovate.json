@@ -1,8 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":configMigration"],
   "schedule": ["before 6am on monday"],
-  "minimumReleaseAge": "1 day",
+  "minimumReleaseAge": "3 days",
   "prConcurrentLimit": 3,
   "prHourlyLimit": 2,
   "lockFileMaintenance": {
