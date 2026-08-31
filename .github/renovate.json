@@ -1,9 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:best-practices"],
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":configMigration"],
+  "schedule": ["before 6am on monday"],
   "minimumReleaseAge": "3 days",
   "prConcurrentLimit": 3,
   "prHourlyLimit": 2,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
   "packageRules": [
     {
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
