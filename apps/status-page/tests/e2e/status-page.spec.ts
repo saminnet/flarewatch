@@ -312,6 +312,13 @@ test('events route renders seeded incidents and maintenance', async ({ page }) =
 });
 
 test('events route filters by type, monitor, and invalid month fallback', async ({ page }) => {
+  const seeded = await readOkJson<{ title?: string; start: string }[]>(
+    await page.request.get('/api/maintenances'),
+  );
+  const upcoming = seeded.find((maintenance) => maintenance.title === 'E2E upcoming maintenance');
+  if (!upcoming) throw new Error('seeded upcoming maintenance is missing');
+  const upcomingMonth = upcoming.start.slice(0, 7);
+
   await page.goto('/events?type=incident');
   await expect(page).toHaveURL(/type=incident/);
   await expect(page.getByText('Synthetic E2E outage')).toBeVisible();
@@ -320,10 +327,12 @@ test('events route filters by type, monitor, and invalid month fallback', async 
   await page.goto('/events?type=maintenance');
   await expect(page).toHaveURL(/type=maintenance/);
   await expect(page.getByText('E2E active maintenance')).toBeVisible();
-  await expect(page.getByText('E2E upcoming maintenance')).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).not.toBeVisible();
 
-  await page.goto('/events?monitor=demo_example');
+  await page.goto(`/events?type=maintenance&month=${upcomingMonth}`);
+  await expect(page.getByText('E2E upcoming maintenance')).toBeVisible();
+
+  await page.goto(`/events?monitor=demo_example&month=${upcomingMonth}`);
   await expect(page).toHaveURL(/monitor=demo_example/);
   await expect(page.getByText('E2E upcoming maintenance')).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).not.toBeVisible();
