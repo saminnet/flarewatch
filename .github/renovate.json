@@ -1,14 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "schedule": ["before 6am on monday"],
-  "minimumReleaseAge": "1 day",
+  "extends": ["config:best-practices"],
+  "minimumReleaseAge": "3 days",
   "prConcurrentLimit": 3,
   "prHourlyLimit": 2,
-  "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": ["before 6am on monday"]
-  },
   "packageRules": [
     {
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
