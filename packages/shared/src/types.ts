@@ -103,6 +103,15 @@ export type NotificationConfig = Notification;
 
 export type NotificationTemplate = 'slack' | 'discord' | 'telegram' | 'ntfy' | 'text';
 
+/** Any value representable as JSON: the contract for user-authored webhook payloads. */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 type SingleWebhook = {
   url: string;
   /** Use a pre-built template (slack, discord, telegram, ntfy, text) */
@@ -114,7 +123,7 @@ type SingleWebhook = {
   /** Payload type (required if not using template) */
   payloadType?: 'param' | 'json' | 'x-www-form-urlencoded';
   /** Payload with $MSG placeholder (required if not using template) */
-  payload?: Record<string, unknown> | string;
+  payload?: JsonValue;
   /** Request timeout in ms (default: 5000) */
   timeout?: number;
 };
@@ -130,7 +139,7 @@ export type RuntimeConfig = {
   kvWriteCooldownMinutes?: number;
 };
 
-export type RuntimeConfigEnvelopeMetadata = Record<string, unknown>;
+export type RuntimeConfigEnvelopeMetadata = Record<string, JsonValue>;
 
 export type RuntimeConfigEnvelope = RuntimeConfigEnvelopeMetadata & {
   config: RuntimeConfig;

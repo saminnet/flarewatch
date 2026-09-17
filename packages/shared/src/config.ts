@@ -15,9 +15,8 @@ const WEBHOOK_TEMPLATES = new Set(['slack', 'discord', 'telegram', 'ntfy', 'text
 const WEBHOOK_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH']);
 const WEBHOOK_PAYLOAD_TYPES = new Set(['param', 'json', 'x-www-form-urlencoded']);
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
+function isConfigRecord(value: unknown): value is object {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isValidHttpUrl(value: string): boolean {
@@ -69,31 +68,32 @@ function isValidMonitorTarget(target: string, method?: string): boolean {
 }
 
 function isValidWebhookHeaders(value: unknown): boolean {
-  const obj = asRecord(value);
-  if (!obj) return false;
-  return Object.values(obj).every(
+  if (!isConfigRecord(value)) return false;
+  return Object.values(value).every(
     (entry) => typeof entry === 'string' || typeof entry === 'number',
   );
 }
 
 function isValidWebhook(value: unknown): value is Webhook {
-  const obj = asRecord(value);
-  if (!obj) return false;
+  if (!isConfigRecord(value)) return false;
 
-  if (typeof obj.url !== 'string' || !isValidHttpUrl(obj.url)) return false;
-  if (obj.template !== undefined) {
-    if (typeof obj.template !== 'string' || !WEBHOOK_TEMPLATES.has(obj.template)) return false;
+  if (!('url' in value) || typeof value.url !== 'string' || !isValidHttpUrl(value.url))
+    return false;
+  if ('template' in value && value.template !== undefined) {
+    if (typeof value.template !== 'string' || !WEBHOOK_TEMPLATES.has(value.template)) return false;
   }
-  if (obj.method !== undefined) {
-    if (typeof obj.method !== 'string' || !WEBHOOK_METHODS.has(obj.method.toUpperCase()))
+  if ('method' in value && value.method !== undefined) {
+    if (typeof value.method !== 'string' || !WEBHOOK_METHODS.has(value.method.toUpperCase()))
       return false;
   }
-  if (obj.headers !== undefined && !isValidWebhookHeaders(obj.headers)) return false;
-  if (obj.payloadType !== undefined) {
-    if (typeof obj.payloadType !== 'string' || !WEBHOOK_PAYLOAD_TYPES.has(obj.payloadType))
+  if ('headers' in value && value.headers !== undefined && !isValidWebhookHeaders(value.headers))
+    return false;
+  if ('payloadType' in value && value.payloadType !== undefined) {
+    if (typeof value.payloadType !== 'string' || !WEBHOOK_PAYLOAD_TYPES.has(value.payloadType))
       return false;
   }
-  if (obj.timeout !== undefined && typeof obj.timeout !== 'number') return false;
+  if ('timeout' in value && value.timeout !== undefined && typeof value.timeout !== 'number')
+    return false;
 
   return true;
 }
@@ -119,20 +119,26 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 function isValidMaintenance(value: unknown): value is Maintenance {
-  const obj = asRecord(value);
-  if (!obj) return false;
+  if (!isConfigRecord(value)) return false;
 
-  if (typeof obj.id !== 'string' || obj.id.length === 0) return false;
-  if (typeof obj.body !== 'string' || obj.body.length === 0) return false;
-  if (typeof obj.createdAt !== 'number' || !Number.isFinite(obj.createdAt)) return false;
-  if (typeof obj.updatedAt !== 'number' || !Number.isFinite(obj.updatedAt)) return false;
-  if (!(typeof obj.start === 'string' || typeof obj.start === 'number')) return false;
-  if (obj.end !== undefined && !(typeof obj.end === 'string' || typeof obj.end === 'number')) {
+  if (!('id' in value) || typeof value.id !== 'string' || value.id.length === 0) return false;
+  if (!('body' in value) || typeof value.body !== 'string' || value.body.length === 0) return false;
+  if (!('createdAt' in value) || typeof value.createdAt !== 'number') return false;
+  if (!Number.isFinite(value.createdAt)) return false;
+  if (!('updatedAt' in value) || typeof value.updatedAt !== 'number') return false;
+  if (!Number.isFinite(value.updatedAt)) return false;
+  if (!('start' in value) || !(typeof value.start === 'string' || typeof value.start === 'number'))
+    return false;
+  if (
+    'end' in value &&
+    value.end !== undefined &&
+    !(typeof value.end === 'string' || typeof value.end === 'number')
+  ) {
     return false;
   }
-  if (!isOptionalType(obj.title, isString)) return false;
-  if (!isOptionalType(obj.color, isString)) return false;
-  if (!isOptionalType(obj.monitors, isStringArray)) return false;
+  if ('title' in value && !isOptionalType(value.title, isString)) return false;
+  if ('color' in value && !isOptionalType(value.color, isString)) return false;
+  if ('monitors' in value && !isOptionalType(value.monitors, isStringArray)) return false;
 
   return true;
 }
@@ -143,60 +149,74 @@ export function parseMaintenances(value: unknown): Maintenance[] {
 }
 
 function isValidNotificationConfig(value: unknown): value is NotificationConfig {
-  const obj = asRecord(value);
-  if (!obj) return false;
+  if (!isConfigRecord(value)) return false;
 
-  if (obj.webhook !== undefined) {
-    const webhooks = Array.isArray(obj.webhook) ? obj.webhook : [obj.webhook];
+  if ('webhook' in value && value.webhook !== undefined) {
+    const webhooks = Array.isArray(value.webhook) ? value.webhook : [value.webhook];
     if (!webhooks.every(isValidWebhook)) return false;
   }
 
-  if (!isOptionalType(obj.timeZone, isString)) return false;
-  if (!isOptionalType(obj.gracePeriod, isNumber)) return false;
-  if (!isOptionalType(obj.skipNotificationIds, isStringArray)) return false;
-  if (!isOptionalType(obj.skipErrorChangeNotification, isBoolean)) return false;
+  if ('timeZone' in value && !isOptionalType(value.timeZone, isString)) return false;
+  if ('gracePeriod' in value && !isOptionalType(value.gracePeriod, isNumber)) return false;
+  if ('skipNotificationIds' in value && !isOptionalType(value.skipNotificationIds, isStringArray))
+    return false;
+  if (
+    'skipErrorChangeNotification' in value &&
+    !isOptionalType(value.skipErrorChangeNotification, isBoolean)
+  )
+    return false;
 
   return true;
 }
 
 function isValidMonitor(value: unknown): value is Monitor {
-  const obj = asRecord(value);
-  if (!obj) return false;
+  if (!isConfigRecord(value)) return false;
 
   return (
-    typeof obj.id === 'string' &&
-    obj.id.length > 0 &&
-    typeof obj.name === 'string' &&
-    obj.name.length > 0 &&
-    typeof obj.method === 'string' &&
-    typeof obj.target === 'string' &&
-    isValidMonitorTarget(obj.target, obj.method)
+    'id' in value &&
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    value.name.length > 0 &&
+    'method' in value &&
+    typeof value.method === 'string' &&
+    'target' in value &&
+    typeof value.target === 'string' &&
+    isValidMonitorTarget(value.target, value.method)
   );
 }
 
 function isValidStatusPageConfig(value: unknown): value is StatusPageConfig {
-  const obj = asRecord(value);
-  if (!obj) return false;
-  return isOptionalType(obj.title, isString);
+  if (!isConfigRecord(value)) return false;
+  return !('title' in value) || isOptionalType(value.title, isString);
 }
 
 export function isValidRuntimeConfig(value: unknown): value is RuntimeConfig {
-  const obj = asRecord(value);
-  if (!obj) return false;
+  if (!isConfigRecord(value)) return false;
 
-  if (!Array.isArray(obj.monitors)) return false;
-  if (!obj.monitors.every(isValidMonitor)) return false;
-  if (obj.statusPage !== undefined && !isValidStatusPageConfig(obj.statusPage)) return false;
-  if (obj.notification !== undefined && !isValidNotificationConfig(obj.notification)) return false;
+  if (!('monitors' in value) || !Array.isArray(value.monitors)) return false;
+  if (!value.monitors.every(isValidMonitor)) return false;
+  if (
+    'statusPage' in value &&
+    value.statusPage !== undefined &&
+    !isValidStatusPageConfig(value.statusPage)
+  )
+    return false;
+  if (
+    'notification' in value &&
+    value.notification !== undefined &&
+    !isValidNotificationConfig(value.notification)
+  )
+    return false;
 
   return true;
 }
 
 export function isStoredConfigEnvelope(value: unknown): value is RuntimeConfigEnvelope {
-  const obj = asRecord(value);
-  if (!obj) return false;
+  if (!isConfigRecord(value)) return false;
 
-  return isValidRuntimeConfig(obj.config);
+  return 'config' in value && isValidRuntimeConfig(value.config);
 }
 
 export function parseRuntimeConfig(value: unknown): RuntimeConfig | null {

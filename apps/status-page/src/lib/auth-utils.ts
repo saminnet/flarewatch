@@ -17,9 +17,11 @@ export function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function parseCookies(header: string | null): Record<string, string> {
+interface CookieMap extends Record<string, string> {}
+
+function parseCookies(header: string | null): CookieMap {
   if (!header) return {};
-  const out: Record<string, string> = {};
+  const out: CookieMap = {};
   for (const part of header.split(';')) {
     const [rawKey, ...rawValueParts] = part.split('=');
     if (!rawKey || rawValueParts.length === 0) continue;
@@ -53,9 +55,21 @@ export async function validateSession(
   try {
     const raw = await kv.get(`${AUTH.SESSION_KEY_PREFIX}${sessionId}`);
     if (!raw) return null;
-    return JSON.parse(raw) as SessionData;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isSessionData(parsed)) return null;
+    return parsed;
   } catch {
     // Invalid session data format or KV error
     return null;
   }
+}
+
+function isSessionData(value: unknown): value is SessionData {
+  if (typeof value !== 'object' || value === null) return false;
+  return (
+    'createdAt' in value &&
+    typeof value.createdAt === 'number' &&
+    'ip' in value &&
+    (value.ip === null || typeof value.ip === 'string')
+  );
 }

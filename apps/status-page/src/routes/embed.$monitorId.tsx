@@ -7,13 +7,12 @@ interface EmbedSearch {
   minimal?: boolean;
 }
 
-const VALID_THEMES = ['light', 'dark', 'auto'] as const;
-
 export const Route = createFileRoute('/embed/$monitorId')({
-  validateSearch: (search: Record<string, unknown>): EmbedSearch => {
-    const theme = VALID_THEMES.includes(search.theme as (typeof VALID_THEMES)[number])
-      ? (search.theme as EmbedSearch['theme'])
-      : 'auto';
+  validateSearch: (search): EmbedSearch => {
+    const theme =
+      search.theme === 'light' || search.theme === 'dark' || search.theme === 'auto'
+        ? search.theme
+        : 'auto';
     return {
       theme,
       minimal: search.minimal === 'true' || search.minimal === true,

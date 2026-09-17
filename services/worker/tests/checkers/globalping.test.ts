@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
-import type { MonitorTarget } from '@flarewatch/shared';
+import type { JsonValue, MonitorTarget } from '@flarewatch/shared';
 
 const fetchWithTimeoutMock = vi.fn();
 
@@ -26,9 +26,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
-function finishedHttpMeasurement(
-  resultOverrides: Record<string, unknown> = {},
-): Record<string, unknown> {
+function finishedHttpMeasurement(resultOverrides: Record<string, JsonValue> = {}): JsonValue {
   return {
     status: 'finished',
     results: [
@@ -46,7 +44,7 @@ function finishedHttpMeasurement(
   };
 }
 
-function mockCompletedMeasurement(measurement: Record<string, unknown>): void {
+function mockCompletedMeasurement(measurement: JsonValue): void {
   fetchWithTimeoutMock
     .mockResolvedValueOnce(jsonResponse({ id: 'measurement-1' }, 202))
     .mockResolvedValueOnce(jsonResponse(measurement));

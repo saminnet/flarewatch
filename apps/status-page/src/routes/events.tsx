@@ -16,7 +16,7 @@ function getCurrentMonth(): string {
 }
 
 export const Route = createFileRoute('/events')({
-  validateSearch: (search: Record<string, unknown>): EventsSearch => {
+  validateSearch: (search): EventsSearch => {
     const month = isValidYearMonth(search.month) ? search.month : getCurrentMonth();
     const monitor =
       typeof search.monitor === 'string' && search.monitor.length > 0 ? search.monitor : undefined;

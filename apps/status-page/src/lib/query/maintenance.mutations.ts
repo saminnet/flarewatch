@@ -33,7 +33,7 @@ export type MaintenanceUpdatePatch = {
   color: string | null;
 };
 
-async function request<T = void>(path: string, init: RequestInit): Promise<T> {
+async function requestOk(path: string, init: RequestInit): Promise<Response> {
   const res = await fetch(path, init);
   if (!res.ok) {
     // Detect session expiry
@@ -43,10 +43,13 @@ async function request<T = void>(path: string, init: RequestInit): Promise<T> {
     const text = await res.text().catch(() => '');
     throw new Error(text || `Request failed (${res.status})`);
   }
-  if (res.status === 204 || res.headers.get('content-length') === '0') {
-    return undefined as T;
-  }
-  return (await res.json()) as T;
+  return res;
+}
+
+async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
+  const res = await requestOk(path, init);
+  const data: T = await res.json();
+  return data;
 }
 
 interface MutationCallbacks<T = Maintenance> {
@@ -60,7 +63,7 @@ export function useCreateMaintenance(callbacks?: MutationCallbacks) {
 
   return useMutation({
     mutationFn: async (data: MaintenanceConfig) => {
-      return request<Maintenance>(API_PATH, {
+      return requestJson<Maintenance>(API_PATH, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -83,7 +86,7 @@ export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: MaintenanceUpdatePatch }) => {
-      return request<Maintenance>(API_PATH, {
+      return requestJson<Maintenance>(API_PATH, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, updates }),
@@ -110,7 +113,7 @@ export function useDeleteMaintenance(callbacks?: MutationCallbacks<string>) {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      await request(API_PATH, {
+      await requestOk(API_PATH, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),

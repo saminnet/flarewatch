@@ -11,6 +11,7 @@ import {
   DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   createLogger,
 } from '@flarewatch/shared';
+import { z } from 'zod';
 
 const log = createLogger('GlobalPing');
 
@@ -24,28 +25,46 @@ interface GlobalPingConfig {
   ipVersion?: number;
 }
 
-interface MeasurementResult {
-  status: string;
-  results: Array<{
-    probe: { country: string; city: string };
-    result: {
-      status: string;
-      rawOutput?: string;
-      statusCode?: number;
-      rawBody?: string;
-      timings?: { total: number };
-      stats?: { avg: number };
-      tls?: {
-        authorized: boolean;
-        error?: string;
-        certificate?: {
-          expiresAt?: string;
-          issuer?: { commonName?: string };
-          subject?: { commonName?: string };
-        };
-      };
-    };
-  }>;
+const measurementResultSchema = z.object({
+  status: z.string(),
+  results: z.array(
+    z.object({
+      probe: z.object({ country: z.string(), city: z.string() }),
+      result: z.object({
+        status: z.string(),
+        rawOutput: z.string().optional(),
+        statusCode: z.number().optional(),
+        rawBody: z.string().optional(),
+        timings: z.object({ total: z.number() }).optional(),
+        stats: z.object({ avg: z.number() }).optional(),
+        tls: z
+          .object({
+            authorized: z.boolean(),
+            error: z.string().optional(),
+            certificate: z
+              .object({
+                expiresAt: z.string().optional(),
+                issuer: z.object({ commonName: z.string().optional() }).optional(),
+                subject: z.object({ commonName: z.string().optional() }).optional(),
+              })
+              .optional(),
+          })
+          .optional(),
+      }),
+    }),
+  ),
+});
+
+type MeasurementResult = z.infer<typeof measurementResultSchema>;
+
+interface CertExpiryInfo {
+  expiryDate: number;
+  daysUntilExpiry: number;
+}
+
+interface HttpValidationResult {
+  error: string | null;
+  ssl?: SSLCertificateInfo;
 }
 
 function parseProxyUrl(proxyUrl: string): GlobalPingConfig {
@@ -117,10 +136,7 @@ function buildHttpRequest(target: MonitorTarget, config: GlobalPingConfig) {
   };
 }
 
-function calculateCertExpiry(expiresAt: string): {
-  expiryDate: number;
-  daysUntilExpiry: number;
-} {
+function calculateCertExpiry(expiresAt: string): CertExpiryInfo {
   const expiryDate = Math.floor(new Date(expiresAt).getTime() / 1000);
   const now = Math.floor(Date.now() / 1000);
   const daysUntilExpiry = Math.floor((expiryDate - now) / 86400);
@@ -130,7 +146,7 @@ function calculateCertExpiry(expiresAt: string): {
 function validateHttpResult(
   target: MonitorTarget,
   result: MeasurementResult['results'][0]['result'],
-): { error: string | null; ssl?: SSLCertificateInfo } {
+): HttpValidationResult {
   let ssl: SSLCertificateInfo | undefined;
 
   let error = validateHttpStatusAndBody(result.statusCode ?? 0, result.rawBody ?? '', {
@@ -187,12 +203,20 @@ async function createMeasurement(
   });
 
   if (response.status !== 202) {
-    const errorBody = (await response.json()) as { error?: { message?: string } };
-    throw new Error(errorBody.error?.message ?? `API error: ${response.status}`);
+    const errorBody = z
+      .object({ error: z.object({ message: z.string() }).optional() })
+      .safeParse(await response.json());
+    throw new Error(
+      (errorBody.success ? errorBody.data.error?.message : undefined) ??
+        `API error: ${response.status}`,
+    );
   }
 
-  const { id } = (await response.json()) as { id: string };
-  return id;
+  const created = z.object({ id: z.string() }).safeParse(await response.json());
+  if (!created.success) {
+    throw new Error('GlobalPing: invalid measurement creation response');
+  }
+  return created.data.id;
 }
 
 async function pollMeasurement(
@@ -209,7 +233,11 @@ async function pollMeasurement(
     const response = await fetchWithTimeout(`${GLOBALPING_API}/${measurementId}`, {
       timeout: API_TIMEOUT,
     });
-    const result = (await response.json()) as MeasurementResult;
+    const parsed = measurementResultSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      throw new Error('GlobalPing: invalid measurement payload');
+    }
+    const result = parsed.data;
 
     if (result.status !== 'in-progress') {
       return result;

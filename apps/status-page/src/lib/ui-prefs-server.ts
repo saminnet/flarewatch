@@ -31,16 +31,18 @@ function parseUiPrefsCookie(cookieValue: string | undefined): UiPrefs {
   if (!cookieValue) return DEFAULT_UI_PREFS;
 
   try {
-    const parsed = JSON.parse(cookieValue) as unknown;
+    const parsed: unknown = JSON.parse(cookieValue);
     if (typeof parsed !== 'object' || parsed === null) return DEFAULT_UI_PREFS;
 
-    const obj = parsed as Record<string, unknown>;
     const collapsedMonitors =
-      parseStringArray(obj.collapsedMonitors) ?? DEFAULT_UI_PREFS.collapsedMonitors;
+      'collapsedMonitors' in parsed ? parseStringArray(parsed.collapsedMonitors) : null;
     const collapsedGroups =
-      parseStringArray(obj.collapsedGroups) ?? DEFAULT_UI_PREFS.collapsedGroups;
+      'collapsedGroups' in parsed ? parseStringArray(parsed.collapsedGroups) : null;
 
-    return { collapsedGroups, collapsedMonitors };
+    return {
+      collapsedMonitors: collapsedMonitors ?? DEFAULT_UI_PREFS.collapsedMonitors,
+      collapsedGroups: collapsedGroups ?? DEFAULT_UI_PREFS.collapsedGroups,
+    };
   } catch {
     return DEFAULT_UI_PREFS;
   }
@@ -51,9 +53,9 @@ function validateUiPrefs(data: unknown): UiPrefs {
     throw new Error('Invalid UI prefs');
   }
 
-  const obj = data as Record<string, unknown>;
-  const collapsedMonitors = parseStringArray(obj.collapsedMonitors);
-  const collapsedGroups = parseStringArray(obj.collapsedGroups);
+  const collapsedMonitors =
+    'collapsedMonitors' in data ? parseStringArray(data.collapsedMonitors) : null;
+  const collapsedGroups = 'collapsedGroups' in data ? parseStringArray(data.collapsedGroups) : null;
 
   if (!collapsedMonitors || !collapsedGroups) {
     throw new Error('Invalid UI prefs properties');

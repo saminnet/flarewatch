@@ -1,4 +1,10 @@
-import type { MonitorTarget, SSLCertificateInfo, CheckSuccess, CheckFailure } from './types';
+import type {
+  CheckFailure,
+  CheckSuccess,
+  JsonValue,
+  MonitorTarget,
+  SSLCertificateInfo,
+} from './types';
 
 export const DEFAULT_HTTP_TIMEOUT = 10000;
 export const DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS = 30;
@@ -17,13 +23,15 @@ export interface FetchOptions extends Omit<RequestInit, 'signal' | 'body'> {
   body?: BodyInit | null | undefined;
 }
 
-function getTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cleanup: () => void } {
-  const abortSignalGlobal: unknown = typeof AbortSignal === 'undefined' ? undefined : AbortSignal;
-  const timeoutFn = (abortSignalGlobal as { timeout?: (ms: number) => AbortSignal } | undefined)
-    ?.timeout;
-  if (typeof timeoutFn === 'function') {
+interface TimeoutSignal {
+  signal: AbortSignal;
+  cleanup: () => void;
+}
+
+function getTimeoutSignal(timeoutMs: number): TimeoutSignal {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
     // AbortSignal.timeout() handles cleanup automatically
-    return { signal: timeoutFn(timeoutMs), cleanup: () => {} };
+    return { signal: AbortSignal.timeout(timeoutMs), cleanup: () => {} };
   }
 
   const controller = new AbortController();
@@ -167,6 +175,11 @@ export async function validateHttpResponse(
   return null;
 }
 
+export interface TcpTarget {
+  hostname: string;
+  port: number;
+}
+
 /**
  * Parse TCP target string into hostname and port.
  *
@@ -174,7 +187,7 @@ export async function validateHttpResponse(
  * @returns Object with hostname and port
  * @throws Error if hostname is missing, port is missing, or port is invalid
  */
-export function parseTcpTarget(target: string): { hostname: string; port: number } {
+export function parseTcpTarget(target: string): TcpTarget {
   const url = new URL(`tcp://${target}`);
   if (!url.hostname) {
     throw new Error('Invalid TCP target hostname');
@@ -229,7 +242,8 @@ interface LogEntry {
   level: LogLevel;
   message: string;
   timestamp: string;
-  [key: string]: unknown;
+  component: string;
+  [key: string]: JsonValue;
 }
 
 /**
@@ -239,7 +253,7 @@ interface LogEntry {
  * @returns Logger object with debug, info, warn, error methods
  */
 export function createLogger(component: string) {
-  const log = (level: LogLevel, message: string, data?: Record<string, unknown>) => {
+  const log = (level: LogLevel, message: string, data?: { [key: string]: JsonValue }) => {
     const entry: LogEntry = {
       level,
       message,
@@ -266,9 +280,9 @@ export function createLogger(component: string) {
   };
 
   return {
-    debug: (message: string, data?: Record<string, unknown>) => log('debug', message, data),
-    info: (message: string, data?: Record<string, unknown>) => log('info', message, data),
-    warn: (message: string, data?: Record<string, unknown>) => log('warn', message, data),
-    error: (message: string, data?: Record<string, unknown>) => log('error', message, data),
+    debug: (message: string, data?: { [key: string]: JsonValue }) => log('debug', message, data),
+    info: (message: string, data?: { [key: string]: JsonValue }) => log('info', message, data),
+    warn: (message: string, data?: { [key: string]: JsonValue }) => log('warn', message, data),
+    error: (message: string, data?: { [key: string]: JsonValue }) => log('error', message, data),
   };
 }

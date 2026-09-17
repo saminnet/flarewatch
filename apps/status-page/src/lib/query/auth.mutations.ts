@@ -36,8 +36,15 @@ export function useAdminLogin(options?: {
       });
 
       if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? t('admin.loginFailed'));
+        const payload: unknown = await res.json().catch(() => null);
+        const message =
+          typeof payload === 'object' &&
+          payload !== null &&
+          'error' in payload &&
+          typeof payload.error === 'string'
+            ? payload.error
+            : undefined;
+        throw new Error(message ?? t('admin.loginFailed'));
       }
 
       return { ok: true };
@@ -76,11 +83,6 @@ export function useAdminLogout(options?: {
  */
 export function isSessionExpiredError(error: unknown): boolean {
   if (error instanceof SessionExpiredError) return true;
-  if (
-    error instanceof Error &&
-    'status' in error &&
-    (error as Error & { status: number }).status === 401
-  )
-    return true;
+  if (error instanceof Error && 'status' in error && error.status === 401) return true;
   return false;
 }

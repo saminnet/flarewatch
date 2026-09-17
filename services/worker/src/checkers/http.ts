@@ -29,7 +29,9 @@ export class HttpChecker implements MonitorChecker {
     const startTime = performance.now();
 
     try {
-      const headers = new Headers(target.headers as HeadersInit);
+      const headers = new Headers(
+        Object.entries(target.headers ?? {}).map(([key, value]) => [key, String(value)]),
+      );
       if (!headers.has('user-agent')) {
         headers.set('user-agent', USER_AGENT);
       }

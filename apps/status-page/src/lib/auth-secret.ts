@@ -1,4 +1,5 @@
 import { timingSafeEqual } from './auth-utils';
+import type { JsonValue } from '@flarewatch/shared';
 
 const AUTH_SECRET_ITERATIONS = 100_000;
 const PBKDF2_HASH_BITS = 256;
@@ -21,17 +22,23 @@ function normalizeBase64(value: string): string | null {
   }
 }
 
-function isValidPayload(payload: unknown): payload is ParsedAuthSecret {
+function isValidPayload(payload: JsonValue): payload is ParsedAuthSecret {
   if (typeof payload !== 'object' || payload === null) return false;
 
-  const candidate = payload as Record<string, unknown>;
-  if (typeof candidate.username !== 'string' || candidate.username.length === 0) return false;
-  if (typeof candidate.salt !== 'string' || !normalizeBase64(candidate.salt)) return false;
-  if (typeof candidate.hash !== 'string' || !normalizeBase64(candidate.hash)) return false;
+  if (
+    !('username' in payload) ||
+    typeof payload.username !== 'string' ||
+    payload.username.length === 0
+  )
+    return false;
+  if (!('salt' in payload) || typeof payload.salt !== 'string' || !normalizeBase64(payload.salt))
+    return false;
+  if (!('hash' in payload) || typeof payload.hash !== 'string' || !normalizeBase64(payload.hash))
+    return false;
   return true;
 }
 
-function parseJsonSecret(rawSecret: string): unknown {
+function parseJsonSecret(rawSecret: string): JsonValue {
   let input = rawSecret.trim();
 
   if (input.startsWith("'") && input.endsWith("'")) {

@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { Maintenance, MonitorState } from '@flarewatch/shared';
+import type { JsonValue, Maintenance, MonitorState } from '@flarewatch/shared';
 
 const appDir = process.cwd();
 const persistDir = path.join(appDir, '.wrangler/e2e-state');
@@ -57,9 +57,11 @@ rmSync(fixtureDir, { recursive: true, force: true });
 mkdirSync(fixtureDir, { recursive: true });
 mkdirSync(path.dirname(e2eConfigPath), { recursive: true });
 
-const wranglerConfig = JSON.parse(readFileSync(configPath, 'utf8')) as {
-  vars?: Record<string, unknown>;
+type WranglerConfig = {
+  vars?: { [key: string]: JsonValue };
 };
+
+const wranglerConfig: WranglerConfig = JSON.parse(readFileSync(configPath, 'utf8'));
 wranglerConfig.vars = {
   ...wranglerConfig.vars,
   FLAREWATCH_ADMIN_BASIC_AUTH: E2E_ADMIN_AUTH_SECRET,

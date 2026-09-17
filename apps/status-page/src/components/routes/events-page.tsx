@@ -110,7 +110,7 @@ export function EventsPage() {
               navigate({
                 search: (prev) => ({
                   ...prev,
-                  type: value === 'all' ? undefined : (value as 'incident' | 'maintenance'),
+                  type: value === 'incident' || value === 'maintenance' ? value : undefined,
                 }),
               })
             }

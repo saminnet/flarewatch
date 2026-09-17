@@ -13,17 +13,18 @@ type ProxyEnv = {
 };
 
 function isCheckResult(value: unknown): value is CheckResult {
-  if (!value || typeof value !== 'object') return false;
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('ok' in value)) return false;
 
-  const result = value as Record<string, unknown>;
-  if (result.ok === true) {
-    return typeof result.latency === 'number';
+  if (value.ok === true) {
+    return 'latency' in value && typeof value.latency === 'number';
   }
 
-  if (result.ok === false) {
+  if (value.ok === false) {
     return (
-      typeof result.error === 'string' &&
-      (result.latency === undefined || typeof result.latency === 'number')
+      'error' in value &&
+      typeof value.error === 'string' &&
+      (!('latency' in value) || typeof value.latency === 'number')
     );
   }
 
@@ -31,10 +32,10 @@ function isCheckResult(value: unknown): value is CheckResult {
 }
 
 function isProxyCheckResponse(value: unknown): value is CheckResultWithLocation {
-  if (!value || typeof value !== 'object') return false;
-
-  const response = value as Record<string, unknown>;
-  return typeof response.location === 'string' && isCheckResult(response.result);
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('location' in value) || typeof value.location !== 'string') return false;
+  if (!('result' in value) || !isCheckResult(value.result)) return false;
+  return true;
 }
 
 export async function checkExternalProxy(
@@ -70,7 +71,7 @@ export async function checkExternalProxy(
       };
     }
 
-    const data = (await response.json()) as unknown;
+    const data: unknown = await response.json();
     if (!isProxyCheckResponse(data)) {
       return {
         location: 'ERROR',

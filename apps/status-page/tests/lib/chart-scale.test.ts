@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { linearScale, niceLinearTicks } from '@/lib/chart-scale';
+import { linearScale, niceLinearTicks, type NiceTicks } from '@/lib/chart-scale';
 
-const GOLDEN: Record<number, { ticks: number[]; max: number }> = {
+interface GoldenTable extends Record<number, NiceTicks> {}
+
+const GOLDEN: GoldenTable = {
   0: { ticks: [0], max: 0 },
   1: { ticks: [0, 0.2, 0.4, 0.6, 0.8, 1], max: 1 },
   5: { ticks: [0, 1, 2, 3, 4, 5], max: 5 },

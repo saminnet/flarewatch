@@ -30,11 +30,8 @@ function applyTheme(theme: ThemePreference) {
 function setThemePreferenceClient(theme: ThemePreference) {
   if (typeof window === 'undefined') return;
 
-  const setTheme = (
-    window as unknown as {
-      __flarewatchSetThemePreference?: (t: ThemePreference) => void;
-    }
-  ).__flarewatchSetThemePreference;
+  const setTheme =
+    '__flarewatchSetThemePreference' in window ? window.__flarewatchSetThemePreference : undefined;
 
   if (typeof setTheme === 'function') {
     setTheme(theme);

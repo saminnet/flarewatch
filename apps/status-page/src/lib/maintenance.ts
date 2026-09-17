@@ -92,7 +92,9 @@ export type MaintenanceColors = {
   dot: string;
 };
 
-const MAINTENANCE_COLOR_MAP: Record<string, MaintenanceColors> = {
+interface MaintenanceColorMap extends Record<string, MaintenanceColors> {}
+
+const MAINTENANCE_COLOR_MAP: MaintenanceColorMap = {
   blue: {
     bg: 'bg-blue-50 dark:bg-blue-950/30',
     border: 'border-blue-200 dark:border-blue-800',

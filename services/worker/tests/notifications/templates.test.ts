@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vite-plus/test';
+import type { JsonValue } from '@flarewatch/shared';
 import { getTemplate, hasTemplate, type TemplateContext } from '../../src/notifications/templates';
 
 const baseContext: TemplateContext = {
@@ -15,7 +16,7 @@ const baseContext: TemplateContext = {
 };
 
 describe('notification templates', () => {
-  const getSlackBlockText = (block: Record<string, unknown>): string => {
+  const getSlackBlockText = (block: Record<string, JsonValue>): string => {
     const text = block.text;
     if (!text || typeof text !== 'object') return '';
     const maybeText = (text as { text?: unknown }).text;
@@ -88,7 +89,7 @@ describe('notification templates', () => {
 
     const downOutput = slack(baseContext);
     const downPayload = JSON.parse(downOutput.body) as {
-      attachments: Array<{ blocks: Array<Record<string, unknown>> }>;
+      attachments: Array<{ blocks: Array<Record<string, JsonValue>> }>;
     };
     const downBlocks = downPayload.attachments[0]?.blocks ?? [];
     const hasReasonDown = downBlocks.some(
@@ -98,7 +99,7 @@ describe('notification templates', () => {
 
     const upOutput = slack({ ...baseContext, isUp: true });
     const upPayload = JSON.parse(upOutput.body) as {
-      attachments: Array<{ blocks: Array<Record<string, unknown>> }>;
+      attachments: Array<{ blocks: Array<Record<string, JsonValue>> }>;
     };
     const upBlocks = upPayload.attachments[0]?.blocks ?? [];
     const hasReasonUp = upBlocks.some(

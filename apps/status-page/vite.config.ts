@@ -8,7 +8,9 @@ import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 
-// Avoid TS 6's deep plugin-type comparison across Vite/Rolldown packages.
+// SAFETY: these plugins share the same runtime shape, but Vite's and Rolldown's published
+// plugin element types are declared independently and TS 6's deep comparison across both
+// package graphs fails; `never` defers element checking to defineConfig's own plugin type.
 const plugins = [
   devtools(),
   cloudflare({ viteEnvironment: { name: 'ssr' } }),

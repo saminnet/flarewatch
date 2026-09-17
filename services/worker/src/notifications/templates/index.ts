@@ -50,13 +50,13 @@ function textTemplate(ctx: TemplateContext): TemplateOutput {
 }
 
 /** Template registry */
-const templates: Record<NotificationTemplate, TemplateFunction> = {
+const templates = {
   slack: slackTemplate,
   discord: discordTemplate,
   telegram: telegramTemplate,
   ntfy: ntfyTemplate,
   text: textTemplate,
-};
+} satisfies Record<NotificationTemplate, TemplateFunction>;
 
 /** Get a template by name */
 export function getTemplate(name: NotificationTemplate): TemplateFunction {

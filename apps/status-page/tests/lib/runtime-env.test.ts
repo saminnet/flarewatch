@@ -24,14 +24,14 @@ describe('runtime-env', () => {
   });
 
   it('returns STATE_KV when available', async () => {
-    const kv = { name: 'state' } as unknown as StateKv;
+    const kv = { name: 'state' } as { name: string } & StateKv;
     globalWithEnv.__env__ = { STATE_KV: kv };
 
     await expect(requireStateKv()).resolves.toBe(kv);
   });
 
   it('falls back to FLAREWATCH_STATE', async () => {
-    const kv = { name: 'legacy-state' } as unknown as StateKv;
+    const kv = { name: 'legacy-state' } as { name: string } & StateKv;
     globalWithEnv.__env__ = { FLAREWATCH_STATE: kv };
 
     await expect(requireStateKv()).resolves.toBe(kv);

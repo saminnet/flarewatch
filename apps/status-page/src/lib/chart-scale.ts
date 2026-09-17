@@ -10,12 +10,18 @@ export interface LinearScale {
   invert: (px: number) => number;
 }
 
+export interface NiceTicks {
+  ticks: number[];
+  max: number;
+}
+
 // Maps domain [d0, d1] onto range [r0, r1].
 export function linearScale([d0, d1]: [number, number], [r0, r1]: [number, number]): LinearScale {
   const span = d1 - d0 || 1; // degenerate domain -> avoid divide-by-zero
-  const scale = ((value: number) => r0 + ((value - d0) / span) * (r1 - r0)) as LinearScale;
-  scale.invert = (px: number) => d0 + ((px - r0) / (r1 - r0)) * span;
-  return scale;
+  const scale = (value: number) => r0 + ((value - d0) / span) * (r1 - r0);
+  return Object.assign(scale, {
+    invert: (px: number) => d0 + ((px - r0) / (r1 - r0)) * span,
+  });
 }
 
 const E10 = Math.sqrt(50);
@@ -84,7 +90,7 @@ function niceMax(maxValue: number, count: number): number {
  * Mirrors scaleLinear().domain([0, maxValue]).nice().ticks(5):
  * nice() uses its default count of 10; ticks() uses 5.
  */
-export function niceLinearTicks(maxValue: number): { ticks: number[]; max: number } {
+export function niceLinearTicks(maxValue: number): NiceTicks {
   const max = niceMax(maxValue, 10);
   return { ticks: ticks(0, max, 5), max };
 }

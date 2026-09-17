@@ -1,4 +1,5 @@
 import {
+  type JsonValue,
   type MonitorTarget,
   type WebhookConfig,
   fetchWithTimeout,
@@ -8,6 +9,8 @@ import {
 import { getTemplate, type TemplateContext } from './templates';
 
 const log = createLogger('Webhook');
+
+type SingleWebhookConfig = Exclude<WebhookConfig, Array<unknown>>;
 
 function createDateFormatter(timeZone: string) {
   return new Intl.DateTimeFormat('en-US', {
@@ -64,24 +67,31 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
   ].join('\n');
 }
 
-function applyMessageTemplate(payload: unknown, message: string): unknown {
+function applyTemplate(payload: JsonValue, message: string): JsonValue {
   if (payload === '$MSG') {
     return message;
   }
 
   if (Array.isArray(payload)) {
-    return payload.map((item) => applyMessageTemplate(item, message));
+    return payload.map((item) => applyTemplate(item, message));
   }
 
   if (typeof payload === 'object' && payload !== null) {
-    const result: Record<string, unknown> = {};
+    const result: { [key: string]: JsonValue } = {};
     for (const [key, value] of Object.entries(payload)) {
-      result[key] = applyMessageTemplate(value, message);
+      result[key] = applyTemplate(value, message);
     }
     return result;
   }
 
   return payload;
+}
+
+function encodeFormValue(value: JsonValue): string {
+  if (value !== null && typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
 }
 
 function buildTemplateContext(ctx: NotificationContext): TemplateContext {
@@ -115,7 +125,7 @@ export class WebhookNotifier {
   }
 
   private async sendSingle(
-    webhook: Exclude<WebhookConfig, Array<unknown>>,
+    webhook: SingleWebhookConfig,
     ctx: NotificationContext,
     message: string,
   ): Promise<WebhookResult> {
@@ -129,7 +139,9 @@ export class WebhookNotifier {
         const templateCtx = buildTemplateContext(ctx);
         const output = getTemplate(template)(templateCtx);
 
-        const requestHeaders = new Headers(headers as Record<string, string> | undefined);
+        const requestHeaders = new Headers(
+          Object.entries(headers ?? {}).map(([key, value]) => [key, String(value)]),
+        );
         for (const [key, value] of Object.entries(output.headers)) {
           if (!requestHeaders.has(key)) {
             requestHeaders.set(key, value);
@@ -142,17 +154,13 @@ export class WebhookNotifier {
           body: output.body,
         };
       } else {
-        const templatedPayload = applyMessageTemplate(payload, message);
+        const templatedPayload =
+          payload === undefined ? undefined : applyTemplate(payload, message);
 
-        requestInit = this.buildRequest(
-          payloadType ?? 'json',
-          method,
-          headers as Record<string, string> | undefined,
-          templatedPayload,
-        );
+        requestInit = this.buildRequest(payloadType ?? 'json', method, headers, templatedPayload);
 
         if (payloadType === 'param') {
-          finalUrl = this.buildUrlWithParams(url, templatedPayload as Record<string, unknown>);
+          finalUrl = this.buildUrlWithParams(url, templatedPayload);
         }
       }
 
@@ -185,10 +193,12 @@ export class WebhookNotifier {
   private buildRequest(
     payloadType: string,
     method: string | undefined,
-    headers: Record<string, string> | undefined,
-    payload: unknown,
+    headers: SingleWebhookConfig['headers'],
+    payload: JsonValue | undefined,
   ): RequestInit {
-    const requestHeaders = new Headers(headers);
+    const requestHeaders = new Headers(
+      Object.entries(headers ?? {}).map(([key, value]) => [key, String(value)]),
+    );
 
     switch (payloadType) {
       case 'json': {
@@ -207,8 +217,10 @@ export class WebhookNotifier {
           requestHeaders.set('content-type', 'application/x-www-form-urlencoded');
         }
         const formData = new URLSearchParams();
-        for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
-          formData.append(key, String(value));
+        if (payload !== null && typeof payload === 'object') {
+          for (const [key, value] of Object.entries(payload)) {
+            formData.append(key, encodeFormValue(value));
+          }
         }
         return {
           method: method ?? 'POST',
@@ -226,10 +238,12 @@ export class WebhookNotifier {
     }
   }
 
-  private buildUrlWithParams(baseUrl: string, params: Record<string, unknown>): string {
+  private buildUrlWithParams(baseUrl: string, params: JsonValue | undefined): string {
     const url = new URL(baseUrl);
-    for (const [key, value] of Object.entries(params)) {
-      url.searchParams.append(key, String(value));
+    if (params !== null && typeof params === 'object') {
+      for (const [key, value] of Object.entries(params)) {
+        url.searchParams.append(key, encodeFormValue(value));
+      }
     }
     return url.toString();
   }

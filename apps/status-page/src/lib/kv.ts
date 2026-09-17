@@ -45,6 +45,8 @@ export const getMonitorState = createServerFn({ method: 'GET' }).handler(
     try {
       const kv = await requireStateKv();
       const state = await kv.get(KV_KEYS.STATE, { type: 'json' });
+      // SAFETY: this key has a single writer (the worker), which persists validated
+      // MonitorState JSON and re-validates on its own reads.
       return resolveMonitorState((state as MonitorState | null) ?? null, triggerInitialCheck);
     } catch (error) {
       console.error('Error fetching monitor state:', error);

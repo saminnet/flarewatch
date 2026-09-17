@@ -101,8 +101,8 @@ function createMaintenance(overrides: Partial<Maintenance> = {}): Maintenance {
   };
 }
 
-function createKv(initial: Record<string, unknown> = {}) {
-  const values = new Map(Object.entries(initial));
+function createKv(initial: Array<[string, unknown]> = []) {
+  const values = new Map(initial);
   const get = vi.fn(async (key: string) => {
     if (!values.has(key)) return null;
     return structuredClone(values.get(key));
@@ -115,7 +115,7 @@ function createKv(initial: Record<string, unknown> = {}) {
 }
 
 function asKv(kv: ReturnType<typeof createKv>): KVNamespace {
-  return kv as unknown as KVNamespace;
+  return kv as ReturnType<typeof createKv> & KVNamespace;
 }
 
 function setNotifications(overrides: Partial<NotificationConfig> = {}): void {
@@ -174,7 +174,7 @@ describe('worker', () => {
     it('notifies on a status change when no grace period is configured', async () => {
       setNotifications();
       mockDown();
-      const stateKv = createKv({ [KV_KEYS.STATE]: createState() });
+      const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -190,7 +190,7 @@ describe('worker', () => {
     it('does not notify before the grace period is reached', async () => {
       setNotifications({ gracePeriod: 1 });
       mockDown();
-      const stateKv = createKv({ [KV_KEYS.STATE]: createState() });
+      const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -200,9 +200,7 @@ describe('worker', () => {
     it('notifies for a status change after the grace period is reached', async () => {
       const monitor = createMonitor();
       setNotifications({ gracePeriod: 1 });
-      const stateKv = createKv({
-        [KV_KEYS.STATE]: createDownState(monitor, NOW_SECONDS - 90),
-      });
+      const stateKv = createKv([[KV_KEYS.STATE, createDownState(monitor, NOW_SECONDS - 90)]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -217,9 +215,7 @@ describe('worker', () => {
       const monitor = createMonitor();
       setNotifications({ gracePeriod: 2 });
       mockDown();
-      const stateKv = createKv({
-        [KV_KEYS.STATE]: createDownState(monitor, NOW_SECONDS - 90),
-      });
+      const stateKv = createKv([[KV_KEYS.STATE, createDownState(monitor, NOW_SECONDS - 90)]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -233,9 +229,7 @@ describe('worker', () => {
     it('suppresses an up transition when the outage ended before its grace period', async () => {
       const monitor = createMonitor();
       setNotifications({ gracePeriod: 1 });
-      const stateKv = createKv({
-        [KV_KEYS.STATE]: createDownState(monitor, NOW_SECONDS - 20),
-      });
+      const stateKv = createKv([[KV_KEYS.STATE, createDownState(monitor, NOW_SECONDS - 20)]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -246,10 +240,10 @@ describe('worker', () => {
       const monitor = createMonitor();
       setNotifications();
       mockDown();
-      const stateKv = createKv({
-        [KV_KEYS.STATE]: createState(),
-        [KV_KEYS.MAINTENANCES]: [createMaintenance({ monitors: [monitor.id] })],
-      });
+      const stateKv = createKv([
+        [KV_KEYS.STATE, createState()],
+        [KV_KEYS.MAINTENANCES, [createMaintenance({ monitors: [monitor.id] })]],
+      ]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -262,15 +256,18 @@ describe('worker', () => {
       workerConfigMock.monitors = [includedMonitor, excludedMonitor];
       setNotifications();
       mockDown();
-      const stateKv = createKv({
-        [KV_KEYS.STATE]: createState(),
-        [KV_KEYS.MAINTENANCES]: [
-          createMaintenance({
-            monitors: [includedMonitor.id],
-            end: new Date((NOW_SECONDS + 60) * 1000).toISOString(),
-          }),
+      const stateKv = createKv([
+        [KV_KEYS.STATE, createState()],
+        [
+          KV_KEYS.MAINTENANCES,
+          [
+            createMaintenance({
+              monitors: [includedMonitor.id],
+              end: new Date((NOW_SECONDS + 60) * 1000).toISOString(),
+            }),
+          ],
         ],
-      });
+      ]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -283,10 +280,10 @@ describe('worker', () => {
     it('suppresses every monitor when a maintenance window lists no monitors', async () => {
       setNotifications();
       mockDown();
-      const stateKv = createKv({
-        [KV_KEYS.STATE]: createState(),
-        [KV_KEYS.MAINTENANCES]: [createMaintenance({ monitors: [] })],
-      });
+      const stateKv = createKv([
+        [KV_KEYS.STATE, createState()],
+        [KV_KEYS.MAINTENANCES, [createMaintenance({ monitors: [] })]],
+      ]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -296,7 +293,7 @@ describe('worker', () => {
     it('suppresses monitors in skipNotificationIds', async () => {
       setNotifications({ skipNotificationIds: ['test-monitor'] });
       mockDown();
-      const stateKv = createKv({ [KV_KEYS.STATE]: createState() });
+      const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -307,7 +304,7 @@ describe('worker', () => {
   describe('state persistence', () => {
     it('saves state when a monitor status changes', async () => {
       mockDown();
-      const stateKv = createKv({ [KV_KEYS.STATE]: createState() });
+      const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -316,9 +313,7 @@ describe('worker', () => {
     });
 
     it('saves state when the write cooldown has elapsed', async () => {
-      const stateKv = createKv({
-        [KV_KEYS.STATE]: createState({ lastUpdate: NOW_SECONDS - 180 }),
-      });
+      const stateKv = createKv([[KV_KEYS.STATE, createState({ lastUpdate: NOW_SECONDS - 180 })]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -326,9 +321,7 @@ describe('worker', () => {
     });
 
     it('skips saving state when no status changed and the cooldown has not elapsed', async () => {
-      const stateKv = createKv({
-        [KV_KEYS.STATE]: createState({ lastUpdate: NOW_SECONDS - 60 }),
-      });
+      const stateKv = createKv([[KV_KEYS.STATE, createState({ lastUpdate: NOW_SECONDS - 60 })]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
@@ -341,9 +334,7 @@ describe('worker', () => {
       const staticMonitor = createMonitor('static');
       const runtimeMonitor = createMonitor('runtime');
       workerConfigMock.monitors = [staticMonitor];
-      const configKv = createKv({
-        [KV_KEYS.CONFIG]: { monitors: [runtimeMonitor] },
-      });
+      const configKv = createKv([[KV_KEYS.CONFIG, { monitors: [runtimeMonitor] }]]);
       const stateKv = createKv();
 
       await runScheduled({ CONFIG_KV: asKv(configKv), STATE_KV: asKv(stateKv) });
@@ -356,9 +347,7 @@ describe('worker', () => {
     it('falls back to static config when CONFIG_KV contains invalid config', async () => {
       const staticMonitor = createMonitor('static');
       workerConfigMock.monitors = [staticMonitor];
-      const configKv = createKv({
-        [KV_KEYS.CONFIG]: { monitors: 'invalid' },
-      });
+      const configKv = createKv([[KV_KEYS.CONFIG, { monitors: 'invalid' }]]);
       const stateKv = createKv();
 
       await runScheduled({ CONFIG_KV: asKv(configKv), STATE_KV: asKv(stateKv) });

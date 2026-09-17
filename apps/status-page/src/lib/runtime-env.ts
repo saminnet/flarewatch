@@ -21,9 +21,10 @@ export async function resolveRuntimeEnv(): Promise<RuntimeEnv | undefined> {
     }
   }
 
-  const env =
-    (globalThis as { __env__?: unknown; process?: { env?: unknown } }).__env__ ??
-    globalThis.process?.env;
+  const globalScope: object = globalThis;
+  const env = '__env__' in globalScope ? globalScope.__env__ : globalThis.process?.env;
+  // SAFETY: bindings come from the Workers runtime or the test harness __env__ shim;
+  // consumers null-check each binding where they use it.
   return env as RuntimeEnv | undefined;
 }
 

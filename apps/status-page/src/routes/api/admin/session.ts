@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import type { JsonValue } from '@flarewatch/shared';
 import { getAdminSessionCookie, type SessionData } from '@/lib/auth-utils';
 import { verifyAuthSecret } from '@/lib/auth-secret';
 import { resolveRuntimeEnv, requireStateKv } from '@/lib/runtime-env';
@@ -6,7 +7,7 @@ import { AUTH } from '@/lib/constants';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
-function jsonResponse(body: object, status: number, headers?: Record<string, string>): Response {
+function jsonResponse(body: JsonValue, status: number, headers?: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...JSON_HEADERS, ...headers },
@@ -80,9 +81,20 @@ export const Route = createFileRoute('/api/admin/session')({
           return jsonResponse({ error: 'Invalid JSON body' }, 400);
         }
 
-        const data = body as Record<string, unknown>;
-        const username = typeof data.username === 'string' ? data.username : '';
-        const password = typeof data.password === 'string' ? data.password : '';
+        const username =
+          typeof body === 'object' &&
+          body !== null &&
+          'username' in body &&
+          typeof body.username === 'string'
+            ? body.username
+            : '';
+        const password =
+          typeof body === 'object' &&
+          body !== null &&
+          'password' in body &&
+          typeof body.password === 'string'
+            ? body.password
+            : '';
 
         try {
           const kv = await requireStateKv();

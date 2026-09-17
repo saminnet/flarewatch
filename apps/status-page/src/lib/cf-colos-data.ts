@@ -1,7 +1,14 @@
 // Cloudflare colo codes (IATA-like) → city + country code.
 // Source: `https://speed.cloudflare.com/locations` (may return 403 unless you send a browser-like
 // User-Agent + Referer header).
-export const CF_COLO_MAP: Record<string, { city: string; countryCode: string }> = {
+export interface CloudflareColo {
+  city: string;
+  countryCode: string;
+}
+
+interface CloudflareColoMap extends Record<string, CloudflareColo> {}
+
+export const CF_COLO_MAP: CloudflareColoMap = {
   AAE: { city: 'Annaba', countryCode: 'DZ' },
   ABJ: { city: 'Abidjan', countryCode: 'CI' },
   ABQ: { city: 'Albuquerque', countryCode: 'US' },

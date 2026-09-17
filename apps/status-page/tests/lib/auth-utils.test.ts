@@ -5,12 +5,13 @@ import { isSessionExpiredError, SessionExpiredError } from '../../src/lib/query/
 type TestKv = Parameters<typeof validateSession>[0];
 
 function createKv(value: string | null, shouldThrow = false): TestKv {
-  return {
+  const kv = {
     get: async () => {
       if (shouldThrow) throw new Error('KV unavailable');
       return value;
     },
-  } as unknown as TestKv;
+  };
+  return kv as TestKv & typeof kv;
 }
 
 describe('auth-utils', () => {

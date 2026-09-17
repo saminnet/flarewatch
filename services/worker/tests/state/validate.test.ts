@@ -12,15 +12,16 @@ describe('isMonitorState', () => {
   });
 
   it('rejects invalid incident shape', () => {
-    const state = createInitialState() as unknown as Record<string, unknown>;
-    state['incident'] = { test: 'nope' };
+    const state = { ...createInitialState(), incident: { test: 'nope' } };
 
     expect(isMonitorState(state)).toBe(false);
   });
 
   it('rejects invalid latency shape', () => {
-    const state = createInitialState() as unknown as Record<string, unknown>;
-    state['latency'] = { test: { recent: [{ loc: 1, ping: 'x', time: 0 }] } };
+    const state = {
+      ...createInitialState(),
+      latency: { test: { recent: [{ loc: 1, ping: 'x', time: 0 }] } },
+    };
 
     expect(isMonitorState(state)).toBe(false);
   });

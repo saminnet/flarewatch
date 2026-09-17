@@ -8,16 +8,43 @@ export default defineConfig({
       'services/worker/dist/**',
       'apps/status-page/src/routeTree.gen.ts',
       'apps/status-page/worker-configuration.d.ts',
+      'tools/oxlint/anti-slop/**',
     ],
     jsPlugins: [
       {
         name: 'react-hooks-js',
         specifier: 'eslint-plugin-react-hooks',
       },
+      {
+        name: 'anti-slop',
+        specifier: './tools/oxlint/anti-slop/index.ts',
+      },
     ],
     rules: {
       'react-hooks-js/set-state-in-render': 'error',
+      'anti-slop/no-chained-type-assertions': 'error',
+      'anti-slop/no-known-value-widening': 'error',
+      'anti-slop/no-module-mocking': 'error',
+      'anti-slop/no-object-parameters': 'error',
+      'anti-slop/no-reflect-apply': 'error',
+      'anti-slop/no-reflect-get': 'error',
+      'anti-slop/no-response-json-type-argument': 'error',
+      'anti-slop/no-unsafe-dictionary-type': 'error',
+      'anti-slop/no-widen-then-assert': 'error',
+      'anti-slop/require-safety-comment-for-type-assertion': 'error',
     },
+    overrides: [
+      {
+        files: [
+          'apps/status-page/tests/**',
+          'services/worker/tests/**',
+          'packages/shared/tests/**',
+        ],
+        rules: {
+          'anti-slop/require-safety-comment-for-type-assertion': 'off',
+        },
+      },
+    ],
     options: {
       typeAware: true,
       typeCheck: true,

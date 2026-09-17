@@ -24,6 +24,11 @@ vp run worker-build
 
 Run `vp config` once after cloning if you want the local Vite+ pre-commit hook.
 
+Linting includes the vendored anti-slop rules (`tools/oxlint/anti-slop/`, see
+[docs/adr/0002](docs/adr/0002-vendored-anti-slop-lint-rules.md)). Fix findings by restructuring
+first; a type assertion that survives review needs a `SAFETY:` comment stating the checked
+invariant.
+
 ## Architecture
 
 - `services/worker` runs scheduled checks and writes state to KV (`FLAREWATCH_STATE` binding).
