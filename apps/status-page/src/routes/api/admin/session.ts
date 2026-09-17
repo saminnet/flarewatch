@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { isJsonObject, type JsonValue } from '@flarewatch/shared';
 import { getAdminSessionCookie, type SessionData } from '@/lib/auth-utils';
 import { verifyAuthSecret } from '@/lib/auth-secret';
 import { resolveRuntimeEnv, requireStateKv } from '@/lib/runtime-env';
@@ -6,7 +7,7 @@ import { AUTH } from '@/lib/constants';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
-function jsonResponse(body: object, status: number, headers?: Record<string, string>): Response {
+function jsonResponse(body: JsonValue, status: number, headers?: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...JSON_HEADERS, ...headers },
@@ -68,21 +69,18 @@ export const Route = createFileRoute('/api/admin/session')({
     handlers: {
       POST: async ({ request }: { request: Request }) => {
         const env = await resolveRuntimeEnv();
-        const adminCreds = env?.FLAREWATCH_ADMIN_BASIC_AUTH;
+        const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
         if (!adminCreds) {
           return jsonResponse({ error: 'Admin access not configured' }, 404);
         }
 
-        let body: unknown;
-        try {
-          body = await request.json();
-        } catch {
+        const body: unknown = await request.json().catch(() => null);
+        if (!isJsonObject(body)) {
           return jsonResponse({ error: 'Invalid JSON body' }, 400);
         }
 
-        const data = body as Record<string, unknown>;
-        const username = typeof data.username === 'string' ? data.username : '';
-        const password = typeof data.password === 'string' ? data.password : '';
+        const username = typeof body.username === 'string' ? body.username : '';
+        const password = typeof body.password === 'string' ? body.password : '';
 
         try {
           const kv = await requireStateKv();
@@ -126,7 +124,7 @@ export const Route = createFileRoute('/api/admin/session')({
 
       DELETE: async ({ request }: { request: Request }) => {
         const env = await resolveRuntimeEnv();
-        const adminCreds = env?.FLAREWATCH_ADMIN_BASIC_AUTH;
+        const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
         if (!adminCreds) {
           return jsonResponse({ error: 'Admin access not configured' }, 404);
         }

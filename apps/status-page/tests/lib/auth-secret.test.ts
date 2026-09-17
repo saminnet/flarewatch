@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import {
-  parseAuthSecret,
-  verifyAuthSecret,
-  verifyBasicAuthHeader,
-} from '../../src/lib/auth-secret';
+import { parseAuthSecret, verifyAuthSecret, verifyBasicAuthHeader } from '@/lib/auth-secret';
 
 function bytesToBase64(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes));

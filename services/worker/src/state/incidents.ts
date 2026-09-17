@@ -5,24 +5,15 @@ import type {
   SSLCertificateInfo,
 } from '@flarewatch/shared';
 
-const INCIDENT_RETENTION_SECONDS = 90 * 24 * 60 * 60; // 90 days
-const LATENCY_RETENTION_SECONDS = 12 * 60 * 60; // 12 hours
+const INCIDENT_RETENTION_SECONDS = 90 * 24 * 60 * 60;
+const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
 
-export interface IncidentUpdate {
+interface IncidentUpdate {
   statusChanged: boolean;
   changeType: 'none' | 'up' | 'down' | 'error';
   isUp: boolean;
   incidentStartTime: number;
   error: string;
-}
-
-function ensureMonitorState(state: MonitorState, monitorId: string, currentTime: number): void {
-  if (!state.startedAt[monitorId]) {
-    state.startedAt[monitorId] = currentTime;
-  }
-
-  state.incident[monitorId] ??= [];
-  state.latency[monitorId] ??= { recent: [] };
 }
 
 export function processCheckResult(
@@ -31,18 +22,11 @@ export function processCheckResult(
   result: CheckResult,
   currentTime: number,
 ): IncidentUpdate {
-  ensureMonitorState(state, monitor.id, currentTime);
-
-  const incidents = state.incident[monitor.id];
-  if (!incidents) {
-    return {
-      statusChanged: false,
-      changeType: 'none',
-      isUp: result.ok,
-      incidentStartTime: currentTime,
-      error: result.ok ? '' : result.error,
-    };
+  if (!state.startedAt[monitor.id]) {
+    state.startedAt[monitor.id] = currentTime;
   }
+  state.latency[monitor.id] ??= { recent: [] };
+  const incidents = (state.incident[monitor.id] ??= []);
 
   const lastIncident = incidents.length > 0 ? incidents[incidents.length - 1] : undefined;
   let statusChanged = false;

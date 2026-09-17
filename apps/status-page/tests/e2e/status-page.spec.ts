@@ -1,5 +1,5 @@
-import { Buffer } from 'node:buffer';
 import { expect, test, type APIResponse, type Page } from '@playwright/test';
+import { isJsonObject, isValidMaintenance } from '@flarewatch/shared';
 
 type SeededMonitor = {
   id: string;
@@ -63,9 +63,7 @@ const adminCredentials = {
   password: 'e2e-password',
 };
 const adminAuthHeaders = {
-  Authorization: `Basic ${Buffer.from(
-    `${adminCredentials.username}:${adminCredentials.password}`,
-  ).toString('base64')}`,
+  Authorization: `Basic ${btoa(`${adminCredentials.username}:${adminCredentials.password}`)}`,
 };
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -78,15 +76,44 @@ function collectClientErrors(page: Page): string[] {
   return errors;
 }
 
-async function readOkJson<T = unknown>(response: APIResponse): Promise<T> {
+async function readOkJson<T>(
+  response: APIResponse,
+  guard: (value: unknown) => value is T,
+): Promise<T> {
   await expect(response).toBeOK();
-  return (await response.json()) as T;
+  const json: unknown = await response.json();
+  if (!guard(json)) throw new Error(`Unexpected response shape from ${response.url()}`);
+  return json;
+}
+
+function isPublicData(value: unknown): value is PublicData {
+  if (!isJsonObject(value)) return false;
+  if (typeof value.up !== 'number' || typeof value.down !== 'number') return false;
+  if (!isJsonObject(value.monitors)) return false;
+  return Object.values(value.monitors).every(
+    (monitor) =>
+      isJsonObject(monitor) &&
+      typeof monitor.up === 'boolean' &&
+      (monitor.latency === null || typeof monitor.latency === 'number'),
+  );
+}
+
+type PublicMaintenance = { id?: string; title?: string; start?: string };
+
+function isMaintenanceList(value: unknown): value is PublicMaintenance[] {
+  return Array.isArray(value) && value.every((item) => isJsonObject(item));
+}
+
+function isSeededMaintenanceList(
+  value: unknown,
+): value is (PublicMaintenance & { start: string })[] {
+  return isMaintenanceList(value) && value.every((item) => typeof item.start === 'string');
 }
 
 function getPublicMonitor(data: PublicData, monitorId: string): PublicData['monitors'][string] {
   const monitor = data.monitors[monitorId];
-  expect(monitor).toBeDefined();
-  return monitor!;
+  if (monitor === undefined) throw new Error(`Monitor ${monitorId} missing from public data`);
+  return monitor;
 }
 
 test('seeded dashboard matches monitor data and supports collapse interactions', async ({
@@ -95,7 +122,7 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
 }) => {
   const clientErrors = collectClientErrors(page);
   const dataResponse = await request.get('/api/data');
-  const data = await readOkJson<PublicData>(dataResponse);
+  const data = await readOkJson(dataResponse, isPublicData);
 
   await page.goto('/');
 
@@ -171,7 +198,6 @@ test('latency chart is server-rendered, labeled, and supports hover', async ({ p
     page.getByRole('img', { name: /Response time chart, latest \d+ms from/ }).first(),
   ).toBeVisible();
 
-  // The line path and a y-axis label render from real data.
   await expect(chart.locator('path').first()).toBeVisible();
   await expect(chart.getByText(/^\d+ms$/).first()).toBeVisible();
 
@@ -224,7 +250,7 @@ test('public API exposes seeded status, maintenance, badges, and CORS', async ({
   const dataResponse = await request.get('/api/data', {
     headers: { Origin: 'https://example.test' },
   });
-  const data = await readOkJson<PublicData>(dataResponse);
+  const data = await readOkJson(dataResponse, isPublicData);
   expect(dataResponse.headers()['access-control-allow-origin']).toBe('*');
 
   expect(data).toMatchObject({
@@ -248,8 +274,8 @@ test('public API exposes seeded status, maintenance, badges, and CORS', async ({
   expect(getPublicMonitor(data, 'demo_cloudflare_trace').latency).toBeNull();
 
   const maintenancesResponse = await request.get('/api/maintenances');
-  const maintenances = await readOkJson<{ title?: string }[]>(maintenancesResponse);
-  expect(maintenances.map((maintenance: { title?: string }) => maintenance.title)).toEqual(
+  const maintenances = await readOkJson(maintenancesResponse, isMaintenanceList);
+  expect(maintenances.map((maintenance) => maintenance.title)).toEqual(
     expect.arrayContaining(['E2E active maintenance', 'E2E upcoming maintenance']),
   );
 
@@ -312,8 +338,9 @@ test('events route renders seeded incidents and maintenance', async ({ page }) =
 });
 
 test('events route filters by type, monitor, and invalid month fallback', async ({ page }) => {
-  const seeded = await readOkJson<{ title?: string; start: string }[]>(
+  const seeded = await readOkJson(
     await page.request.get('/api/maintenances'),
+    isSeededMaintenanceList,
   );
   const upcoming = seeded.find((maintenance) => maintenance.title === 'E2E upcoming maintenance');
   if (!upcoming) throw new Error('seeded upcoming maintenance is missing');
@@ -403,7 +430,9 @@ test.describe.serial('admin maintenance lifecycle', () => {
       },
     });
     expect(createdResponse.status()).toBe(201);
-    const created = await createdResponse.json();
+    const created: unknown = await createdResponse.json();
+    if (!isValidMaintenance(created))
+      throw new Error('created maintenance has an unexpected shape');
 
     await page.reload();
     await expect(page.getByText('E2E lifecycle maintenance')).toBeVisible();
@@ -429,12 +458,10 @@ test.describe.serial('admin maintenance lifecycle', () => {
     await expect(page.getByText('Cloudflare Trace').first()).toBeVisible();
 
     const publicMaintenancesResponse = await adminRequest.get('/api/maintenances');
-    const publicMaintenances = await readOkJson<{ id: string; title?: string }[]>(
-      publicMaintenancesResponse,
-    );
+    const publicMaintenances = await readOkJson(publicMaintenancesResponse, isMaintenanceList);
     expect(
       publicMaintenances.some(
-        (maintenance: { id: string; title?: string }) =>
+        (maintenance) =>
           maintenance.id === created.id &&
           maintenance.title === 'E2E lifecycle maintenance updated',
       ),

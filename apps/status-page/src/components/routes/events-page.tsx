@@ -84,20 +84,20 @@ export function EventsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate({ search: (prev) => ({ ...prev, month: prevMonth }) })}
+            onClick={() => void navigate({ search: (prev) => ({ ...prev, month: prevMonth }) })}
           >
             <IconChevronLeft className="h-4 w-4" />
           </Button>
 
           <MonthPicker
             value={resolvedMonth}
-            onChange={(value) => navigate({ search: (prev) => ({ ...prev, month: value }) })}
+            onChange={(value) => void navigate({ search: (prev) => ({ ...prev, month: value }) })}
           />
 
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate({ search: (prev) => ({ ...prev, month: nextMonth }) })}
+            onClick={() => void navigate({ search: (prev) => ({ ...prev, month: nextMonth }) })}
           >
             <IconChevronRight className="h-4 w-4" />
           </Button>
@@ -107,10 +107,10 @@ export function EventsPage() {
           <Select
             value={eventType ?? 'all'}
             onValueChange={(value) =>
-              navigate({
+              void navigate({
                 search: (prev) => ({
                   ...prev,
-                  type: value === 'all' ? undefined : (value as 'incident' | 'maintenance'),
+                  type: value === 'incident' || value === 'maintenance' ? value : undefined,
                 }),
               })
             }
@@ -132,7 +132,7 @@ export function EventsPage() {
           <Select
             value={selectedMonitor ?? ''}
             onValueChange={(value) =>
-              navigate({
+              void navigate({
                 search: (prev) => ({ ...prev, monitor: value || undefined }),
               })
             }

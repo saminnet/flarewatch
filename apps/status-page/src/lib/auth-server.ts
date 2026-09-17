@@ -6,14 +6,10 @@ import { AUTH } from './constants';
 
 export type AdminAuthState = 'authenticated' | 'unauthenticated' | 'not_configured';
 
-/**
- * Server function to check admin authentication status.
- * Uses session cookie to validate against KV storage.
- */
 export const checkAdminAuthServerFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<AdminAuthState> => {
     const env = await resolveRuntimeEnv();
-    const adminCreds = env?.FLAREWATCH_ADMIN_BASIC_AUTH;
+    const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
 
     if (!adminCreds) {
       if (import.meta.env.DEV) return 'authenticated';
@@ -21,7 +17,7 @@ export const checkAdminAuthServerFn = createServerFn({ method: 'GET' }).handler(
     }
 
     try {
-      const kv = env?.STATE_KV ?? env?.FLAREWATCH_STATE;
+      const kv = env.STATE_KV ?? env.FLAREWATCH_STATE;
       if (!kv) {
         return 'unauthenticated';
       }

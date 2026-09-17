@@ -8,23 +8,20 @@ import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 
-// Avoid TS 6's deep plugin-type comparison across Vite/Rolldown packages.
-const plugins = [
-  devtools(),
-  cloudflare({ viteEnvironment: { name: 'ssr' } }),
-  tailwindcss(),
-  transformImports({
-    '@tabler/icons-react': {
-      transform: '@tabler/icons-react/dist/esm/icons/{{member}}.mjs',
-    },
-  }),
-  tanstackStart(),
-  viteReact(),
-  babel({ presets: [reactCompilerPreset()] }),
-] as never;
-
 const config = defineConfig({
-  plugins,
+  plugins: [
+    devtools(),
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),
+    tailwindcss(),
+    transformImports({
+      '@tabler/icons-react': {
+        transform: '@tabler/icons-react/dist/esm/icons/{{member}}.mjs',
+      },
+    }),
+    tanstackStart(),
+    viteReact(),
+    babel({ presets: [reactCompilerPreset()] }),
+  ],
   optimizeDeps: {
     include: ['react', 'react-dom', '@tanstack/react-query'],
   },

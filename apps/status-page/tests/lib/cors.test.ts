@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { getCorsHeaders } from '../../src/lib/cors';
+import { getCorsHeaders } from '@/lib/cors';
 
 const baseHeaders = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',

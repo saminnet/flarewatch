@@ -1,5 +1,4 @@
-import type { Maintenance, KvStore } from './types';
-import { KV_KEYS } from './types';
+import { KV_KEYS, type Maintenance, type KvStore } from './types';
 import { parseMaintenances } from './config';
 
 export async function readMaintenancesFromStorage(kv: KvStore): Promise<Maintenance[]> {

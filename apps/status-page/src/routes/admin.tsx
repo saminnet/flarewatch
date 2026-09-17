@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { AdminPage } from '@/components/routes/admin-page';
 import { publicMonitorsQuery, maintenancesQuery } from '@/lib/query/monitors.queries';
-import { checkAdminAuthServerFn, type AdminAuthState } from '@/lib/auth-server';
+import { checkAdminAuthServerFn } from '@/lib/auth-server';
 
 export const Route = createFileRoute('/admin')({
   beforeLoad: async () => {
@@ -9,13 +9,8 @@ export const Route = createFileRoute('/admin')({
     return { authState };
   },
   loader: async ({ context }) => {
-    // Access authState from beforeLoad context
-    const { authState } = context as {
-      authState: AdminAuthState;
-      queryClient: typeof context.queryClient;
-    };
+    const { authState } = context;
 
-    // Only prefetch data if authenticated
     if (authState === 'authenticated') {
       await Promise.all([
         context.queryClient.ensureQueryData(publicMonitorsQuery()),

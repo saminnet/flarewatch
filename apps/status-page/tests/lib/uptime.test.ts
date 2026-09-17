@@ -7,7 +7,7 @@ import {
   getMonitorError,
   getLatestLatency,
   getOverallStatus,
-} from '../../src/lib/uptime';
+} from '@/lib/uptime';
 
 const createEmptyState = (lastUpdate?: number): MonitorState => ({
   lastUpdate: lastUpdate ?? Math.floor(Date.now() / 1000),
@@ -53,8 +53,7 @@ describe('uptime utilities', () => {
 
       const result = calculateUptimePercent('test', state);
 
-      expect(result).toBeGreaterThan(97);
-      expect(result).toBeLessThan(100);
+      expect(result).toBeCloseTo(97.9167, 3);
     });
 
     it('treats open incident end as now', () => {
@@ -71,8 +70,7 @@ describe('uptime utilities', () => {
 
       const result = calculateUptimePercent('test', state);
 
-      expect(result).toBeGreaterThan(95);
-      expect(result).toBeLessThan(100);
+      expect(result).toBeCloseTo(95.8333, 3);
     });
 
     it('uses startedAt as window start for recently started monitors', () => {

@@ -1,21 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
-import type { MonitorTarget } from '@flarewatch/shared';
+import type { Fetcher, MonitorTarget } from '@flarewatch/shared';
+import { checkDirectMonitor } from '../../src/checkers/direct';
+import type { CheckDeps } from '../../src/checkers/deps';
 
 const getEdgeLocationMock = vi.fn<() => Promise<string>>();
-const httpCheckMock = vi.fn();
-const tcpCheckMock = vi.fn();
+const httpCheckMock = vi.fn<CheckDeps['http']['check']>();
+const tcpCheckMock = vi.fn<CheckDeps['tcp']['check']>();
+const globalPingCheckMock = vi.fn<CheckDeps['globalPing']['check']>();
 
-vi.mock('../../src/utils/location', () => ({
+const deps: CheckDeps = {
+  http: { check: httpCheckMock },
+  tcp: { check: tcpCheckMock },
+  globalPing: { check: globalPingCheckMock },
   getEdgeLocation: getEdgeLocationMock,
-}));
-
-vi.mock('../../src/checkers/http', () => ({
-  httpChecker: { check: httpCheckMock },
-}));
-
-vi.mock('../../src/checkers/tcp', () => ({
-  tcpChecker: { check: tcpCheckMock },
-}));
+  fetcher: vi.fn<Fetcher>(),
+};
 
 function createTarget(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   return {
@@ -37,8 +36,7 @@ describe('checkDirectMonitor', () => {
     const target = createTarget({ method: 'TCP_PING', target: 'example.com:443' });
     tcpCheckMock.mockResolvedValue({ ok: true, latency: 5 });
 
-    const { checkDirectMonitor } = await import('../../src/checkers/direct');
-    const result = await checkDirectMonitor(target);
+    const result = await checkDirectMonitor(target, deps);
 
     expect(result).toEqual({ location: 'SFO', result: { ok: true, latency: 5 } });
     expect(getEdgeLocationMock).toHaveBeenCalledTimes(1);
@@ -50,8 +48,7 @@ describe('checkDirectMonitor', () => {
     const target = createTarget({ method: 'POST' });
     httpCheckMock.mockResolvedValue({ ok: false, error: 'Service unavailable', latency: 8 });
 
-    const { checkDirectMonitor } = await import('../../src/checkers/direct');
-    const result = await checkDirectMonitor(target);
+    const result = await checkDirectMonitor(target, deps);
 
     expect(result).toEqual({
       location: 'SFO',

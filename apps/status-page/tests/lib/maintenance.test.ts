@@ -9,7 +9,7 @@ import {
   getMaintenanceStatus,
   getSeverityOption,
   resolveAffectedMonitors,
-} from '../../src/lib/maintenance';
+} from '@/lib/maintenance';
 
 function maintenance(id: string, start: string, end?: string): Maintenance {
   return {
@@ -64,13 +64,12 @@ describe('maintenance helpers', () => {
     expect(result.past.map((m) => m.id)).toEqual(['past-new', 'past-old']);
   });
 
-  it('compares ISO start strings lexicographically', () => {
-    expect(
-      compareByStart(
-        maintenance('a', '2026-06-09T09:00:00.000Z'),
-        maintenance('b', '2026-06-09T10:00:00.000Z'),
-      ),
-    ).toBe(-1);
+  it('orders by start time across numeric and string starts', () => {
+    const numeric = { ...maintenance('a', ''), start: Date.parse('2026-06-10T09:00:00Z') };
+    const iso = maintenance('b', '2026-06-09T10:00:00.000Z');
+    const offset = maintenance('c', '2026-06-09T11:00:00+02:00');
+
+    expect([numeric, iso, offset].sort(compareByStart).map((m) => m.id)).toEqual(['c', 'b', 'a']);
   });
 
   it('formats time ranges and relative durations', () => {

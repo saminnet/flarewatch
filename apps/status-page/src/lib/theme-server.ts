@@ -30,6 +30,14 @@ export const setThemePreferenceServerFn = createServerFn({ method: 'POST' })
     });
   });
 
+declare global {
+  interface Window {
+    /** Installed by {@link getThemeInitScript}; absent until that inline script has run. */
+    __flarewatchSetThemePreference?: (theme: ThemePreference) => void;
+    __flarewatchGetThemePreference?: () => ThemePreference;
+  }
+}
+
 export function getThemeInitScript(theme: ThemePreference): string {
   const initialTheme = JSON.stringify(theme);
 

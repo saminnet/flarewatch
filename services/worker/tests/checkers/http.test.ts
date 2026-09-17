@@ -1,15 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
-import type { MonitorTarget } from '@flarewatch/shared';
+import type { Fetcher, MonitorTarget } from '@flarewatch/shared';
+import { HttpChecker } from '../../src/checkers/http';
 
-const fetchWithTimeoutMock = vi.fn();
-
-vi.mock('@flarewatch/shared', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@flarewatch/shared')>();
-  return {
-    ...actual,
-    fetchWithTimeout: fetchWithTimeoutMock,
-  };
-});
+const fetchMock = vi.fn<Fetcher>();
+const checker = new HttpChecker(fetchMock);
 
 function createMonitor(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   return {
@@ -23,20 +17,17 @@ function createMonitor(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
 
 describe('HttpChecker', () => {
   beforeEach(() => {
-    fetchWithTimeoutMock.mockReset();
+    fetchMock.mockReset();
   });
 
   it('adds user-agent header when missing', async () => {
-    fetchWithTimeoutMock.mockResolvedValue(new Response('ok', { status: 200 }));
-
-    const { HttpChecker } = await import('../../src/checkers/http');
-    const checker = new HttpChecker();
+    fetchMock.mockResolvedValue(new Response('ok', { status: 200 }));
 
     const result = await checker.check(createMonitor({ headers: { 'X-Test': '1' } }));
 
     expect(result.ok).toBe(true);
-    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
-    const [, options] = fetchWithTimeoutMock.mock.calls[0] ?? [];
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, options] = fetchMock.mock.calls[0] ?? [];
     expect(options).toBeDefined();
     if (!options) throw new Error('Expected fetch options to be defined');
 
@@ -46,24 +37,18 @@ describe('HttpChecker', () => {
   });
 
   it('does not override existing user-agent header', async () => {
-    fetchWithTimeoutMock.mockResolvedValue(new Response('ok', { status: 200 }));
-
-    const { HttpChecker } = await import('../../src/checkers/http');
-    const checker = new HttpChecker();
+    fetchMock.mockResolvedValue(new Response('ok', { status: 200 }));
 
     const result = await checker.check(createMonitor({ headers: { 'User-Agent': 'custom' } }));
 
     expect(result.ok).toBe(true);
-    const [, options] = fetchWithTimeoutMock.mock.calls[0] ?? [];
+    const [, options] = fetchMock.mock.calls[0] ?? [];
     const headers = (options?.headers ?? new Headers()) as Headers;
     expect(headers.get('user-agent')).toBe('custom');
   });
 
   it('fails on non-2xx status when expectedCodes is not set', async () => {
-    fetchWithTimeoutMock.mockResolvedValue(new Response('fail', { status: 500 }));
-
-    const { HttpChecker } = await import('../../src/checkers/http');
-    const checker = new HttpChecker();
+    fetchMock.mockResolvedValue(new Response('fail', { status: 500 }));
 
     const result = await checker.check(createMonitor());
 
@@ -73,10 +58,7 @@ describe('HttpChecker', () => {
   });
 
   it('accepts non-2xx status when expectedCodes includes it', async () => {
-    fetchWithTimeoutMock.mockResolvedValue(new Response('not found', { status: 404 }));
-
-    const { HttpChecker } = await import('../../src/checkers/http');
-    const checker = new HttpChecker();
+    fetchMock.mockResolvedValue(new Response('not found', { status: 404 }));
 
     const result = await checker.check(createMonitor({ expectedCodes: [404] }));
 
@@ -84,10 +66,7 @@ describe('HttpChecker', () => {
   });
 
   it('fails when expectedCodes does not include the response status', async () => {
-    fetchWithTimeoutMock.mockResolvedValue(new Response('not found', { status: 404 }));
-
-    const { HttpChecker } = await import('../../src/checkers/http');
-    const checker = new HttpChecker();
+    fetchMock.mockResolvedValue(new Response('not found', { status: 404 }));
 
     const result = await checker.check(createMonitor({ expectedCodes: [200] }));
 
@@ -97,10 +76,7 @@ describe('HttpChecker', () => {
   });
 
   it('fails when required responseKeyword is missing', async () => {
-    fetchWithTimeoutMock.mockResolvedValue(new Response('hello', { status: 200 }));
-
-    const { HttpChecker } = await import('../../src/checkers/http');
-    const checker = new HttpChecker();
+    fetchMock.mockResolvedValue(new Response('hello', { status: 200 }));
 
     const result = await checker.check(createMonitor({ responseKeyword: 'world' }));
 
@@ -110,10 +86,7 @@ describe('HttpChecker', () => {
   });
 
   it('fails when forbidden keyword is present', async () => {
-    fetchWithTimeoutMock.mockResolvedValue(new Response('contains secret', { status: 200 }));
-
-    const { HttpChecker } = await import('../../src/checkers/http');
-    const checker = new HttpChecker();
+    fetchMock.mockResolvedValue(new Response('contains secret', { status: 200 }));
 
     const result = await checker.check(createMonitor({ responseForbiddenKeyword: 'secret' }));
 
@@ -123,10 +96,7 @@ describe('HttpChecker', () => {
   });
 
   it('maps timeout-like errors to a consistent message using the configured timeout', async () => {
-    fetchWithTimeoutMock.mockRejectedValue(new Error('timeout'));
-
-    const { HttpChecker } = await import('../../src/checkers/http');
-    const checker = new HttpChecker();
+    fetchMock.mockRejectedValue(new Error('timeout'));
 
     const result = await checker.check(createMonitor({ timeout: 1234 }));
 

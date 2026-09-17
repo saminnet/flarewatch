@@ -24,6 +24,16 @@ vp run worker-build
 
 Run `vp config` once after cloning if you want the local Vite+ pre-commit hook.
 
+Linting includes the anti-slop rules in `tools/oxlint/anti-slop/`. They come from
+[dmmulroy/anti-slop](https://github.com/dmmulroy/anti-slop) (MIT, see the `LICENSE` in that folder)
+plus a few local fixes and rules, and they live with their tests in a separate repository. Don't
+edit the copy here; if a rule misfires, open an issue. `vite.config.ts` lists the rules that run.
+Oxlint's type-aware `no-unsafe-*`, `no-floating-promises`, and `no-misused-promises` checks also
+run as errors, tests included.
+
+Fix findings by restructuring first. A type assertion that survives review needs a `SAFETY:`
+comment stating the checked invariant.
+
 ## Architecture
 
 - `services/worker` runs scheduled checks and writes state to KV (`FLAREWATCH_STATE` binding).

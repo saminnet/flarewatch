@@ -28,7 +28,6 @@ function nearestCanonical(idealMs: number): number {
   return best;
 }
 
-// Epoch-aligned ticks at `stepMs` within [domainMin, domainMax] (inclusive).
 function ticksAtStep(domainMin: number, domainMax: number, stepMs: number): number[] {
   if (stepMs <= 0) return [];
   const start = Math.floor(domainMin / stepMs) * stepMs;
@@ -40,8 +39,7 @@ function ticksAtStep(domainMin: number, domainMax: number, stepMs: number): numb
   return out;
 }
 
-export interface TimeTicks {
-  // Epoch-ms ticks at the fine canonical step (~FINE_TARGET of them).
+interface TimeTicks {
   ticks: number[];
   // 2x the fine step; ticks on this boundary are the rounder, always-shown subset.
   coarseStep: number;
@@ -58,10 +56,6 @@ function coarseMultiple(fineStep: number): number {
   return fineStep * 2;
 }
 
-/**
- * Pick canonical x-axis ticks for [domainMin, domainMax]: a fine step aiming for ~7 labels,
- * plus a coarser step for the subset kept on narrow widths.
- */
 export function timeTicks(domainMin: number, domainMax: number): TimeTicks {
   const fineStep = nearestCanonical((domainMax - domainMin) / FINE_TARGET);
   return {

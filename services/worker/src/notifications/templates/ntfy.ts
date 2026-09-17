@@ -1,4 +1,4 @@
-import type { TemplateContext, TemplateOutput } from './index';
+import type { TemplateContext, TemplateOutput } from './types';
 
 export function ntfyTemplate(ctx: TemplateContext): TemplateOutput {
   let title: string;
@@ -28,8 +28,8 @@ export function ntfyTemplate(ctx: TemplateContext): TemplateOutput {
 }
 
 /**
- * Header values must be ASCII; non-ASCII monitor names would make the
- * Headers constructor throw. ntfy decodes RFC 2047 encoded words.
+ * Header values outside printable ASCII are RFC 2047-encoded because ntfy decodes encoded words
+ * and some Headers implementations reject wider Unicode.
  */
 function encodeHeaderValue(value: string): string {
   if (/^[\x20-\x7e]*$/.test(value)) return value;

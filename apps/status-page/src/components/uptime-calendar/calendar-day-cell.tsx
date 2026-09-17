@@ -6,12 +6,12 @@ import type { AggregatedDayData, DayStatus } from '@/lib/uptime';
 import { STATUS_COLORS } from '@/lib/constants';
 
 // White/amber overlays are tuned for contrast on the solid status fills.
-const DAY_TEXT_COLORS: Record<DayStatus, string> = {
+const DAY_TEXT_COLORS = {
   up: 'text-white/70',
   down: 'text-white/80',
   partial: 'text-amber-900/50 dark:text-white/70',
   unknown: 'text-muted-foreground',
-};
+} satisfies Record<DayStatus, string>;
 
 interface CalendarDayCellProps {
   day: CalendarDay | null;
@@ -23,14 +23,12 @@ interface CalendarDayCellProps {
 export function CalendarDayCell({ day, data, animationDelay, onClick }: CalendarDayCellProps) {
   const { t } = useTranslation();
 
-  // Padding cell (outside the month)
   if (!day) {
     return <div className="h-6" />;
   }
 
   const dayNum = day.date.getUTCDate();
 
-  // Future day — faint placeholder with number
   if (day.isFuture) {
     return (
       <div

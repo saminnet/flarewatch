@@ -6,7 +6,7 @@ import {
   getUtcMonthBounds,
   formatUtc,
   formatDuration,
-} from '../../src/lib/date';
+} from '@/lib/date';
 
 describe('parseYearMonth', () => {
   it('parses valid year-month strings', () => {
@@ -16,9 +16,7 @@ describe('parseYearMonth', () => {
   });
 
   it('returns defaults for invalid input', () => {
-    // Empty string splits to [''] - yearStr='', monthStr=undefined (uses default '01')
     expect(parseYearMonth('')).toEqual({ year: 0, month: 1 });
-    // 'invalid' splits to ['invalid'] - yearStr='invalid' (NaN), monthStr=undefined (uses default '01')
     expect(parseYearMonth('invalid')).toEqual({ year: NaN, month: 1 });
   });
 });

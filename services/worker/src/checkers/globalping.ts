@@ -5,12 +5,15 @@ import {
   success,
   failure,
   fetchWithTimeout,
+  type Fetcher,
   validateHttpStatusAndBody,
   parseTcpTarget,
   DEFAULT_HTTP_TIMEOUT,
   DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   createLogger,
+  getErrorMessage,
 } from '@flarewatch/shared';
+import * as z from 'zod/mini';
 
 const log = createLogger('GlobalPing');
 
@@ -24,29 +27,37 @@ interface GlobalPingConfig {
   ipVersion?: number;
 }
 
-interface MeasurementResult {
-  status: string;
-  results: Array<{
-    probe: { country: string; city: string };
-    result: {
-      status: string;
-      rawOutput?: string;
-      statusCode?: number;
-      rawBody?: string;
-      timings?: { total: number };
-      stats?: { avg: number };
-      tls?: {
-        authorized: boolean;
-        error?: string;
-        certificate?: {
-          expiresAt?: string;
-          issuer?: { commonName?: string };
-          subject?: { commonName?: string };
-        };
-      };
-    };
-  }>;
-}
+const measurementResultSchema = z.object({
+  status: z.string(),
+  results: z.array(
+    z.object({
+      probe: z.object({ country: z.string(), city: z.string() }),
+      result: z.object({
+        status: z.string(),
+        rawOutput: z.optional(z.string()),
+        statusCode: z.optional(z.number()),
+        rawBody: z.optional(z.string()),
+        timings: z.optional(z.object({ total: z.number() })),
+        stats: z.optional(z.object({ avg: z.number() })),
+        tls: z.optional(
+          z.object({
+            authorized: z.boolean(),
+            error: z.optional(z.string()),
+            certificate: z.optional(
+              z.object({
+                expiresAt: z.optional(z.string()),
+                issuer: z.optional(z.object({ commonName: z.optional(z.string()) })),
+                subject: z.optional(z.object({ commonName: z.optional(z.string()) })),
+              }),
+            ),
+          }),
+        ),
+      }),
+    }),
+  ),
+});
+
+type MeasurementResult = z.infer<typeof measurementResultSchema>;
 
 function parseProxyUrl(proxyUrl: string): GlobalPingConfig {
   const url = new URL(proxyUrl);
@@ -84,7 +95,7 @@ function buildHttpRequest(target: MonitorTarget, config: GlobalPingConfig) {
     throw new Error('Custom body not supported with GlobalPing');
   }
 
-  const method = target.method?.toUpperCase() ?? 'GET';
+  const method = target.method.toUpperCase();
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     throw new Error(`Method ${method} not supported with GlobalPing (only GET, HEAD, OPTIONS)`);
   }
@@ -117,10 +128,7 @@ function buildHttpRequest(target: MonitorTarget, config: GlobalPingConfig) {
   };
 }
 
-function calculateCertExpiry(expiresAt: string): {
-  expiryDate: number;
-  daysUntilExpiry: number;
-} {
+function calculateCertExpiry(expiresAt: string) {
   const expiryDate = Math.floor(new Date(expiresAt).getTime() / 1000);
   const now = Math.floor(Date.now() / 1000);
   const daysUntilExpiry = Math.floor((expiryDate - now) / 86400);
@@ -130,7 +138,7 @@ function calculateCertExpiry(expiresAt: string): {
 function validateHttpResult(
   target: MonitorTarget,
   result: MeasurementResult['results'][0]['result'],
-): { error: string | null; ssl?: SSLCertificateInfo } {
+) {
   let ssl: SSLCertificateInfo | undefined;
 
   let error = validateHttpStatusAndBody(result.statusCode ?? 0, result.rawBody ?? '', {
@@ -145,7 +153,6 @@ function validateHttpResult(
       error = `TLS error: ${tls.error ?? 'Certificate not trusted'}`;
     }
 
-    // Extract certificate info
     if (tls.certificate?.expiresAt) {
       const { expiryDate, daysUntilExpiry } = calculateCertExpiry(tls.certificate.expiresAt);
       ssl = { expiryDate, daysUntilExpiry };
@@ -156,7 +163,6 @@ function validateHttpResult(
         ssl.subject = tls.certificate.subject.commonName;
       }
 
-      // Check expiry threshold
       if (!error && target.sslCheckEnabled) {
         const threshold = target.sslCheckDaysBeforeExpiry ?? DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS;
         if (daysUntilExpiry <= threshold) {
@@ -175,8 +181,9 @@ function validateHttpResult(
 async function createMeasurement(
   request: ReturnType<typeof buildHttpRequest> | ReturnType<typeof buildTcpRequest>,
   token: string,
+  fetcher: Fetcher,
 ): Promise<string> {
-  const response = await fetchWithTimeout(GLOBALPING_API, {
+  const response = await fetcher(GLOBALPING_API, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -187,17 +194,26 @@ async function createMeasurement(
   });
 
   if (response.status !== 202) {
-    const errorBody = (await response.json()) as { error?: { message?: string } };
-    throw new Error(errorBody.error?.message ?? `API error: ${response.status}`);
+    const errorBody = z
+      .object({ error: z.optional(z.object({ message: z.string() })) })
+      .safeParse(await response.json());
+    throw new Error(
+      (errorBody.success ? errorBody.data.error?.message : undefined) ??
+        `API error: ${response.status}`,
+    );
   }
 
-  const { id } = (await response.json()) as { id: string };
-  return id;
+  const created = z.object({ id: z.string() }).safeParse(await response.json());
+  if (!created.success) {
+    throw new Error('invalid measurement creation response');
+  }
+  return created.data.id;
 }
 
 async function pollMeasurement(
   measurementId: string,
   timeoutMs: number,
+  fetcher: Fetcher,
 ): Promise<MeasurementResult> {
   const pollStart = Date.now();
 
@@ -206,10 +222,14 @@ async function pollMeasurement(
       throw new Error('GlobalPing measurement timeout');
     }
 
-    const response = await fetchWithTimeout(`${GLOBALPING_API}/${measurementId}`, {
+    const response = await fetcher(`${GLOBALPING_API}/${measurementId}`, {
       timeout: API_TIMEOUT,
     });
-    const result = (await response.json()) as MeasurementResult;
+    const parsed = measurementResultSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      throw new Error('invalid measurement payload');
+    }
+    const result = parsed.data;
 
     if (result.status !== 'in-progress') {
       return result;
@@ -254,10 +274,9 @@ function parseMeasurementResult(
   return { location, result: success(latency, ssl) };
 }
 
-/**
- * GlobalPing checker for geo-distributed monitoring
- */
 export class GlobalPingChecker {
+  constructor(private readonly fetcher: Fetcher = fetchWithTimeout) {}
+
   async check(target: MonitorTarget): Promise<CheckResultWithLocation> {
     if (!target.checkProxy?.startsWith('globalping://')) {
       throw new Error('Invalid GlobalPing proxy URL');
@@ -272,12 +291,12 @@ export class GlobalPingChecker {
           : buildHttpRequest(target, config);
 
       log.info('Creating measurement', { name: target.name });
-      const measurementId = await createMeasurement(measurementRequest, config.token);
+      const measurementId = await createMeasurement(measurementRequest, config.token, this.fetcher);
       const pollTimeout = (target.timeout ?? DEFAULT_HTTP_TIMEOUT) + 2000;
-      const measurement = await pollMeasurement(measurementId, pollTimeout);
+      const measurement = await pollMeasurement(measurementId, pollTimeout, this.fetcher);
       return parseMeasurementResult(target, measurement);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       const isTimeout = errorMessage.toLowerCase().includes('timeout');
 
       log.error('Error', { name: target.name, error: errorMessage });

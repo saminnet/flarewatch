@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { linearScale, niceLinearTicks } from '@/lib/chart-scale';
+import { linearScale, niceLinearTicks, type NiceTicks } from '@/lib/chart-scale';
 
-const GOLDEN: Record<number, { ticks: number[]; max: number }> = {
+const GOLDEN = {
   0: { ticks: [0], max: 0 },
   1: { ticks: [0, 0.2, 0.4, 0.6, 0.8, 1], max: 1 },
   5: { ticks: [0, 1, 2, 3, 4, 5], max: 5 },
@@ -23,7 +23,7 @@ const GOLDEN: Record<number, { ticks: number[]; max: number }> = {
   10000: { ticks: [0, 2000, 4000, 6000, 8000, 10000], max: 10000 },
   12345: { ticks: [0, 2000, 4000, 6000, 8000, 10000, 12000], max: 13000 },
   54321: { ticks: [0, 10000, 20000, 30000, 40000, 50000], max: 55000 },
-};
+} satisfies Record<number, NiceTicks>;
 
 describe('niceLinearTicks', () => {
   for (const [max, expected] of Object.entries(GOLDEN)) {

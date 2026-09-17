@@ -1,24 +1,19 @@
-import type {
-  RuntimeConfig,
-  Monitor,
-  StatusPageConfig,
-  RuntimeConfigEnvelope,
-  NotificationConfig,
-  Webhook,
-  Maintenance,
-  KvStore,
+import * as z from 'zod/mini';
+import {
+  KV_KEYS,
+  type KvStore,
+  type Maintenance,
+  type MonitorState,
+  type MonitorTarget,
+  type NotificationConfig,
+  type PageConfig,
+  type RuntimeConfig,
+  type RuntimeConfigEnvelope,
+  type Webhook,
 } from './types';
-import { KV_KEYS } from './types';
+import { isJsonObject } from './utils';
 
 const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
-const WEBHOOK_TEMPLATES = new Set(['slack', 'discord', 'telegram', 'ntfy', 'text']);
-const WEBHOOK_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH']);
-const WEBHOOK_PAYLOAD_TYPES = new Set(['param', 'json', 'x-www-form-urlencoded']);
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -68,135 +63,136 @@ function isValidMonitorTarget(target: string, method?: string): boolean {
   return true;
 }
 
-function isValidWebhookHeaders(value: unknown): boolean {
-  const obj = asRecord(value);
-  if (!obj) return false;
-  return Object.values(obj).every(
-    (entry) => typeof entry === 'string' || typeof entry === 'number',
+function isAllowedPayload(payloadType: string | undefined, payload: unknown): boolean {
+  return (
+    payloadType === undefined ||
+    payloadType === 'json' ||
+    payload === undefined ||
+    payload === null ||
+    isJsonObject(payload)
   );
 }
 
-function isValidWebhook(value: unknown): value is Webhook {
-  const obj = asRecord(value);
-  if (!obj) return false;
-
-  if (typeof obj.url !== 'string' || !isValidHttpUrl(obj.url)) return false;
-  if (obj.template !== undefined) {
-    if (typeof obj.template !== 'string' || !WEBHOOK_TEMPLATES.has(obj.template)) return false;
-  }
-  if (obj.method !== undefined) {
-    if (typeof obj.method !== 'string' || !WEBHOOK_METHODS.has(obj.method.toUpperCase()))
-      return false;
-  }
-  if (obj.headers !== undefined && !isValidWebhookHeaders(obj.headers)) return false;
-  if (obj.payloadType !== undefined) {
-    if (typeof obj.payloadType !== 'string' || !WEBHOOK_PAYLOAD_TYPES.has(obj.payloadType))
-      return false;
-  }
-  if (obj.timeout !== undefined && typeof obj.timeout !== 'number') return false;
-
-  return true;
+function asTypeGuard<T>(schema: z.ZodMiniType<SchemaOutput<T>>): (value: unknown) => value is T {
+  return (value): value is T => schema.safeParse(value).success;
 }
 
-function isOptionalType<T>(value: unknown, check: (v: unknown) => v is T): value is T | undefined {
-  return value === undefined || check(value);
-}
+type Prev = [never, 0, 1, 2, 3];
 
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
-}
+/**
+ * zod types every optional key as `T | undefined`, which the exact-optional types in types.ts do
+ * not. Loosening a target type this way keeps `z.ZodMiniType<SchemaOutput<T>>` a real constraint:
+ * a schema that drops a field or changes its type stops compiling. The depth stops the recursion
+ * short of the self-referential JsonValue, which TS cannot expand.
+ */
+type SchemaOutput<T, Depth extends number = 4> = Depth extends 0
+  ? unknown
+  : { [K in keyof T]: SchemaOutput<T[K], Prev[Depth]> | undefined };
 
-function isNumber(value: unknown): value is number {
-  return typeof value === 'number';
-}
+const timestamp = z.union([z.string(), z.number()]);
 
-function isBoolean(value: unknown): value is boolean {
-  return typeof value === 'boolean';
-}
+const maintenanceSchema: z.ZodMiniType<SchemaOutput<Maintenance>> = z.object({
+  id: z.string().check(z.minLength(1)),
+  body: z.string().check(z.minLength(1)),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  start: timestamp,
+  end: z.optional(timestamp),
+  title: z.optional(z.string()),
+  color: z.optional(z.string()),
+  monitors: z.optional(z.array(z.string())),
+});
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string');
-}
+const monitorSchema: z.ZodMiniType<SchemaOutput<MonitorTarget>> = z
+  .object({
+    id: z.string().check(z.minLength(1)),
+    name: z.string().check(z.minLength(1)),
+    method: z.string(),
+    target: z.string(),
+  })
+  .check(z.refine((monitor) => isValidMonitorTarget(monitor.target, monitor.method)));
 
-function isValidMaintenance(value: unknown): value is Maintenance {
-  const obj = asRecord(value);
-  if (!obj) return false;
+const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.object({
+  title: z.optional(z.string()),
+});
 
-  if (typeof obj.id !== 'string' || obj.id.length === 0) return false;
-  if (typeof obj.body !== 'string' || obj.body.length === 0) return false;
-  if (typeof obj.createdAt !== 'number' || !Number.isFinite(obj.createdAt)) return false;
-  if (typeof obj.updatedAt !== 'number' || !Number.isFinite(obj.updatedAt)) return false;
-  if (!(typeof obj.start === 'string' || typeof obj.start === 'number')) return false;
-  if (obj.end !== undefined && !(typeof obj.end === 'string' || typeof obj.end === 'number')) {
-    return false;
-  }
-  if (!isOptionalType(obj.title, isString)) return false;
-  if (!isOptionalType(obj.color, isString)) return false;
-  if (!isOptionalType(obj.monitors, isStringArray)) return false;
+const webhookMethod = z.pipe(
+  z.string().check(z.toUpperCase()),
+  z.enum(['GET', 'POST', 'PUT', 'PATCH']),
+);
 
-  return true;
-}
+const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
+  .object({
+    url: z.string().check(z.refine(isValidHttpUrl)),
+    template: z.optional(z.enum(['slack', 'discord', 'telegram', 'ntfy', 'text'])),
+    method: z.optional(webhookMethod),
+    headers: z.optional(z.record(z.string(), z.union([z.string(), z.number()]))),
+    payloadType: z.optional(z.enum(['param', 'json', 'x-www-form-urlencoded'])),
+    payload: z.optional(z.json()),
+    timeout: z.optional(z.number()),
+  })
+  .check(z.refine((webhook) => isAllowedPayload(webhook.payloadType, webhook.payload)));
+
+const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.object({
+  webhook: z.optional(z.union([webhookSchema, z.array(webhookSchema)])),
+  timeZone: z.optional(z.string()),
+  gracePeriod: z.optional(z.number()),
+  skipNotificationIds: z.optional(z.array(z.string())),
+  skipErrorChangeNotification: z.optional(z.boolean()),
+});
+
+const runtimeConfigSchema: z.ZodMiniType<SchemaOutput<RuntimeConfig>> = z.object({
+  monitors: z.array(monitorSchema),
+  statusPage: z.optional(statusPageSchema),
+  notification: z.optional(notificationSchema),
+});
+
+const envelopeSchema: z.ZodMiniType<SchemaOutput<RuntimeConfigEnvelope>> = z.object({
+  config: runtimeConfigSchema,
+});
+
+const monitorStateSchema: z.ZodMiniType<SchemaOutput<MonitorState>> = z.object({
+  lastUpdate: z.number(),
+  overallUp: z.number(),
+  overallDown: z.number(),
+  startedAt: z.record(z.string(), z.number()),
+  incident: z.record(
+    z.string(),
+    z.array(
+      z.object({
+        start: z.array(z.number()),
+        end: z.optional(z.number()),
+        error: z.array(z.string()),
+      }),
+    ),
+  ),
+  latency: z.record(
+    z.string(),
+    z.object({
+      recent: z.array(z.object({ loc: z.string(), ping: z.number(), time: z.number() })),
+    }),
+  ),
+  sslCertificates: z.optional(
+    z.record(
+      z.string(),
+      z.object({
+        expiryDate: z.number(),
+        daysUntilExpiry: z.number(),
+        lastCheck: z.number(),
+        issuer: z.optional(z.string()),
+        subject: z.optional(z.string()),
+      }),
+    ),
+  ),
+});
+
+export const isValidMaintenance = asTypeGuard<Maintenance>(maintenanceSchema);
+export const isMonitorState = asTypeGuard<MonitorState>(monitorStateSchema);
+export const isValidRuntimeConfig = asTypeGuard<RuntimeConfig>(runtimeConfigSchema);
+export const isStoredConfigEnvelope = asTypeGuard<RuntimeConfigEnvelope>(envelopeSchema);
 
 export function parseMaintenances(value: unknown): Maintenance[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is Maintenance => isValidMaintenance(item));
-}
-
-function isValidNotificationConfig(value: unknown): value is NotificationConfig {
-  const obj = asRecord(value);
-  if (!obj) return false;
-
-  if (obj.webhook !== undefined) {
-    const webhooks = Array.isArray(obj.webhook) ? obj.webhook : [obj.webhook];
-    if (!webhooks.every(isValidWebhook)) return false;
-  }
-
-  if (!isOptionalType(obj.timeZone, isString)) return false;
-  if (!isOptionalType(obj.gracePeriod, isNumber)) return false;
-  if (!isOptionalType(obj.skipNotificationIds, isStringArray)) return false;
-  if (!isOptionalType(obj.skipErrorChangeNotification, isBoolean)) return false;
-
-  return true;
-}
-
-function isValidMonitor(value: unknown): value is Monitor {
-  const obj = asRecord(value);
-  if (!obj) return false;
-
-  return (
-    typeof obj.id === 'string' &&
-    obj.id.length > 0 &&
-    typeof obj.name === 'string' &&
-    obj.name.length > 0 &&
-    typeof obj.method === 'string' &&
-    typeof obj.target === 'string' &&
-    isValidMonitorTarget(obj.target, obj.method)
-  );
-}
-
-function isValidStatusPageConfig(value: unknown): value is StatusPageConfig {
-  const obj = asRecord(value);
-  if (!obj) return false;
-  return isOptionalType(obj.title, isString);
-}
-
-export function isValidRuntimeConfig(value: unknown): value is RuntimeConfig {
-  const obj = asRecord(value);
-  if (!obj) return false;
-
-  if (!Array.isArray(obj.monitors)) return false;
-  if (!obj.monitors.every(isValidMonitor)) return false;
-  if (obj.statusPage !== undefined && !isValidStatusPageConfig(obj.statusPage)) return false;
-  if (obj.notification !== undefined && !isValidNotificationConfig(obj.notification)) return false;
-
-  return true;
-}
-
-export function isStoredConfigEnvelope(value: unknown): value is RuntimeConfigEnvelope {
-  const obj = asRecord(value);
-  if (!obj) return false;
-
-  return isValidRuntimeConfig(obj.config);
+  return Array.isArray(value) ? value.filter(isValidMaintenance) : [];
 }
 
 export function parseRuntimeConfig(value: unknown): RuntimeConfig | null {

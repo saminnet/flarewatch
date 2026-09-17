@@ -3,7 +3,7 @@ import { getRouteApi } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { StatusIcon } from '@/components/status-icon';
 import { monitorStateQuery, publicMonitorsQuery } from '@/lib/query/monitors.queries';
-import type { MonitorState } from '@flarewatch/shared';
+import { createEmptyMonitorState } from '@/lib/monitor-state';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import { formatUptimeDisplay } from '@/lib/uptime';
 import { cn } from '@/lib/utils';
@@ -29,14 +29,7 @@ function EmbedWrapper({ children, theme, className }: EmbedWrapperProps): React.
   );
 }
 
-const EMPTY_STATE: MonitorState = {
-  incident: {},
-  latency: {},
-  overallUp: 0,
-  overallDown: 0,
-  lastUpdate: 0,
-  startedAt: {},
-};
+const EMPTY_STATE = createEmptyMonitorState();
 
 export function EmbedPage() {
   const { t } = useTranslation();
@@ -47,7 +40,6 @@ export function EmbedPage() {
 
   const monitor = monitors.find((m) => m.id === monitorId);
 
-  // Call hooks unconditionally to satisfy Rules of Hooks
   const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(
     monitorId,
     state ?? EMPTY_STATE,

@@ -1,21 +1,20 @@
 /**
- * Linear scale + nice-tick helpers ported from d3-scale/d3-array, so the chart needs only
- * d3-shape (curveMonotoneX) and not the heavier d3-scale tree (d3-interpolate, d3-format,
- * d3-color). Output matches scaleLinear().domain([0, max]).nice().ticks(5); the golden
+ * Linear scale + nice-tick helpers ported from d3-scale/d3-array so the chart needs only
+ * d3-shape. Output matches scaleLinear().domain([0, max]).nice().ticks(5); the golden
  * values in chart-scale.test.ts lock that down.
  */
 
-export interface LinearScale {
-  (value: number): number;
-  invert: (px: number) => number;
+export interface NiceTicks {
+  ticks: number[];
+  max: number;
 }
 
-// Maps domain [d0, d1] onto range [r0, r1].
-export function linearScale([d0, d1]: [number, number], [r0, r1]: [number, number]): LinearScale {
+export function linearScale([d0, d1]: [number, number], [r0, r1]: [number, number]) {
   const span = d1 - d0 || 1; // degenerate domain -> avoid divide-by-zero
-  const scale = ((value: number) => r0 + ((value - d0) / span) * (r1 - r0)) as LinearScale;
-  scale.invert = (px: number) => d0 + ((px - r0) / (r1 - r0)) * span;
-  return scale;
+  const scale = (value: number) => r0 + ((value - d0) / span) * (r1 - r0);
+  return Object.assign(scale, {
+    invert: (px: number) => d0 + ((px - r0) / (r1 - r0)) * span,
+  });
 }
 
 const E10 = Math.sqrt(50);
@@ -80,11 +79,8 @@ function niceMax(maxValue: number, count: number): number {
   return stop;
 }
 
-/**
- * Mirrors scaleLinear().domain([0, maxValue]).nice().ticks(5):
- * nice() uses its default count of 10; ticks() uses 5.
- */
-export function niceLinearTicks(maxValue: number): { ticks: number[]; max: number } {
+/** Mirrors scaleLinear().domain([0, max]).nice().ticks(5): nice() defaults to count 10, ticks() to 5. */
+export function niceLinearTicks(maxValue: number): NiceTicks {
   const max = niceMax(maxValue, 10);
   return { ticks: ticks(0, max, 5), max };
 }

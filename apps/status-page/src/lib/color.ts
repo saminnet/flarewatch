@@ -1,6 +1,6 @@
 import { UPTIME_THRESHOLDS } from './constants';
 
-export type StatusColor = {
+type StatusColor = {
   bg: string;
   text: string;
   border: string;
@@ -12,10 +12,7 @@ const UNKNOWN: StatusColor = {
   border: 'border-status-unknown',
 };
 
-/**
- * Get token-backed status classes based on uptime percentage.
- * Colors resolve from the `--status-*` runtime contract tokens.
- */
+/** Status classes resolve from the `--status-*` runtime contract tokens. */
 export function getStatusColor(percent: number | string | null): StatusColor {
   if (percent === null) return UNKNOWN;
 
@@ -41,9 +38,7 @@ export function getStatusColor(percent: number | string | null): StatusColor {
 
 const HEX_NEUTRAL = '#a3a3a3'; // neutral-400
 
-/**
- * Get hex color based on uptime percentage (for charts)
- */
+/** Hex colors for charts, which cannot consume the CSS status tokens. */
 export function getStatusHexColor(percent: number | string | null, darker = false): string {
   if (percent === null) return HEX_NEUTRAL;
 

@@ -1,15 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
-import type { MonitorTarget } from '@flarewatch/shared';
+import type { Fetcher, MonitorTarget } from '@flarewatch/shared';
+import { checkExternalProxy } from '../../src/checkers/proxy';
 
-const fetchWithTimeoutMock = vi.fn();
-
-vi.mock('@flarewatch/shared', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@flarewatch/shared')>();
-  return {
-    ...actual,
-    fetchWithTimeout: fetchWithTimeoutMock,
-  };
-});
+const fetchMock = vi.fn<Fetcher>();
 
 function createTarget(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   return {
@@ -24,21 +17,20 @@ function createTarget(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
 
 describe('checkExternalProxy', () => {
   beforeEach(() => {
-    fetchWithTimeoutMock.mockReset();
+    fetchMock.mockReset();
   });
 
   it('returns a failure when the proxy URL is not configured', async () => {
     const target = createTarget();
     delete target.checkProxy;
 
-    const { checkExternalProxy } = await import('../../src/checkers/proxy');
-    const result = await checkExternalProxy(target);
+    const result = await checkExternalProxy(target, undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'ERROR',
       result: { ok: false, error: 'Proxy URL is not configured' },
     });
-    expect(fetchWithTimeoutMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('posts the monitor with authorization and its configured timeout', async () => {
@@ -46,17 +38,18 @@ describe('checkExternalProxy', () => {
       location: 'FRA',
       result: { ok: true, latency: 42 },
     };
-    fetchWithTimeoutMock.mockResolvedValue(
-      new Response(JSON.stringify(proxyResult), { status: 200 }),
-    );
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(proxyResult), { status: 200 }));
     const target = createTarget({ timeout: 1234 });
 
-    const { checkExternalProxy } = await import('../../src/checkers/proxy');
-    const result = await checkExternalProxy(target, { FLAREWATCH_PROXY_TOKEN: 'test-token' });
+    const result = await checkExternalProxy(
+      target,
+      { FLAREWATCH_PROXY_TOKEN: 'test-token' },
+      fetchMock,
+    );
 
     expect(result).toEqual(proxyResult);
-    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
-    const [url, options] = fetchWithTimeoutMock.mock.calls[0] ?? [];
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0] ?? [];
     expect(url).toBe('https://proxy.example.com/check');
     expect(options).toEqual({
       method: 'POST',
@@ -70,31 +63,29 @@ describe('checkExternalProxy', () => {
   });
 
   it('uses the default timeout and omits authorization without a token', async () => {
-    fetchWithTimeoutMock.mockResolvedValue(
+    fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({ location: 'FRA', result: { ok: false, error: 'Connection refused' } }),
         { status: 200 },
       ),
     );
 
-    const { checkExternalProxy } = await import('../../src/checkers/proxy');
-    const result = await checkExternalProxy(createTarget());
+    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'FRA',
       result: { ok: false, error: 'Connection refused' },
     });
-    const [, options] = fetchWithTimeoutMock.mock.calls[0] ?? [];
+    const [, options] = fetchMock.mock.calls[0] ?? [];
     expect(options?.headers).toEqual({ 'Content-Type': 'application/json' });
     expect(options?.timeout).toBe(10000);
   });
 
   it('returns the proxy status and a truncated response body for non-2xx responses', async () => {
     const body = 'x'.repeat(220);
-    fetchWithTimeoutMock.mockResolvedValue(new Response(body, { status: 503 }));
+    fetchMock.mockResolvedValue(new Response(body, { status: 503 }));
 
-    const { checkExternalProxy } = await import('../../src/checkers/proxy');
-    const result = await checkExternalProxy(createTarget());
+    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'ERROR',
@@ -111,12 +102,9 @@ describe('checkExternalProxy', () => {
     { location: 'FRA', result: { ok: false, error: 'failed', latency: 'slow' } },
     { location: 'FRA', result: { ok: 'yes', latency: 1 } },
   ])('rejects an invalid proxy response %#', async (proxyResult) => {
-    fetchWithTimeoutMock.mockResolvedValue(
-      new Response(JSON.stringify(proxyResult), { status: 200 }),
-    );
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(proxyResult), { status: 200 }));
 
-    const { checkExternalProxy } = await import('../../src/checkers/proxy');
-    const result = await checkExternalProxy(createTarget());
+    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'ERROR',
@@ -129,21 +117,17 @@ describe('checkExternalProxy', () => {
       location: 'LHR',
       result: { ok: false, error: 'Timed out', latency: 10000 },
     };
-    fetchWithTimeoutMock.mockResolvedValue(
-      new Response(JSON.stringify(proxyResult), { status: 200 }),
-    );
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(proxyResult), { status: 200 }));
 
-    const { checkExternalProxy } = await import('../../src/checkers/proxy');
-    const result = await checkExternalProxy(createTarget());
+    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
 
     expect(result).toEqual(proxyResult);
   });
 
   it('returns a failure when the proxy request throws', async () => {
-    fetchWithTimeoutMock.mockRejectedValue(new Error('network unavailable'));
+    fetchMock.mockRejectedValue(new Error('network unavailable'));
 
-    const { checkExternalProxy } = await import('../../src/checkers/proxy');
-    const result = await checkExternalProxy(createTarget());
+    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'ERROR',

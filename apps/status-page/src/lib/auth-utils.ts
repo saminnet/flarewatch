@@ -1,3 +1,4 @@
+import { isJsonObject } from '@flarewatch/shared';
 import { AUTH } from './constants';
 
 export type SessionData = {
@@ -29,23 +30,17 @@ function parseCookies(header: string | null): Record<string, string> {
     try {
       out[key] = decodeURIComponent(val);
     } catch {
-      out[key] = val; // Fallback to raw value if decode fails
+      out[key] = val;
     }
   }
   return out;
 }
 
-/**
- * Get the admin session cookie value from a cookie header.
- */
 export function getAdminSessionCookie(cookieHeader: string | null): string | null {
   const cookies = parseCookies(cookieHeader);
   return cookies[AUTH.COOKIE_NAME] ?? null;
 }
 
-/**
- * Validate a session exists in KV storage.
- */
 export async function validateSession(
   kv: KVNamespace,
   sessionId: string,
@@ -53,9 +48,15 @@ export async function validateSession(
   try {
     const raw = await kv.get(`${AUTH.SESSION_KEY_PREFIX}${sessionId}`);
     if (!raw) return null;
-    return JSON.parse(raw) as SessionData;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isSessionData(parsed)) return null;
+    return parsed;
   } catch {
-    // Invalid session data format or KV error
     return null;
   }
+}
+
+function isSessionData(value: unknown): value is SessionData {
+  if (!isJsonObject(value)) return false;
+  return typeof value.createdAt === 'number' && (value.ip === null || typeof value.ip === 'string');
 }

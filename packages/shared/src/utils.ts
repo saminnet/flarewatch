@@ -1,7 +1,30 @@
-import type { MonitorTarget, SSLCertificateInfo, CheckSuccess, CheckFailure } from './types';
+import type {
+  CheckFailure,
+  CheckSuccess,
+  JsonObject,
+  MonitorTarget,
+  SSLCertificateInfo,
+} from './types';
 
 export const DEFAULT_HTTP_TIMEOUT = 10000;
 export const DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS = 30;
+
+/**
+ * Narrow a `JSON.parse` result to an object so its properties can be read directly. Only sound for
+ * values that really came from JSON; runtime bindings and class instances are not JSON objects.
+ */
+export function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+/** HeadersInit is string-valued, so configured numeric header values are converted. */
+export function toHeaders(headers?: { [key: string]: string | number }): Headers {
+  return new Headers(Object.entries(headers ?? {}).map(([key, value]) => [key, String(value)]));
+}
 
 export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -17,13 +40,13 @@ export interface FetchOptions extends Omit<RequestInit, 'signal' | 'body'> {
   body?: BodyInit | null | undefined;
 }
 
-function getTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cleanup: () => void } {
-  const abortSignalGlobal: unknown = typeof AbortSignal === 'undefined' ? undefined : AbortSignal;
-  const timeoutFn = (abortSignalGlobal as { timeout?: (ms: number) => AbortSignal } | undefined)
-    ?.timeout;
-  if (typeof timeoutFn === 'function') {
+/** The HTTP seam every checker and notifier takes, so tests substitute a real function. */
+export type Fetcher = (url: string, options?: FetchOptions) => Promise<Response>;
+
+function getTimeoutSignal(timeoutMs: number) {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
     // AbortSignal.timeout() handles cleanup automatically
-    return { signal: timeoutFn(timeoutMs), cleanup: () => {} };
+    return { signal: AbortSignal.timeout(timeoutMs), cleanup: () => {} };
   }
 
   const controller = new AbortController();
@@ -31,15 +54,7 @@ function getTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cleanup: ()
   return { signal: controller.signal, cleanup: () => clearTimeout(timeoutId) };
 }
 
-/**
- * Fetch with automatic timeout handling.
- * Works in both Node.js and Cloudflare Workers.
- *
- * @param url - The URL to fetch
- * @param options - Fetch options including optional timeout (default: 10000ms)
- * @returns The fetch Response
- * @throws AbortError if the request times out
- */
+/** fetch() with a timeout (default 10s); throws the runtime's abort exception when the signal fires. */
 export async function fetchWithTimeout(url: string, options: FetchOptions = {}): Promise<Response> {
   const { timeout = DEFAULT_HTTP_TIMEOUT, body, ...rest } = options;
 
@@ -58,9 +73,6 @@ export async function fetchWithTimeout(url: string, options: FetchOptions = {}):
   }
 }
 
-/**
- * Error thrown when an operation times out.
- */
 export class TimeoutError extends Error {
   constructor(ms: number) {
     super(`Operation timed out after ${ms}ms`);
@@ -68,14 +80,6 @@ export class TimeoutError extends Error {
   }
 }
 
-/**
- * Wrap any promise with a timeout.
- *
- * @param promise - The promise to wrap
- * @param ms - Timeout in milliseconds
- * @returns The resolved value of the promise
- * @throws TimeoutError if the promise doesn't resolve in time
- */
 export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout>;
 
@@ -90,21 +94,13 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T
   }
 }
 
-export interface HttpValidationConfig {
+interface HttpValidationConfig {
   expectedCodes?: number[] | undefined;
   responseKeyword?: string | undefined;
   responseForbiddenKeyword?: string | undefined;
 }
 
-/**
- * Validate HTTP status code and body against configuration.
- * Core validation logic shared between direct HTTP checks and GlobalPing.
- *
- * @param status - HTTP status code
- * @param body - Response body text (undefined to skip keyword checks)
- * @param config - Validation configuration
- * @returns Error message if validation fails, null if success
- */
+/** Validation shared by the direct HTTP checker and GlobalPing. */
 export function validateHttpStatusAndBody(
   status: number,
   body: string | undefined,
@@ -112,7 +108,6 @@ export function validateHttpStatusAndBody(
 ): string | null {
   const { expectedCodes, responseKeyword, responseForbiddenKeyword } = config;
 
-  // Check status code
   if (expectedCodes) {
     if (!expectedCodes.includes(status)) {
       return `Expected status ${expectedCodes.join('|')}, got ${status}`;
@@ -121,7 +116,6 @@ export function validateHttpStatusAndBody(
     return `Expected 2xx status, got ${status}`;
   }
 
-  // Check keywords if body is available and keywords are configured
   if (body !== undefined) {
     if (responseKeyword && !body.includes(responseKeyword)) {
       return `Required keyword "${responseKeyword}" not found in response`;
@@ -135,26 +129,18 @@ export function validateHttpStatusAndBody(
   return null;
 }
 
-/**
- * Validate HTTP response against monitor configuration.
- *
- * @param monitor - Monitor target with validation settings
- * @param response - Fetch Response to validate
- * @returns Error message if validation fails, null if success
- */
 export async function validateHttpResponse(
   monitor: MonitorTarget,
   response: Response,
 ): Promise<string | null> {
   const { expectedCodes, responseKeyword, responseForbiddenKeyword } = monitor;
 
-  // Check status code first (doesn't need body)
+  // Status first: it avoids reading the body.
   const statusError = validateHttpStatusAndBody(response.status, undefined, { expectedCodes });
   if (statusError) {
     return statusError;
   }
 
-  // Check keywords if configured (requires reading body)
   if (responseKeyword || responseForbiddenKeyword) {
     const body = await response.text();
     return validateHttpStatusAndBody(response.status, body, {
@@ -167,14 +153,12 @@ export async function validateHttpResponse(
   return null;
 }
 
-/**
- * Parse TCP target string into hostname and port.
- *
- * @param target - Target in "hostname:port" format
- * @returns Object with hostname and port
- * @throws Error if hostname is missing, port is missing, or port is invalid
- */
-export function parseTcpTarget(target: string): { hostname: string; port: number } {
+interface TcpTarget {
+  hostname: string;
+  port: number;
+}
+
+export function parseTcpTarget(target: string): TcpTarget {
   const url = new URL(`tcp://${target}`);
   if (!url.hostname) {
     throw new Error('Invalid TCP target hostname');
@@ -195,13 +179,6 @@ export function parseTcpTarget(target: string): { hostname: string; port: number
   };
 }
 
-/**
- * Create a successful check result.
- *
- * @param latency - Response latency in milliseconds
- * @param ssl - Optional SSL certificate information
- * @returns CheckSuccess result object
- */
 export function success(latency: number, ssl?: SSLCertificateInfo): CheckSuccess {
   if (ssl) {
     return { ok: true, latency, ssl };
@@ -209,13 +186,6 @@ export function success(latency: number, ssl?: SSLCertificateInfo): CheckSuccess
   return { ok: true, latency };
 }
 
-/**
- * Create a failed check result.
- *
- * @param error - Error message describing the failure
- * @param latency - Optional response latency in milliseconds
- * @returns CheckFailure result object
- */
 export function failure(error: string, latency?: number): CheckFailure {
   if (latency !== undefined) {
     return { ok: false, error, latency };
@@ -225,27 +195,15 @@ export function failure(error: string, latency?: number): CheckFailure {
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-interface LogEntry {
-  level: LogLevel;
-  message: string;
-  timestamp: string;
-  [key: string]: unknown;
-}
-
-/**
- * Create a structured logger for a specific component.
- *
- * @param component - Component name (e.g., "Worker", "HTTP", "TCP")
- * @returns Logger object with debug, info, warn, error methods
- */
 export function createLogger(component: string) {
-  const log = (level: LogLevel, message: string, data?: Record<string, unknown>) => {
-    const entry: LogEntry = {
+  const log = (level: LogLevel, message: string, data?: JsonObject) => {
+    // `data` spreads first so a caller can add fields but never overwrite the envelope.
+    const entry = {
+      ...data,
       level,
       message,
       timestamp: new Date().toISOString(),
       component,
-      ...data,
     };
     const output = JSON.stringify(entry);
 
@@ -266,9 +224,9 @@ export function createLogger(component: string) {
   };
 
   return {
-    debug: (message: string, data?: Record<string, unknown>) => log('debug', message, data),
-    info: (message: string, data?: Record<string, unknown>) => log('info', message, data),
-    warn: (message: string, data?: Record<string, unknown>) => log('warn', message, data),
-    error: (message: string, data?: Record<string, unknown>) => log('error', message, data),
+    debug: (message: string, data?: JsonObject) => log('debug', message, data),
+    info: (message: string, data?: JsonObject) => log('info', message, data),
+    warn: (message: string, data?: JsonObject) => log('warn', message, data),
+    error: (message: string, data?: JsonObject) => log('error', message, data),
   };
 }

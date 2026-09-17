@@ -1,4 +1,4 @@
-import type { TemplateContext, TemplateOutput } from './index';
+import type { TemplateContext, TemplateOutput } from './types';
 
 export function slackTemplate(ctx: TemplateContext): TemplateOutput {
   const color = ctx.isUp ? '#36a64f' : '#dc3545';
@@ -28,7 +28,6 @@ export function slackTemplate(ctx: TemplateContext): TemplateOutput {
     },
   ];
 
-  // Add reason section if down
   if (!ctx.isUp && ctx.reason) {
     blocks.push({
       type: 'section',
@@ -39,7 +38,6 @@ export function slackTemplate(ctx: TemplateContext): TemplateOutput {
     });
   }
 
-  // Add context with timestamp and target
   blocks.push({
     type: 'context',
     elements: [

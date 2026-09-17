@@ -1,6 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
-import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
-import { writeMaintenancesToStorage, readMaintenancesFromStorage } from '@flarewatch/shared';
+import {
+  writeMaintenancesToStorage,
+  readMaintenancesFromStorage,
+  isJsonObject,
+  type Maintenance,
+  type MaintenanceConfig,
+  isNonEmptyString,
+} from '@flarewatch/shared';
 import { requireStateKv } from '@/lib/runtime-env';
 
 function jsonError(message: string, status: number): Response {
@@ -21,24 +27,25 @@ function parseDateMs(value: unknown): number | null {
 }
 
 function normalizeMaintenanceInput(input: unknown): MaintenanceConfig | null {
-  if (!input || typeof input !== 'object') return null;
-  const data = input as Record<string, unknown>;
+  if (!isJsonObject(input)) return null;
 
-  const body = typeof data.body === 'string' ? data.body.trim() : '';
+  const body = typeof input.body === 'string' ? input.body.trim() : '';
   if (!body) return null;
 
-  const startMs = parseDateMs(data.start);
+  const startMs = parseDateMs(input.start);
   if (startMs === null) return null;
 
-  const endMs = data.end === undefined ? undefined : parseDateMs(data.end);
+  const endMs = input.end !== undefined ? parseDateMs(input.end) : undefined;
   if (endMs === null) return null;
   if (endMs !== undefined && endMs < startMs) return null;
 
-  const title = typeof data.title === 'string' && data.title.trim() ? data.title.trim() : undefined;
-  const color = typeof data.color === 'string' && data.color.trim() ? data.color.trim() : undefined;
+  const title =
+    typeof input.title === 'string' && input.title.trim() ? input.title.trim() : undefined;
+  const color =
+    typeof input.color === 'string' && input.color.trim() ? input.color.trim() : undefined;
 
-  const monitors = Array.isArray(data.monitors)
-    ? data.monitors.filter((m): m is string => typeof m === 'string' && m.length > 0)
+  const monitors = Array.isArray(input.monitors)
+    ? input.monitors.filter(isNonEmptyString)
     : undefined;
 
   return {
@@ -62,40 +69,37 @@ function parseNullableString(
   return { valid: false };
 }
 
-function normalizeMaintenanceUpdates(
+export function normalizeMaintenanceUpdates(
   input: unknown,
   current: Maintenance,
 ): Partial<MaintenanceConfig> | null {
-  if (!input || typeof input !== 'object') return null;
-  const data = input as Record<string, unknown>;
+  if (!isJsonObject(input)) return null;
 
   const updates: Partial<MaintenanceConfig> = {};
 
-  if (data.title !== undefined) {
-    const result = parseNullableString(data.title);
+  if (input.title !== undefined) {
+    const result = parseNullableString(input.title);
     if (!result.valid) return null;
     updates.title = result.value;
   }
 
-  if (data.body !== undefined) {
-    const body = typeof data.body === 'string' ? data.body.trim() : '';
+  if (input.body !== undefined) {
+    const body = typeof input.body === 'string' ? input.body.trim() : '';
     if (!body) return null;
     updates.body = body;
   }
 
-  if (data.color !== undefined) {
-    const result = parseNullableString(data.color);
+  if (input.color !== undefined) {
+    const result = parseNullableString(input.color);
     if (!result.valid) return null;
     updates.color = result.value;
   }
 
-  if (data.monitors !== undefined) {
-    if (data.monitors === null) {
+  if (input.monitors !== undefined) {
+    if (input.monitors === null) {
       updates.monitors = undefined;
-    } else if (Array.isArray(data.monitors)) {
-      const monitors = data.monitors.filter(
-        (m): m is string => typeof m === 'string' && m.length > 0,
-      );
+    } else if (Array.isArray(input.monitors)) {
+      const monitors = input.monitors.filter(isNonEmptyString);
       updates.monitors = monitors.length ? Array.from(new Set(monitors)) : undefined;
     } else {
       return null;
@@ -109,20 +113,20 @@ function normalizeMaintenanceUpdates(
   if (currentEndMs === null) return null;
 
   let nextStartMs = currentStartMs;
-  if (data.start !== undefined) {
-    const parsed = parseDateMs(data.start);
+  if (input.start !== undefined) {
+    const parsed = parseDateMs(input.start);
     if (parsed === null) return null;
     nextStartMs = parsed;
     updates.start = new Date(parsed).toISOString();
   }
 
   let nextEndMs = currentEndMs;
-  if (data.end !== undefined) {
-    if (data.end === null) {
+  if (input.end !== undefined) {
+    if (input.end === null) {
       nextEndMs = undefined;
       updates.end = undefined;
     } else {
-      const parsed = parseDateMs(data.end);
+      const parsed = parseDateMs(input.end);
       if (parsed === null) return null;
       nextEndMs = parsed;
       updates.end = new Date(parsed).toISOString();
@@ -134,10 +138,14 @@ function normalizeMaintenanceUpdates(
   return updates;
 }
 
+function parseMaintenancePayload(body: unknown): { id: string; updates: unknown } | null {
+  if (!isJsonObject(body) || !isNonEmptyString(body.id)) return null;
+  return { id: body.id, updates: body.updates };
+}
+
 export const Route = createFileRoute('/api/admin/maintenances')({
   server: {
     handlers: {
-      // List all maintenances
       GET: async () => {
         try {
           const kv = await requireStateKv();
@@ -149,10 +157,9 @@ export const Route = createFileRoute('/api/admin/maintenances')({
         }
       },
 
-      // Create a new maintenance
       POST: async ({ request }: { request: Request }) => {
         try {
-          const body = (await request.json()) as unknown;
+          const body: unknown = await request.json();
           const input = normalizeMaintenanceInput(body);
 
           if (!input) {
@@ -178,25 +185,24 @@ export const Route = createFileRoute('/api/admin/maintenances')({
         }
       },
 
-      // Update an existing maintenance
       PUT: async ({ request }: { request: Request }) => {
         try {
-          const body = (await request.json()) as { id: string; updates: unknown };
+          const payload = parseMaintenancePayload(await request.json());
 
-          if (!body.id) {
+          if (!payload) {
             return jsonError('id is required', 400);
           }
 
           const kv = await requireStateKv();
           const maintenances = await readMaintenancesFromStorage(kv);
-          const index = maintenances.findIndex((m) => m.id === body.id);
+          const index = maintenances.findIndex((m) => m.id === payload.id);
           const current = maintenances[index];
 
           if (!current) {
             return jsonError('Maintenance not found', 404);
           }
 
-          const updates = normalizeMaintenanceUpdates(body.updates, current);
+          const updates = normalizeMaintenanceUpdates(payload.updates, current);
           if (!updates) {
             return jsonError('Invalid maintenance updates', 400);
           }
@@ -220,18 +226,17 @@ export const Route = createFileRoute('/api/admin/maintenances')({
         }
       },
 
-      // Delete a maintenance
       DELETE: async ({ request }: { request: Request }) => {
         try {
-          const body = (await request.json()) as { id: string };
+          const payload = parseMaintenancePayload(await request.json());
 
-          if (!body.id) {
+          if (!payload) {
             return jsonError('id is required', 400);
           }
 
           const kv = await requireStateKv();
           const maintenances = await readMaintenancesFromStorage(kv);
-          const filtered = maintenances.filter((m) => m.id !== body.id);
+          const filtered = maintenances.filter((m) => m.id !== payload.id);
 
           if (filtered.length === maintenances.length) {
             return jsonError('Maintenance not found', 404);

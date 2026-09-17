@@ -1,6 +1,11 @@
 import { createServerFn } from '@tanstack/react-start';
-import type { Maintenance, MonitorState } from '@flarewatch/shared';
-import { KV_KEYS, readMaintenancesFromStorage } from '@flarewatch/shared';
+import {
+  isMonitorState,
+  KV_KEYS,
+  type Maintenance,
+  type MonitorState,
+  readMaintenancesFromStorage,
+} from '@flarewatch/shared';
 import { INITIAL_TRIGGER_RETRY_MS } from '@/lib/constants';
 import { resolveMonitorState } from '@/lib/monitor-state';
 import { requireStateKv, resolveRuntimeEnv } from '@/lib/runtime-env';
@@ -10,7 +15,7 @@ let lastTriggerAttempt = 0;
 
 async function performTrigger(): Promise<boolean> {
   const env = await resolveRuntimeEnv();
-  const monitorWorker = env?.MONITOR_WORKER;
+  const monitorWorker = env.MONITOR_WORKER;
   if (!monitorWorker || typeof monitorWorker.fetch !== 'function') return false;
 
   try {
@@ -37,15 +42,12 @@ async function triggerInitialCheck(): Promise<boolean> {
   return initialTriggerPromise;
 }
 
-/**
- * Get the monitor state from Cloudflare KV
- */
 export const getMonitorState = createServerFn({ method: 'GET' }).handler(
   async (): Promise<MonitorState | null> => {
     try {
       const kv = await requireStateKv();
-      const state = await kv.get(KV_KEYS.STATE, { type: 'json' });
-      return resolveMonitorState((state as MonitorState | null) ?? null, triggerInitialCheck);
+      const state: unknown = await kv.get(KV_KEYS.STATE, { type: 'json' });
+      return resolveMonitorState(isMonitorState(state) ? state : null, triggerInitialCheck);
     } catch (error) {
       console.error('Error fetching monitor state:', error);
       return null;
@@ -53,9 +55,6 @@ export const getMonitorState = createServerFn({ method: 'GET' }).handler(
   },
 );
 
-/**
- * Get all maintenances from Cloudflare KV
- */
 export const getMaintenances = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Maintenance[]> => {
     try {

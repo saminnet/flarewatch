@@ -1,38 +1,34 @@
-export type RuntimeEnv = {
-  CONFIG_KV?: KVNamespace;
-  STATE_KV?: KVNamespace;
-  FLAREWATCH_STATE?: KVNamespace;
-  FLAREWATCH_STATUS_PAGE_BASIC_AUTH?: string;
-  FLAREWATCH_ADMIN_BASIC_AUTH?: string;
-  MONITOR_WORKER?: Fetcher;
-};
+declare global {
+  /** Test-harness shim; production bindings come from the Workers runtime. */
+  var __env__: Cloudflare.Env | undefined;
+}
 
-/**
- * Resolves the runtime environment for both Cloudflare Workers and Node.js
- */
-export async function resolveRuntimeEnv(): Promise<RuntimeEnv | undefined> {
+export async function resolveRuntimeEnv(): Promise<Cloudflare.Env> {
   if (import.meta.env.SSR) {
     try {
-      const { getCloudflareWorkersEnv } = await import('./cloudflare-workers-env');
-      const env = getCloudflareWorkersEnv();
-      if (env) return env;
+      const { env } = await import('cloudflare:workers');
+      return env;
     } catch {
       // Ignore - likely not running in the Workers runtime.
     }
   }
 
-  const env =
-    (globalThis as { __env__?: unknown; process?: { env?: unknown } }).__env__ ??
-    globalThis.process?.env;
-  return env as RuntimeEnv | undefined;
+  if (globalThis.__env__) return globalThis.__env__;
+
+  // process.env is string-valued, so project only the credentials the app reads from it;
+  // KV and service bindings exist solely in the Workers runtime or the test shim.
+  const processEnv = globalThis.process?.env;
+  const env: Cloudflare.Env = {};
+  const siteAuth = processEnv?.FLAREWATCH_STATUS_PAGE_BASIC_AUTH;
+  if (siteAuth) env.FLAREWATCH_STATUS_PAGE_BASIC_AUTH = siteAuth;
+  const adminAuth = processEnv?.FLAREWATCH_ADMIN_BASIC_AUTH;
+  if (adminAuth) env.FLAREWATCH_ADMIN_BASIC_AUTH = adminAuth;
+  return env;
 }
 
-/**
- * Gets the KV namespace or throws if not available
- */
 export async function requireStateKv(): Promise<KVNamespace> {
   const env = await resolveRuntimeEnv();
-  const kv = env?.STATE_KV ?? env?.FLAREWATCH_STATE;
+  const kv = env.STATE_KV ?? env.FLAREWATCH_STATE;
   if (!kv) throw new Error('STATE_KV (or FLAREWATCH_STATE) binding not found');
   return kv;
 }

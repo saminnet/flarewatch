@@ -1,6 +1,6 @@
-import { beforeEach, afterEach, vi } from 'vite-plus/test';
+import { beforeEach, afterEach, vi, type MockInstance } from 'vite-plus/test';
 
-let spies: Array<ReturnType<typeof vi.spyOn>> = [];
+let spies: MockInstance[] = [];
 
 beforeEach(() => {
   spies = [

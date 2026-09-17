@@ -1,9 +1,12 @@
-import type { MonitorState, Maintenance, RuntimeConfig } from '@flarewatch/shared';
 import {
   createLogger,
+  isMonitorState,
   KV_KEYS,
   loadRuntimeConfig,
+  type Maintenance,
   readMaintenancesFromStorage,
+  type RuntimeConfig,
+  type WorkerConfig,
 } from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
 
@@ -22,25 +25,19 @@ import {
   updateSSLCertificate,
   cleanupOldIncidents,
 } from './state/incidents';
-import { isMonitorState } from './state/validate';
 
 const log = createLogger('Worker');
 
-export interface Env {
+interface Env {
   CONFIG_KV?: KVNamespace;
   STATE_KV?: KVNamespace;
   FLAREWATCH_STATE?: KVNamespace;
-  /**
-   * Optional Bearer token used when calling external check proxies.
-   * If set, the worker sends `Authorization: Bearer <token>` with every proxied check request.
-   */
+  /** Sent as `Authorization: Bearer <token>` on every external proxy check. */
   FLAREWATCH_PROXY_TOKEN?: string;
 }
 
-/** Default KV write cooldown in minutes */
 const DEFAULT_COOLDOWN_MINUTES = 3;
 
-/** Buffer (in seconds) around grace period threshold for notification timing */
 const GRACE_PERIOD_BUFFER_SECONDS = 30;
 
 function getStateKv(env: Env): KVNamespace {
@@ -51,7 +48,7 @@ function getStateKv(env: Env): KVNamespace {
   return kv;
 }
 
-async function loadEffectiveConfig(env: Env): Promise<RuntimeConfig> {
+async function loadEffectiveConfig(env: Env, staticConfig: WorkerConfig): Promise<RuntimeConfig> {
   if (env.CONFIG_KV) {
     const runtimeConfig = await loadRuntimeConfig(env.CONFIG_KV);
     if (runtimeConfig) {
@@ -60,12 +57,12 @@ async function loadEffectiveConfig(env: Env): Promise<RuntimeConfig> {
     log.error('Invalid runtime config in CONFIG_KV, falling back to static config');
   }
 
-  const config: RuntimeConfig = { monitors: workerConfig.monitors };
-  if (workerConfig.notification) {
-    config.notification = workerConfig.notification;
+  const config: RuntimeConfig = { monitors: staticConfig.monitors };
+  if (staticConfig.notification) {
+    config.notification = staticConfig.notification;
   }
-  if (workerConfig.kvWriteCooldownMinutes !== undefined) {
-    config.kvWriteCooldownMinutes = workerConfig.kvWriteCooldownMinutes;
+  if (staticConfig.kvWriteCooldownMinutes !== undefined) {
+    config.kvWriteCooldownMinutes = staticConfig.kvWriteCooldownMinutes;
   }
   return config;
 }
@@ -133,7 +130,6 @@ function shouldNotify(
 ): boolean {
   const gracePeriod = config.notification?.gracePeriod;
 
-  // No grace period configured - notify on any status change
   if (gracePeriod === undefined) {
     return statusChanged;
   }
@@ -142,17 +138,14 @@ function shouldNotify(
   const timeSinceIncident = currentTime - incidentStartTime;
   const gracePeriodReached = timeSinceIncident >= gracePeriodSeconds - GRACE_PERIOD_BUFFER_SECONDS;
 
-  // Must have reached grace period to send any notification
   if (!gracePeriodReached) {
     return false;
   }
 
-  // Status changed (up or down) - notify if grace period reached
   if (statusChanged) {
     return true;
   }
 
-  // No status change but grace period just crossed - send delayed DOWN notification
   if (!isUp) {
     const justCrossedThreshold =
       timeSinceIncident < gracePeriodSeconds + GRACE_PERIOD_BUFFER_SECONDS;
@@ -162,32 +155,45 @@ function shouldNotify(
   return false;
 }
 
-/**
- * Core check logic - runs all monitors and updates state.
- * Used by both scheduled handler and /trigger endpoint.
- */
-async function runChecks(env: Env): Promise<void> {
-  const location = await getEdgeLocation();
+export interface WorkerDeps {
+  readonly checkMonitor: typeof checkMonitor;
+  readonly createNotifier: typeof createNotifier;
+  readonly formatNotificationMessage: typeof formatNotificationMessage;
+  readonly getEdgeLocation: () => Promise<string>;
+  readonly staticConfig: WorkerConfig;
+}
+
+const defaultWorkerDeps: WorkerDeps = {
+  checkMonitor,
+  createNotifier,
+  formatNotificationMessage,
+  getEdgeLocation,
+  staticConfig: workerConfig,
+};
+
+/** Used by both the scheduled handler and the /trigger endpoint. */
+export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps): Promise<void> {
+  const location = await deps.getEdgeLocation();
   log.info('Starting checks', { location });
 
-  const config = await loadEffectiveConfig(env);
+  const config = await loadEffectiveConfig(env, deps.staticConfig);
 
   const stateKv = getStateKv(env);
   const storedState = await stateKv.get(KV_KEYS.STATE, {
     type: 'json',
   });
-  const state: MonitorState = isMonitorState(storedState) ? storedState : createInitialState();
+  const state = isMonitorState(storedState) ? storedState : createInitialState();
   resetCounters(state);
 
   const maintenances = await loadMaintenances(stateKv);
 
   const currentTime = Math.floor(Date.now() / 1000);
-  const notifier = createNotifier(config.notification?.webhook);
+  const notifier = deps.createNotifier(config.notification?.webhook);
 
   const checkResults = await Promise.allSettled(
     config.monitors.map(async (monitor) => {
       log.info('Checking monitor', { name: monitor.name });
-      const result = await checkMonitor(monitor, env);
+      const result = await deps.checkMonitor(monitor, env);
 
       return { monitor, result };
     }),
@@ -208,7 +214,7 @@ async function runChecks(env: Env): Promise<void> {
     const update = processCheckResult(state, monitor, checkResult, currentTime);
     stateChanged ||= update.statusChanged;
 
-    const latency = checkResult.ok ? checkResult.latency : (checkResult.latency ?? 0);
+    const latency = checkResult.latency ?? 0;
     updateLatency(state, monitor.id, checkLocation, latency, currentTime);
 
     if (checkResult.ok && checkResult.ssl) {
@@ -241,14 +247,14 @@ async function runChecks(env: Env): Promise<void> {
           reason: update.error,
           timeZone: config.notification?.timeZone ?? 'UTC',
         };
-        const message = formatNotificationMessage(ctx);
+        const message = deps.formatNotificationMessage(ctx);
         await notifier.send(ctx, message);
       }
     }
 
     if (update.statusChanged) {
       await safeCallback(
-        workerConfig.callbacks?.onStatusChange,
+        deps.staticConfig.callbacks?.onStatusChange,
         'Callback',
         env,
         monitor,
@@ -261,7 +267,7 @@ async function runChecks(env: Env): Promise<void> {
 
     if (!update.isUp) {
       await safeCallback(
-        workerConfig.callbacks?.onIncident,
+        deps.staticConfig.callbacks?.onIncident,
         'Incident callback',
         env,
         monitor,
@@ -293,7 +299,6 @@ const Worker = {
     // Trigger check (internal binding only). If you route this worker publicly,
     // add a secret check here.
     if (url.pathname === '/trigger' && request.method === 'POST') {
-      // Run checks in background, return immediately
       ctx.waitUntil(runChecks(env));
       return Response.json({ success: true, message: 'Check triggered' }, { status: 202 });
     }

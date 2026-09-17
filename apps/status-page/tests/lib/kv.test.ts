@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { MonitorState } from '@flarewatch/shared';
-import { createEmptyMonitorState, resolveMonitorState } from '../../src/lib/monitor-state';
+import { createEmptyMonitorState, resolveMonitorState } from '@/lib/monitor-state';
 
 function createState(overrides: Partial<MonitorState> = {}): MonitorState {
   return {
@@ -16,7 +16,7 @@ function createState(overrides: Partial<MonitorState> = {}): MonitorState {
 
 describe('kv monitor state bootstrap', () => {
   it('returns initializing state when KV is empty and trigger dispatch succeeds', async () => {
-    const triggerCheck = vi.fn().mockResolvedValue(true);
+    const triggerCheck = vi.fn<Parameters<typeof resolveMonitorState>[1]>().mockResolvedValue(true);
 
     await expect(resolveMonitorState(null, triggerCheck)).resolves.toEqual(
       createEmptyMonitorState(),
@@ -25,14 +25,16 @@ describe('kv monitor state bootstrap', () => {
   });
 
   it('returns null when KV is empty and trigger dispatch fails', async () => {
-    const triggerCheck = vi.fn().mockResolvedValue(false);
+    const triggerCheck = vi
+      .fn<Parameters<typeof resolveMonitorState>[1]>()
+      .mockResolvedValue(false);
 
     await expect(resolveMonitorState(null, triggerCheck)).resolves.toBeNull();
     expect(triggerCheck).toHaveBeenCalledTimes(1);
   });
 
   it('triggers when state exists but has never been updated', async () => {
-    const triggerCheck = vi.fn().mockResolvedValue(true);
+    const triggerCheck = vi.fn<Parameters<typeof resolveMonitorState>[1]>().mockResolvedValue(true);
     const state = createState({ lastUpdate: 0 });
 
     await expect(resolveMonitorState(state, triggerCheck)).resolves.toBe(state);
@@ -40,7 +42,7 @@ describe('kv monitor state bootstrap', () => {
   });
 
   it('does not trigger when state already has data', async () => {
-    const triggerCheck = vi.fn().mockResolvedValue(true);
+    const triggerCheck = vi.fn<Parameters<typeof resolveMonitorState>[1]>().mockResolvedValue(true);
     const state = createState({ lastUpdate: 123 });
 
     await expect(resolveMonitorState(state, triggerCheck)).resolves.toBe(state);

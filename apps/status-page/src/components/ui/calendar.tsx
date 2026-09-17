@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { IconChevronDown, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import { DayPicker, getDefaultClassNames, type DayButton } from 'react-day-picker';
+import { format } from 'date-fns';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,7 @@ function Calendar({
       )}
       captionLayout={captionLayout}
       formatters={{
-        formatMonthDropdown: (date) => date.toLocaleString('default', { month: 'short' }),
+        formatMonthDropdown: (date) => format(date, 'MMM'),
         ...formatters,
       }}
       classNames={{
@@ -153,7 +154,7 @@ function CalendarDayButton({
     <Button
       variant="ghost"
       size="icon"
-      data-day={day.date.toLocaleDateString()}
+      data-day={format(day.date, 'yyyy-MM-dd')}
       data-selected-single={
         modifiers.selected &&
         !modifiers.range_start &&

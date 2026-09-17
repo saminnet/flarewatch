@@ -1,3 +1,4 @@
+import { isNonEmptyString } from '@flarewatch/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { EventsPage } from '@/components/routes/events-page';
 import { publicMonitorsQuery } from '@/lib/query/monitors.queries';
@@ -16,10 +17,9 @@ function getCurrentMonth(): string {
 }
 
 export const Route = createFileRoute('/events')({
-  validateSearch: (search: Record<string, unknown>): EventsSearch => {
+  validateSearch: (search): EventsSearch => {
     const month = isValidYearMonth(search.month) ? search.month : getCurrentMonth();
-    const monitor =
-      typeof search.monitor === 'string' && search.monitor.length > 0 ? search.monitor : undefined;
+    const monitor = isNonEmptyString(search.monitor) ? search.monitor : undefined;
     const type = search.type === 'incident' || search.type === 'maintenance' ? search.type : 'all';
     return { month, monitor, type };
   },

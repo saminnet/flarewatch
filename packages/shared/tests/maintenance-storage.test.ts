@@ -6,7 +6,7 @@ import {
   writeMaintenancesToStorage,
 } from '../src/maintenance-storage';
 
-class MockKv {
+class MockKv implements KvStore {
   readonly store = new Map<string, string>();
 
   async get(key: string, options?: { type?: 'json' | 'text' }): Promise<unknown> {
@@ -42,19 +42,19 @@ describe('maintenance storage', () => {
   });
 
   it('returns an empty list when the snapshot key is absent', async () => {
-    await expect(readMaintenancesFromStorage(kv as KvStore)).resolves.toEqual([]);
+    await expect(readMaintenancesFromStorage(kv)).resolves.toEqual([]);
   });
 
   it('reads a valid maintenances snapshot', async () => {
     const maintenances = [createMaintenance('maintenance-1')];
-    await writeMaintenancesToStorage(kv as KvStore, maintenances);
+    await writeMaintenancesToStorage(kv, maintenances);
 
-    await expect(readMaintenancesFromStorage(kv as KvStore)).resolves.toEqual(maintenances);
+    await expect(readMaintenancesFromStorage(kv)).resolves.toEqual(maintenances);
   });
 
   it('writes the maintenance snapshot to the supported KV key', async () => {
     const maintenances = [createMaintenance('maintenance-1'), createMaintenance('maintenance-2')];
-    await writeMaintenancesToStorage(kv as KvStore, maintenances);
+    await writeMaintenancesToStorage(kv, maintenances);
 
     await expect(kv.get('maintenances', { type: 'json' })).resolves.toEqual(maintenances);
   });

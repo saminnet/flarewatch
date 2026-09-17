@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vite-plus/test';
-import { getStatusColor, getStatusHexColor } from '../../src/lib/color';
+import { getStatusColor, getStatusHexColor } from '@/lib/color';
 
 describe('color utilities', () => {
   it('maps uptime thresholds to status token classes', () => {

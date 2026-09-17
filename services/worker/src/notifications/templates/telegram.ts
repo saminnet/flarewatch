@@ -1,4 +1,4 @@
-import type { TemplateContext, TemplateOutput } from './index';
+import type { TemplateContext, TemplateOutput } from './types';
 
 export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
   const emoji = ctx.isUp ? '✅' : '🔴';
@@ -30,7 +30,6 @@ export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
   };
 }
 
-/** Escape HTML special characters for Telegram */
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')

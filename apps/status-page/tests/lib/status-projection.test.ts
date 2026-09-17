@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { Maintenance, MonitorState, MonitorTarget } from '@flarewatch/shared';
-import type { PublicMonitor } from '../../src/lib/monitors';
-import {
-  projectBadgeStatus,
-  projectPublicData,
-  projectTimeline,
-} from '../../src/lib/status-projection';
+import type { PublicMonitor } from '@/lib/monitors';
+import { projectBadgeStatus, projectPublicData, projectTimeline } from '@/lib/status-projection';
 
 function createState(overrides: Partial<MonitorState> = {}): MonitorState {
   return {
