@@ -1,4 +1,4 @@
-import type { TemplateContext, TemplateOutput } from './index';
+import type { TemplateContext, TemplateOutput } from './types';
 
 export function discordTemplate(ctx: TemplateContext): TemplateOutput {
   // Discord uses decimal color values

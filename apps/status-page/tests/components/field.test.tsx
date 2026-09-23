@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vite-plus/test';
 
-import { Field, FieldError } from '../../src/components/ui/field';
+import { Field, FieldError } from '@/components/ui/field';
 
 afterEach(cleanup);
 

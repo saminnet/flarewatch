@@ -13,13 +13,11 @@ export type PageConfig = {
 
 export type PageConfigGroup = { [key: string]: string[] };
 
-export type PageConfigLink = {
+type PageConfigLink = {
   link: string;
   label: string;
   highlight?: boolean;
 };
-
-export type StatusPageConfig = PageConfig;
 
 export type MaintenanceConfig = {
   monitors?: string[];
@@ -66,12 +64,10 @@ export type MonitorTarget = {
   sslIgnoreSelfSigned?: boolean;
 };
 
-export type Monitor = MonitorTarget;
-
 export type WorkerConfig = {
   kvWriteCooldownMinutes?: number;
   monitors: MonitorTarget[];
-  notification?: Notification;
+  notification?: NotificationConfig;
   callbacks?: {
     onStatusChange?: (
       env: unknown,
@@ -91,7 +87,7 @@ export type WorkerConfig = {
   };
 };
 
-export type Notification = {
+export type NotificationConfig = {
   webhook?: WebhookConfig;
   timeZone?: string;
   gracePeriod?: number;
@@ -99,9 +95,13 @@ export type Notification = {
   skipErrorChangeNotification?: boolean;
 };
 
-export type NotificationConfig = Notification;
-
 export type NotificationTemplate = 'slack' | 'discord' | 'telegram' | 'ntfy' | 'text';
+
+/** A JSON object: every value that survives `JSON.parse` on an object payload. */
+export type JsonObject = { [key: string]: JsonValue };
+
+/** Any value representable as JSON: the contract for user-authored webhook payloads. */
+export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 
 type SingleWebhook = {
   url: string;
@@ -109,12 +109,11 @@ type SingleWebhook = {
   template?: NotificationTemplate;
   /** HTTP method (default: POST for templates, depends on payloadType otherwise) */
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
-  /** Custom headers */
   headers?: { [key: string]: string | number };
   /** Payload type (required if not using template) */
   payloadType?: 'param' | 'json' | 'x-www-form-urlencoded';
   /** Payload with $MSG placeholder (required if not using template) */
-  payload?: Record<string, unknown> | string;
+  payload?: JsonValue;
   /** Request timeout in ms (default: 5000) */
   timeout?: number;
 };
@@ -124,15 +123,13 @@ export type Webhook = SingleWebhook;
 export type WebhookConfig = SingleWebhook | SingleWebhook[];
 
 export type RuntimeConfig = {
-  monitors: Monitor[];
-  statusPage?: StatusPageConfig;
+  monitors: MonitorTarget[];
+  statusPage?: PageConfig;
   notification?: NotificationConfig;
   kvWriteCooldownMinutes?: number;
 };
 
-export type RuntimeConfigEnvelopeMetadata = Record<string, unknown>;
-
-export type RuntimeConfigEnvelope = RuntimeConfigEnvelopeMetadata & {
+export type RuntimeConfigEnvelope = JsonObject & {
   config: RuntimeConfig;
   _deployment?: unknown;
 };
@@ -161,7 +158,7 @@ export type MonitorState = {
       /** Unix timestamps (seconds). One per error segment. */
       start: number[];
       /** Unix timestamp (seconds). Undefined if it's still open. */
-      end: number | undefined;
+      end?: number | undefined;
       error: string[];
     }[]
   >;

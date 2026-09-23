@@ -5,7 +5,9 @@ import {
   DEFAULT_HTTP_TIMEOUT,
   failure,
   fetchWithTimeout,
+  type Fetcher,
   getErrorMessage,
+  isJsonObject,
 } from '@flarewatch/shared';
 
 type ProxyEnv = {
@@ -13,17 +15,16 @@ type ProxyEnv = {
 };
 
 function isCheckResult(value: unknown): value is CheckResult {
-  if (!value || typeof value !== 'object') return false;
+  if (!isJsonObject(value)) return false;
 
-  const result = value as Record<string, unknown>;
-  if (result.ok === true) {
-    return typeof result.latency === 'number';
+  if (value.ok === true) {
+    return typeof value.latency === 'number';
   }
 
-  if (result.ok === false) {
+  if (value.ok === false) {
     return (
-      typeof result.error === 'string' &&
-      (result.latency === undefined || typeof result.latency === 'number')
+      typeof value.error === 'string' &&
+      (value.latency === undefined || typeof value.latency === 'number')
     );
   }
 
@@ -31,15 +32,14 @@ function isCheckResult(value: unknown): value is CheckResult {
 }
 
 function isProxyCheckResponse(value: unknown): value is CheckResultWithLocation {
-  if (!value || typeof value !== 'object') return false;
-
-  const response = value as Record<string, unknown>;
-  return typeof response.location === 'string' && isCheckResult(response.result);
+  if (!isJsonObject(value)) return false;
+  return typeof value.location === 'string' && isCheckResult(value.result);
 }
 
 export async function checkExternalProxy(
   target: MonitorTarget,
   env?: ProxyEnv,
+  fetcher: Fetcher = fetchWithTimeout,
 ): Promise<CheckResultWithLocation> {
   if (!target.checkProxy) {
     return {
@@ -50,7 +50,7 @@ export async function checkExternalProxy(
 
   try {
     const timeout = target.timeout ?? DEFAULT_HTTP_TIMEOUT;
-    const response = await fetchWithTimeout(target.checkProxy, {
+    const response = await fetcher(target.checkProxy, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -70,7 +70,7 @@ export async function checkExternalProxy(
       };
     }
 
-    const data = (await response.json()) as unknown;
+    const data: unknown = await response.json();
     if (!isProxyCheckResponse(data)) {
       return {
         location: 'ERROR',

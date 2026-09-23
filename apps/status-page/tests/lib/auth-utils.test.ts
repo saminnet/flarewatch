@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { getAdminSessionCookie, timingSafeEqual, validateSession } from '../../src/lib/auth-utils';
-import { isSessionExpiredError, SessionExpiredError } from '../../src/lib/query/auth.mutations';
+import { getAdminSessionCookie, timingSafeEqual, validateSession } from '@/lib/auth-utils';
+import { isSessionExpiredError, SessionExpiredError } from '@/lib/query/auth.mutations';
 
 type TestKv = Parameters<typeof validateSession>[0];
 
 function createKv(value: string | null, shouldThrow = false): TestKv {
-  return {
+  const kv = {
     get: async () => {
       if (shouldThrow) throw new Error('KV unavailable');
       return value;
     },
-  } as unknown as TestKv;
+  };
+  return kv as TestKv & typeof kv;
 }
 
 describe('auth-utils', () => {
@@ -42,6 +43,17 @@ describe('auth-utils', () => {
     await expect(validateSession(createKv(null), 'abc')).resolves.toBeNull();
     await expect(validateSession(createKv('{bad json'), 'abc')).resolves.toBeNull();
     await expect(validateSession(createKv(null, true), 'abc')).resolves.toBeNull();
+  });
+
+  it('rejects well-formed JSON that fails the session shape guard', async () => {
+    await expect(validateSession(createKv('{}'), 'abc')).resolves.toBeNull();
+    await expect(validateSession(createKv('[]'), 'abc')).resolves.toBeNull();
+    await expect(validateSession(createKv('"session"'), 'abc')).resolves.toBeNull();
+    await expect(validateSession(createKv('{"ip":"127.0.0.1"}'), 'abc')).resolves.toBeNull();
+    await expect(
+      validateSession(createKv('{"createdAt":"123","ip":null}'), 'abc'),
+    ).resolves.toBeNull();
+    await expect(validateSession(createKv('{"createdAt":123,"ip":5}'), 'abc')).resolves.toBeNull();
   });
 
   it('detects session expiry errors', () => {

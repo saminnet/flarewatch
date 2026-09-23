@@ -1,9 +1,6 @@
 import { format } from 'date-fns';
 
-/**
- * Parse a "yyyy-MM" string into year and month numbers.
- */
-export function parseYearMonth(value: string): { year: number; month: number } {
+export function parseYearMonth(value: string) {
   const [yearStr = '1970', monthStr = '01'] = value.split('-');
   return {
     year: Number(yearStr),
@@ -11,9 +8,6 @@ export function parseYearMonth(value: string): { year: number; month: number } {
   };
 }
 
-/**
- * Validate that a value is a valid "yyyy-MM" string.
- */
 export function isValidYearMonth(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const match = value.match(/^(\d{4})-(\d{2})$/);
@@ -22,19 +16,13 @@ export function isValidYearMonth(value: unknown): value is string {
   return month >= 1 && month <= 12;
 }
 
-/**
- * Shift a "yyyy-MM" string by a number of months.
- */
 export function shiftYearMonth(value: string, deltaMonths: number): string {
   const { year, month } = parseYearMonth(value);
   const shifted = new Date(Date.UTC(year, month - 1 + deltaMonths, 1));
   return shifted.toISOString().slice(0, 7);
 }
 
-/**
- * Get UTC month boundaries for a "yyyy-MM" string.
- */
-export function getUtcMonthBounds(value: string): { monthStart: Date; monthEnd: Date } {
+export function getUtcMonthBounds(value: string) {
   const { year, month } = parseYearMonth(value);
   const monthIndex = month - 1;
   const monthStart = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0));
@@ -50,19 +38,8 @@ export function formatUtc(date: Date, pattern: string): string {
   return format(toUtcViewDate(date), pattern);
 }
 
-/**
- * Get an ISO date key (yyyy-MM-dd) for a UTC midnight Date, suitable for Map lookups.
- */
 export function getDateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-/**
- * Format a date/time using a fixed, locale-independent format.
- * This avoids SSR hydration mismatches caused by different server/client locales.
- */
-export function formatDateTime(date: Date): string {
-  return format(date, 'MMM d, yyyy h:mm a');
 }
 
 export interface CalendarDay {
@@ -78,10 +55,7 @@ export interface CalendarMonthGrid {
 }
 
 /**
- * Generate calendar grids for the given number of months.
- * When `endYearMonth` is provided (e.g. "2026-02"), the window ends at that month.
- * Otherwise it ends at the month of `nowUtc`.
- * Each grid uses ISO week layout (Mon–Sun columns), with `null` padding for cells outside the month.
+ * Calendar window ends at `endYearMonth` (or the month of `nowUtc`); weeks are Mon–Sun, `null`-padded.
  */
 export function generateCalendarGrids(
   nowUtc: Date,
@@ -93,7 +67,6 @@ export function generateCalendarGrids(
   const todayDate = nowUtc.getUTCDate();
   const todayMidnight = Date.UTC(todayYear, todayMonth, todayDate);
 
-  // Determine the "end" month for the window
   let endYear = todayYear;
   let endMonth = todayMonth;
   if (endYearMonth) {
@@ -152,11 +125,7 @@ export function generateCalendarGrids(
   return grids;
 }
 
-/**
- * Format a duration in milliseconds to a human-readable string.
- * @param ms - Duration in milliseconds
- * @param options.minUnit - Minimum unit to show: 'seconds' (default) or 'minutes'
- */
+/** Human duration like "2d 3h"; `minUnit: 'minutes'` stops the breakdown at minutes (default 'seconds'). */
 export function formatDuration(ms: number, options?: { minUnit?: 'seconds' | 'minutes' }): string {
   if (ms <= 0) return '0m';
   const seconds = Math.floor(ms / 1000);

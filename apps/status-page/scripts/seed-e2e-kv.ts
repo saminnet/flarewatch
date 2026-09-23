@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Maintenance, MonitorState } from '@flarewatch/shared';
+import { isJsonObject } from '@flarewatch/shared/utils';
 
 const appDir = process.cwd();
 const persistDir = path.join(appDir, '.wrangler/e2e-state');
@@ -10,8 +11,7 @@ const envFilePath = path.join(appDir, '.wrangler/e2e.dev.vars');
 const configPath = path.join(appDir, 'dist/server/wrangler.json');
 const e2eConfigPath = path.join(appDir, 'dist/server/e2e-wrangler.json');
 
-// Public, deterministic credentials for the local Playwright Wrangler instance only.
-// This is not a production secret and should never be used outside seeded E2E state.
+// Public deterministic credentials for the local Playwright instance only; never a production secret.
 const E2E_ADMIN_AUTH_SECRET = JSON.stringify({
   username: 'e2e-admin',
   salt: 'ZmxhcmV3YXRjaC1lMmUtc2FsdA',
@@ -57,12 +57,14 @@ rmSync(fixtureDir, { recursive: true, force: true });
 mkdirSync(fixtureDir, { recursive: true });
 mkdirSync(path.dirname(e2eConfigPath), { recursive: true });
 
-const wranglerConfig = JSON.parse(readFileSync(configPath, 'utf8')) as {
-  vars?: Record<string, unknown>;
-};
-wranglerConfig.vars = {
-  ...wranglerConfig.vars,
-  FLAREWATCH_ADMIN_BASIC_AUTH: E2E_ADMIN_AUTH_SECRET,
+const parsedWranglerConfig: unknown = JSON.parse(readFileSync(configPath, 'utf8'));
+if (!isJsonObject(parsedWranglerConfig)) {
+  throw new Error(`Expected an object in ${configPath}`);
+}
+const existingVars = isJsonObject(parsedWranglerConfig.vars) ? parsedWranglerConfig.vars : {};
+const wranglerConfig = {
+  ...parsedWranglerConfig,
+  vars: { ...existingVars, FLAREWATCH_ADMIN_BASIC_AUTH: E2E_ADMIN_AUTH_SECRET },
 };
 writeFileSync(e2eConfigPath, `${JSON.stringify(wranglerConfig, null, 2)}\n`);
 writeFileSync(envFilePath, `FLAREWATCH_ADMIN_BASIC_AUTH='${E2E_ADMIN_AUTH_SECRET}'\n`);

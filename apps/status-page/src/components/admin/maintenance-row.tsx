@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { formatDateTime } from '@/lib/date';
+import { formatUtc } from '@/lib/date';
 import {
   IconPencil,
   IconTrash,
@@ -57,7 +57,6 @@ export function MaintenanceRow({
       <div className="flex-1 p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            {/* Header row */}
             <div className="flex items-center gap-2 flex-wrap">
               <StatusIcon
                 className={cn(
@@ -81,12 +80,12 @@ export function MaintenanceRow({
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
               <span className="flex items-center gap-1">
                 <span className="font-medium">{t('field.from')}:</span>
-                {formatDateTime(startDate)}
+                {formatUtc(startDate, "MMM d, yyyy h:mm a 'UTC'")}
               </span>
               {endDate && (
                 <span className="flex items-center gap-1">
                   <span className="font-medium">{t('field.to')}:</span>
-                  {formatDateTime(endDate)}
+                  {formatUtc(endDate, "MMM d, yyyy h:mm a 'UTC'")}
                 </span>
               )}
             </div>

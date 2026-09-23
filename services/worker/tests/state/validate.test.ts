@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vite-plus/test';
 import { createInitialState } from '../../src/state/incidents';
-import { isMonitorState } from '../../src/state/validate';
+import { isMonitorState } from '@flarewatch/shared';
 
 describe('isMonitorState', () => {
   it('accepts createInitialState()', () => {
@@ -12,17 +12,27 @@ describe('isMonitorState', () => {
   });
 
   it('rejects invalid incident shape', () => {
-    const state = createInitialState() as unknown as Record<string, unknown>;
-    state['incident'] = { test: 'nope' };
+    const state = { ...createInitialState(), incident: { test: 'nope' } };
 
     expect(isMonitorState(state)).toBe(false);
   });
 
   it('rejects invalid latency shape', () => {
-    const state = createInitialState() as unknown as Record<string, unknown>;
-    state['latency'] = { test: { recent: [{ loc: 1, ping: 'x', time: 0 }] } };
+    const state = {
+      ...createInitialState(),
+      latency: { test: { recent: [{ loc: 1, ping: 'x', time: 0 }] } },
+    };
 
     expect(isMonitorState(state)).toBe(false);
+  });
+
+  it('accepts an open incident, whose end JSON omits', () => {
+    const state = {
+      ...createInitialState(),
+      incident: { test: [{ start: [1700000000], error: ['timeout'] }] },
+    };
+
+    expect(isMonitorState(state)).toBe(true);
   });
 
   it('accepts sslCertificates when well-formed', () => {

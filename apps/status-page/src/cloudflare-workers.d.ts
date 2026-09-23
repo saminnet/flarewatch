@@ -1,4 +1,4 @@
-declare global {
+declare namespace Cloudflare {
   interface Env {
     CONFIG_KV?: KVNamespace;
     STATE_KV?: KVNamespace;
@@ -10,6 +10,6 @@ declare global {
 }
 
 declare module 'cloudflare:workers' {
-  const workers: { env: Env };
+  const workers: { env: Cloudflare.Env };
   export default workers;
 }

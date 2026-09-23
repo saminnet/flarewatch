@@ -3,6 +3,7 @@ import {
   type CheckResult,
   type MonitorChecker,
   type FetchOptions,
+  type Fetcher,
   success,
   failure,
   fetchWithTimeout,
@@ -11,13 +12,13 @@ import {
   createLogger,
   getErrorMessage,
   isTimeoutError,
+  toHeaders,
 } from '@flarewatch/shared';
 
 const log = createLogger('HTTP');
 
 const USER_AGENT = 'FlareWatch/1.0 (+https://github.com/saminnet/flarewatch)';
 
-/** Cloudflare-specific fetch options */
 interface CloudflareFetchOptions extends FetchOptions {
   cf?: {
     cacheTtlByStatus?: Record<string, number>;
@@ -25,11 +26,13 @@ interface CloudflareFetchOptions extends FetchOptions {
 }
 
 export class HttpChecker implements MonitorChecker {
+  constructor(private readonly fetcher: Fetcher = fetchWithTimeout) {}
+
   async check(target: MonitorTarget): Promise<CheckResult> {
     const startTime = performance.now();
 
     try {
-      const headers = new Headers(target.headers as HeadersInit);
+      const headers = toHeaders(target.headers);
       if (!headers.has('user-agent')) {
         headers.set('user-agent', USER_AGENT);
       }
@@ -43,7 +46,7 @@ export class HttpChecker implements MonitorChecker {
           cacheTtlByStatus: { '100-599': -1 }, // Never cache
         },
       };
-      const response = await fetchWithTimeout(target.target, options);
+      const response = await this.fetcher(target.target, options);
 
       const latency = Math.round(performance.now() - startTime);
       log.info('Response', { name: target.name, status: response.status, latency });
@@ -77,5 +80,4 @@ export class HttpChecker implements MonitorChecker {
   }
 }
 
-/** Singleton instance */
 export const httpChecker = new HttpChecker();

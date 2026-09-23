@@ -31,6 +31,25 @@ catalog:
   react-i18next: 17.0.12
   tailwindcss: 4.3.3
   typescript: 7.0.2
-  vite: 8.2.2
+  vite: npm:@voidzero-dev/vite-plus-core@0.3.2
   wrangler: 4.108.0
   zod: 4.5.4
+  vite-plus: 0.3.2
+overrides:
+  vite@*: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
+minimumReleaseAgeExclude:
+  - vite-plus
+  - '@voidzero-dev/*'
+  - oxlint
+  - '@oxlint/*'
+  - oxlint-tsgolint
+  - '@oxlint-tsgolint/*'
+  - oxfmt
+  - '@oxfmt/*'
+  - vitest
+  - '@vitest/*'

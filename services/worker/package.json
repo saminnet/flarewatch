@@ -15,7 +15,7 @@
   "dependencies": {
     "@flarewatch/config": "workspace:*",
     "@flarewatch/shared": "workspace:*",
-    "zod": "^4.5.4"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

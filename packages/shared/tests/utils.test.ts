@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vite-plus/test';
 import {
+  createLogger,
+  DEFAULT_HTTP_TIMEOUT,
   fetchWithTimeout,
   TimeoutError,
+  toHeaders,
   withTimeout,
   validateHttpResponse,
   parseTcpTarget,
@@ -109,7 +112,7 @@ describe('fetchWithTimeout', () => {
   });
 
   it('calls fetch with provided URL and options', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(new Response('ok'));
+    const mockFetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('ok'));
     globalThis.fetch = mockFetch;
 
     const responsePromise = fetchWithTimeout('https://example.com', {
@@ -121,14 +124,15 @@ describe('fetchWithTimeout', () => {
     await responsePromise;
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const [url, options] = mockFetch.mock.calls[0] ?? [];
     expect(url).toBe('https://example.com');
-    expect(options.method).toBe('POST');
-    expect(options.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(options?.method).toBe('POST');
+    expect(options?.headers).toEqual({ 'Content-Type': 'application/json' });
   });
 
   it('uses default timeout of 10000ms', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(new Response('ok'));
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+    const mockFetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('ok'));
     globalThis.fetch = mockFetch;
 
     const responsePromise = fetchWithTimeout('https://example.com');
@@ -136,12 +140,12 @@ describe('fetchWithTimeout', () => {
     await vi.runAllTimersAsync();
     await responsePromise;
 
-    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(options.signal).toBeDefined();
+    expect(timeoutSpy).toHaveBeenCalledWith(DEFAULT_HTTP_TIMEOUT);
+    timeoutSpy.mockRestore();
   });
 
   it('passes body when provided', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(new Response('ok'));
+    const mockFetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('ok'));
     globalThis.fetch = mockFetch;
 
     const responsePromise = fetchWithTimeout('https://example.com', {
@@ -152,13 +156,13 @@ describe('fetchWithTimeout', () => {
     await vi.runAllTimersAsync();
     await responsePromise;
 
-    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(options.body).toBe('{"test":true}');
+    const [, options] = mockFetch.mock.calls[0] ?? [];
+    expect(options?.body).toBe('{"test":true}');
   });
 
   it('returns response on success', async () => {
     const mockResponse = new Response('test body', { status: 200 });
-    globalThis.fetch = vi.fn().mockResolvedValue(mockResponse);
+    globalThis.fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(mockResponse);
 
     const responsePromise = fetchWithTimeout('https://example.com');
     await vi.runAllTimersAsync();
@@ -169,7 +173,9 @@ describe('fetchWithTimeout', () => {
   });
 
   it('propagates fetch errors', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+    globalThis.fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockRejectedValue(new Error('Network error'));
 
     const responsePromise = fetchWithTimeout('https://example.com');
     vi.runAllTimers();
@@ -193,14 +199,13 @@ describe('validateHttpResponse', () => {
     it('accepts 2xx status codes by default', async () => {
       const monitor = createMonitor();
 
-      // Note: Response constructor requires status 200-599 and 204/304 must have null body
+      // Response requires status 200-599 and 204/304 must have null body
       for (const status of [200, 201, 299]) {
         const response = new Response('ok', { status });
         const result = await validateHttpResponse(monitor, response);
         expect(result).toBeNull();
       }
 
-      // 204 No Content must have null body
       const response204 = new Response(null, { status: 204 });
       expect(await validateHttpResponse(monitor, response204)).toBeNull();
     });
@@ -304,17 +309,14 @@ describe('validateHttpResponse', () => {
         responseForbiddenKeyword: 'error',
       });
 
-      // Has required, no forbidden - passes
       const goodResponse = new Response('status: ok', { status: 200 });
       expect(await validateHttpResponse(monitor, goodResponse)).toBeNull();
 
-      // Missing required - fails
       const missingRequired = new Response('status: done', { status: 200 });
       expect(await validateHttpResponse(monitor, missingRequired)).toBe(
         'Required keyword "ok" not found in response',
       );
 
-      // Has forbidden - fails (checked after required)
       const hasForbidden = new Response('ok but error', { status: 200 });
       expect(await validateHttpResponse(monitor, hasForbidden)).toBe(
         'Forbidden keyword "error" found in response',
@@ -347,7 +349,6 @@ describe('validateHttpResponse', () => {
 
       const result = await validateHttpResponse(monitor, response);
 
-      // Status check fails first
       expect(result).toBe('Expected 2xx status, got 500');
     });
   });
@@ -468,5 +469,53 @@ describe('failure', () => {
 
     expect(result.latency).toBe(0);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('toHeaders', () => {
+  it('converts numeric values to strings and keeps string values', () => {
+    const headers = toHeaders({ 'X-Retry': 3, Accept: 'application/json' });
+
+    expect(headers.get('X-Retry')).toBe('3');
+    expect(headers.get('Accept')).toBe('application/json');
+  });
+
+  it('returns empty headers when none are configured', () => {
+    const headers = toHeaders();
+
+    expect([...headers.keys()]).toStrictEqual([]);
+  });
+});
+
+describe('createLogger', () => {
+  it('caller data cannot overwrite the envelope fields', () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, 'info').mockImplementation((output: unknown) => {
+      if (typeof output === 'string') lines.push(output);
+    });
+    const log = createLogger('Test');
+
+    log.info('real message', {
+      level: 'debug',
+      message: 'fake',
+      timestamp: 'stale',
+      component: 'Fake',
+    });
+
+    expect(lines).toHaveLength(1);
+    const entry = JSON.parse(lines[0]!) as {
+      level: string;
+      message: string;
+      timestamp: string;
+      component: string;
+    };
+    expect(entry).toStrictEqual({
+      level: 'info',
+      message: 'real message',
+      component: 'Test',
+      timestamp: entry.timestamp,
+    });
+    expect(typeof entry.timestamp).toBe('string');
+    spy.mockRestore();
   });
 });

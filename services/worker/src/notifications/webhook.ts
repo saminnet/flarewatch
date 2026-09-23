@@ -1,11 +1,17 @@
 import {
+  type JsonValue,
   type MonitorTarget,
+  type Webhook,
   type WebhookConfig,
   fetchWithTimeout,
+  type Fetcher,
   createLogger,
   getErrorMessage,
+  isJsonObject,
+  toHeaders,
 } from '@flarewatch/shared';
-import { getTemplate, type TemplateContext } from './templates';
+import { getTemplate } from './templates';
+import type { TemplateContext } from './templates/types';
 
 const log = createLogger('Webhook');
 
@@ -29,7 +35,7 @@ export interface NotificationContext {
   timeZone: string;
 }
 
-export interface WebhookResult {
+interface WebhookResult {
   success: boolean;
   statusCode?: number;
   error?: string;
@@ -64,24 +70,47 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
   ].join('\n');
 }
 
-function applyMessageTemplate(payload: unknown, message: string): unknown {
+function applyTemplate(payload: JsonValue, message: string): JsonValue {
   if (payload === '$MSG') {
     return message;
   }
 
   if (Array.isArray(payload)) {
-    return payload.map((item) => applyMessageTemplate(item, message));
+    return payload.map((item) => applyTemplate(item, message));
   }
 
-  if (typeof payload === 'object' && payload !== null) {
-    const result: Record<string, unknown> = {};
+  if (isJsonObject(payload)) {
+    const result: { [key: string]: JsonValue } = {};
     for (const [key, value] of Object.entries(payload)) {
-      result[key] = applyMessageTemplate(value, message);
+      result[key] = applyTemplate(value, message);
     }
     return result;
   }
 
   return payload;
+}
+
+/**
+ * An array repeats its key, the way an HTML form sends a multi-value field. An object has no form
+ * representation, so it goes as JSON. `null` sends an empty field, not the text "null".
+ */
+function appendParams(target: URLSearchParams, payload: JsonValue | undefined): void {
+  if (!isJsonObject(payload)) return;
+  for (const [key, value] of Object.entries(payload)) {
+    appendFormValue(target, key, value);
+  }
+}
+
+function appendFormValue(target: URLSearchParams, key: string, value: JsonValue): void {
+  if (Array.isArray(value)) {
+    for (const item of value) appendFormValue(target, key, item);
+    return;
+  }
+  if (value === null) {
+    target.append(key, '');
+    return;
+  }
+  target.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
 }
 
 function buildTemplateContext(ctx: NotificationContext): TemplateContext {
@@ -106,7 +135,10 @@ function buildTemplateContext(ctx: NotificationContext): TemplateContext {
 }
 
 export class WebhookNotifier {
-  constructor(private config: WebhookConfig) {}
+  constructor(
+    private config: WebhookConfig,
+    private readonly fetcher: Fetcher = fetchWithTimeout,
+  ) {}
 
   async send(ctx: NotificationContext, message: string): Promise<WebhookResult[]> {
     const configs = Array.isArray(this.config) ? this.config : [this.config];
@@ -115,7 +147,7 @@ export class WebhookNotifier {
   }
 
   private async sendSingle(
-    webhook: Exclude<WebhookConfig, Array<unknown>>,
+    webhook: Webhook,
     ctx: NotificationContext,
     message: string,
   ): Promise<WebhookResult> {
@@ -129,7 +161,7 @@ export class WebhookNotifier {
         const templateCtx = buildTemplateContext(ctx);
         const output = getTemplate(template)(templateCtx);
 
-        const requestHeaders = new Headers(headers as Record<string, string> | undefined);
+        const requestHeaders = toHeaders(headers);
         for (const [key, value] of Object.entries(output.headers)) {
           if (!requestHeaders.has(key)) {
             requestHeaders.set(key, value);
@@ -142,23 +174,28 @@ export class WebhookNotifier {
           body: output.body,
         };
       } else {
-        const templatedPayload = applyMessageTemplate(payload, message);
+        // `param` and `x-www-form-urlencoded` carry the message in the payload object. Anything
+        // that is not an object encodes to nothing, and a silently empty alert is worse than a
+        // reported failure.
+        if (payloadType !== undefined && payloadType !== 'json' && !isJsonObject(payload)) {
+          return { success: false, error: `Webhook payloadType '${payloadType}' needs a payload` };
+        }
 
-        requestInit = this.buildRequest(
-          payloadType ?? 'json',
-          method,
-          headers as Record<string, string> | undefined,
-          templatedPayload,
-        );
+        const templatedPayload =
+          payload === undefined ? undefined : applyTemplate(payload, message);
+
+        requestInit = this.buildRequest(payloadType ?? 'json', method, headers, templatedPayload);
 
         if (payloadType === 'param') {
-          finalUrl = this.buildUrlWithParams(url, templatedPayload as Record<string, unknown>);
+          const urlWithParams = new URL(url);
+          appendParams(urlWithParams.searchParams, templatedPayload);
+          finalUrl = urlWithParams.toString();
         }
       }
 
       log.info('Sending', { url: finalUrl });
 
-      const response = await fetchWithTimeout(finalUrl, {
+      const response = await this.fetcher(finalUrl, {
         ...requestInit,
         timeout,
       });
@@ -185,10 +222,10 @@ export class WebhookNotifier {
   private buildRequest(
     payloadType: string,
     method: string | undefined,
-    headers: Record<string, string> | undefined,
-    payload: unknown,
+    headers: Webhook['headers'],
+    payload: JsonValue | undefined,
   ): RequestInit {
-    const requestHeaders = new Headers(headers);
+    const requestHeaders = toHeaders(headers);
 
     switch (payloadType) {
       case 'json': {
@@ -207,9 +244,7 @@ export class WebhookNotifier {
           requestHeaders.set('content-type', 'application/x-www-form-urlencoded');
         }
         const formData = new URLSearchParams();
-        for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
-          formData.append(key, String(value));
-        }
+        appendParams(formData, payload);
         return {
           method: method ?? 'POST',
           headers: requestHeaders,
@@ -225,17 +260,12 @@ export class WebhookNotifier {
         };
     }
   }
-
-  private buildUrlWithParams(baseUrl: string, params: Record<string, unknown>): string {
-    const url = new URL(baseUrl);
-    for (const [key, value] of Object.entries(params)) {
-      url.searchParams.append(key, String(value));
-    }
-    return url.toString();
-  }
 }
 
-export function createNotifier(config: WebhookConfig | undefined): WebhookNotifier | null {
+export function createNotifier(
+  config: WebhookConfig | undefined,
+  fetcher: Fetcher = fetchWithTimeout,
+): WebhookNotifier | null {
   if (!config) return null;
-  return new WebhookNotifier(config);
+  return new WebhookNotifier(config, fetcher);
 }

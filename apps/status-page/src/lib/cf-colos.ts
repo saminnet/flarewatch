@@ -5,7 +5,7 @@ const REGION_NAMES =
     ? new Intl.DisplayNames(['en'], { type: 'region' })
     : null;
 
-export type CloudflareColoInfo = {
+type CloudflareColoInfo = {
   code: string;
   city: string;
   countryCode: string;
@@ -19,7 +19,7 @@ function lookupCloudflareColo(code: string): CloudflareColoInfo | null {
   const normalized = code.trim().toUpperCase();
   if (!isIataCode(normalized)) return null;
 
-  const entry = CF_COLO_MAP[normalized];
+  const entry = CF_COLO_MAP.get(normalized);
   if (!entry) return null;
   return { code: normalized, city: entry.city, countryCode: entry.countryCode };
 }

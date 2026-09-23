@@ -33,15 +33,14 @@ export function getMaintenanceStatus(
   return 'scheduled';
 }
 
-export interface FilteredMaintenances {
+interface FilteredMaintenances {
   active: Maintenance[];
   upcoming: Maintenance[];
   past: Maintenance[];
 }
 
-/** ISO 8601 strings sort lexicographically — no Date parsing needed. */
 export function compareByStart(a: Maintenance, b: Maintenance): number {
-  return a.start < b.start ? -1 : a.start > b.start ? 1 : 0;
+  return new Date(a.start).getTime() - new Date(b.start).getTime();
 }
 
 export function filterMaintenances(
@@ -85,14 +84,16 @@ export function formatDateRange(start: Date, end: Date | null): string {
   return `${startStr} - ${endStr}`;
 }
 
-export type MaintenanceColors = {
+type MaintenanceColors = {
   bg: string;
   border: string;
   icon: string;
   dot: string;
 };
 
-const MAINTENANCE_COLOR_MAP: Record<string, MaintenanceColors> = {
+type MaintenanceColorName = 'blue' | 'yellow' | 'red' | 'green';
+
+const MAINTENANCE_COLOR_MAP = {
   blue: {
     bg: 'bg-blue-50 dark:bg-blue-950/30',
     border: 'border-blue-200 dark:border-blue-800',
@@ -117,12 +118,13 @@ const MAINTENANCE_COLOR_MAP: Record<string, MaintenanceColors> = {
     icon: 'text-emerald-500',
     dot: 'bg-emerald-500',
   },
-};
+} satisfies Record<MaintenanceColorName, MaintenanceColors>;
 
-/**
- * Default surface for maintenances with no authored severity color — backed by the
- * `--status-maintenance-*` runtime tokens. Authored severity colors keep the palette above.
- */
+function isMaintenanceColorName(value: string): value is MaintenanceColorName {
+  return value in MAINTENANCE_COLOR_MAP;
+}
+
+/** Default for maintenances with no authored severity color; authored colors keep the palette above. */
 const DEFAULT_MAINTENANCE_COLORS: MaintenanceColors = {
   bg: 'bg-status-maintenance-bg',
   border: 'border-status-maintenance-border',
@@ -131,8 +133,8 @@ const DEFAULT_MAINTENANCE_COLORS: MaintenanceColors = {
 };
 
 export function getMaintenanceColors(color?: string): MaintenanceColors {
-  if (!color) return DEFAULT_MAINTENANCE_COLORS;
-  return MAINTENANCE_COLOR_MAP[color] ?? DEFAULT_MAINTENANCE_COLORS;
+  if (!color || !isMaintenanceColorName(color)) return DEFAULT_MAINTENANCE_COLORS;
+  return MAINTENANCE_COLOR_MAP[color];
 }
 
 export const SEVERITY_OPTIONS = [
@@ -158,7 +160,7 @@ export const SEVERITY_OPTIONS = [
   },
 ] as const;
 
-export type SeverityOption = (typeof SEVERITY_OPTIONS)[number];
+type SeverityOption = (typeof SEVERITY_OPTIONS)[number];
 
 export function getSeverityOption(color?: string): SeverityOption {
   return SEVERITY_OPTIONS.find((s) => s.value === color) ?? SEVERITY_OPTIONS[1];

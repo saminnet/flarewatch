@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vite-plus/test';
 
-import { MonthPicker } from '../../src/components/ui/month-picker';
+import { MonthPicker } from '@/components/ui/month-picker';
 
 afterEach(cleanup);
 

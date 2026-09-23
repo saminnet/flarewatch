@@ -14,7 +14,7 @@ import {
 
 const log = createLogger('TCP');
 
-export class TcpChecker implements MonitorChecker {
+class TcpChecker implements MonitorChecker {
   async check(target: MonitorTarget): Promise<CheckResult> {
     const startTime = performance.now();
     const timeout = target.timeout ?? DEFAULT_HTTP_TIMEOUT;
@@ -25,16 +25,13 @@ export class TcpChecker implements MonitorChecker {
       // Dynamic import to avoid bundling issues
       const { connect } = await import(/* webpackIgnore: true */ 'cloudflare:sockets');
 
-      // Create socket connection
       const socket = connect({
         hostname,
         port,
       });
 
-      // Wait for connection with timeout
       await withTimeout(socket.opened, timeout);
 
-      // Connection successful, close it
       await socket.close();
 
       const latency = Math.round(performance.now() - startTime);
@@ -56,5 +53,4 @@ export class TcpChecker implements MonitorChecker {
   }
 }
 
-/** Singleton instance */
 export const tcpChecker = new TcpChecker();

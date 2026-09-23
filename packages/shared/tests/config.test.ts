@@ -5,7 +5,7 @@ import {
   loadRuntimeConfig,
   parseRuntimeConfig,
 } from '../src/config';
-import { KV_KEYS, type KvStore, type RuntimeConfig } from '../src/types';
+import { KV_KEYS, type JsonValue, type KvStore, type RuntimeConfig } from '../src/types';
 
 class MockKv implements KvStore {
   readonly reads: Array<{ key: string; type?: 'json' | 'text' }> = [];
@@ -74,6 +74,25 @@ describe('runtime config contract', () => {
 
     expect(isStoredConfigEnvelope(envelope)).toBe(true);
     expect(parseRuntimeConfig(envelope)).toEqual(config);
+  });
+
+  it('rejects param and form webhook payloads that are not objects', () => {
+    const configWithWebhookPayload = (
+      payloadType: 'param' | 'json' | 'x-www-form-urlencoded',
+      payload: JsonValue,
+    ) =>
+      createRuntimeConfig({
+        notification: {
+          webhook: { url: 'https://hooks.example.com', payloadType, payload },
+        },
+      });
+
+    expect(isValidRuntimeConfig(configWithWebhookPayload('param', '$MSG'))).toBe(false);
+    expect(
+      isValidRuntimeConfig(configWithWebhookPayload('x-www-form-urlencoded', ['a', 'b'])),
+    ).toBe(false);
+    expect(isValidRuntimeConfig(configWithWebhookPayload('param', { msg: '$MSG' }))).toBe(true);
+    expect(isValidRuntimeConfig(configWithWebhookPayload('json', 'plain text'))).toBe(true);
   });
 
   it('rejects a stored config envelope when the nested config is invalid', () => {

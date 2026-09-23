@@ -21,7 +21,7 @@ export function CalendarMonth({
   onDayClick,
 }: CalendarMonthProps) {
   const { t } = useTranslation();
-  const weekdays = (t('calendar.weekdays') as string).split(',');
+  const weekdays = t('calendar.weekdays').split(',');
 
   return (
     <div className="rounded-lg border border-border bg-card p-2.5">

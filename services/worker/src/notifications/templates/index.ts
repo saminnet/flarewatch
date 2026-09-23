@@ -1,34 +1,12 @@
 import type { NotificationTemplate } from '@flarewatch/shared';
+import type { TemplateContext, TemplateOutput } from './types';
 import { slackTemplate } from './slack';
 import { discordTemplate } from './discord';
 import { telegramTemplate } from './telegram';
 import { ntfyTemplate } from './ntfy';
 
-/** Context passed to templates for formatting */
-export interface TemplateContext {
-  monitorName: string;
-  monitorId: string;
-  targetUrl: string;
-  isUp: boolean;
-  isRecovery: boolean;
-  isInitialOutage: boolean;
-  downtimeMinutes: number;
-  reason: string;
-  timestamp: string;
-  timestampIso: string;
-}
+type TemplateFunction = (ctx: TemplateContext) => TemplateOutput;
 
-/** Output from a template - ready to send */
-export interface TemplateOutput {
-  method: 'GET' | 'POST';
-  headers: Record<string, string>;
-  body: string;
-}
-
-/** Template function signature */
-export type TemplateFunction = (ctx: TemplateContext) => TemplateOutput;
-
-/** Plain text template (default fallback) */
 function textTemplate(ctx: TemplateContext): TemplateOutput {
   const emoji = ctx.isUp ? '✅' : '🔴';
   const status = ctx.isUp ? 'up' : 'down';
@@ -49,21 +27,18 @@ function textTemplate(ctx: TemplateContext): TemplateOutput {
   };
 }
 
-/** Template registry */
-const templates: Record<NotificationTemplate, TemplateFunction> = {
+const templates = {
   slack: slackTemplate,
   discord: discordTemplate,
   telegram: telegramTemplate,
   ntfy: ntfyTemplate,
   text: textTemplate,
-};
+} satisfies Record<NotificationTemplate, TemplateFunction>;
 
-/** Get a template by name */
 export function getTemplate(name: NotificationTemplate): TemplateFunction {
-  return templates[name] ?? textTemplate;
+  return templates[name];
 }
 
-/** Check if a template exists */
 export function hasTemplate(name: string): name is NotificationTemplate {
   return Object.prototype.hasOwnProperty.call(templates, name);
 }

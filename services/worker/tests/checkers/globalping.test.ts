@@ -1,15 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
-import type { MonitorTarget } from '@flarewatch/shared';
+import type { Fetcher, JsonValue, MonitorTarget } from '@flarewatch/shared';
+import { GlobalPingChecker } from '../../src/checkers/globalping';
 
-const fetchWithTimeoutMock = vi.fn();
-
-vi.mock('@flarewatch/shared', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@flarewatch/shared')>();
-  return {
-    ...actual,
-    fetchWithTimeout: fetchWithTimeoutMock,
-  };
-});
+const fetchMock = vi.fn<Fetcher>();
+const checker = new GlobalPingChecker(fetchMock);
 
 function createMonitor(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   return {
@@ -26,9 +20,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
-function finishedHttpMeasurement(
-  resultOverrides: Record<string, unknown> = {},
-): Record<string, unknown> {
+function finishedHttpMeasurement(resultOverrides: Record<string, JsonValue> = {}): JsonValue {
   return {
     status: 'finished',
     results: [
@@ -46,8 +38,8 @@ function finishedHttpMeasurement(
   };
 }
 
-function mockCompletedMeasurement(measurement: Record<string, unknown>): void {
-  fetchWithTimeoutMock
+function mockCompletedMeasurement(measurement: JsonValue): void {
+  fetchMock
     .mockResolvedValueOnce(jsonResponse({ id: 'measurement-1' }, 202))
     .mockResolvedValueOnce(jsonResponse(measurement));
 }
@@ -56,7 +48,7 @@ describe('GlobalPingChecker', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-01-15T12:00:00Z'));
-    fetchWithTimeoutMock.mockReset();
+    fetchMock.mockReset();
   });
 
   afterEach(() => {
@@ -65,9 +57,6 @@ describe('GlobalPingChecker', () => {
 
   it('parses proxy settings and builds an HTTP measurement request', async () => {
     mockCompletedMeasurement(finishedHttpMeasurement());
-
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
 
     const result = await checker.check(
       createMonitor({
@@ -79,20 +68,21 @@ describe('GlobalPingChecker', () => {
     );
 
     expect(result).toEqual({ location: 'FI/Helsinki', result: { ok: true, latency: 13 } });
-    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    const [url, options] = fetchWithTimeoutMock.mock.calls[0] ?? [];
+    const [url, options] = fetchMock.mock.calls[0] ?? [];
     expect(url).toBe('https://api.globalping.io/v1/measurements');
-    expect(options).toEqual({
+    const { body, ...request } = options ?? {};
+    expect(request).toEqual({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: 'Bearer CaseSensitiveToken',
       },
-      body: expect.any(String),
       timeout: 5000,
     });
-    expect(JSON.parse(options?.body as string)).toEqual({
+    expect(typeof body).toBe('string');
+    expect(JSON.parse(body as string)).toEqual({
       type: 'http',
       target: 'example.com',
       locations: [{ magic: 'aws-us-east-1' }],
@@ -125,9 +115,6 @@ describe('GlobalPingChecker', () => {
       ],
     });
 
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
-
     const result = await checker.check(
       createMonitor({
         method: 'TCP_PING',
@@ -138,7 +125,7 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({ location: 'DE/Frankfurt', result: { ok: true, latency: 9 } });
 
-    const [, options] = fetchWithTimeoutMock.mock.calls[0] ?? [];
+    const [, options] = fetchMock.mock.calls[0] ?? [];
     expect(JSON.parse(options?.body as string)).toEqual({
       type: 'ping',
       target: 'example.com',
@@ -163,9 +150,6 @@ describe('GlobalPingChecker', () => {
       ],
     });
 
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
-
     const result = await checker.check(
       createMonitor({
         method: 'TCP_PING',
@@ -176,14 +160,13 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({ location: 'NL/Amsterdam', result: { ok: true, latency: 4 } });
 
-    const [, options] = fetchWithTimeoutMock.mock.calls[0] ?? [];
-    expect(JSON.parse(options?.body as string).measurementOptions.port).toBe(443);
+    const [, options] = fetchMock.mock.calls[0] ?? [];
+    expect(JSON.parse(options?.body as string)).toMatchObject({
+      measurementOptions: { port: 443 },
+    });
   });
 
   it('returns an error for an unsupported HTTP method', async () => {
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
-
     const result = await checker.check(createMonitor({ method: 'POST' }));
 
     expect(result).toEqual({
@@ -193,54 +176,45 @@ describe('GlobalPingChecker', () => {
         error: 'GlobalPing: Method POST not supported with GlobalPing (only GET, HEAD, OPTIONS)',
       },
     });
-    expect(fetchWithTimeoutMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('returns an error when an HTTP monitor has a body', async () => {
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
-
     const result = await checker.check(createMonitor({ body: '{"hello":"world"}' }));
 
     expect(result).toEqual({
       location: 'ERROR',
       result: { ok: false, error: 'GlobalPing: Custom body not supported with GlobalPing' },
     });
-    expect(fetchWithTimeoutMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('polls until the measurement is no longer in progress', async () => {
-    fetchWithTimeoutMock
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({ id: 'measurement-1' }, 202))
       .mockResolvedValueOnce(jsonResponse({ status: 'in-progress', results: [] }))
       .mockResolvedValueOnce(jsonResponse(finishedHttpMeasurement()));
-
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
 
     const resultPromise = checker.check(createMonitor());
     await vi.advanceTimersByTimeAsync(1000);
     const result = await resultPromise;
 
     expect(result).toEqual({ location: 'FI/Helsinki', result: { ok: true, latency: 13 } });
-    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(3);
-    expect(fetchWithTimeoutMock.mock.calls[1]?.[0]).toBe(
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
       'https://api.globalping.io/v1/measurements/measurement-1',
     );
-    expect(fetchWithTimeoutMock.mock.calls[2]?.[0]).toBe(
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
       'https://api.globalping.io/v1/measurements/measurement-1',
     );
   });
 
   it('returns a timeout error when polling exceeds the monitor timeout', async () => {
-    fetchWithTimeoutMock
+    fetchMock
       .mockResolvedValueOnce(jsonResponse({ id: 'measurement-1' }, 202))
       .mockImplementation(() =>
         Promise.resolve(jsonResponse({ status: 'in-progress', results: [] })),
       );
-
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
 
     const resultPromise = checker.check(createMonitor({ timeout: 500 }));
     await vi.advanceTimersByTimeAsync(3000);
@@ -254,7 +228,7 @@ describe('GlobalPingChecker', () => {
         latency: 500,
       },
     });
-    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it('returns parsed TLS certificate information', async () => {
@@ -270,9 +244,6 @@ describe('GlobalPingChecker', () => {
         },
       }),
     );
-
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
 
     const result = await checker.check(createMonitor());
 
@@ -301,9 +272,6 @@ describe('GlobalPingChecker', () => {
       }),
     );
 
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
-
     const result = await checker.check(
       createMonitor({ sslCheckEnabled: true, sslCheckDaysBeforeExpiry: 14 }),
     );
@@ -325,25 +293,69 @@ describe('GlobalPingChecker', () => {
       }),
     );
 
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
-
     const result = await checker.check(createMonitor({ sslIgnoreSelfSigned: true }));
 
     expect(result).toEqual({ location: 'FI/Helsinki', result: { ok: true, latency: 13 } });
   });
 
   it('returns location ERROR when an unexpected request failure is caught', async () => {
-    fetchWithTimeoutMock.mockRejectedValue(new Error('service unavailable'));
-
-    const { GlobalPingChecker } = await import('../../src/checkers/globalping');
-    const checker = new GlobalPingChecker();
+    fetchMock.mockRejectedValue(new Error('service unavailable'));
 
     const result = await checker.check(createMonitor());
 
     expect(result).toEqual({
       location: 'ERROR',
       result: { ok: false, error: 'GlobalPing: service unavailable' },
+    });
+  });
+  it('fails the check when the measurement payload does not match the schema', async () => {
+    // A probe entry missing `city` must fail schema validation, not render an undefined city.
+    mockCompletedMeasurement({
+      status: 'finished',
+      results: [{ probe: { country: 'FI' }, result: { status: 'finished', statusCode: 200 } }],
+    });
+
+    const result = await checker.check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'ERROR',
+      result: { ok: false, error: 'GlobalPing: invalid measurement payload' },
+    });
+  });
+
+  it('fails the check when measurement creation returns no id', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ notAnId: true }, 202));
+
+    const result = await checker.check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'ERROR',
+      result: {
+        ok: false,
+        error: 'GlobalPing: invalid measurement creation response',
+      },
+    });
+  });
+
+  it('uses the API error message when creation is rejected with an error payload', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: { message: 'Invalid token' } }, 401));
+
+    const result = await checker.check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'ERROR',
+      result: { ok: false, error: 'GlobalPing: Invalid token' },
+    });
+  });
+
+  it('falls back to the status code when the error payload is malformed', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse('nope', 429));
+
+    const result = await checker.check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'ERROR',
+      result: { ok: false, error: 'GlobalPing: API error: 429' },
     });
   });
 });

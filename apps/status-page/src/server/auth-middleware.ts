@@ -51,9 +51,8 @@ export async function authMiddlewareServer(
   const env = await resolveRuntimeEnv();
 
   if (isAdminRoute(pathname)) {
-    const adminCreds = env?.FLAREWATCH_ADMIN_BASIC_AUTH;
+    const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
     if (!adminCreds) {
-      // Allow access in development mode
       if (import.meta.env.DEV) {
         return next();
       }
@@ -73,18 +72,15 @@ export async function authMiddlewareServer(
       return forbidden('Invalid origin');
     }
 
-    // Allow the admin UI to render a login page when not authenticated.
     if (isAdminUIRoute(pathname)) {
       return next();
     }
 
-    // Allow session endpoints to handle login/logout/status.
     if (pathname === '/api/admin/session') {
       return next();
     }
 
-    // Auth for admin APIs: session cookie OR Basic Auth header.
-    const kv = env?.STATE_KV ?? env?.FLAREWATCH_STATE;
+    const kv = env.STATE_KV ?? env.FLAREWATCH_STATE;
     const sessionId = getAdminSessionCookie(request.headers.get('Cookie'));
     if (kv && sessionId) {
       const session = await validateSession(kv, sessionId);
@@ -100,7 +96,7 @@ export async function authMiddlewareServer(
     return unauthorizedAdmin();
   }
 
-  const siteCreds = env?.FLAREWATCH_STATUS_PAGE_BASIC_AUTH;
+  const siteCreds = env.FLAREWATCH_STATUS_PAGE_BASIC_AUTH;
   if (siteCreds && !(await verifyBasicAuthHeader(siteCreds, request.headers.get('Authorization'))))
     return unauthorized('FlareWatch');
 

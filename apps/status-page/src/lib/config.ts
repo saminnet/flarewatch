@@ -4,18 +4,7 @@ import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
 import { resolveRuntimeEnv } from './runtime-env';
 
-/**
- * In-memory config cache with TTL.
- *
- * Note for Cloudflare Workers: This module-level cache persists within a single
- * isolate but is NOT shared across isolates. Cache behavior will be unpredictable
- * as isolates can be recycled at any time. This is acceptable since:
- * 1. KV reads are fast (~10ms) and the fallback is always available
- * 2. The cache provides optimization within a single request lifecycle
- * 3. Config changes are infrequent and eventual consistency is acceptable
- *
- * For stricter caching requirements, consider using the Cache API instead.
- */
+// Valid 30s per warm isolate; isolates share no cache state and may be recycled.
 const CACHE_TTL_MS = 30_000;
 let cachedConfig: RuntimeConfig | null = null;
 let cacheTime = 0;
@@ -43,7 +32,7 @@ function cacheAndReturn(config: RuntimeConfig, now: number): RuntimeConfig {
 }
 
 export async function getConfig(): Promise<RuntimeConfig> {
-  const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
+  const isDev = import.meta.env.DEV;
   const now = Date.now();
 
   if (!isDev && cachedConfig && now - cacheTime < CACHE_TTL_MS) {
@@ -51,7 +40,7 @@ export async function getConfig(): Promise<RuntimeConfig> {
   }
 
   const env = await resolveRuntimeEnv();
-  const kv = env?.CONFIG_KV;
+  const kv = env.CONFIG_KV;
 
   if (kv) {
     const runtime = await loadRuntimeConfig(kv);
@@ -63,9 +52,8 @@ export async function getConfig(): Promise<RuntimeConfig> {
   return cacheAndReturn(buildFallbackConfig(), now);
 }
 
-// Export a simplified config type that only includes what the status page needs
-// This avoids complex type inference issues with createServerFn
-export type StatusPageConfig = {
+// Narrow type: the full RuntimeConfig breaks createServerFn's inference.
+type StatusPageConfig = {
   monitors: RuntimeConfig['monitors'];
   statusPage: RuntimeConfig['statusPage'];
 };

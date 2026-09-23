@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { isJsonObject } from '@flarewatch/shared';
 import { useTranslation } from 'react-i18next';
 import { qk } from './keys';
 
@@ -11,7 +12,6 @@ type LoginResult = {
   ok: boolean;
 };
 
-/** Error thrown when a 401 response is received, indicating session expiry */
 export class SessionExpiredError extends Error {
   readonly status = 401;
   constructor() {
@@ -36,8 +36,10 @@ export function useAdminLogin(options?: {
       });
 
       if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? t('admin.loginFailed'));
+        const payload: unknown = await res.json().catch(() => null);
+        const message =
+          isJsonObject(payload) && typeof payload.error === 'string' ? payload.error : undefined;
+        throw new Error(message ?? t('admin.loginFailed'));
       }
 
       return { ok: true };
@@ -70,17 +72,6 @@ export function useAdminLogout(options?: {
   });
 }
 
-/**
- * Check if an error indicates session expiry (401 response).
- * Components can use this to redirect to login on stale auth state.
- */
 export function isSessionExpiredError(error: unknown): boolean {
-  if (error instanceof SessionExpiredError) return true;
-  if (
-    error instanceof Error &&
-    'status' in error &&
-    (error as Error & { status: number }).status === 401
-  )
-    return true;
-  return false;
+  return error instanceof Error && 'status' in error && error.status === 401;
 }

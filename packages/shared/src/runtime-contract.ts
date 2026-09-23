@@ -1,4 +1,4 @@
-/** Neutral contract for the config/theme data the status page runtime can consume. */
+import { isNonEmptyString } from './utils';
 
 /** Bump on incompatible contract changes. */
 export const CONTRACT_VERSION = 1;
@@ -57,13 +57,6 @@ export const SUPPORTED_THEME_TOKENS = [
   'status-unknown-border',
 ] as const;
 
-export type SupportedThemeToken = (typeof SUPPORTED_THEME_TOKENS)[number];
-
-/** Theme data the runtime accepts; `themeVars` is raw CSS for an inline <style>. */
-export type ThemeContract = {
-  themeVars?: string;
-};
-
 /** Sequences that could break out of an inline <style>. */
 const UNSAFE_THEME_SEQUENCES = ['</style', '<script', 'javascript:'] as const;
 
@@ -72,7 +65,7 @@ const UNSAFE_THEME_SEQUENCES = ['</style', '<script', 'javascript:'] as const;
  * <style>. Returns '' if unsafe or not a non-empty string (no token validation).
  */
 export function sanitizeThemeVars(input: unknown): string {
-  if (typeof input !== 'string' || input.length === 0) return '';
+  if (!isNonEmptyString(input)) return '';
   const lower = input.toLowerCase();
   for (const sequence of UNSAFE_THEME_SEQUENCES) {
     if (lower.includes(sequence)) return '';

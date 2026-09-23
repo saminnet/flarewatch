@@ -4,11 +4,7 @@ import { UPTIME_DAYS, UPTIME_THRESHOLDS } from './constants';
 
 const MIN_MONITOR_AGE_SECONDS = 60;
 
-/**
- * Returns the "current" timestamp for calculations.
- * Uses state.lastUpdate to ensure SSR/client consistency (Date.now() would cause hydration mismatches).
- * Returns null if no state has been written yet, signaling callers to return "unknown" status.
- */
+/** state.lastUpdate, not Date.now(), so SSR and hydration agree; null before the first state write. */
 function getNowSeconds(state: MonitorState): number | null {
   return state.lastUpdate > 0 ? state.lastUpdate : null;
 }
@@ -106,7 +102,7 @@ export function getOverallStatus(state: MonitorState): 'operational' | 'degraded
 
 export type DayStatus = 'up' | 'down' | 'partial' | 'unknown';
 
-export interface DayIncidentDetail {
+interface DayIncidentDetail {
   startTime: string;
   endTime: string;
   error: string;
@@ -151,7 +147,6 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
   const days: DailyStatusData[] = [];
   const nowSec = getNowSeconds(state);
 
-  // No state data yet - return unknown days based on current UTC date
   if (nowSec === null) {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
@@ -163,7 +158,6 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
   const incidents = state.incident[monitorId] || [];
   const monitorStartSec = state.startedAt?.[monitorId];
 
-  // If monitor has no data yet, return all unknown days
   if (!hasMonitorData(monitorId, state)) {
     return generateUnknownDays(now);
   }
@@ -178,7 +172,6 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
     const dayStartSec = Math.floor(dayStart / 1000);
     const dayEndSec = Math.floor(dayEnd / 1000);
 
-    // Entire day is before monitoring began
     if (monitorStartSec && dayEndSec <= monitorStartSec) {
       days.push(createUnknownDay(date));
       continue;
@@ -199,13 +192,11 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
       if (incidentStart === undefined) continue;
       const incidentEnd = incident.end ?? nowSec;
 
-      // Check if incident overlaps with this day
       if (incidentEnd > effectiveDayStartSec && incidentStart < effectiveDayEndSec) {
         const overlapStart = Math.max(incidentStart, effectiveDayStartSec);
         const overlapEnd = Math.min(incidentEnd, effectiveDayEndSec);
         downtimeInDay += (overlapEnd - overlapStart) * 1000;
 
-        // Collect incident details for this day
         for (let j = 0; j < incident.error.length; j++) {
           const partStart = incident.start[j];
           if (partStart === undefined) continue;
@@ -213,7 +204,6 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
           const partEnd =
             j === incident.error.length - 1 ? (incident.end ?? nowSec) : (nextStart ?? nowSec);
 
-          // Check if this part overlaps with the day
           if (partEnd > effectiveDayStartSec && partStart < effectiveDayEndSec) {
             const clampedStart = Math.max(partStart, effectiveDayStartSec);
             const clampedEnd = Math.min(partEnd, effectiveDayEndSec);

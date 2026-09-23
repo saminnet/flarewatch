@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
+import { isValidMaintenance, type Maintenance, type MaintenanceConfig } from '@flarewatch/shared';
 import { compareByStart } from '../maintenance';
 import { qk } from './keys';
 import { SessionExpiredError } from './auth.mutations';
@@ -33,20 +33,23 @@ export type MaintenanceUpdatePatch = {
   color: string | null;
 };
 
-async function request<T = void>(path: string, init: RequestInit): Promise<T> {
+async function requestOk(path: string, init: RequestInit): Promise<Response> {
   const res = await fetch(path, init);
   if (!res.ok) {
-    // Detect session expiry
     if (res.status === 401) {
       throw new SessionExpiredError();
     }
     const text = await res.text().catch(() => '');
     throw new Error(text || `Request failed (${res.status})`);
   }
-  if (res.status === 204 || res.headers.get('content-length') === '0') {
-    return undefined as T;
-  }
-  return (await res.json()) as T;
+  return res;
+}
+
+async function requestMaintenance(path: string, init: RequestInit): Promise<Maintenance> {
+  const res = await requestOk(path, init);
+  const data: unknown = await res.json();
+  if (!isValidMaintenance(data)) throw new Error('Unexpected response shape');
+  return data;
 }
 
 interface MutationCallbacks<T = Maintenance> {
@@ -60,7 +63,7 @@ export function useCreateMaintenance(callbacks?: MutationCallbacks) {
 
   return useMutation({
     mutationFn: async (data: MaintenanceConfig) => {
-      return request<Maintenance>(API_PATH, {
+      return requestMaintenance(API_PATH, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -83,7 +86,7 @@ export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: MaintenanceUpdatePatch }) => {
-      return request<Maintenance>(API_PATH, {
+      return requestMaintenance(API_PATH, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, updates }),
@@ -110,7 +113,7 @@ export function useDeleteMaintenance(callbacks?: MutationCallbacks<string>) {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      await request(API_PATH, {
+      await requestOk(API_PATH, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),

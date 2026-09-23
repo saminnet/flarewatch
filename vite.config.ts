@@ -8,23 +8,74 @@ export default defineConfig({
       'services/worker/dist/**',
       'apps/status-page/src/routeTree.gen.ts',
       'apps/status-page/worker-configuration.d.ts',
+      'tools/oxlint/anti-slop/**',
     ],
     jsPlugins: [
       {
         name: 'react-hooks-js',
         specifier: 'eslint-plugin-react-hooks',
       },
+      {
+        name: 'anti-slop',
+        specifier: './tools/oxlint/anti-slop/index.ts',
+      },
     ],
     rules: {
       'react-hooks-js/set-state-in-render': 'error',
+      'anti-slop/no-chained-type-assertions': 'error',
+      'anti-slop/no-known-value-widening': 'error',
+      'anti-slop/no-module-mocking': 'error',
+      'anti-slop/no-object-parameters': 'error',
+      'anti-slop/no-reflect-apply': 'error',
+      'anti-slop/no-reflect-get': 'error',
+      'anti-slop/no-json-type-argument': 'error',
+      'anti-slop/no-unsafe-dictionary-type': 'error',
+      'anti-slop/no-widen-then-assert': 'error',
+      'anti-slop/no-zod-check-return-value': 'error',
+      'anti-slop/prefer-shared-helper': [
+        'error',
+        { objectGuard: 'isJsonObject', nonEmptyString: 'isNonEmptyString' },
+      ],
+      'anti-slop/require-safety-comment-for-type-assertion': 'error',
+      'typescript/no-floating-promises': 'error',
+      'typescript/no-misused-promises': 'error',
+      'typescript/no-unsafe-argument': 'error',
+      'typescript/no-unsafe-assignment': 'error',
+      'typescript/no-unsafe-call': 'error',
+      'typescript/no-unsafe-member-access': 'error',
+      'typescript/no-unsafe-return': 'error',
     },
+    overrides: [
+      {
+        files: ['apps/status-page/src/**'],
+        rules: {
+          'anti-slop/no-implicit-locale': 'error',
+        },
+      },
+      {
+        files: [
+          'apps/status-page/tests/**',
+          'services/worker/tests/**',
+          'packages/shared/tests/**',
+        ],
+        rules: {
+          'anti-slop/require-safety-comment-for-type-assertion': 'off',
+        },
+      },
+    ],
     options: {
       typeAware: true,
       typeCheck: true,
     },
   },
   fmt: {
-    ignorePatterns: ['.wrangler/**', '**/dist/**', 'worker-configuration.d.ts', 'routeTree.gen.ts'],
+    ignorePatterns: [
+      '.wrangler/**',
+      '**/dist/**',
+      'worker-configuration.d.ts',
+      'routeTree.gen.ts',
+      'tools/oxlint/anti-slop/**',
+    ],
     printWidth: 100,
     tabWidth: 2,
     singleQuote: true,

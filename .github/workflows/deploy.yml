@@ -40,7 +40,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-vite-task-
 
-      - name: Check formatting and types
+      - name: Check formatting, types, and lint
         timeout-minutes: 5
         run: vp check
 

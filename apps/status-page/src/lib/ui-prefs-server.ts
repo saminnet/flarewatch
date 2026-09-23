@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getCookie, setCookie } from '@tanstack/react-start/server';
+import { isJsonObject } from '@flarewatch/shared';
 import { ONE_YEAR_SECONDS, COOKIE_NAMES } from './constants';
 
 export type UiPrefs = {
@@ -23,37 +24,35 @@ function parseStringArray(value: unknown): string[] | null {
     strings.push(trimmed);
   }
 
-  // De-dup, preserve order
   return Array.from(new Set(strings));
 }
 
-function parseUiPrefsCookie(cookieValue: string | undefined): UiPrefs {
+export function parseUiPrefsCookie(cookieValue: string | undefined): UiPrefs {
   if (!cookieValue) return DEFAULT_UI_PREFS;
 
   try {
-    const parsed = JSON.parse(cookieValue) as unknown;
-    if (typeof parsed !== 'object' || parsed === null) return DEFAULT_UI_PREFS;
+    const parsed: unknown = JSON.parse(cookieValue);
+    if (!isJsonObject(parsed)) return DEFAULT_UI_PREFS;
 
-    const obj = parsed as Record<string, unknown>;
-    const collapsedMonitors =
-      parseStringArray(obj.collapsedMonitors) ?? DEFAULT_UI_PREFS.collapsedMonitors;
-    const collapsedGroups =
-      parseStringArray(obj.collapsedGroups) ?? DEFAULT_UI_PREFS.collapsedGroups;
+    const collapsedMonitors = parseStringArray(parsed.collapsedMonitors);
+    const collapsedGroups = parseStringArray(parsed.collapsedGroups);
 
-    return { collapsedGroups, collapsedMonitors };
+    return {
+      collapsedMonitors: collapsedMonitors ?? DEFAULT_UI_PREFS.collapsedMonitors,
+      collapsedGroups: collapsedGroups ?? DEFAULT_UI_PREFS.collapsedGroups,
+    };
   } catch {
     return DEFAULT_UI_PREFS;
   }
 }
 
-function validateUiPrefs(data: unknown): UiPrefs {
-  if (typeof data !== 'object' || data === null) {
+export function validateUiPrefs(data: unknown): UiPrefs {
+  if (!isJsonObject(data)) {
     throw new Error('Invalid UI prefs');
   }
 
-  const obj = data as Record<string, unknown>;
-  const collapsedMonitors = parseStringArray(obj.collapsedMonitors);
-  const collapsedGroups = parseStringArray(obj.collapsedGroups);
+  const collapsedMonitors = parseStringArray(data.collapsedMonitors);
+  const collapsedGroups = parseStringArray(data.collapsedGroups);
 
   if (!collapsedMonitors || !collapsedGroups) {
     throw new Error('Invalid UI prefs properties');
