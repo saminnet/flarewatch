@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -44,100 +43,94 @@ export function MaintenanceFormDialog({
   isPending,
   onSubmit,
 }: MaintenanceFormDialogProps) {
-  const { t } = useTranslation();
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {editingMaintenance ? t('admin.editMaintenance') : t('admin.addMaintenance')}
+            {editingMaintenance ? 'Edit maintenance window' : 'Add maintenance window'}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 pb-4">
           <div>
             <Label htmlFor="title" className="sr-only">
-              {t('field.title')}
+              Title
             </Label>
             <Input
               id="title"
               value={formData.title}
               onChange={(e) => updateField('title', e.target.value)}
-              placeholder={t('field.titleOptional')}
+              placeholder="Title (optional)"
             />
           </div>
 
           <div>
             <Label htmlFor="body" className="sr-only">
-              {t('field.description')}
+              Description
             </Label>
             <Textarea
               id="body"
               value={formData.body}
               onChange={(e) => updateField('body', e.target.value)}
-              placeholder={t('field.descriptionRequired')}
+              placeholder="Description *"
               rows={3}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs text-neutral-500">{t('field.start')} *</Label>
+              <Label className="text-xs text-neutral-500">Start *</Label>
               <DateTimePicker
                 value={formData.start}
                 onChange={(date) => updateField('start', date)}
-                placeholder={t('field.selectStart')}
+                placeholder="Select start date"
               />
             </div>
             <div>
-              <Label className="text-xs text-neutral-500">{t('field.end')}</Label>
+              <Label className="text-xs text-neutral-500">End</Label>
               <DateTimePicker
                 value={formData.end}
                 onChange={(date) => updateField('end', date)}
-                placeholder={t('field.selectEnd')}
-                clearLabel={t('action.clear')}
+                placeholder="Select end date"
+                clearLabel="Clear"
               />
               {isEndBeforeStart && (
                 <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                  {t('validation.endAfterStart')}
+                  End must be after start
                 </p>
               )}
             </div>
           </div>
 
           <fieldset>
-            <legend className="text-xs text-neutral-500">{t('field.severity')}</legend>
+            <legend className="text-xs text-neutral-500">Severity</legend>
             <div className="mt-1.5 flex gap-2">
-              {SEVERITY_OPTIONS.map((option) => {
-                const optionLabel = t(option.labelKey);
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => updateField('color', option.value)}
-                    aria-label={optionLabel}
-                    aria-pressed={formData.color === option.value}
-                    className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                      formData.color === option.value
-                        ? 'border-neutral-900 bg-neutral-100 dark:border-neutral-100 dark:bg-neutral-800'
-                        : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600'
-                    }`}
-                  >
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${getMaintenanceColors(option.value).dot}`}
-                      aria-hidden="true"
-                    />
-                    {optionLabel}
-                  </button>
-                );
-              })}
+              {SEVERITY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => updateField('color', option.value)}
+                  aria-label={option.label}
+                  aria-pressed={formData.color === option.value}
+                  className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                    formData.color === option.value
+                      ? 'border-neutral-900 bg-neutral-100 dark:border-neutral-100 dark:bg-neutral-800'
+                      : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600'
+                  }`}
+                >
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${getMaintenanceColors(option.value).dot}`}
+                    aria-hidden="true"
+                  />
+                  {option.label}
+                </button>
+              ))}
             </div>
           </fieldset>
 
           <div>
-            <Label className="text-xs text-neutral-500">{t('field.affectedMonitors')}</Label>
+            <Label className="text-xs text-neutral-500">Affected Monitors</Label>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {monitors.map((monitor) => (
                 <Badge
@@ -156,9 +149,9 @@ export function MaintenanceFormDialog({
         </div>
 
         <div className="flex justify-end gap-2">
-          <DialogClose render={<Button variant="outline">{t('action.cancel')}</Button>} />
+          <DialogClose render={<Button variant="outline">Cancel</Button>} />
           <Button onClick={onSubmit} disabled={!isValid || isPending}>
-            {isPending ? t('action.saving') : t('action.save')}
+            {isPending ? 'Saving...' : 'Save'}
           </Button>
         </div>
       </DialogContent>

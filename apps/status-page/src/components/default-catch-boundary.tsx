@@ -1,13 +1,11 @@
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import { ErrorComponent, Link, rootRouteId, useMatch, useRouter } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
-  const { t } = useTranslation();
   const router = useRouter();
   const isRoot = useMatch({
     select: (state) => state.id === rootRouteId,
@@ -19,7 +17,7 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
       <Card className="w-full max-w-3xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-semibold text-destructive">
-            {t('error.somethingWrong')}
+            Something went wrong
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -29,12 +27,12 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Button variant="outline" onClick={() => void router.invalidate()}>
-              {t('action.tryAgain')}
+              Try again
             </Button>
 
             {isRoot ? (
               <Link to="/" className={cn(buttonVariants({ variant: 'default' }))}>
-                {t('nav.home')}
+                Home
               </Link>
             ) : (
               <Button
@@ -44,7 +42,7 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
                   window.history.back();
                 }}
               >
-                {t('action.goBack')}
+                Go back
               </Button>
             )}
           </div>

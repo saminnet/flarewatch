@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { IconWorld, IconClockPlay } from '@tabler/icons-react';
 import {
@@ -49,7 +48,6 @@ export function MonitorList({
   kind,
   onKindChange,
 }: MonitorListProps) {
-  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [collapsedMonitors, setCollapsedMonitors] = useState<string[]>(
     () => uiPrefs?.collapsedMonitors ?? [],
@@ -135,7 +133,7 @@ export function MonitorList({
     if (scheduledJobs.length > 0) {
       activeGroups.push({
         key: SCHEDULED_JOBS_GROUP_KEY,
-        name: t('monitor.scheduledJobs'),
+        name: 'Scheduled jobs',
         monitors: scheduledJobs,
       });
     }
@@ -160,16 +158,16 @@ export function MonitorList({
             const selected = Array.isArray(value) ? value[0] : value;
             onKindChange?.(selected === 'web' || selected === 'jobs' ? selected : undefined);
           }}
-          aria-label={t('filter.byKind')}
+          aria-label="Filter monitors by kind"
         >
-          <ToggleGroupItem value="all">{t('filter.all')}</ToggleGroupItem>
+          <ToggleGroupItem value="all">All</ToggleGroupItem>
           <ToggleGroupItem value="web">
             <IconWorld aria-hidden="true" />
-            {t('filter.websites')}
+            Websites
           </ToggleGroupItem>
           <ToggleGroupItem value="jobs">
             <IconClockPlay aria-hidden="true" />
-            {t('monitor.scheduledJobs')}
+            Scheduled jobs
           </ToggleGroupItem>
         </ToggleGroup>
       )}
@@ -193,15 +191,15 @@ export function MonitorList({
             className="space-y-2"
           >
             {activeGroups.map(({ key, name, monitors: groupMonitors }) => {
-              const countLabel = t(
-                groupMonitors.every(isHeartbeat) ? 'monitor.jobCount' : 'monitor.count',
-                { count: groupMonitors.length },
-              );
+              const count = groupMonitors.length;
+              const countLabel = groupMonitors.every(isHeartbeat)
+                ? `${count} ${count === 1 ? 'job' : 'jobs'}`
+                : `${count} ${count === 1 ? 'monitor' : 'monitors'}`;
               return (
                 <AccordionItem key={key} value={key} className={cn('border', GROUP_RADIUS)}>
                   <AccordionTrigger
                     className={cn('px-3 py-2.5 hover:no-underline hover:bg-muted/50', GROUP_RADIUS)}
-                    aria-label={t('monitor.toggleGroup', { name, countLabel })}
+                    aria-label={`Toggle ${name} (${countLabel})`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{name}</span>

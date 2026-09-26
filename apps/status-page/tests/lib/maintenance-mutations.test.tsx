@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { Maintenance } from '@flarewatch/shared';
 import { qk } from '@/lib/query/keys';
 
-await import('../../src/lib/i18n');
 const { useCreateMaintenance, useDeleteMaintenance } =
   await import('../../src/lib/query/maintenance.mutations');
 

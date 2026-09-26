@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { IconAlertTriangle, IconCalendar, IconClock } from '@tabler/icons-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -18,7 +17,6 @@ export function MaintenanceCard({
   nowMs,
   variant,
 }: MaintenanceCardProps) {
-  const { t } = useTranslation();
   const colors = getMaintenanceColors(maintenance.color);
   const start = new Date(maintenance.start);
   const end = maintenance.end ? new Date(maintenance.end) : null;
@@ -38,15 +36,15 @@ export function MaintenanceCard({
         <div className="flex items-center gap-2 flex-wrap">
           <Icon className={cn('size-4 shrink-0', colors.icon)} />
           <h4 className="font-medium text-foreground">
-            {maintenance.title ?? t('maintenance.scheduled')}
+            {maintenance.title ?? 'Scheduled Maintenance'}
           </h4>
           {isActive ? (
             <Badge variant="secondary" className="text-xs">
-              {t('status.ongoing')}
+              Ongoing
             </Badge>
           ) : (
             <Badge variant="outline" className="text-xs">
-              {t('maintenance.startsIn', { time: formatTimeUntil(start, now) })}
+              {`Starts in ${formatTimeUntil(start, now)}`}
             </Badge>
           )}
         </div>
@@ -65,7 +63,7 @@ export function MaintenanceCard({
           </span>
           {isActive && end && (
             <span className="text-status-degraded font-medium">
-              {t('maintenance.endsIn', { time: formatTimeUntil(end, now) })}
+              {`Ends in ${formatTimeUntil(end, now)}`}
             </span>
           )}
         </div>

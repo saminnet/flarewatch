@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 import { IconExternalLink, IconChevronDown, IconEyeOff } from '@tabler/icons-react';
 import type { HeartbeatStatus } from '@flarewatch/shared';
 import { formatUtcShort } from '@flarewatch/shared';
@@ -31,13 +30,13 @@ interface MonitorCardProps {
   style?: React.CSSProperties;
 }
 
-const PHASE_STATUS_KEYS = {
-  up: 'monitor.statusUp',
-  late: 'monitor.statusLate',
-  pending: 'monitor.statusPending',
-  running: 'monitor.statusRunning',
-  down: 'monitor.statusOverdue',
-} as const;
+const PHASE_STATUS_LABELS: Record<HeartbeatStatus, string> = {
+  up: 'operational',
+  late: 'running late',
+  pending: 'waiting for first ping',
+  running: 'running',
+  down: 'overdue',
+};
 
 const PHASE_BADGE_CLASS: Record<HeartbeatStatus, string> = {
   up: 'text-status-operational border-status-operational',
@@ -59,13 +58,11 @@ function UtcTime({ sec, className }: { sec: number; className?: string }) {
 }
 
 function HeartbeatMeta({ heartbeat }: { heartbeat: HeartbeatView }) {
-  const { t } = useTranslation();
-
   if (heartbeat.lastRunSec === undefined) return null;
 
   return (
     <>
-      {t('monitor.lastRun')}{' '}
+      last run{' '}
       <UtcTime sec={heartbeat.lastRunSec} className="font-medium tabular-nums text-foreground" />
     </>
   );
@@ -85,7 +82,6 @@ function HeartbeatBody({
   monitor: AdminMonitor;
   heartbeat: HeartbeatView;
 }) {
-  const { t } = useTranslation();
   const { phase, startedSec, deadlineSec, nextDueSec, lastDurationSec, nowSec } = heartbeat;
   const isFail = heartbeat.lastResult === 'fail';
 
@@ -94,23 +90,23 @@ function HeartbeatBody({
   if (phase === 'running') {
     if (startedSec !== undefined) {
       rows.push({
-        label: t('monitor.runningFor'),
+        label: 'Running for',
         value: formatDuration(Math.max(0, nowSec - startedSec) * 1000),
       });
     }
     if (deadlineSec !== undefined) {
-      rows.push({ label: t('monitor.mustFinishBy'), value: <UtcTime sec={deadlineSec} /> });
+      rows.push({ label: 'Must finish by', value: <UtcTime sec={deadlineSec} /> });
     }
   } else if (phase === 'late') {
     if (lastDurationSec !== undefined) {
       rows.push({
-        label: t('monitor.durationLabel'),
+        label: 'Duration',
         value: formatDuration(lastDurationSec * 1000),
       });
     }
     if (deadlineSec !== undefined) {
       rows.push({
-        label: t('monitor.graceEnds'),
+        label: 'Grace ends',
         value: <UtcTime sec={deadlineSec} />,
         valueClassName: 'text-status-degraded-text',
       });
@@ -118,24 +114,24 @@ function HeartbeatBody({
   } else if (phase === 'down' && isFail) {
     if (lastDurationSec !== undefined) {
       rows.push({
-        label: t('monitor.failedAfter'),
+        label: 'Failed after',
         value: formatDuration(lastDurationSec * 1000),
         valueClassName: 'text-status-down-text',
       });
     }
     if (deadlineSec !== undefined) {
-      rows.push({ label: t('monitor.nextDue'), value: <UtcTime sec={deadlineSec} /> });
+      rows.push({ label: 'Next due', value: <UtcTime sec={deadlineSec} /> });
     }
   } else if (phase === 'down') {
     if (lastDurationSec !== undefined) {
       rows.push({
-        label: t('monitor.durationLabel'),
+        label: 'Duration',
         value: formatDuration(lastDurationSec * 1000),
       });
     }
     if (deadlineSec !== undefined) {
       rows.push({
-        label: t('monitor.overdueBy'),
+        label: 'Overdue by',
         value: formatDuration(Math.max(0, nowSec - deadlineSec) * 1000),
         valueClassName: 'text-status-down-text',
       });
@@ -143,20 +139,20 @@ function HeartbeatBody({
   } else if (phase === 'up') {
     if (lastDurationSec !== undefined) {
       rows.push({
-        label: t('monitor.durationLabel'),
+        label: 'Duration',
         value: formatDuration(lastDurationSec * 1000),
       });
     }
 
     const dueSec = nextDueSec ?? deadlineSec;
     if (dueSec !== undefined) {
-      rows.push({ label: t('monitor.nextDue'), value: <UtcTime sec={dueSec} /> });
+      rows.push({ label: 'Next due', value: <UtcTime sec={dueSec} /> });
     }
   }
 
   if (heartbeat.message) {
     rows.push({
-      label: t('monitor.reportedLabel'),
+      label: 'Reported',
       value: heartbeat.message,
       valueClassName: 'text-status-down-text wrap-break-word',
       full: true,
@@ -169,16 +165,13 @@ function HeartbeatBody({
     <>
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h4 className="text-xs font-medium text-muted-foreground">
-          {runCount === 0 ? t('monitor.runsLabel') : t('monitor.runsHeader', { count: runCount })}
+          {runCount === 0 ? 'Runs' : `Last ${runCount} ${runCount === 1 ? 'run' : 'runs'}`}
         </h4>
         {monitor.periodSeconds !== undefined && (
           <span className="text-xs text-muted-foreground">
             {monitor.graceSeconds
-              ? t('monitor.cadenceGrace', {
-                  period: formatCadence(monitor.periodSeconds),
-                  grace: formatCadence(monitor.graceSeconds),
-                })
-              : t('monitor.cadenceEvery', { cadence: formatCadence(monitor.periodSeconds) })}
+              ? `Every ${formatCadence(monitor.periodSeconds)}, ${formatCadence(monitor.graceSeconds)} grace`
+              : `Every ${formatCadence(monitor.periodSeconds)}`}
           </span>
         )}
       </div>
@@ -211,47 +204,37 @@ function HeartbeatBody({
         </dl>
       ) : (
         phase === 'pending' && (
-          <p className="mt-2.5 text-xs text-muted-foreground">{t('monitor.noRunsYet')}</p>
+          <p className="mt-2.5 text-xs text-muted-foreground">
+            No run recorded yet. The first ping starts the schedule.
+          </p>
         )
       )}
     </>
   );
 }
 
-type TranslateFn = ReturnType<typeof useTranslation>['t'];
-
 function triggerLabel({
-  t,
   name,
   heartbeat,
   isUp,
   uptime,
 }: {
-  t: TranslateFn;
   name: string;
   heartbeat: HeartbeatView | null;
   isUp: boolean;
   uptime: string;
 }): string {
   if (!heartbeat) {
-    return t('monitor.toggleMonitor', {
-      name,
-      status: t(isUp ? 'monitor.statusUp' : 'monitor.statusDown'),
-      uptime,
-    });
+    const status = isUp ? 'operational' : 'not operational';
+    return `${name}, ${status}, ${uptime}. Click to toggle details`;
   }
 
-  const status = t(PHASE_STATUS_KEYS[heartbeat.phase]);
+  const status = PHASE_STATUS_LABELS[heartbeat.phase];
   if (heartbeat.lastRunSec === undefined || heartbeat.deadlineSec === undefined) {
-    return t('monitor.toggleMonitor', { name, status, uptime });
+    return `${name}, ${status}, ${uptime}. Click to toggle details`;
   }
 
-  return t('monitor.toggleHeartbeat', {
-    name,
-    status,
-    time: formatUtcShort(heartbeat.lastRunSec),
-    deadline: formatUtcShort(heartbeat.deadlineSec),
-  });
+  return `${name}, ${status}, last run ${formatUtcShort(heartbeat.lastRunSec)}, next expected by ${formatUtcShort(heartbeat.deadlineSec)}. Click to toggle details`;
 }
 
 function MonitorSubLines({
@@ -265,7 +248,6 @@ function MonitorSubLines({
   latency: { ping: number; loc: string } | null;
   isAdminView: boolean;
 }) {
-  const { t } = useTranslation();
   const lateDeadline = heartbeat?.phase === 'late' ? heartbeat.deadlineSec : undefined;
   const runningStart = heartbeat?.phase === 'running' ? heartbeat.startedSec : undefined;
   const reportedFailure = heartbeat?.phase === 'down' && heartbeat.lastResult === 'fail';
@@ -281,26 +263,26 @@ function MonitorSubLines({
       )}
       {reportedFailure && (
         <p className="text-xs text-status-down-text line-clamp-2 wrap-break-word mt-0.5">
-          {t('monitor.jobReportedFailure')}
+          Job reported failure
         </p>
       )}
       {overdueDeadline !== undefined && !isAdminView && (
         <p className="text-xs text-status-down-text mt-0.5">
-          {t('monitor.overdueExpectedBy', { time: formatUtcShort(overdueDeadline) })}
+          {`Overdue, was expected by ${formatUtcShort(overdueDeadline)}`}
         </p>
       )}
       {lateDeadline !== undefined && (
         <p className="text-xs text-status-degraded-text mt-0.5">
-          {t('monitor.runningLate')} <UtcTime sec={lateDeadline} />
+          Running late, expected by <UtcTime sec={lateDeadline} />
         </p>
       )}
       {runningStart !== undefined && (
         <p className="text-xs text-muted-foreground mt-0.5">
-          {t('monitor.runningStarted')} <UtcTime sec={runningStart} />
+          Running since <UtcTime sec={runningStart} />
         </p>
       )}
       {heartbeat?.phase === 'pending' && (
-        <p className="text-xs text-muted-foreground mt-0.5">{t('monitor.waitingFirstPing')}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Waiting for first ping</p>
       )}
       {heartbeat
         ? heartbeat.phase !== 'pending' && (
@@ -319,8 +301,6 @@ function MonitorSubLines({
 }
 
 function MonitorHeading({ monitor }: { monitor: AdminMonitor }) {
-  const { t } = useTranslation();
-
   return (
     <>
       {monitor.link ? (
@@ -341,8 +321,8 @@ function MonitorHeading({ monitor }: { monitor: AdminMonitor }) {
       {monitor.private && (
         <Badge variant="outline" className="shrink-0">
           <IconEyeOff className="size-3" aria-hidden="true" />
-          {t('admin.privateBadge')}
-          <span className="sr-only">{t('admin.privateBadgeLabel', { name: monitor.name })}</span>
+          Private
+          <span className="sr-only">{`${monitor.name} is private and never appears on the public page`}</span>
         </Badge>
       )}
       {monitor.tooltip && (
@@ -364,7 +344,6 @@ function LatencyMeta({
   isProxy?: boolean;
   latency: { ping: number; loc: string };
 }) {
-  const { t } = useTranslation();
   const coloLabel = formatColoLabel(latency.loc);
 
   return (
@@ -383,7 +362,9 @@ function LatencyMeta({
                 <span className="font-mono">{latency.loc}</span>
                 {coloLabel && <span>{` — ${coloLabel}`}</span>}
               </div>
-              <div className="opacity-80">{t('monitor.checkLocation.cloudflare')}</div>
+              <div className="opacity-80">
+                Last check ran at this Cloudflare edge location (may differ from yours).
+              </div>
             </div>
           </TooltipContent>
         </Tooltip>
@@ -401,12 +382,11 @@ export function MonitorCard({
   className,
   style,
 }: MonitorCardProps) {
-  const { t } = useTranslation();
   const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
   const heartbeat = deriveHeartbeat(monitor, state);
 
   const hasStarted = !!state.startedAt?.[monitor.id];
-  const uptimeDisplay = formatUptimeDisplay(uptimePercent, hasStarted, 2, t);
+  const uptimeDisplay = formatUptimeDisplay(uptimePercent, hasStarted, 2);
   const errorLine = !isUp && error ? error : null;
   const isAdminView = pingUrlSlot !== undefined;
 
@@ -431,7 +411,6 @@ export function MonitorCard({
             render={<div />}
             className="absolute inset-0 z-10"
             aria-label={triggerLabel({
-              t,
               name: monitor.name,
               heartbeat,
               isUp,
@@ -471,7 +450,10 @@ export function MonitorCard({
                   <TooltipTrigger className="relative z-20 cursor-help">
                     {uptimeBadge}
                   </TooltipTrigger>
-                  <TooltipContent>{t('monitor.uptimeHeartbeat')}</TooltipContent>
+                  <TooltipContent>
+                    Uptime samples this monitor once a minute with the cron run, not once per job
+                    run.
+                  </TooltipContent>
                 </Tooltip>
               ) : (
                 uptimeBadge
@@ -496,13 +478,13 @@ export function MonitorCard({
             ) : (
               <>
                 <h4 className="mb-2 text-xs font-medium text-muted-foreground">
-                  {t('monitor.uptimeDays', { days: UPTIME_DAYS })}
+                  {`Last ${UPTIME_DAYS} days`}
                 </h4>
                 <StatusBar monitorId={monitor.id} monitorName={monitor.name} state={state} />
                 {open && !monitor.hideLatencyChart && (
                   <div className="mt-4">
                     <h4 className="mb-2 text-xs font-medium text-muted-foreground">
-                      {t('monitor.responseTimes')}
+                      Response times (ms)
                     </h4>
                     <LatencyChart monitor={monitor} state={state} />
                   </div>

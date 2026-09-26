@@ -16,7 +16,6 @@ vi.stubGlobal(
   },
 );
 
-await import('../../src/lib/i18n');
 const { RunStrip } = await import('../../src/components/run-strip');
 const { formatUtcShort } = await import('@flarewatch/shared');
 

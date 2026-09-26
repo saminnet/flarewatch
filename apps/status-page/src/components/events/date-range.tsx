@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { formatUtc } from '@/lib/date';
 
 interface DateRangeProps {
@@ -9,16 +8,14 @@ interface DateRangeProps {
 }
 
 export function DateRange({ start, end, noEndLabel, noEndClassName }: DateRangeProps) {
-  const { t } = useTranslation();
-
   return (
     <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-neutral-500">
       <span>
-        <strong>{t('field.from')}</strong> {formatUtc(start, 'PPp')}
+        <strong>From</strong> {formatUtc(start, 'PPp')}
       </span>
       {end ? (
         <span>
-          <strong>{t('field.to')}</strong> {formatUtc(end, 'PPp')}
+          <strong>To</strong> {formatUtc(end, 'PPp')}
         </span>
       ) : (
         <span className={noEndClassName}>{noEndLabel}</span>

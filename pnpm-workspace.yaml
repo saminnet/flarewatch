@@ -25,10 +25,8 @@ catalog:
   '@tanstack/router-plugin': 1.168.19
   '@types/node': 26.4.0
   date-fns: 4.4.0
-  i18next: 26.4.0
   react: 19.2.8
   react-dom: 19.2.8
-  react-i18next: 17.0.12
   tailwindcss: 4.3.3
   typescript: 7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@0.3.2

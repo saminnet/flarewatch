@@ -140,22 +140,22 @@ export function getMaintenanceColors(color?: string): MaintenanceColors {
 export const SEVERITY_OPTIONS = [
   {
     value: 'green',
-    labelKey: 'severity.minor',
+    label: 'Minor',
     badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
   },
   {
     value: 'yellow',
-    labelKey: 'event.maintenance',
+    label: 'Maintenance',
     badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
   },
   {
     value: 'blue',
-    labelKey: 'severity.info',
+    label: 'Info',
     badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
   },
   {
     value: 'red',
-    labelKey: 'severity.critical',
+    label: 'Critical',
     badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
   },
 ] as const;

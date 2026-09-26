@@ -1,5 +1,4 @@
 import { IconFlame } from '@tabler/icons-react';
-import { useTranslation } from 'react-i18next';
 import type { PageConfig } from '@flarewatch/shared';
 import { ThemeToggle } from '@/components/theme-toggle';
 import type { ThemePreference } from '@/lib/theme-server';
@@ -11,7 +10,6 @@ interface FooterProps {
 }
 
 export function Footer({ config, theme = 'system' }: FooterProps) {
-  const { t } = useTranslation();
   const poweredByUrl = config?.poweredByUrl ?? DEFAULT_POWERED_BY_URL;
 
   return (
@@ -21,7 +19,7 @@ export function Footer({ config, theme = 'system' }: FooterProps) {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <IconFlame className="h-4 w-4 text-orange-500" />
             <span>
-              {t('footer.poweredBy')}{' '}
+              Powered by{' '}
               <a
                 href={poweredByUrl}
                 target="_blank"

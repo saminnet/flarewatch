@@ -1,5 +1,4 @@
 import { getRouteApi, Outlet, HeadContent, Scripts } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { getThemeInitScript } from '@/lib/theme-server';
@@ -8,7 +7,6 @@ import { sanitizeThemeVars } from '@flarewatch/shared';
 const rootRoute = getRouteApi('__root__');
 
 export function RootComponent() {
-  const { t } = useTranslation();
   const { theme, statusPage } = rootRoute.useLoaderData();
   const themeInitScript = getThemeInitScript(theme);
   const isDark = theme === 'dark';
@@ -42,7 +40,7 @@ export function RootComponent() {
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-100 focus:bg-card focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg"
         >
-          {t('nav.skipToContent')}
+          Skip to main content
         </a>
         <Header config={statusPage} />
 

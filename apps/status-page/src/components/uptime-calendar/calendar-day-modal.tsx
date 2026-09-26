@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -34,8 +33,6 @@ interface CalendarDayModalProps {
 }
 
 export function CalendarDayModal({ data, open, onOpenChange }: CalendarDayModalProps) {
-  const { t } = useTranslation();
-
   if (!data) return null;
 
   const grouped = groupByMonitor(data.incidents);
@@ -49,25 +46,18 @@ export function CalendarDayModal({ data, open, onOpenChange }: CalendarDayModalP
               <span
                 className={cn('w-2.5 h-2.5 rounded-full shrink-0', STATUS_DOT_COLORS[data.status])}
               />
-              {t('calendar.incidentsOnDate', { date: formatUtc(data.date, 'MMM d, yyyy') })}
+              {`Incidents on ${formatUtc(data.date, 'MMM d, yyyy')}`}
             </DialogTitle>
             <DialogClose
               render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  aria-label={t('action.close')}
-                >
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Close">
                   <IconX className="h-4 w-4" />
                 </Button>
               }
             />
           </div>
           {data.uptime !== null && (
-            <DialogDescription>
-              {t('calendar.overallUptime', { percent: data.uptime.toFixed(2) })}
-            </DialogDescription>
+            <DialogDescription>{`Overall uptime: ${data.uptime.toFixed(2)}%`}</DialogDescription>
           )}
         </DialogHeader>
 

@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { IconCalendar } from '@tabler/icons-react';
 import type { Maintenance } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
@@ -12,7 +11,6 @@ interface MaintenanceAlertsProps {
 }
 
 export function MaintenanceAlerts({ maintenances, monitors, nowMs }: MaintenanceAlertsProps) {
-  const { t } = useTranslation();
   const monitorNamesById = new Map(monitors.map((m) => [m.id, m.name]));
   const { active: activeMaintenances, upcoming: upcomingMaintenances } = filterMaintenances(
     maintenances,
@@ -28,7 +26,7 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
       {activeMaintenances.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-            {t('maintenance.active')}
+            Active maintenance windows
           </h3>
           {activeMaintenances.map((m) => (
             <MaintenanceCard
@@ -46,7 +44,7 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
             <IconCalendar className="size-4 text-status-maintenance" />
-            {t('maintenance.upcoming')}
+            Upcoming maintenance windows
           </h3>
           {upcomingMaintenances.map((m) => (
             <MaintenanceCard

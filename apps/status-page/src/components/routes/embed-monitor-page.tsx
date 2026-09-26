@@ -1,6 +1,5 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
 import { StatusIcon } from '@/components/status-icon';
 import { monitorStateQuery, publicMonitorsQuery } from '@/lib/query/monitors.queries';
 import { createEmptyMonitorState } from '@/lib/monitor-state';
@@ -32,7 +31,6 @@ function EmbedWrapper({ children, theme, className }: EmbedWrapperProps): React.
 const EMPTY_STATE = createEmptyMonitorState();
 
 export function EmbedPage() {
-  const { t } = useTranslation();
   const { monitorId } = embedRoute.useParams();
   const { data: state } = useSuspenseQuery(monitorStateQuery());
   const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
@@ -49,9 +47,7 @@ export function EmbedPage() {
   if (!monitor) {
     return (
       <EmbedWrapper theme={theme} className="h-full flex items-center justify-center p-4">
-        <div className="text-sm text-destructive">
-          {t('error.monitorNotFound', { id: monitorId })}
-        </div>
+        <div className="text-sm text-destructive">{`Monitor with ID ${monitorId} not found.`}</div>
       </EmbedWrapper>
     );
   }
@@ -59,7 +55,9 @@ export function EmbedPage() {
   if (!state) {
     return (
       <EmbedWrapper theme={theme} className="h-full flex items-center justify-center p-4">
-        <div className="text-sm text-muted-foreground">{t('error.monitorStateNotDefined')}</div>
+        <div className="text-sm text-muted-foreground">
+          Monitor state is unavailable. Check the worker status and KV binding.
+        </div>
       </EmbedWrapper>
     );
   }
@@ -74,7 +72,7 @@ export function EmbedPage() {
           className={cn('w-2 h-2 rounded-full', isUp ? 'bg-status-operational' : 'bg-status-down')}
         />
         <span className={cn('font-mono', statusColor.text)}>
-          {formatUptimeDisplay(uptimePercent, hasStarted, 1, t)}
+          {formatUptimeDisplay(uptimePercent, hasStarted, 1)}
         </span>
       </EmbedWrapper>
     );
@@ -94,10 +92,7 @@ export function EmbedPage() {
           {!isUp && error && <p className="text-xs text-status-down truncate mt-0.5">{error}</p>}
           {isUp && latency && (
             <p className="text-xs text-muted-foreground mt-0.5">
-              {t('monitor.latency', {
-                ping: latency.ping,
-                loc: latency.loc,
-              })}
+              {`${latency.ping}ms (edge ${latency.loc})`}
             </p>
           )}
         </div>
@@ -109,7 +104,7 @@ export function EmbedPage() {
             statusColor.text,
           )}
         >
-          {formatUptimeDisplay(uptimePercent, hasStarted, 2, t)}
+          {formatUptimeDisplay(uptimePercent, hasStarted, 2)}
         </div>
       </div>
     </EmbedWrapper>

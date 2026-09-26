@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { formatUtc } from '@/lib/date';
 import {
   IconPencil,
@@ -41,7 +40,6 @@ export function MaintenanceRow({
   onEdit,
   onDelete,
 }: MaintenanceRowProps) {
-  const { t } = useTranslation();
   const startDate = new Date(maintenance.start);
   const endDate = maintenance.end ? new Date(maintenance.end) : null;
   const status = getMaintenanceStatus(maintenance, nowMs);
@@ -67,9 +65,9 @@ export function MaintenanceRow({
                 )}
               />
               <h3 className="font-medium text-neutral-900 dark:text-neutral-100 truncate">
-                {maintenance.title ?? t('maintenance.scheduled')}
+                {maintenance.title ?? 'Scheduled Maintenance'}
               </h3>
-              <Badge className={severity.badge}>{t(severity.labelKey)}</Badge>
+              <Badge className={severity.badge}>{severity.label}</Badge>
               <MaintenanceStatusBadge status={status} />
             </div>
 
@@ -79,12 +77,12 @@ export function MaintenanceRow({
 
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
               <span className="flex items-center gap-1">
-                <span className="font-medium">{t('field.from')}:</span>
+                <span className="font-medium">From:</span>
                 {formatUtc(startDate, "MMM d, yyyy h:mm a 'UTC'")}
               </span>
               {endDate && (
                 <span className="flex items-center gap-1">
-                  <span className="font-medium">{t('field.to')}:</span>
+                  <span className="font-medium">To:</span>
                   {formatUtc(endDate, "MMM d, yyyy h:mm a 'UTC'")}
                 </span>
               )}

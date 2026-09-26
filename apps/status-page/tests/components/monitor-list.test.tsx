@@ -16,7 +16,6 @@ vi.stubGlobal(
   },
 );
 
-await import('@/lib/i18n');
 const { MonitorList } = await import('@/components/monitor-list');
 
 afterEach(cleanup);

@@ -1,9 +1,9 @@
-import { useTranslation } from 'react-i18next';
 import { getDateKey, type CalendarMonthGrid } from '@/lib/date';
 import type { AggregatedDayData } from '@/lib/uptime';
 import { CalendarDayCell } from './calendar-day-cell';
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 interface CalendarMonthProps {
   grid: CalendarMonthGrid;
@@ -20,9 +20,6 @@ export function CalendarMonth({
   monthUptime,
   onDayClick,
 }: CalendarMonthProps) {
-  const { t } = useTranslation();
-  const weekdays = t('calendar.weekdays').split(',');
-
   return (
     <div className="rounded-lg border border-border bg-card p-2.5">
       <div className="flex items-baseline justify-between mb-1.5">
@@ -34,7 +31,7 @@ export function CalendarMonth({
         )}
       </div>
       <div className="grid grid-cols-7 gap-0.5 mb-0.5">
-        {weekdays.map((day, i) => (
+        {WEEKDAYS.map((day, i) => (
           <div
             key={WEEKDAY_KEYS[i]}
             className="h-4 flex items-center justify-center text-[9px] font-medium text-muted-foreground/50 select-none"

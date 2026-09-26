@@ -1,6 +1,5 @@
 import { useId, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-import { useTranslation } from 'react-i18next';
 import { area, line, curveMonotoneX } from 'd3-shape';
 import type { MonitorState } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
@@ -81,7 +80,6 @@ function ChartTooltip({ point, xFrac }: { point: ChartPoint; xFrac: number }) {
 }
 
 function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
-  const { t } = useTranslation();
   const plotRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   // React ids may contain non-URL-safe characters; url(#...) needs a plain id.
@@ -95,11 +93,8 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
 
   const last = chartData[chartData.length - 1];
   const ariaLabel = last
-    ? t('monitor.responseTimesChart', {
-        ping: last.ping,
-        loc: formatColoLabel(last.loc) || last.loc,
-      })
-    : t('monitor.responseTimes');
+    ? `Response time chart, latest ${last.ping}ms from ${formatColoLabel(last.loc) || last.loc}`
+    : 'Response times (ms)';
 
   const xScale = linearScale(xDomain, [0, VB]);
   const { ticks: yTicks, max: yMax } = niceLinearTicks(maxPing);
@@ -282,7 +277,6 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
 }
 
 export function LatencyChart({ monitor, state }: LatencyChartProps) {
-  const { t } = useTranslation();
   const recentLatency = state.latency[monitor.id]?.recent;
 
   const chartData: ChartPoint[] = (recentLatency ?? []).map((point) => ({
@@ -297,7 +291,7 @@ export function LatencyChart({ monitor, state }: LatencyChartProps) {
         className="flex w-full items-center justify-center rounded-md border border-dashed border-border"
         style={{ height: CHART_HEIGHT_PX }}
       >
-        <span className="text-xs text-muted-foreground">{t('monitor.noResponseData')}</span>
+        <span className="text-xs text-muted-foreground">No response data yet</span>
       </div>
     );
   }

@@ -1,13 +1,10 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
 import { isValidMaintenance, type Maintenance, type MaintenanceConfig } from '@flarewatch/shared';
 import { compareByStart } from '../maintenance';
 import { qk } from './keys';
 import { SessionExpiredError } from './auth.mutations';
 
 const API_PATH = '/api/admin/maintenances';
-
-type TranslateFn = ReturnType<typeof useTranslation>['t'];
 
 function setMaintenances(
   queryClient: QueryClient,
@@ -22,8 +19,8 @@ function setMaintenances(
   void queryClient.invalidateQueries({ queryKey: qk.maintenances });
 }
 
-function normalizeMutationError(error: unknown, t: TranslateFn): Error {
-  return error instanceof Error ? error : new Error(t('error.somethingWrong'));
+function normalizeMutationError(error: unknown): Error {
+  return error instanceof Error ? error : new Error('Something went wrong');
 }
 
 export type MaintenanceUpdatePatch = {
@@ -60,7 +57,6 @@ interface MutationCallbacks<T = Maintenance> {
 }
 
 export function useCreateMaintenance(callbacks?: MutationCallbacks) {
-  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -76,13 +72,12 @@ export function useCreateMaintenance(callbacks?: MutationCallbacks) {
       callbacks?.onSuccess?.(result);
     },
     onError: (error) => {
-      callbacks?.onError?.(normalizeMutationError(error, t));
+      callbacks?.onError?.(normalizeMutationError(error));
     },
   });
 }
 
 export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
-  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -102,13 +97,12 @@ export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
       callbacks?.onSuccess?.(result);
     },
     onError: (error) => {
-      callbacks?.onError?.(normalizeMutationError(error, t));
+      callbacks?.onError?.(normalizeMutationError(error));
     },
   });
 }
 
 export function useDeleteMaintenance(callbacks?: MutationCallbacks<string>) {
-  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -125,7 +119,7 @@ export function useDeleteMaintenance(callbacks?: MutationCallbacks<string>) {
       callbacks?.onSuccess?.(id);
     },
     onError: (error) => {
-      callbacks?.onError?.(normalizeMutationError(error, t));
+      callbacks?.onError?.(normalizeMutationError(error));
     },
   });
 }

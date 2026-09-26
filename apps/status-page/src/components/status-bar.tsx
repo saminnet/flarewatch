@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Dialog,
@@ -31,18 +30,13 @@ interface StatusBarSegmentProps {
 }
 
 function StatusBarSegment({ day, isMobile, onClick }: StatusBarSegmentProps) {
-  const { t } = useTranslation();
-
   return (
     <Tooltip>
       <TooltipTrigger
         aria-label={
           day.status === 'unknown'
-            ? t('monitor.noDataAt', { date: formatUtc(day.date, 'MMM d, yyyy') })
-            : t('monitor.statusAt', {
-                percent: day.uptime.toFixed(2),
-                date: formatUtc(day.date, 'MMM d, yyyy'),
-              })
+            ? `No data for ${formatUtc(day.date, 'MMM d, yyyy')}`
+            : `${day.uptime.toFixed(2)}% uptime on ${formatUtc(day.date, 'MMM d, yyyy')}`
         }
         className={cn(
           'h-6 rounded-sm transition-[scale,filter,background-color,box-shadow] duration-150 ease-out',
@@ -57,15 +51,12 @@ function StatusBarSegment({ day, isMobile, onClick }: StatusBarSegmentProps) {
       <TooltipContent side="top" className="text-xs">
         <div className="font-medium">
           {day.status === 'unknown'
-            ? t('monitor.noData')
-            : t('monitor.percentAtDate', {
-                percent: day.uptime.toFixed(2),
-                date: formatUtc(day.date, 'MMM d, yyyy'),
-              })}
+            ? 'No data'
+            : `${day.uptime.toFixed(2)}% at ${formatUtc(day.date, 'MMM d, yyyy')}`}
         </div>
         {day.downtime > 0 && (
           <div className="text-muted-foreground">
-            {t('monitor.downFor', { duration: formatDuration(day.downtime) })}
+            {`Down for ${formatDuration(day.downtime)} (click for detail)`}
           </div>
         )}
       </TooltipContent>
@@ -80,7 +71,6 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
-  const { t } = useTranslation();
   const [selectedDay, setSelectedDay] = useState<DailyStatusData | null>(null);
   const dailyStatus = generateDailyStatus(monitorId, state);
 
@@ -128,19 +118,11 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
             <div className="flex items-center justify-between">
               <DialogTitle>
                 {selectedDay &&
-                  t('monitor.incidentsAt', {
-                    name: monitorName || monitorId,
-                    date: formatUtc(selectedDay.date, 'MMM d, yyyy'),
-                  })}
+                  `${monitorName || monitorId} incidents at ${formatUtc(selectedDay.date, 'MMM d, yyyy')}`}
               </DialogTitle>
               <DialogClose
                 render={
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    aria-label={t('action.close')}
-                  >
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Close">
                     <IconX className="h-4 w-4" />
                   </Button>
                 }

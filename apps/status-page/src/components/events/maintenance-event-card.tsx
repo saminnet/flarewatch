@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { IconTool } from '@tabler/icons-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -20,7 +19,6 @@ interface MaintenanceEventCardProps {
 }
 
 export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEventCardProps) {
-  const { t } = useTranslation();
   const { maintenance } = event;
   const startDate = new Date(maintenance.start);
   const endDate = maintenance.end ? new Date(maintenance.end) : null;
@@ -33,25 +31,21 @@ export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEven
     <Alert className={colors.bg}>
       <AlertTitle className="flex items-center gap-2">
         <IconTool className={cn('h-4 w-4', colors.icon)} />
-        {maintenance.title ?? t('maintenance.scheduled')}
+        {maintenance.title ?? 'Scheduled Maintenance'}
         <Badge variant="outline" className="text-xs">
-          {t('event.maintenance')}
+          Maintenance
         </Badge>
         <MaintenanceStatusBadge status={status} />
       </AlertTitle>
 
       <AlertDescription className="mt-1.5">
         <p className="text-neutral-700 dark:text-neutral-300">{maintenance.body}</p>
-        <DateRange
-          start={startDate}
-          end={endDate}
-          noEndLabel={t('maintenance.untilFurtherNotice')}
-        />
+        <DateRange start={startDate} end={endDate} noEndLabel="Until further notice" />
 
         {affectedMonitors.length > 0 && (
           <div className="mt-2">
             <span className="text-xs text-neutral-500">
-              {t('field.affectedMonitors')}
+              Affected Monitors
               {': '}
             </span>
             <div className="mt-1 flex flex-wrap gap-1">

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Link } from '@tanstack/react-router';
 import { IconArrowLeft, IconLock } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,6 @@ type AdminLoginFormProps = {
 };
 
 export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
-  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -41,9 +39,11 @@ export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-4 text-center">
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-            {t('admin.signInTitle')}
+            Admin sign-in
           </h1>
-          <p className="mt-1 text-sm text-neutral-500">{t('admin.signInSubtitle')}</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            Sign in to manage scheduled maintenance windows.
+          </p>
         </div>
 
         <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
@@ -55,7 +55,7 @@ export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <Field>
-              <FieldLabel htmlFor="username">{t('field.username')}</FieldLabel>
+              <FieldLabel htmlFor="username">Username</FieldLabel>
               <Input
                 id="username"
                 value={username}
@@ -68,7 +68,7 @@ export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="password">{t('field.password')}</FieldLabel>
+              <FieldLabel htmlFor="password">Password</FieldLabel>
               <Input
                 id="password"
                 type="password"
@@ -86,7 +86,7 @@ export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
               className="w-full bg-orange-500 hover:bg-orange-600 text-white"
             >
               <IconLock className="mr-2 size-4" />
-              {loginMutation.isPending ? t('action.signingIn') : t('action.signIn')}
+              {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
         </div>
@@ -95,7 +95,7 @@ export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
           <Link to="/">
             <Button variant="ghost" size="sm">
               <IconArrowLeft className="mr-2 h-4 w-4" />
-              {t('action.goBack')}
+              Go back
             </Button>
           </Link>
         </div>

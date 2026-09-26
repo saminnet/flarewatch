@@ -1,6 +1,5 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
 import { IconChevronLeft, IconChevronRight, IconCalendar } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { MonthPicker } from '@/components/ui/month-picker';
@@ -28,7 +27,6 @@ function getCurrentMonth(): string {
 }
 
 export function EventsPage() {
-  const { t } = useTranslation();
   const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
   const { data: state } = useSuspenseQuery(monitorStateQuery());
   const { maintenances, loaderNowMs } = eventsRoute.useLoaderData();
@@ -58,23 +56,21 @@ export function EventsPage() {
   const nextMonth = shiftYearMonth(resolvedMonth, 1);
 
   const monitorOptions = [
-    { value: '', label: t('filter.all') },
+    { value: '', label: 'All' },
     ...monitors.map((m) => ({ value: m.id, label: m.name })),
   ];
 
   const typeOptions = [
-    { value: 'all', label: t('filter.allEvents') },
-    { value: 'incident', label: t('filter.incidents') },
-    { value: 'maintenance', label: t('filter.maintenances') },
+    { value: 'all', label: 'All events' },
+    { value: 'incident', label: 'Incidents' },
+    { value: 'maintenance', label: 'Maintenance windows' },
   ];
 
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-          {t('nav.events')}
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500">{t('events.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Events</h1>
+        <p className="mt-1 text-sm text-neutral-500">Incidents and scheduled maintenance</p>
       </div>
 
       {state && <UptimeCalendar monitors={monitors} state={state} selectedMonth={resolvedMonth} />}
@@ -139,8 +135,7 @@ export function EventsPage() {
           >
             <SelectTrigger className="min-w-56">
               <SelectValue>
-                {monitorOptions.find((o) => o.value === (selectedMonitor ?? ''))?.label ??
-                  t('filter.all')}
+                {monitorOptions.find((o) => o.value === (selectedMonitor ?? ''))?.label ?? 'All'}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -159,15 +154,15 @@ export function EventsPage() {
           icon={IconCalendar}
           iconClassName="text-status-operational"
           iconContainerClassName="bg-status-operational-bg"
-          title={t('events.noEvents')}
-          description={t('events.noIncidentsOrMaintenance')}
+          title="No events this month"
+          description="No incidents or maintenance scheduled for this period."
         />
       ) : (
         <div className="space-y-4">
           {pinned.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {t('events.activeAndUpcoming')}
+                Active & Upcoming Maintenance
               </h3>
               {pinned.map((event) => (
                 <MaintenanceEventCard

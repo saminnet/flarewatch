@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
 import {
   IconPlus,
   IconTool,
@@ -51,7 +50,6 @@ const adminRoute = getRouteApi('/admin');
 
 export function AdminPage() {
   const { authState: initialAuthState, loaderNowMs } = adminRoute.useLoaderData();
-  const { t } = useTranslation();
   const [auth, setAuth] = useState<AdminAuthState>(initialAuthState);
 
   const nowMs = useNow({
@@ -80,12 +78,12 @@ export function AdminPage() {
       <div className={PAGE_CONTAINER_CLASSES}>
         <EmptyState
           icon={IconTool}
-          title={t('admin.notConfigured')}
-          description={t('admin.notConfiguredDesc')}
+          title="Admin not configured"
+          description="Set FLAREWATCH_ADMIN_BASIC_AUTH to enable admin access."
         />
         <div className="mt-6">
           <Link to="/">
-            <Button variant="outline">{t('action.goBack')}</Button>
+            <Button variant="outline">Go back</Button>
           </Link>
         </div>
       </div>
@@ -114,7 +112,6 @@ function MaintenancesAdminAuthed({
   onSessionExpired: () => void;
   nowMs: number;
 }) {
-  const { t } = useTranslation();
   const { data: monitors } = useSuspenseQuery(adminMonitorsQuery());
   const { data: maintenances } = useSuspenseQuery(adminMaintenancesQuery());
   const { data: state } = useSuspenseQuery(adminMonitorStateQuery());
@@ -244,7 +241,7 @@ function MaintenancesAdminAuthed({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link to="/">
-              <Button variant="ghost" size="icon-sm" aria-label={t('action.goBack')}>
+              <Button variant="ghost" size="icon-sm" aria-label="Go back">
                 <IconArrowLeft className="size-4" />
               </Button>
             </Link>
@@ -253,25 +250,23 @@ function MaintenancesAdminAuthed({
                 <IconCalendarEvent className="size-5 text-orange-500" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
-                  {t('nav.admin')}
-                </h1>
-                <p className="text-sm text-neutral-500">{t('admin.subtitle')}</p>
+                <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-100">Admin</h1>
+                <p className="text-sm text-neutral-500">Manage scheduled maintenance windows</p>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={onLogout}>
-              {t('action.signOut')}
+              Sign out
             </Button>
             {sortedMaintenances.length !== 0 && (
               <Button
                 onClick={openCreateDialog}
-                aria-label={t('admin.addMaintenance')}
+                aria-label="Add maintenance window"
                 className="bg-orange-500 hover:bg-orange-600 text-white"
               >
                 <IconPlus className="size-4" />
-                {t('admin.addMaintenance')}
+                Add maintenance window
               </Button>
             )}
           </div>
@@ -281,21 +276,15 @@ function MaintenancesAdminAuthed({
           <div className="mt-6 flex gap-4">
             <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
               <IconAlertTriangle className="size-4 text-amber-500" />
-              <span>
-                {maintenanceSummary.active} {t('status.ongoing')}
-              </span>
+              <span>{maintenanceSummary.active} Ongoing</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
               <IconClock className="size-4 text-blue-500" />
-              <span>
-                {maintenanceSummary.upcoming} {t('status.upcoming')}
-              </span>
+              <span>{maintenanceSummary.upcoming} Upcoming</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
               <IconCircleCheck className="size-4 text-emerald-500" />
-              <span>
-                {maintenanceSummary.past} {t('status.completed')}
-              </span>
+              <span>{maintenanceSummary.past} Completed</span>
             </div>
           </div>
         )}
@@ -313,15 +302,17 @@ function MaintenancesAdminAuthed({
             <IconCalendarEvent className="size-8 text-neutral-400" />
           </div>
           <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
-            {t('admin.noMaintenances')}
+            No maintenance windows
           </h3>
-          <p className="mt-1 text-sm text-neutral-500 max-w-sm mx-auto">{t('admin.createFirst')}</p>
+          <p className="mt-1 text-sm text-neutral-500 max-w-sm mx-auto">
+            Create your first maintenance window
+          </p>
           <Button
             onClick={openCreateDialog}
             className="mt-6 bg-orange-500 hover:bg-orange-600 text-white"
           >
             <IconPlus className="mr-2 size-4" />
-            {t('admin.addMaintenance')}
+            Add maintenance window
           </Button>
         </div>
       ) : (
@@ -342,13 +333,10 @@ function MaintenancesAdminAuthed({
       <section className="mt-10">
         <div className="mb-3 flex items-baseline gap-2">
           <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-            {t('monitor.title')}
+            Monitors
           </h2>
           <span className="text-sm text-neutral-500">
-            {t('admin.monitorCount', {
-              public: monitors.length - privateCount,
-              private: privateCount,
-            })}
+            {`${monitors.length - privateCount} public, ${privateCount} private`}
           </span>
         </div>
         <MonitorList
@@ -385,17 +373,19 @@ function MaintenancesAdminAuthed({
       <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('admin.deleteMaintenance')}</DialogTitle>
+            <DialogTitle>Delete maintenance window</DialogTitle>
           </DialogHeader>
-          <p className="py-4 text-neutral-600 dark:text-neutral-400">{t('admin.confirmDelete')}</p>
+          <p className="py-4 text-neutral-600 dark:text-neutral-400">
+            Are you sure you want to delete this maintenance window? This action cannot be undone.
+          </p>
           <div className="flex justify-end gap-2">
-            <DialogClose render={<Button variant="outline">{t('action.cancel')}</Button>} />
+            <DialogClose render={<Button variant="outline">Cancel</Button>} />
             <Button
               variant="destructive"
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? t('action.deleting') : t('action.delete')}
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
             </Button>
           </div>
         </DialogContent>

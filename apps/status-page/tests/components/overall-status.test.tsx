@@ -3,7 +3,6 @@
 import { cleanup, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vite-plus/test';
 import type { MonitorState } from '@flarewatch/shared';
-import '@/lib/i18n';
 import { OverallStatus } from '@/components/overall-status';
 import { renderWithProviders } from '../helpers/render';
 

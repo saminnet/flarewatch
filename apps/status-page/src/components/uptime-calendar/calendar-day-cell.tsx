@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { formatUtc, type CalendarDay } from '@/lib/date';
@@ -21,8 +20,6 @@ interface CalendarDayCellProps {
 }
 
 export function CalendarDayCell({ day, data, animationDelay, onClick }: CalendarDayCellProps) {
-  const { t } = useTranslation();
-
   if (!day) {
     return <div className="h-6" />;
   }
@@ -47,8 +44,8 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
 
   const label =
     data?.uptime != null
-      ? t('calendar.uptimeAt', { percent: data.uptime.toFixed(2), date: dateStr })
-      : t('calendar.noDataAt', { date: dateStr });
+      ? `${data.uptime.toFixed(2)}% uptime on ${dateStr}`
+      : `No data for ${dateStr}`;
 
   const cellClasses = cn(
     'relative h-6 rounded flex items-center justify-center',
@@ -97,7 +94,7 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
         <div className="font-medium">{label}</div>
         {hasIncidents && (
           <div className="text-neutral-400">
-            {t('calendar.incidentCount', { count: incidentCount })}
+            {`${incidentCount} ${incidentCount === 1 ? 'incident' : 'incidents'}`}
           </div>
         )}
       </TooltipContent>

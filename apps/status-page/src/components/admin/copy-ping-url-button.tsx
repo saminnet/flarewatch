@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
 import { IconCheck, IconCopy } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +25,6 @@ interface CopyPingUrlButtonProps {
 }
 
 export function CopyPingUrlButton({ monitorId, monitorName, loadPingUrl }: CopyPingUrlButtonProps) {
-  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [manualUrl, setManualUrl] = useState<string | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,7 +55,7 @@ export function CopyPingUrlButton({ monitorId, monitorName, loadPingUrl }: CopyP
       variant="ghost"
       size="icon-sm"
       disabled={copyMutation.isPending}
-      aria-label={t('admin.copyPingUrlFor', { name: monitorName })}
+      aria-label={`Copy ping URL for ${monitorName}`}
       onClick={() => copyMutation.mutate()}
     >
       <span className="relative inline-flex">
@@ -82,18 +80,18 @@ export function CopyPingUrlButton({ monitorId, monitorName, loadPingUrl }: CopyP
       <Tooltip>
         <TooltipTrigger render={<span className="inline-flex" />}>{button}</TooltipTrigger>
         <TooltipContent>
-          {unavailable ? t('admin.pingUrlUnavailable') : t('admin.copyPingUrl')}
+          {unavailable ? 'Set HEARTBEAT_SECRET to generate ping URLs' : 'Copy ping URL'}
         </TooltipContent>
       </Tooltip>
 
       <span aria-live="polite" className="sr-only">
-        {copied ? t('admin.pingUrlCopied') : unavailable ? t('admin.pingUrlUnavailable') : null}
+        {copied ? 'Copied' : unavailable ? 'Set HEARTBEAT_SECRET to generate ping URLs' : null}
       </span>
 
       <Dialog open={manualUrl !== null} onOpenChange={(open) => !open && setManualUrl(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('admin.copyPingUrlFailed')}</DialogTitle>
+            <DialogTitle>Copy failed, select the URL manually</DialogTitle>
           </DialogHeader>
           <Input
             readOnly
@@ -102,7 +100,7 @@ export function CopyPingUrlButton({ monitorId, monitorName, loadPingUrl }: CopyP
             onFocus={(e) => e.currentTarget.select()}
           />
           <div className="flex justify-end">
-            <DialogClose render={<Button variant="outline">{t('action.close')}</Button>} />
+            <DialogClose render={<Button variant="outline">Close</Button>} />
           </div>
         </DialogContent>
       </Dialog>

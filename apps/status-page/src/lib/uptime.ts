@@ -86,12 +86,11 @@ export function formatUptimeDisplay(
   uptimePercent: number | null,
   hasStarted: boolean,
   decimals: number,
-  t: (key: 'monitor.starting' | 'monitor.pending') => string,
 ): string {
   if (uptimePercent !== null) {
     return `${uptimePercent.toFixed(decimals)}%`;
   }
-  return hasStarted ? t('monitor.starting') : t('monitor.pending');
+  return hasStarted ? 'Starting...' : 'Pending';
 }
 
 export function getOverallStatus(state: MonitorState): 'operational' | 'degraded' | 'down' {

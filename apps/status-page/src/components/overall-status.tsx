@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { IconCircleCheck, IconAlertTriangle, IconCircleX, IconRefresh } from '@tabler/icons-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +16,7 @@ interface OverallStatusProps {
 const statusConfig = {
   operational: {
     icon: IconCircleCheck,
-    titleKey: 'status.allOperational' as const,
+    title: 'All systems operational',
     bgClass: 'bg-status-operational-bg',
     borderClass: 'border border-status-operational-border',
     iconClass: 'text-status-operational',
@@ -25,7 +24,7 @@ const statusConfig = {
   },
   degraded: {
     icon: IconAlertTriangle,
-    titleKey: 'status.someDown' as const,
+    title: 'Some systems are down',
     bgClass: 'bg-status-degraded-bg',
     borderClass: 'border border-status-degraded-border',
     iconClass: 'text-status-degraded',
@@ -33,7 +32,7 @@ const statusConfig = {
   },
   down: {
     icon: IconCircleX,
-    titleKey: 'status.allDown' as const,
+    title: 'All systems down',
     bgClass: 'bg-status-down-bg',
     borderClass: 'border border-status-down-border',
     iconClass: 'text-status-down',
@@ -42,7 +41,6 @@ const statusConfig = {
 };
 
 export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusProps) {
-  const { t } = useTranslation();
   const status = getOverallStatus(state);
   const { currentTime, isStale, willRefreshSoon, refreshCountdown } = useAutoRefresh({
     lastUpdate: state.lastUpdate,
@@ -62,22 +60,22 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
   }
 
   function getStatusTitle(): string {
-    if (status !== 'degraded') return t(config.titleKey);
+    if (status !== 'degraded') return config.title;
 
     if (state.overallDown === 0) {
-      return t('status.someLate', { late, total: jobCount });
+      return `Some jobs are running late (${late} out of ${jobCount})`;
     }
-    return t('status.someDown', { down: state.overallDown, total: monitorCount });
+    return `Some systems are down (${state.overallDown} out of ${monitorCount})`;
   }
 
   function getRefreshMessage(): string {
     if (refreshCountdown !== null && refreshCountdown > 0) {
-      return t('status.refreshingIn', { seconds: refreshCountdown });
+      return `Refreshing in ${refreshCountdown}s`;
     }
     if (willRefreshSoon) {
-      return t('status.refreshing');
+      return 'Refreshing...';
     }
-    return t('status.stale');
+    return 'Data is stale';
   }
 
   return (
@@ -93,22 +91,17 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
               {getStatusTitle()}
             </h2>
             <Badge variant={config.badgeVariant} className="shrink-0">
-              {t(late > 0 ? 'status.countsLate' : 'status.counts', {
-                up: state.overallUp - late,
-                late,
-                down: state.overallDown,
-              })}
+              {late > 0
+                ? `${state.overallUp - late} up / ${late} late / ${state.overallDown} down`
+                : `${state.overallUp - late} up / ${state.overallDown} down`}
             </Badge>
           </div>
 
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <p className="text-xs text-muted-foreground">
               {isInitialState
-                ? t('status.initializing')
-                : t('status.lastUpdated', {
-                    date: formatLastUpdated(),
-                    seconds: secondsAgo,
-                  })}
+                ? 'Running first check...'
+                : `Last updated ${formatLastUpdated()} (${secondsAgo}s ago)`}
             </p>
 
             {!isInitialState && isStale && (
@@ -122,7 +115,9 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
                   <IconRefresh className={cn('h-3.5 w-3.5', willRefreshSoon && 'animate-spin')} />
                   <span>{getRefreshMessage()}</span>
                 </TooltipTrigger>
-                <TooltipContent>{t('status.autoRefresh')}</TooltipContent>
+                <TooltipContent>
+                  Page will auto-refresh when data is more than 5 minutes old
+                </TooltipContent>
               </Tooltip>
             )}
           </div>

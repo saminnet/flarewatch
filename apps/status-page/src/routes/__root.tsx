@@ -5,8 +5,6 @@ import { RootComponent } from '@/components/routes/root-component';
 import { getThemePreferenceServerFn } from '@/lib/theme-server';
 import { configQuery } from '@/lib/query/monitors.queries';
 
-// Initialize i18n
-import '@/lib/i18n';
 import '@fontsource-variable/inter/wght.css';
 
 import appCss from '../styles.css?url';

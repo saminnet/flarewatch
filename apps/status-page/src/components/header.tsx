@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { Link } from '@tanstack/react-router';
 import { IconFlame, IconHistory, IconExternalLink, IconMenu2 } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
@@ -15,8 +14,6 @@ interface HeaderProps {
 }
 
 export function Header({ config }: HeaderProps) {
-  const { t } = useTranslation();
-
   const hasExternalLinks = config?.links && config.links.length > 0;
 
   return (
@@ -39,10 +36,10 @@ export function Header({ config }: HeaderProps) {
               variant="ghost"
               size="sm"
               className="flex items-center gap-1.5"
-              aria-label={t('nav.dashboard')}
+              aria-label="Dashboard"
             >
               <IconFlame className="h-4 w-4" />
-              <span className="hidden sm:inline">{t('nav.dashboard')}</span>
+              <span className="hidden sm:inline">Dashboard</span>
             </Button>
           </Link>
 
@@ -51,10 +48,10 @@ export function Header({ config }: HeaderProps) {
               variant="ghost"
               size="sm"
               className="flex items-center gap-1.5"
-              aria-label={t('nav.events')}
+              aria-label="Events"
             >
               <IconHistory className="h-4 w-4" />
-              <span className="hidden sm:inline">{t('nav.events')}</span>
+              <span className="hidden sm:inline">Events</span>
             </Button>
           </Link>
 

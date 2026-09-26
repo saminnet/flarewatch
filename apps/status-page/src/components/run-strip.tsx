@@ -5,7 +5,6 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type Ref,
 } from 'react';
-import { useTranslation } from 'react-i18next';
 import type { HeartbeatRun } from '@flarewatch/shared';
 import { HEARTBEAT_RUN_HISTORY } from '@flarewatch/shared';
 import { formatUtcShort } from '@flarewatch/shared';
@@ -40,12 +39,12 @@ const NEXT_CELL_CLASSES: Record<NextCellKind, string> = {
   running: 'bg-status-maintenance/40 border-status-maintenance',
 };
 
-const NEXT_DETAIL_KEYS = {
-  running: 'monitor.nextRunningMustFinishBy',
-  late: 'monitor.nextLateGraceEnds',
-  missed: 'monitor.nextMissedExpectedBy',
-  next: 'monitor.nextRunExpectedBy',
-} as const;
+const NEXT_DETAIL: Record<'running' | 'late' | 'missed' | 'next', (time: string) => string> = {
+  running: (time) => `Running, must finish by ${time}`,
+  late: (time) => `Late, grace ends ${time}`,
+  missed: (time) => `Missed, was expected by ${time}`,
+  next: (time) => `Next run expected by ${time}`,
+};
 
 interface NextCellProps {
   kind: NextCellKind;
@@ -220,7 +219,6 @@ export function RunStrip({
   periodSeconds?: number;
   graceSeconds?: number;
 }) {
-  const { t } = useTranslation();
   const { ref, width, isReady } = useContainerWidth();
 
   const runs = heartbeat.runs ?? [];
@@ -230,33 +228,26 @@ export function RunStrip({
   const failed = runs.filter((run) => run.outcome === 'fail').length;
   const lastRun = runs[runs.length - 1];
   const lastRunSec = lastRun ? lastRun.at : heartbeat.lastRunSec;
-  const runningDetail = t('monitor.runRunningSince', {
-    time: formatUtcShort(heartbeat.startedSec ?? heartbeat.nowSec),
-  });
+  const runningDetail = `Running since ${formatUtcShort(heartbeat.startedSec ?? heartbeat.nowSec)}`;
   const summary =
     lastRunSec !== undefined
-      ? t('monitor.runStripLabel', {
-          count: runs.length,
-          missed,
-          failed,
-          time: formatUtcShort(lastRunSec),
-        })
+      ? `${runs.length} runs, ${missed} missed, ${failed} failed, last run ${formatUtcShort(lastRunSec)}`
       : running
         ? runningDetail
-        : t('monitor.noRunsYet');
+        : 'No run recorded yet. The first ping starts the schedule.';
 
   function runDetail(run: HeartbeatRun, index: number): string {
     const time = formatUtcShort(run.at);
     if (run.outcome === 'late') {
       const lateBySec = runLatenessSec(runs, index, periodSeconds, graceSeconds);
       if (lateBySec > 0) {
-        return t('monitor.runReceivedLate', { duration: formatDuration(lateBySec * 1000) });
+        return `Received ${formatDuration(lateBySec * 1000)} late`;
       }
-      return t('monitor.runCompletedLateAt', { time });
+      return `Completed late at ${time}`;
     }
-    if (run.outcome === 'fail') return t('monitor.runFailedAt', { time });
-    if (run.outcome === 'miss') return t('monitor.runMissedAt', { time });
-    return t('monitor.runCompletedAt', { time });
+    if (run.outcome === 'fail') return `Failed at ${time}`;
+    if (run.outcome === 'miss') return `Missed, expected ${time}`;
+    return `Completed at ${time}`;
   }
 
   const nextKind: NextCellKind =
@@ -273,10 +264,10 @@ export function RunStrip({
   const nextTimeSec = heartbeat.nextDueSec ?? heartbeat.deadlineSec;
   const nextDetail =
     nextKind === 'first'
-      ? t('monitor.waitingFirstPingBody')
+      ? 'Waiting for the first ping'
       : nextTimeSec === undefined
-        ? t('monitor.nextRunUnscheduled')
-        : t(NEXT_DETAIL_KEYS[nextKind], { time: formatUtcShort(nextTimeSec) });
+        ? 'Next run not scheduled yet'
+        : NEXT_DETAIL[nextKind](formatUtcShort(nextTimeSec));
 
   const filled: Slot[] = runs.map((run, index) => ({ kind: 'run', run, index }));
   if (running) filled.push({ kind: 'running' });

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import type { PublicMonitor } from '@/lib/public-view';
 import type { MonitorState } from '@flarewatch/shared';
@@ -19,7 +18,6 @@ interface UptimeCalendarProps {
 }
 
 export function UptimeCalendar({ monitors, state, selectedMonth }: UptimeCalendarProps) {
-  const { t } = useTranslation();
   const [selectedDay, setSelectedDay] = useState<AggregatedDayData | null>(null);
 
   const ids = monitors.map((m) => m.id);
@@ -79,7 +77,7 @@ export function UptimeCalendar({ monitors, state, selectedMonth }: UptimeCalenda
       <Card className="py-0 gap-0 mb-6">
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between mb-4">
-            <div className="text-sm font-semibold text-foreground">{t('calendar.title')}</div>
+            <div className="text-sm font-semibold text-foreground">Uptime History</div>
             <span className="text-xs text-muted-foreground">{dateRangeLabel}</span>
           </div>
 

@@ -1,13 +1,12 @@
-import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 
 type MaintenanceStatus = 'active' | 'upcoming' | 'scheduled' | 'past';
 
 const STATUS_CONFIG = {
-  active: { variant: 'secondary', key: 'status.ongoing' },
-  upcoming: { variant: 'secondary', key: 'status.upcoming' },
-  scheduled: { variant: 'secondary', key: 'status.upcoming' },
-  past: { variant: 'outline', key: 'status.completed' },
+  active: { variant: 'secondary', label: 'Ongoing' },
+  upcoming: { variant: 'secondary', label: 'Upcoming' },
+  scheduled: { variant: 'secondary', label: 'Upcoming' },
+  past: { variant: 'outline', label: 'Completed' },
 } as const;
 
 interface MaintenanceStatusBadgeProps {
@@ -15,7 +14,6 @@ interface MaintenanceStatusBadgeProps {
 }
 
 export function MaintenanceStatusBadge({ status }: MaintenanceStatusBadgeProps) {
-  const { t } = useTranslation();
   const config = STATUS_CONFIG[status];
-  return <Badge variant={config.variant}>{t(config.key)}</Badge>;
+  return <Badge variant={config.variant}>{config.label}</Badge>;
 }

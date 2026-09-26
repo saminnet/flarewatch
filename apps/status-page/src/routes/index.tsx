@@ -1,6 +1,5 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
 import { OverallStatus } from '@/components/overall-status';
 import { MonitorList, type MonitorKindFilter } from '@/components/monitor-list';
 import { MaintenanceAlerts } from '@/components/maintenance/alerts';
@@ -34,7 +33,6 @@ export const Route = createFileRoute('/')({
 });
 
 function DashboardPage() {
-  const { t } = useTranslation();
   const { kind } = Route.useSearch();
   const navigate = Route.useNavigate();
   const { data: config } = useSuspenseQuery(configQuery());
@@ -49,8 +47,10 @@ function DashboardPage() {
     return (
       <div className={PAGE_CONTAINER_CLASSES}>
         <div className="rounded-lg border border-border bg-muted p-8 text-center">
-          <h2 className="text-lg font-medium text-foreground">{t('error.noMonitoringData')}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{t('error.workerNotConfigured')}</p>
+          <h2 className="text-lg font-medium text-foreground">No monitoring data available yet</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The monitoring worker hasn't run yet, or the KV store is not configured.
+          </p>
         </div>
       </div>
     );
@@ -73,7 +73,7 @@ function DashboardPage() {
 
         <section>
           <h2 className="mb-3 text-base font-semibold text-neutral-900 dark:text-neutral-100">
-            {t('monitor.title')}
+            Monitors
           </h2>
           <MonitorList
             monitors={monitors}
