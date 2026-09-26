@@ -1,7 +1,7 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { StatusIcon } from '@/components/status-icon';
-import { monitorStateQuery, publicMonitorsQuery } from '@/lib/query/monitors.queries';
+import { visitorSnapshotQuery } from '@/lib/query/monitors.queries';
 import { createEmptyMonitorState } from '@/lib/monitor-state';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import { formatUptimeDisplay } from '@/lib/uptime';
@@ -32,8 +32,9 @@ const EMPTY_STATE = createEmptyMonitorState();
 
 export function EmbedPage() {
   const { monitorId } = embedRoute.useParams();
-  const { data: state } = useSuspenseQuery(monitorStateQuery());
-  const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
+  const {
+    data: { state, monitors },
+  } = useSuspenseQuery(visitorSnapshotQuery());
   const { theme, minimal } = embedRoute.useSearch();
 
   const monitor = monitors.find((m) => m.id === monitorId);

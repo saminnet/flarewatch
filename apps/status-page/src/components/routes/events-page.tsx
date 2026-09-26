@@ -14,7 +14,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { UptimeCalendar } from '@/components/uptime-calendar/uptime-calendar';
 import { IncidentCard } from '@/components/events/incident-card';
 import { MaintenanceEventCard } from '@/components/events/maintenance-event-card';
-import { publicMonitorsQuery, monitorStateQuery } from '@/lib/query/monitors.queries';
+import { visitorSnapshotQuery } from '@/lib/query/monitors.queries';
 import { useNow } from '@/lib/hooks/use-now';
 import { shiftYearMonth, getUtcMonthBounds } from '@/lib/date';
 import { projectTimeline } from '@/lib/status-projection';
@@ -27,9 +27,10 @@ function getCurrentMonth(): string {
 }
 
 export function EventsPage() {
-  const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
-  const { data: state } = useSuspenseQuery(monitorStateQuery());
-  const { maintenances, loaderNowMs } = eventsRoute.useLoaderData();
+  const {
+    data: { monitors, state, maintenances },
+  } = useSuspenseQuery(visitorSnapshotQuery());
+  const { loaderNowMs } = eventsRoute.useLoaderData();
   const nowMs = useNow({ serverTime: loaderNowMs });
   const {
     month: selectedMonth,

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { isValidMaintenance, type Maintenance, type MaintenanceConfig } from '@flarewatch/shared';
 import { compareByStart } from '../maintenance';
+import type { Snapshot } from '../public-view';
 import { qk } from './keys';
 import { SessionExpiredError } from './auth.mutations';
 
@@ -11,12 +12,15 @@ function setMaintenances(
   updater: (current: Maintenance[]) => Maintenance[],
   { sort = false } = {},
 ): void {
-  queryClient.setQueryData<Maintenance[]>(qk.adminMaintenances, (current) => {
-    const result = updater(current ?? []);
-    return sort ? result.sort((a, b) => compareByStart(b, a)) : result;
+  queryClient.setQueryData<Snapshot>(qk.operatorSnapshot, (current) => {
+    if (!current) return current;
+    const result = updater(current.maintenances);
+    return {
+      ...current,
+      maintenances: sort ? result.sort((a, b) => compareByStart(b, a)) : result,
+    };
   });
-  void queryClient.invalidateQueries({ queryKey: qk.adminMaintenances });
-  void queryClient.invalidateQueries({ queryKey: qk.maintenances });
+  void queryClient.invalidateQueries({ queryKey: qk.snapshot });
 }
 
 function normalizeMutationError(error: unknown): Error {

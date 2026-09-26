@@ -1,10 +1,7 @@
 export const qk = {
   config: ['config'] as const,
-  monitorState: ['monitorState'] as const,
-  adminMonitorState: ['adminMonitorState'] as const,
-  publicMonitors: ['publicMonitors'] as const,
-  adminMonitors: ['adminMonitors'] as const,
+  snapshot: ['snapshot'] as const,
+  visitorSnapshot: ['snapshot', 'visitor'] as const,
+  operatorSnapshot: ['snapshot', 'operator'] as const,
   uiPrefs: ['uiPrefs'] as const,
-  maintenances: ['maintenances'] as const,
-  adminMaintenances: ['adminMaintenances'] as const,
 };

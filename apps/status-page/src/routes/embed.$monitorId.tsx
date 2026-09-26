@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { EmbedPage } from '@/components/routes/embed-monitor-page';
-import { monitorStateQuery, publicMonitorsQuery } from '@/lib/query/monitors.queries';
+import { visitorSnapshotQuery } from '@/lib/query/monitors.queries';
 
 interface EmbedSearch {
   theme?: 'light' | 'dark' | 'auto';
@@ -16,10 +16,7 @@ export const Route = createFileRoute('/embed/$monitorId')({
     };
   },
   loader: async ({ context }) => {
-    await Promise.all([
-      context.queryClient.ensureQueryData(monitorStateQuery()),
-      context.queryClient.ensureQueryData(publicMonitorsQuery()),
-    ]);
+    await context.queryClient.ensureQueryData(visitorSnapshotQuery());
   },
   component: EmbedPage,
   errorComponent: ({ error }) => (

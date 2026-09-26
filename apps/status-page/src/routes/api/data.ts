@@ -1,8 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { getMonitorState } from '@/lib/kv';
+import { readVisitorSnapshot } from '@/lib/kv';
 import { getCorsHeaders } from '@/lib/cors';
 import { getConfig } from '@/lib/config';
-import { publicView } from '@/lib/public-view';
 import { projectPublicData } from '@/lib/status-projection';
 
 export const Route = createFileRoute('/api/data')({
@@ -10,10 +9,9 @@ export const Route = createFileRoute('/api/data')({
     handlers: {
       GET: async ({ request }: { request: Request }) => {
         const config = await getConfig();
-        const configView = publicView(config, null);
         const corsHeaders = getCorsHeaders(request, config.statusPage?.apiCorsOrigins);
         try {
-          const state = await getMonitorState();
+          const { monitors, state } = await readVisitorSnapshot();
 
           if (!state) {
             return new Response(JSON.stringify({ error: 'No data available' }), {
@@ -22,7 +20,7 @@ export const Route = createFileRoute('/api/data')({
             });
           }
 
-          return Response.json(projectPublicData(configView.monitors, state), {
+          return Response.json(projectPublicData(monitors, state), {
             headers: corsHeaders,
           });
         } catch (error) {

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { Maintenance, MonitorState, RuntimeConfig } from '@flarewatch/shared';
-import { publicMaintenances, publicView, toAdminMonitors } from '@/lib/public-view';
+import {
+  operatorSnapshot,
+  publicMaintenances,
+  publicView,
+  toAdminMonitors,
+  visitorSnapshot,
+} from '@/lib/public-view';
 
 const config: RuntimeConfig = {
   monitors: [
@@ -192,5 +198,70 @@ describe('publicMaintenances', () => {
         maintenance({ id: 'all-private', monitors: ['hidden'] }),
       ]),
     ).toEqual([maintenance({ id: 'unscoped' }), maintenance({ id: 'empty', monitors: [] })]);
+  });
+});
+
+describe('snapshots', () => {
+  const maintenances: Maintenance[] = [
+    {
+      id: 'private-only',
+      title: 'Hidden job upgrade',
+      body: 'Hidden job upgrade',
+      start: '2026-01-01T00:00:00.000Z',
+      monitors: ['hidden-job'],
+      createdAt: 0,
+      updatedAt: 0,
+    },
+    {
+      id: 'mixed',
+      body: 'Network work',
+      start: '2026-01-02T00:00:00.000Z',
+      monitors: ['public', 'hidden'],
+      createdAt: 0,
+      updatedAt: 0,
+    },
+  ];
+
+  it('leaks nothing about private monitors to visitors', () => {
+    const serialized = JSON.stringify(visitorSnapshot(config, state, maintenances));
+
+    for (const secret of [
+      'hidden',
+      'Hidden monitor',
+      'Hidden job',
+      'Hidden',
+      'secret job',
+      'secret job reason',
+      'private',
+      'secret body',
+      'secret response',
+      'token@example.com',
+    ]) {
+      expect(serialized).not.toContain(secret);
+    }
+  });
+
+  it('gives visitors the published monitors, their groups and their maintenance', () => {
+    const snapshot = visitorSnapshot(config, state, maintenances);
+
+    expect(snapshot.monitors.map((monitor) => monitor.id)).toEqual(['public', 'job']);
+    expect(snapshot.groups).toEqual({ Services: ['public'] });
+    expect(snapshot.maintenances.map(({ id, monitors }) => ({ id, monitors }))).toEqual([
+      { id: 'mixed', monitors: ['public'] },
+    ]);
+  });
+
+  it('gives the operator every monitor, failure message and maintenance window', () => {
+    const snapshot = operatorSnapshot(config, state, maintenances);
+
+    expect(snapshot.monitors.map((monitor) => monitor.id)).toEqual([
+      'public',
+      'hidden',
+      'job',
+      'hidden-job',
+    ]);
+    expect(snapshot.groups).toEqual({ Services: ['public'], Hidden: ['hidden'] });
+    expect(snapshot.state?.heartbeat?.['hidden-job']?.message).toBe('secret job failed');
+    expect(snapshot.maintenances).toEqual(maintenances);
   });
 });

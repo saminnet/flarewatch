@@ -65,7 +65,7 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
       ) {
         if (now - lastInvalidateAt.current >= AUTO_REFRESH_MIN_OPEN_SECONDS) {
           lastInvalidateAt.current = now;
-          void queryClient.invalidateQueries({ queryKey: qk.monitorState });
+          void queryClient.invalidateQueries({ queryKey: qk.snapshot });
           void router.invalidate();
         }
       }

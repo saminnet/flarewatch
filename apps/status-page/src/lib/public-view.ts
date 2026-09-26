@@ -4,6 +4,7 @@ import {
   type Maintenance,
   type MonitorState,
   type Monitor,
+  type PageConfigGroup,
   type RuntimeConfig,
 } from '@flarewatch/shared';
 
@@ -17,6 +18,14 @@ export type PublicMonitor = Pick<Monitor, 'id' | 'name' | 'tooltip' | 'method'> 
 };
 
 export type AdminMonitor = PublicMonitor & { private?: boolean };
+
+/** Everything one audience may see on the status page. */
+export type Snapshot = {
+  monitors: AdminMonitor[];
+  groups: PageConfigGroup;
+  state: MonitorState | null;
+  maintenances: Maintenance[];
+};
 
 type PublicView = {
   monitors: PublicMonitor[];
@@ -70,15 +79,19 @@ function stripHeartbeatMessages(
   );
 }
 
-export function publicView(config: RuntimeConfig, state: MonitorState | null): PublicView {
-  const monitors = config.monitors.filter(isPublicMonitor).map(toPublicMonitor);
-  const monitorIds = new Set(monitors.map((monitor) => monitor.id));
-  // A group left with no public members is dropped: its name alone can describe a private job.
-  const groups = Object.fromEntries(
+// A group left with no visible members is dropped: its name alone can describe a private job.
+function groupsOf(config: RuntimeConfig, monitorIds: Set<string>): PageConfigGroup {
+  return Object.fromEntries(
     Object.entries(config.statusPage?.group ?? {})
       .map(([name, ids]) => [name, ids.filter((id) => monitorIds.has(id))] as const)
       .filter(([, ids]) => ids.length > 0),
   );
+}
+
+export function publicView(config: RuntimeConfig, state: MonitorState | null): PublicView {
+  const monitors = config.monitors.filter(isPublicMonitor).map(toPublicMonitor);
+  const monitorIds = new Set(monitors.map((monitor) => monitor.id));
+  const groups = groupsOf(config, monitorIds);
   const statusPage = config.statusPage ? { ...config.statusPage, group: groups } : undefined;
 
   return {
@@ -129,4 +142,32 @@ export function toAdminMonitors(config: RuntimeConfig): AdminMonitor[] {
     ...toPublicMonitor(monitor),
     ...(monitor.private && { private: true }),
   }));
+}
+
+export function visitorSnapshot(
+  config: RuntimeConfig,
+  state: MonitorState | null,
+  maintenances: Maintenance[],
+): Snapshot {
+  const view = publicView(config, state);
+  return {
+    monitors: view.monitors,
+    groups: view.statusPage?.group ?? {},
+    state: view.state,
+    maintenances: publicMaintenances(config, maintenances),
+  };
+}
+
+export function operatorSnapshot(
+  config: RuntimeConfig,
+  state: MonitorState | null,
+  maintenances: Maintenance[],
+): Snapshot {
+  const monitors = toAdminMonitors(config);
+  return {
+    monitors,
+    groups: groupsOf(config, new Set(monitors.map((monitor) => monitor.id))),
+    state,
+    maintenances,
+  };
 }

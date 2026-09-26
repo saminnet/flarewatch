@@ -4,13 +4,7 @@ import { OverallStatus } from '@/components/overall-status';
 import { MonitorList, type MonitorKindFilter } from '@/components/monitor-list';
 import { MaintenanceAlerts } from '@/components/maintenance/alerts';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
-import {
-  configQuery,
-  maintenancesQuery,
-  monitorStateQuery,
-  publicMonitorsQuery,
-  uiPrefsQuery,
-} from '@/lib/query/monitors.queries';
+import { uiPrefsQuery, visitorSnapshotQuery } from '@/lib/query/monitors.queries';
 
 interface IndexSearch {
   kind?: MonitorKindFilter;
@@ -22,11 +16,8 @@ export const Route = createFileRoute('/')({
   }),
   loader: async ({ context }) => {
     await Promise.all([
-      context.queryClient.ensureQueryData(configQuery()),
-      context.queryClient.ensureQueryData(monitorStateQuery()),
-      context.queryClient.ensureQueryData(publicMonitorsQuery()),
+      context.queryClient.ensureQueryData(visitorSnapshotQuery()),
       context.queryClient.ensureQueryData(uiPrefsQuery()),
-      context.queryClient.ensureQueryData(maintenancesQuery()),
     ]);
   },
   component: DashboardPage,
@@ -35,12 +26,10 @@ export const Route = createFileRoute('/')({
 function DashboardPage() {
   const { kind } = Route.useSearch();
   const navigate = Route.useNavigate();
-  const { data: config } = useSuspenseQuery(configQuery());
-  const { data: state } = useSuspenseQuery(monitorStateQuery());
-  const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
+  const {
+    data: { monitors, groups, state, maintenances },
+  } = useSuspenseQuery(visitorSnapshotQuery());
   const { data: uiPrefs } = useSuspenseQuery(uiPrefsQuery());
-  const { data: maintenances } = useSuspenseQuery(maintenancesQuery());
-  const groups = config.statusPage?.group ?? {};
 
   // State can be null if KV has no data yet (worker hasn't run)
   if (!state) {

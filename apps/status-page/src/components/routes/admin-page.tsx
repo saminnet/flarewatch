@@ -26,11 +26,7 @@ import {
   DialogTitle,
   DialogClose,
 } from '@/components/ui/dialog';
-import {
-  adminMonitorsQuery,
-  adminMaintenancesQuery,
-  adminMonitorStateQuery,
-} from '@/lib/query/monitors.queries';
+import { operatorSnapshotQuery } from '@/lib/query/monitors.queries';
 import {
   useCreateMaintenance,
   useUpdateMaintenance,
@@ -112,9 +108,9 @@ function MaintenancesAdminAuthed({
   onSessionExpired: () => void;
   nowMs: number;
 }) {
-  const { data: monitors } = useSuspenseQuery(adminMonitorsQuery());
-  const { data: maintenances } = useSuspenseQuery(adminMaintenancesQuery());
-  const { data: state } = useSuspenseQuery(adminMonitorStateQuery());
+  const {
+    data: { monitors, maintenances, state },
+  } = useSuspenseQuery(operatorSnapshotQuery());
 
   const [editingMaintenance, setEditingMaintenance] = useState<Maintenance | null>(null);
   const [isCreating, setIsCreating] = useState(false);

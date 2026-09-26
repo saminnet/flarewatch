@@ -2,8 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isJsonObject } from '@flarewatch/shared';
 import { qk } from './keys';
 
-const ADMIN_QUERY_KEYS = [qk.adminMonitors, qk.adminMonitorState, qk.adminMaintenances];
-
 type LoginCredentials = {
   username: string;
   password: string;
@@ -45,7 +43,7 @@ export function useAdminLogin(options?: {
       return { ok: true };
     },
     onSuccess: () => {
-      for (const queryKey of ADMIN_QUERY_KEYS) void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({ queryKey: qk.operatorSnapshot });
       options?.onSuccess?.();
     },
     onError: options?.onError,
@@ -63,7 +61,7 @@ export function useAdminLogout(options?: {
       await fetch('/api/admin/session', { method: 'DELETE' });
     },
     onSuccess: () => {
-      for (const queryKey of ADMIN_QUERY_KEYS) queryClient.removeQueries({ queryKey });
+      queryClient.removeQueries({ queryKey: qk.operatorSnapshot });
       options?.onSuccess?.();
     },
     onError: options?.onError,

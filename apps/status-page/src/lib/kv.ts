@@ -10,7 +10,7 @@ import { INITIAL_TRIGGER_RETRY_MS } from '@/lib/constants';
 import { getConfig } from '@/lib/config';
 import { requireOperator } from '@/lib/operator.server';
 import { resolveMonitorState } from '@/lib/monitor-state';
-import { publicMaintenances, publicView } from '@/lib/public-view';
+import { operatorSnapshot, visitorSnapshot, type Snapshot } from '@/lib/public-view';
 import { requireStateKv, resolveRuntimeEnv } from '@/lib/runtime-env';
 
 let initialTriggerPromise: Promise<boolean> | null = null;
@@ -51,43 +51,38 @@ async function readMonitorState(): Promise<MonitorState | null> {
   return resolveMonitorState(isMonitorState(state) ? state : null, triggerInitialCheck);
 }
 
-export const getMonitorState = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<MonitorState | null> => {
-    try {
-      const config = await getConfig();
-      return publicView(config, await readMonitorState()).state;
-    } catch (error) {
-      console.error('Error fetching monitor state:', error);
-      return null;
-    }
-  },
-);
+async function readMaintenances(): Promise<Maintenance[]> {
+  return readMaintenancesFromStorage(await requireStateKv());
+}
 
-/** Unfiltered monitor state, including private monitors. Admin only. */
-export const getAdminMonitorState = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<MonitorState | null> => {
+function logAndFallback<T>(promise: Promise<T>, message: string, fallback: T): Promise<T> {
+  return promise.catch((error: unknown) => {
+    console.error(message, error);
+    return fallback;
+  });
+}
+
+/** The visitor snapshot. KV failures degrade to empty data instead of an error page. */
+export async function readVisitorSnapshot(): Promise<Snapshot> {
+  const [config, state, maintenances] = await Promise.all([
+    getConfig(),
+    logAndFallback(readMonitorState(), 'Error fetching monitor state:', null),
+    logAndFallback(readMaintenances(), 'Error fetching maintenances:', []),
+  ]);
+  return visitorSnapshot(config, state, maintenances);
+}
+
+export const getVisitorSnapshot = createServerFn({ method: 'GET' }).handler(readVisitorSnapshot);
+
+/** Includes private monitors, their raw failure messages, and every maintenance window. */
+export const getOperatorSnapshot = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<Snapshot> => {
     await requireOperator();
-    return readMonitorState();
-  },
-);
-
-export const getMaintenances = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<Maintenance[]> => {
-    try {
-      const kv = await requireStateKv();
-      const config = await getConfig();
-      return publicMaintenances(config, await readMaintenancesFromStorage(kv));
-    } catch (error) {
-      console.error('Error fetching maintenances:', error);
-      return [];
-    }
-  },
-);
-
-export const getAdminMaintenances = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<Maintenance[]> => {
-    await requireOperator();
-    const kv = await requireStateKv();
-    return readMaintenancesFromStorage(kv);
+    const [config, state, maintenances] = await Promise.all([
+      getConfig(),
+      readMonitorState(),
+      readMaintenances(),
+    ]);
+    return operatorSnapshot(config, state, maintenances);
   },
 );

@@ -6,6 +6,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { Maintenance } from '@flarewatch/shared';
 import { qk } from '@/lib/query/keys';
+import type { Snapshot } from '@/lib/public-view';
 
 const { useCreateMaintenance, useDeleteMaintenance } =
   await import('../../src/lib/query/maintenance.mutations');
@@ -34,30 +35,36 @@ function setup(saved: Maintenance) {
   return { queryClient, wrapper };
 }
 
+function snapshotWith(maintenances: Maintenance[]): Snapshot {
+  return { monitors: [], groups: {}, state: null, maintenances };
+}
+
+function operatorMaintenances(queryClient: QueryClient): Maintenance[] | undefined {
+  return queryClient.getQueryData<Snapshot>(qk.operatorSnapshot)?.maintenances;
+}
+
 describe('maintenance mutations', () => {
   it('shows a created window in the admin list', async () => {
     const existing = maintenance('old', '2026-01-01T00:00:00.000Z');
     const created = maintenance('new', '2026-02-01T00:00:00.000Z');
     const { queryClient, wrapper } = setup(created);
-    queryClient.setQueryData(qk.adminMaintenances, [existing]);
+    queryClient.setQueryData(qk.operatorSnapshot, snapshotWith([existing]));
 
     const { result } = renderHook(() => useCreateMaintenance(), { wrapper });
     result.current.mutate({ body: created.body, start: created.start });
 
-    await waitFor(() =>
-      expect(queryClient.getQueryData(qk.adminMaintenances)).toEqual([created, existing]),
-    );
+    await waitFor(() => expect(operatorMaintenances(queryClient)).toEqual([created, existing]));
   });
 
   it('drops a deleted window from the admin list', async () => {
     const kept = maintenance('kept', '2026-01-01T00:00:00.000Z');
     const removed = maintenance('gone', '2026-02-01T00:00:00.000Z');
     const { queryClient, wrapper } = setup(removed);
-    queryClient.setQueryData(qk.adminMaintenances, [removed, kept]);
+    queryClient.setQueryData(qk.operatorSnapshot, snapshotWith([removed, kept]));
 
     const { result } = renderHook(() => useDeleteMaintenance(), { wrapper });
     result.current.mutate('gone');
 
-    await waitFor(() => expect(queryClient.getQueryData(qk.adminMaintenances)).toEqual([kept]));
+    await waitFor(() => expect(operatorMaintenances(queryClient)).toEqual([kept]));
   });
 });
