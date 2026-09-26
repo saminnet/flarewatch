@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import { isJsonObject } from '@flarewatch/shared';
 import { qk } from './keys';
 
@@ -19,11 +20,9 @@ export class SessionExpiredError extends Error {
   }
 }
 
-export function useAdminLogin(options?: {
-  onSuccess?: () => void;
-  onError?: (error: Error) => void;
-}) {
+export function useSignIn(options?: { onError?: (error: Error) => void }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   return useMutation({
     mutationFn: async (credentials: LoginCredentials): Promise<LoginResult> => {
@@ -42,32 +41,39 @@ export function useAdminLogin(options?: {
 
       return { ok: true };
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.operatorSnapshot });
-      options?.onSuccess?.();
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: qk.session });
+      await router.invalidate();
     },
     onError: options?.onError,
   });
 }
 
-export function useAdminLogout(options?: {
-  onSuccess?: () => void;
-  onError?: (error: Error) => void;
-}) {
+export function useSignOut() {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   return useMutation({
     mutationFn: async (): Promise<void> => {
       await fetch('/api/admin/session', { method: 'DELETE' });
     },
-    onSuccess: () => {
+    // Even when the request fails, drop the operator view from this tab. The
+    // operator snapshot goes last: the page still reads it until it reloads.
+    onSettled: async () => {
+      queryClient.removeQueries({ queryKey: qk.session });
+      await router.navigate({ to: '.', search: (prev) => ({ ...prev, view: undefined }) });
       queryClient.removeQueries({ queryKey: qk.operatorSnapshot });
-      options?.onSuccess?.();
     },
-    onError: options?.onError,
   });
 }
 
 export function isSessionExpiredError(error: unknown): boolean {
   return error instanceof Error && 'status' in error && error.status === 401;
+}
+
+/** The message to show when an operator-only request fails. */
+export function mutationErrorMessage(error: Error): string {
+  return isSessionExpiredError(error)
+    ? 'Your session has expired. Sign in again to save changes.'
+    : error.message;
 }

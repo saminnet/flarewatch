@@ -1,23 +1,7 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { AdminPage } from '@/components/routes/admin-page';
-import { operatorSnapshotQuery } from '@/lib/query/monitors.queries';
-import { checkAdminAuthServerFn } from '@/lib/auth-server';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/admin')({
-  beforeLoad: async () => {
-    const authState = await checkAdminAuthServerFn();
-    return { authState };
+  beforeLoad: () => {
+    throw redirect({ to: '/login' });
   },
-  loader: async ({ context }) => {
-    const { authState } = context;
-
-    if (authState === 'authenticated') {
-      await context.queryClient.ensureQueryData(operatorSnapshotQuery());
-    }
-
-    // Capture timestamp at load time for SSR hydration consistency
-    const loaderNowMs = Date.now();
-    return { authState, loaderNowMs };
-  },
-  component: AdminPage,
 });

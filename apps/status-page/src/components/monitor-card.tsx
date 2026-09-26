@@ -10,6 +10,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { StatusBar } from '@/components/status-bar';
 import { StatusIcon } from '@/components/status-icon';
 import { RunStrip } from '@/components/run-strip';
+import { CopyPingUrlButton } from '@/components/copy-ping-url-button';
+import { getHeartbeatPingUrl } from '@/lib/heartbeat-ping-url';
 import type { MonitorState } from '@flarewatch/shared';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import type { AdminMonitor } from '@/lib/public-view';
@@ -25,7 +27,8 @@ interface MonitorCardProps {
   state: MonitorState;
   open: boolean;
   onOpenChange?: (open: boolean) => void;
-  pingUrlSlot?: ReactNode;
+  /** Adds what only the operator sees: the raw error and the ping URL. */
+  operator?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -241,12 +244,12 @@ function MonitorSubLines({
   error,
   heartbeat,
   latency,
-  isAdminView,
+  operator,
 }: {
   error: string | null;
   heartbeat: HeartbeatView | null;
   latency: { ping: number; loc: string } | null;
-  isAdminView: boolean;
+  operator: boolean;
 }) {
   const lateDeadline = heartbeat?.phase === 'late' ? heartbeat.deadlineSec : undefined;
   const runningStart = heartbeat?.phase === 'running' ? heartbeat.startedSec : undefined;
@@ -258,7 +261,7 @@ function MonitorSubLines({
 
   return (
     <>
-      {error && !reportedFailure && !(overdueDeadline !== undefined && !isAdminView) && (
+      {error && !reportedFailure && !(overdueDeadline !== undefined && !operator) && (
         <p className="text-xs text-status-down-text line-clamp-2 wrap-break-word mt-0.5">{error}</p>
       )}
       {reportedFailure && (
@@ -266,7 +269,7 @@ function MonitorSubLines({
           Job reported failure
         </p>
       )}
-      {overdueDeadline !== undefined && !isAdminView && (
+      {overdueDeadline !== undefined && !operator && (
         <p className="text-xs text-status-down-text mt-0.5">
           {`Overdue, was expected by ${formatUtcShort(overdueDeadline)}`}
         </p>
@@ -322,7 +325,7 @@ function MonitorHeading({ monitor }: { monitor: AdminMonitor }) {
         <Badge variant="outline" className="shrink-0">
           <IconEyeOff className="size-3" aria-hidden="true" />
           Private
-          <span className="sr-only">{`${monitor.name} is private and never appears on the public page`}</span>
+          <span className="sr-only">{`${monitor.name} is private: visitors never see it`}</span>
         </Badge>
       )}
       {monitor.tooltip && (
@@ -378,7 +381,7 @@ export function MonitorCard({
   state,
   open,
   onOpenChange,
-  pingUrlSlot,
+  operator = false,
   className,
   style,
 }: MonitorCardProps) {
@@ -388,7 +391,6 @@ export function MonitorCard({
   const hasStarted = !!state.startedAt?.[monitor.id];
   const uptimeDisplay = formatUptimeDisplay(uptimePercent, hasStarted, 2);
   const errorLine = !isUp && error ? error : null;
-  const isAdminView = pingUrlSlot !== undefined;
 
   const uptimeBadge = (
     <Badge
@@ -432,7 +434,7 @@ export function MonitorCard({
                 error={errorLine}
                 heartbeat={heartbeat}
                 latency={latency}
-                isAdminView={isAdminView}
+                operator={operator}
               />
             </div>
 
@@ -459,7 +461,15 @@ export function MonitorCard({
                 uptimeBadge
               )}
 
-              {pingUrlSlot && <div className="relative z-20 flex items-center">{pingUrlSlot}</div>}
+              {operator && monitor.method === 'HEARTBEAT' && (
+                <div className="relative z-20 flex items-center">
+                  <CopyPingUrlButton
+                    monitorId={monitor.id}
+                    monitorName={monitor.name}
+                    loadPingUrl={(id) => getHeartbeatPingUrl({ data: { id } })}
+                  />
+                </div>
+              )}
 
               <IconChevronDown
                 className={cn(

@@ -2,6 +2,8 @@ import { queryOptions } from '@tanstack/react-query';
 import { getOperatorSnapshot, getVisitorSnapshot } from '@/lib/kv';
 import { getUiPrefsServerFn } from '@/lib/ui-prefs-server';
 import { getConfigServerFn } from '@/lib/config';
+import { getSessionServerFn } from '@/lib/session';
+import type { Viewer } from '@/lib/operator.server';
 import { qk } from './keys';
 import { QUERY_STALE_TIME } from '@/lib/constants';
 
@@ -12,18 +14,18 @@ export const configQuery = () =>
     staleTime: QUERY_STALE_TIME.MONITORS, // 5 minutes - config rarely changes
   });
 
-export const visitorSnapshotQuery = () =>
+export const snapshotQuery = (audience: Viewer) =>
   queryOptions({
-    queryFn: () => getVisitorSnapshot(),
-    queryKey: qk.visitorSnapshot,
+    queryFn: () => (audience === 'operator' ? getOperatorSnapshot() : getVisitorSnapshot()),
+    queryKey: audience === 'operator' ? qk.operatorSnapshot : qk.visitorSnapshot,
     staleTime: QUERY_STALE_TIME.DEFAULT, // 30 seconds - KV-backed data
   });
 
-export const operatorSnapshotQuery = () =>
+export const sessionQuery = () =>
   queryOptions({
-    queryFn: () => getOperatorSnapshot(),
-    queryKey: qk.operatorSnapshot,
-    staleTime: QUERY_STALE_TIME.DEFAULT,
+    queryFn: () => getSessionServerFn(),
+    queryKey: qk.session,
+    staleTime: Infinity, // Changes only on sign-in and sign-out, which reset it
   });
 
 export const uiPrefsQuery = () =>

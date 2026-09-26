@@ -1,7 +1,8 @@
 import { isNonEmptyString } from '@flarewatch/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { EventsPage } from '@/components/routes/events-page';
-import { visitorSnapshotQuery } from '@/lib/query/monitors.queries';
+import { snapshotQuery } from '@/lib/query/monitors.queries';
+import { audienceOf } from '@/lib/session';
 import { isValidYearMonth } from '@/lib/date';
 
 interface EventsSearch {
@@ -22,8 +23,11 @@ export const Route = createFileRoute('/events')({
     const type = search.type === 'incident' || search.type === 'maintenance' ? search.type : 'all';
     return { month, monitor, type };
   },
-  loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(visitorSnapshotQuery());
+  loaderDeps: ({ search }) => ({ view: search.view }),
+  loader: async ({ context, deps }) => {
+    await context.queryClient.ensureQueryData(
+      snapshotQuery(audienceOf(context.session, deps.view)),
+    );
     return { loaderNowMs: Date.now() };
   },
   component: EventsPage,

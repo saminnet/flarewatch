@@ -1,6 +1,7 @@
 import { getRouteApi, Outlet, HeadContent, Scripts } from '@tanstack/react-router';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
+import { VisitorViewBar } from '@/components/visitor-view-bar';
 import { getThemeInitScript } from '@/lib/theme-server';
 import { sanitizeThemeVars } from '@flarewatch/shared';
 
@@ -8,6 +9,9 @@ const rootRoute = getRouteApi('__root__');
 
 export function RootComponent() {
   const { theme, statusPage } = rootRoute.useLoaderData();
+  const { session } = rootRoute.useRouteContext();
+  const { view } = rootRoute.useSearch();
+  const visitorView = session.viewer === 'operator' && view === 'visitor';
   const themeInitScript = getThemeInitScript(theme);
   const isDark = theme === 'dark';
   const title = statusPage?.title || 'FlareWatch';
@@ -42,13 +46,18 @@ export function RootComponent() {
         >
           Skip to main content
         </a>
-        <Header config={statusPage} />
+        <Header config={statusPage} session={session} visitorView={visitorView} />
+        {visitorView && <VisitorViewBar />}
 
         <main id="main-content" className="flex-1">
           <Outlet />
         </main>
 
-        <Footer config={statusPage} theme={theme} />
+        <Footer
+          config={statusPage}
+          theme={theme}
+          showSignIn={session.viewer === 'visitor' && session.canSignIn}
+        />
 
         <Scripts />
       </body>

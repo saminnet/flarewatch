@@ -8,12 +8,16 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import type { PageConfig } from '@flarewatch/shared';
+import { UserMenu } from '@/components/user-menu';
+import type { Session } from '@/lib/session';
 
 interface HeaderProps {
   config?: PageConfig;
+  session: Session;
+  visitorView: boolean;
 }
 
-export function Header({ config }: HeaderProps) {
+export function Header({ config, session, visitorView }: HeaderProps) {
   const hasExternalLinks = config?.links && config.links.length > 0;
 
   return (
@@ -107,6 +111,10 @@ export function Header({ config }: HeaderProps) {
                 </DropdownMenu>
               </div>
             </>
+          )}
+
+          {session.viewer === 'operator' && (
+            <UserMenu session={session} visitorView={visitorView} />
           )}
         </nav>
       </div>

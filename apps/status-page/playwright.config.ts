@@ -30,12 +30,12 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium-public',
-      grepInvert: /admin maintenance lifecycle/,
+      grepInvert: /operator maintenance lifecycle/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      name: 'chromium-admin',
-      grep: /admin maintenance lifecycle/,
+      name: 'chromium-operator',
+      grep: /operator maintenance lifecycle/,
       dependencies: ['chromium-public'],
       use: { ...devices['Desktop Chrome'] },
     },

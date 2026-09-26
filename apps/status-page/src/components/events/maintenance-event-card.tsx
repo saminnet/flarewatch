@@ -1,6 +1,7 @@
-import { IconTool } from '@tabler/icons-react';
+import { IconPencil, IconTool, IconTrash } from '@tabler/icons-react';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MaintenanceStatusBadge } from '@/components/maintenance/status-badge';
 import type { PublicMonitor } from '@/lib/public-view';
 import { cn } from '@/lib/utils';
@@ -16,9 +17,18 @@ interface MaintenanceEventCardProps {
   event: MaintenanceEvent;
   monitors: PublicMonitor[];
   nowMs: number;
+  /** Operator only. */
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEventCardProps) {
+export function MaintenanceEventCard({
+  event,
+  monitors,
+  nowMs,
+  onEdit,
+  onDelete,
+}: MaintenanceEventCardProps) {
   const { maintenance } = event;
   const startDate = new Date(maintenance.start);
   const endDate = maintenance.end ? new Date(maintenance.end) : null;
@@ -26,12 +36,13 @@ export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEven
 
   const affectedMonitors = resolveAffectedMonitors(maintenance.monitors, monitors);
   const colors = getMaintenanceColors(maintenance.color);
+  const title = maintenance.title ?? 'Scheduled Maintenance';
 
   return (
     <Alert className={colors.bg}>
       <AlertTitle className="flex items-center gap-2">
         <IconTool className={cn('h-4 w-4', colors.icon)} />
-        {maintenance.title ?? 'Scheduled Maintenance'}
+        {title}
         <Badge variant="outline" className="text-xs">
           Maintenance
         </Badge>
@@ -58,6 +69,23 @@ export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEven
           </div>
         )}
       </AlertDescription>
+
+      {onEdit && onDelete && (
+        <AlertAction className="flex gap-1">
+          <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label={`Edit ${title}`}>
+            <IconPencil className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onDelete}
+            aria-label={`Delete ${title}`}
+            className="hover:text-destructive"
+          >
+            <IconTrash className="size-4" />
+          </Button>
+        </AlertAction>
+      )}
     </Alert>
   );
 }

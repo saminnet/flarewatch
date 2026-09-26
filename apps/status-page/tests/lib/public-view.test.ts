@@ -264,4 +264,32 @@ describe('snapshots', () => {
     expect(snapshot.state?.heartbeat?.['hidden-job']?.message).toBe('secret job failed');
     expect(snapshot.maintenances).toEqual(maintenances);
   });
+
+  it('counts every monitor the worker has seen for the operator, published only for visitors', () => {
+    const counted: MonitorState = {
+      lastUpdate: 123,
+      // What the worker stores: published monitors only.
+      overallUp: 2,
+      overallDown: 0,
+      overallLate: 1,
+      startedAt: { public: 100, hidden: 100 },
+      incident: {
+        public: [{ start: [100], end: 110, error: ['recovered'] }],
+        hidden: [{ start: [110], error: ['still failing'] }],
+      },
+      latency: {},
+      heartbeat: { job: { status: 'late', lastSuccess: 100, deadline: 130 } },
+    };
+
+    expect(operatorSnapshot(config, counted, []).state).toMatchObject({
+      overallUp: 2,
+      overallDown: 1,
+      overallLate: 1,
+    });
+    expect(visitorSnapshot(config, counted, []).state).toMatchObject({
+      overallUp: 2,
+      overallDown: 0,
+      overallLate: 1,
+    });
+  });
 });

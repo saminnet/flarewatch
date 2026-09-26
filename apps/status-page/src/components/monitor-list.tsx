@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { IconWorld, IconClockPlay } from '@tabler/icons-react';
 import {
@@ -34,7 +34,7 @@ interface MonitorListProps {
   state: MonitorState;
   groups?: PageConfigGroup;
   uiPrefs?: UiPrefs;
-  pingUrlSlot?: (monitor: AdminMonitor) => ReactNode;
+  operator?: boolean;
   kind?: MonitorKindFilter;
   onKindChange?: (kind: MonitorKindFilter | undefined) => void;
 }
@@ -44,7 +44,7 @@ export function MonitorList({
   state,
   groups,
   uiPrefs,
-  pingUrlSlot,
+  operator,
   kind,
   onKindChange,
 }: MonitorListProps) {
@@ -88,7 +88,7 @@ export function MonitorList({
         state={state}
         open={!collapsedMonitors.includes(monitor.id)}
         onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
-        pingUrlSlot={pingUrlSlot?.(monitor)}
+        operator={operator}
         className="animate-fade-in-up opacity-0"
         style={{ animationDelay: `${index * 30}ms` }}
       />

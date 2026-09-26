@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
-import { CopyPingUrlButton } from '@/components/admin/copy-ping-url-button';
+import { CopyPingUrlButton } from '@/components/copy-ping-url-button';
 
 const getHeartbeatPingUrl = vi.fn<(id: string) => Promise<string | null>>();
 

@@ -52,7 +52,7 @@ Live demo: <https://demo.flarewatch.app>
   Zulip, Resend email, and custom webhook notifications. Mattermost and
   Rocket.Chat use the Slack template.
 - Incident history, latency history, uptime percentages, and uptime calendar.
-- Scheduled maintenance windows managed from the `/admin` UI.
+- Scheduled maintenance windows you add and edit on the Events page after signing in.
 - Embeddable SVG badges and per-monitor status widgets.
 - Public JSON APIs for status and maintenance data.
 - Light/dark mode, theme tokens, custom CSS, and optional custom domains.
@@ -154,7 +154,7 @@ repository secret** and add:
 
 Optional secrets:
 
-- `FLAREWATCH_ADMIN_BASIC_AUTH` - protects `/admin` and `/api/admin/*`.
+- `FLAREWATCH_ADMIN_BASIC_AUTH` - your operator sign-in at `/login`. It also protects `/api/admin/*`.
 - `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` - protects the whole site.
 - `FLAREWATCH_PROXY_TOKEN` - bearer token for a check proxy.
 
@@ -246,9 +246,10 @@ export const pageConfig = {
 
 Set `private: true` on a monitor to keep it off the status page: private
 monitors are checked, stored, and alerted like any other, but they never appear
-on the public page or the public API. You can see them (marked with a
-"private" badge) and attach them to maintenance windows under `/admin` after
-signing in.
+on the public page or the public API. Once you sign in, the same pages show
+them with a "private" badge, and you can attach them to maintenance windows on
+the Events page. The Visitor view switch in your account menu shows the page as
+visitors see it.
 
 ## Notifications
 

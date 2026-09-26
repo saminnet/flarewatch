@@ -38,7 +38,7 @@ comment stating the checked invariant.
 
 - `services/worker` runs scheduled checks and writes state to KV (`FLAREWATCH_STATE` binding).
 - `apps/status-page` reads the same KV state and renders the UI on Cloudflare Workers.
-- `/admin` (optional) manages maintenances stored in the same KV under the `maintenances` key.
+- Signed in at `/login`, the operator sees private monitors and manages maintenances on `/events`. Maintenances live in the same KV under the `maintenances` key.
 - Optional external proxy (`https://github.com/saminnet/flarewatch-proxy`) executes checks from custom locations (private networks, TCP, SSL).
 
 ## Deployment Model

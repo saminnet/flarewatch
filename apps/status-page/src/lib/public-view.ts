@@ -7,6 +7,7 @@ import {
   type PageConfigGroup,
   type RuntimeConfig,
 } from '@flarewatch/shared';
+import { isMonitorUp } from './uptime';
 
 export type PublicMonitor = Pick<Monitor, 'id' | 'name' | 'tooltip' | 'method'> & {
   hideLatencyChart?: boolean;
@@ -158,6 +159,24 @@ export function visitorSnapshot(
   };
 }
 
+/**
+ * The worker's overall counts cover published monitors only. The operator's
+ * cover every monitor the worker has seen, counted the way the worker counts.
+ */
+function withOperatorCounts(state: MonitorState, monitors: Monitor[]): MonitorState {
+  let up = 0;
+  let down = 0;
+  let late = 0;
+  for (const { id } of monitors) {
+    const heartbeat = state.heartbeat?.[id];
+    if (state.startedAt[id] === undefined && !heartbeat) continue;
+    if (isMonitorUp(id, state)) up++;
+    else down++;
+    if (heartbeat?.status === 'late') late++;
+  }
+  return { ...state, overallUp: up, overallDown: down, overallLate: late };
+}
+
 export function operatorSnapshot(
   config: RuntimeConfig,
   state: MonitorState | null,
@@ -167,7 +186,7 @@ export function operatorSnapshot(
   return {
     monitors,
     groups: groupsOf(config, new Set(monitors.map((monitor) => monitor.id))),
-    state,
+    state: state && withOperatorCounts(state, config.monitors),
     maintenances,
   };
 }

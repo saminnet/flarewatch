@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as EventsRouteImport } from './routes/events'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiBadgeRouteImport } from './routes/api/badge'
 import { Route as ApiDataRouteImport } from './routes/api/data'
 import { Route as ApiMaintenancesRouteImport } from './routes/api/maintenances'
@@ -33,6 +34,11 @@ const AdminRoute = AdminRouteImport.update({
 const EventsRoute = EventsRouteImport.update({
   id: '/events',
   path: '/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiBadgeRoute = ApiBadgeRouteImport.update({
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/events': typeof EventsRoute
+  '/login': typeof LoginRoute
   '/api/badge': typeof ApiBadgeRoute
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/events': typeof EventsRoute
+  '/login': typeof LoginRoute
   '/api/badge': typeof ApiBadgeRoute
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/events': typeof EventsRoute
+  '/login': typeof LoginRoute
   '/api/badge': typeof ApiBadgeRoute
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/events'
+    | '/login'
     | '/api/badge'
     | '/api/data'
     | '/api/maintenances'
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/events'
+    | '/login'
     | '/api/badge'
     | '/api/data'
     | '/api/maintenances'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/events'
+    | '/login'
     | '/api/badge'
     | '/api/data'
     | '/api/maintenances'
@@ -151,6 +163,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   EventsRoute: typeof EventsRoute
+  LoginRoute: typeof LoginRoute
   ApiBadgeRoute: typeof ApiBadgeRoute
   ApiDataRoute: typeof ApiDataRoute
   ApiMaintenancesRoute: typeof ApiMaintenancesRoute
@@ -181,6 +194,13 @@ declare module '@tanstack/react-router' {
       path: '/events'
       fullPath: '/events'
       preLoaderRoute: typeof EventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/badge': {
@@ -239,6 +259,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   EventsRoute: EventsRoute,
+  LoginRoute: LoginRoute,
   ApiBadgeRoute: ApiBadgeRoute,
   ApiDataRoute: ApiDataRoute,
   ApiMaintenancesRoute: ApiMaintenancesRoute,

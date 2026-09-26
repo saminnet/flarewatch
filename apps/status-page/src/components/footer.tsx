@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { IconFlame } from '@tabler/icons-react';
 import type { PageConfig } from '@flarewatch/shared';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -7,9 +8,10 @@ import { DEFAULT_POWERED_BY_URL, PAGE_CONTAINER_CLASSES } from '@/lib/constants'
 interface FooterProps {
   config?: PageConfig;
   theme?: ThemePreference;
+  showSignIn: boolean;
 }
 
-export function Footer({ config, theme = 'system' }: FooterProps) {
+export function Footer({ config, theme = 'system', showSignIn }: FooterProps) {
   const poweredByUrl = config?.poweredByUrl ?? DEFAULT_POWERED_BY_URL;
 
   return (
@@ -32,6 +34,11 @@ export function Footer({ config, theme = 'system' }: FooterProps) {
           </div>
 
           <div className="flex items-center gap-4">
+            {showSignIn && (
+              <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
+                Sign in
+              </Link>
+            )}
             <ThemeToggle initialTheme={theme} />
           </div>
         </div>

@@ -4,7 +4,9 @@ import { OverallStatus } from '@/components/overall-status';
 import { MonitorList, type MonitorKindFilter } from '@/components/monitor-list';
 import { MaintenanceAlerts } from '@/components/maintenance/alerts';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
-import { uiPrefsQuery, visitorSnapshotQuery } from '@/lib/query/monitors.queries';
+import { snapshotQuery, uiPrefsQuery } from '@/lib/query/monitors.queries';
+import { useAudience } from '@/lib/hooks/use-audience';
+import { audienceOf } from '@/lib/session';
 
 interface IndexSearch {
   kind?: MonitorKindFilter;
@@ -14,9 +16,10 @@ export const Route = createFileRoute('/')({
   validateSearch: (search): IndexSearch => ({
     kind: search.kind === 'web' || search.kind === 'jobs' ? search.kind : undefined,
   }),
-  loader: async ({ context }) => {
+  loaderDeps: ({ search }) => ({ view: search.view }),
+  loader: async ({ context, deps }) => {
     await Promise.all([
-      context.queryClient.ensureQueryData(visitorSnapshotQuery()),
+      context.queryClient.ensureQueryData(snapshotQuery(audienceOf(context.session, deps.view))),
       context.queryClient.ensureQueryData(uiPrefsQuery()),
     ]);
   },
@@ -26,9 +29,10 @@ export const Route = createFileRoute('/')({
 function DashboardPage() {
   const { kind } = Route.useSearch();
   const navigate = Route.useNavigate();
+  const audience = useAudience();
   const {
     data: { monitors, groups, state, maintenances },
-  } = useSuspenseQuery(visitorSnapshotQuery());
+  } = useSuspenseQuery(snapshotQuery(audience));
   const { data: uiPrefs } = useSuspenseQuery(uiPrefsQuery());
 
   // State can be null if KV has no data yet (worker hasn't run)
@@ -67,6 +71,7 @@ function DashboardPage() {
             state={state}
             groups={groups}
             uiPrefs={uiPrefs}
+            operator={audience === 'operator'}
             kind={kind}
             onKindChange={(value) =>
               void navigate({ search: (prev) => ({ ...prev, kind: value }) })

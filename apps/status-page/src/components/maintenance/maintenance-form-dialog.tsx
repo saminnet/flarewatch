@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateTimePicker } from '@/components/ui/datetime-picker';
 import {
   Dialog,
@@ -14,43 +16,68 @@ import {
 import type { Maintenance } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
 import { SEVERITY_OPTIONS, getMaintenanceColors } from '@/lib/maintenance';
-import type { MaintenanceFormData } from '@/lib/hooks/use-maintenance-form';
+import {
+  toMaintenanceConfig,
+  toMaintenancePatch,
+  useMaintenanceForm,
+} from '@/lib/hooks/use-maintenance-form';
+import { useCreateMaintenance, useUpdateMaintenance } from '@/lib/query/maintenance.mutations';
+import { mutationErrorMessage } from '@/lib/query/auth.mutations';
 
 interface MaintenanceFormDialogProps {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  editingMaintenance: Maintenance | null;
-  formData: MaintenanceFormData;
+  /** The window to edit; a new one when left out. */
+  maintenance?: Maintenance;
   monitors: PublicMonitor[];
-  updateField: <K extends keyof MaintenanceFormData>(key: K, value: MaintenanceFormData[K]) => void;
-  toggleMonitor: (id: string) => void;
-  isEndBeforeStart: boolean;
-  isValid: boolean;
-  isPending: boolean;
-  onSubmit: () => void;
+  onClose: () => void;
 }
 
 export function MaintenanceFormDialog({
   open,
-  onOpenChange,
-  editingMaintenance,
-  formData,
+  maintenance,
   monitors,
-  updateField,
-  toggleMonitor,
-  isEndBeforeStart,
-  isValid,
-  isPending,
-  onSubmit,
+  onClose,
 }: MaintenanceFormDialogProps) {
+  const { formData, updateField, toggleMonitor, isEndBeforeStart, isValid } =
+    useMaintenanceForm(maintenance);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const callbacks = {
+    onSuccess: onClose,
+    onError: (error: Error) => setErrorMessage(mutationErrorMessage(error)),
+  };
+  const createMutation = useCreateMaintenance(callbacks);
+  const updateMutation = useUpdateMaintenance(callbacks);
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
+  function handleSubmit() {
+    const { start } = formData;
+    if (!isValid || !start) return;
+    setErrorMessage(null);
+    if (maintenance) {
+      updateMutation.mutate({
+        id: maintenance.id,
+        updates: toMaintenancePatch({ ...formData, start }),
+      });
+    } else {
+      createMutation.mutate(toMaintenanceConfig({ ...formData, start }));
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {editingMaintenance ? 'Edit maintenance window' : 'Add maintenance window'}
+            {maintenance ? 'Edit maintenance window' : 'Add maintenance window'}
           </DialogTitle>
         </DialogHeader>
+
+        {errorMessage && (
+          <Alert variant="destructive">
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        )}
 
         <div className="space-y-4 pb-4">
           <div>
@@ -148,7 +175,7 @@ export function MaintenanceFormDialog({
 
         <div className="flex justify-end gap-2">
           <DialogClose render={<Button variant="outline">Cancel</Button>} />
-          <Button onClick={onSubmit} disabled={!isValid || isPending}>
+          <Button onClick={handleSubmit} disabled={!isValid || isPending}>
             {isPending ? 'Saving...' : 'Save'}
           </Button>
         </div>

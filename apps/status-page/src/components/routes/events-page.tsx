@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { IconChevronLeft, IconChevronRight, IconCalendar } from '@tabler/icons-react';
+import { IconChevronLeft, IconChevronRight, IconCalendar, IconPlus } from '@tabler/icons-react';
+import type { Maintenance } from '@flarewatch/shared';
 import { Button } from '@/components/ui/button';
 import { MonthPicker } from '@/components/ui/month-picker';
 import {
@@ -14,7 +16,10 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { UptimeCalendar } from '@/components/uptime-calendar/uptime-calendar';
 import { IncidentCard } from '@/components/events/incident-card';
 import { MaintenanceEventCard } from '@/components/events/maintenance-event-card';
-import { visitorSnapshotQuery } from '@/lib/query/monitors.queries';
+import { MaintenanceFormDialog } from '@/components/maintenance/maintenance-form-dialog';
+import { DeleteMaintenanceDialog } from '@/components/maintenance/delete-maintenance-dialog';
+import { snapshotQuery } from '@/lib/query/monitors.queries';
+import { useAudience } from '@/lib/hooks/use-audience';
 import { useNow } from '@/lib/hooks/use-now';
 import { shiftYearMonth, getUtcMonthBounds } from '@/lib/date';
 import { projectTimeline } from '@/lib/status-projection';
@@ -26,10 +31,25 @@ function getCurrentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
+/** Dialogs stay mounted with their last target so they can animate out. */
+type DialogTarget = { open: boolean; maintenance?: Maintenance; key: number };
+
+const CLOSED: DialogTarget = { open: false, key: 0 };
+
 export function EventsPage() {
+  const audience = useAudience();
+  const operator = audience === 'operator';
   const {
     data: { monitors, state, maintenances },
-  } = useSuspenseQuery(visitorSnapshotQuery());
+  } = useSuspenseQuery(snapshotQuery(audience));
+  const [editing, setEditing] = useState(CLOSED);
+  const [deleting, setDeleting] = useState(CLOSED);
+  const openFor = (maintenance?: Maintenance) => (prev: DialogTarget) => ({
+    open: true,
+    maintenance,
+    key: prev.key + 1,
+  });
+  const closeDialog = (prev: DialogTarget) => ({ ...prev, open: false });
   const { loaderNowMs } = eventsRoute.useLoaderData();
   const nowMs = useNow({ serverTime: loaderNowMs });
   const {
@@ -53,6 +73,14 @@ export function EventsPage() {
     eventType: eventType ?? 'all',
   });
 
+  function maintenanceActions(maintenance: Maintenance) {
+    if (!operator) return {};
+    return {
+      onEdit: () => setEditing(openFor(maintenance)),
+      onDelete: () => setDeleting(openFor(maintenance)),
+    };
+  }
+
   const prevMonth = shiftYearMonth(resolvedMonth, -1);
   const nextMonth = shiftYearMonth(resolvedMonth, 1);
 
@@ -69,9 +97,17 @@ export function EventsPage() {
 
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-foreground">Events</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Incidents and scheduled maintenance</p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Events</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Incidents and scheduled maintenance</p>
+        </div>
+        {operator && (
+          <Button onClick={() => setEditing(openFor())}>
+            <IconPlus className="size-4" />
+            Add maintenance window
+          </Button>
+        )}
       </div>
 
       {state && <UptimeCalendar monitors={monitors} state={state} selectedMonth={resolvedMonth} />}
@@ -171,6 +207,7 @@ export function EventsPage() {
                   event={event}
                   monitors={monitors}
                   nowMs={nowMs}
+                  {...maintenanceActions(event.maintenance)}
                 />
               ))}
             </div>
@@ -191,12 +228,31 @@ export function EventsPage() {
                     event={event}
                     monitors={monitors}
                     nowMs={nowMs}
+                    {...maintenanceActions(event.maintenance)}
                   />
                 ),
               )}
             </div>
           )}
         </div>
+      )}
+
+      {operator && (
+        <>
+          <MaintenanceFormDialog
+            key={editing.key}
+            open={editing.open}
+            maintenance={editing.maintenance}
+            monitors={monitors}
+            onClose={() => setEditing(closeDialog)}
+          />
+          <DeleteMaintenanceDialog
+            key={deleting.key}
+            open={deleting.open}
+            maintenance={deleting.maintenance}
+            onClose={() => setDeleting(closeDialog)}
+          />
+        </>
       )}
     </div>
   );

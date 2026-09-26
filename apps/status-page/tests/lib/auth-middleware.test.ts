@@ -105,13 +105,9 @@ describe('auth middleware admin access', () => {
     expect(bad.next).not.toHaveBeenCalled();
   });
 
-  it('hides admin routes in production when sign-in is not configured', async () => {
+  it('blocks admin APIs in production when sign-in is not configured', async () => {
     vi.stubGlobal('__env__', {});
     vi.stubEnv('DEV', false);
-
-    const page = call('/admin');
-    expect(((await page.response) as Response).status).toBe(404);
-    expect(page.next).not.toHaveBeenCalled();
 
     const api = call('/api/admin/maintenances', { method: 'POST' });
     expect(((await api.response) as Response).status).toBe(403);
@@ -148,5 +144,30 @@ describe('auth middleware admin access', () => {
       headers: { Cookie: cookie, Origin: 'https://status.test' },
     });
     await expect(((await sameOrigin.response) as Response).text()).resolves.toBe('next');
+  });
+});
+
+describe('auth middleware caching', () => {
+  function renderPage(cookie?: string) {
+    const page = new Response('page', { headers: { 'Cache-Control': 'public, max-age=60' } });
+    const next = vi.fn(async () => ({ response: page }));
+    const request = new Request(
+      'https://status.test/',
+      cookie ? { headers: { Cookie: cookie } } : {},
+    );
+    return authMiddlewareServer({ request, pathname: '/', next } as never).then(() =>
+      page.headers.get('Cache-Control'),
+    );
+  }
+
+  it('keeps pages rendered for the operator out of shared caches', async () => {
+    vi.stubGlobal('__env__', {
+      FLAREWATCH_ADMIN_BASIC_AUTH: 'configured',
+      STATE_KV: sessionKv('abc'),
+    });
+
+    await expect(renderPage('flarewatch_admin_session=abc')).resolves.toBe('private, no-store');
+    await expect(renderPage('flarewatch_admin_session=forged')).resolves.toBe('public, max-age=60');
+    await expect(renderPage()).resolves.toBe('public, max-age=60');
   });
 });

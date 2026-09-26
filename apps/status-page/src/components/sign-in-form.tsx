@@ -6,22 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
-import { useAdminLogin } from '@/lib/query/auth.mutations';
+import { useSignIn } from '@/lib/query/auth.mutations';
 
-type AdminLoginFormProps = {
-  onLoginSuccess: () => void;
-};
-
-export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
+export function SignInForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  const loginMutation = useAdminLogin({
-    onSuccess: () => {
-      setPassword('');
-      onLoginSuccess();
-    },
+  const loginMutation = useSignIn({
     onError: (error) => {
       setLoginError(error.message);
     },
@@ -38,9 +30,9 @@ export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-4 text-center">
-          <h1 className="text-2xl font-bold text-foreground">Admin sign-in</h1>
+          <h1 className="text-2xl font-bold text-foreground">Sign in</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sign in to manage scheduled maintenance windows.
+            For the operator of this status page.
           </p>
         </div>
 

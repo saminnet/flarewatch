@@ -3,16 +3,6 @@ import { verifyBasicAuthHeader } from '@/lib/auth-secret';
 import { resolveRuntimeEnv } from '@/lib/runtime-env';
 import { resolveViewer } from '@/lib/operator.server';
 
-function isAdminRoute(pathname: string): boolean {
-  return (
-    pathname === '/admin' || pathname.startsWith('/admin/') || pathname.startsWith('/api/admin')
-  );
-}
-
-function isAdminUIRoute(pathname: string): boolean {
-  return pathname === '/admin' || pathname.startsWith('/admin/');
-}
-
 function unauthorized(realm: string): Response {
   return new Response('Not authenticated', {
     status: 401,
@@ -44,28 +34,37 @@ function hasInvalidOrigin(request: Request): boolean {
   return origin !== new URL(request.url).origin;
 }
 
+type MiddlewareResult = Response | RequestServerResult<any, any, any>;
+
 export async function authMiddlewareServer(
   opts: RequestServerOptions<any, any>,
-): Promise<Response | RequestServerResult<any, any, any>> {
-  const { request, pathname, next } = opts;
-  const env = await resolveRuntimeEnv();
-
+): Promise<MiddlewareResult> {
   // Ping endpoints carry their own HMAC token, verified by the monitoring
   // worker over the service binding. Basic Auth would break curl and systemd
   // reporters, so they are exempt here.
-  if (pathname.startsWith('/ping/')) {
-    return next();
+  if (opts.pathname.startsWith('/ping/')) {
+    return opts.next();
   }
 
-  if (isAdminRoute(pathname)) {
+  const result = await authorize(opts);
+  const env = await resolveRuntimeEnv();
+  // What the operator sees must never be stored by a shared cache.
+  if ((await resolveViewer(env, opts.request)) === 'operator') {
+    const response = result instanceof Response ? result : result.response;
+    response.headers.set('Cache-Control', 'private, no-store');
+  }
+  return result;
+}
+
+async function authorize(opts: RequestServerOptions<any, any>): Promise<MiddlewareResult> {
+  const { request, pathname, next } = opts;
+  const env = await resolveRuntimeEnv();
+
+  if (pathname.startsWith('/api/admin')) {
     const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
     if (!adminCreds) {
       if (import.meta.env.DEV) {
         return next();
-      }
-      // Hide the admin UI when not configured, and block writes.
-      if (isAdminUIRoute(pathname)) {
-        return new Response('Not found', { status: 404 });
       }
       return new Response('Admin access not configured', { status: 403 });
     }
@@ -77,10 +76,6 @@ export async function authMiddlewareServer(
       hasInvalidOrigin(request)
     ) {
       return forbidden('Invalid origin');
-    }
-
-    if (isAdminUIRoute(pathname)) {
-      return next();
     }
 
     if (pathname === '/api/admin/session') {
