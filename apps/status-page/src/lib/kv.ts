@@ -8,7 +8,7 @@ import {
 } from '@flarewatch/shared';
 import { INITIAL_TRIGGER_RETRY_MS } from '@/lib/constants';
 import { getConfig } from '@/lib/config';
-import { requireAdminAuthenticated } from '@/lib/admin-auth.server';
+import { requireOperator } from '@/lib/operator.server';
 import { resolveMonitorState } from '@/lib/monitor-state';
 import { publicMaintenances, publicView } from '@/lib/public-view';
 import { requireStateKv, resolveRuntimeEnv } from '@/lib/runtime-env';
@@ -66,7 +66,7 @@ export const getMonitorState = createServerFn({ method: 'GET' }).handler(
 /** Unfiltered monitor state, including private monitors. Admin only. */
 export const getAdminMonitorState = createServerFn({ method: 'GET' }).handler(
   async (): Promise<MonitorState | null> => {
-    await requireAdminAuthenticated();
+    await requireOperator();
     return readMonitorState();
   },
 );
@@ -86,7 +86,7 @@ export const getMaintenances = createServerFn({ method: 'GET' }).handler(
 
 export const getAdminMaintenances = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Maintenance[]> => {
-    await requireAdminAuthenticated();
+    await requireOperator();
     const kv = await requireStateKv();
     return readMaintenancesFromStorage(kv);
   },

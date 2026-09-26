@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getConfig } from '@/lib/config';
-import { requireAdminAuthenticated } from '@/lib/admin-auth.server';
+import { requireOperator } from '@/lib/operator.server';
 import {
   publicView,
   toAdminMonitors,
@@ -17,7 +17,7 @@ export const getPublicMonitors = createServerFn({ method: 'GET' }).handler(
 
 export const getAdminMonitors = createServerFn({ method: 'GET' }).handler(
   async (): Promise<AdminMonitor[]> => {
-    await requireAdminAuthenticated();
+    await requireOperator();
     const config = await getConfig();
     return toAdminMonitors(config);
   },

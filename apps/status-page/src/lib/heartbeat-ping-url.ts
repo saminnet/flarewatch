@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getRequestUrl } from '@tanstack/react-start/server';
-import { requireAdminAuthenticated } from '@/lib/admin-auth.server';
+import { requireOperator } from '@/lib/operator.server';
 import { fetchPingUrl } from '@/lib/heartbeat';
 import { resolveRuntimeEnv } from '@/lib/runtime-env';
 
@@ -8,7 +8,7 @@ import { resolveRuntimeEnv } from '@/lib/runtime-env';
 export const getHeartbeatPingUrl = createServerFn({ method: 'GET' })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }): Promise<string | null> => {
-    await requireAdminAuthenticated();
+    await requireOperator();
     const env = await resolveRuntimeEnv();
     return fetchPingUrl(env.MONITOR_WORKER, getRequestUrl().origin, data.id);
   });

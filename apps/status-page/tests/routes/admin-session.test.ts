@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { Route } from '@/routes/api/admin/session';
 import { AUTH } from '@/lib/constants';
+import { memoryKv } from '../helpers/kv';
 
 type SessionHandler = (ctx: { request: Request }) => Promise<Response>;
 
@@ -45,20 +46,6 @@ describe('POST /api/admin/session body guard', () => {
 });
 
 describe('POST /api/admin/session login rate limit', () => {
-  function sessionKv(): KVNamespace {
-    const values = new Map<string, string>();
-    const kv = {
-      get: vi.fn(async (key: string) => values.get(key) ?? null),
-      put: vi.fn(async (key: string, value: string) => {
-        values.set(key, value);
-      }),
-      delete: vi.fn(async (key: string) => {
-        values.delete(key);
-      }),
-    };
-    return kv as typeof kv & KVNamespace;
-  }
-
   function loginRequest(password: string): Request {
     return new Request('https://flarewatch.test/api/admin/session', {
       method: 'POST',
@@ -89,7 +76,7 @@ describe('POST /api/admin/session login rate limit', () => {
       salt: btoa(String.fromCharCode(...salt)),
       hash: btoa(String.fromCharCode(...new Uint8Array(bits))),
     });
-    const kv = sessionKv();
+    const kv = memoryKv();
     globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: secret, STATE_KV: kv };
 
     for (let attempt = 0; attempt < AUTH.LOGIN_RATE_LIMIT_MAX_ATTEMPTS; attempt++) {

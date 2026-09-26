@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { isJsonObject, type JsonValue } from '@flarewatch/shared';
-import { getAdminSessionCookie, type SessionData } from '@/lib/auth-utils';
+import { endSession, isSignInConfigured, startSession } from '@/lib/operator.server';
 import { verifyAuthSecret } from '@/lib/auth-secret';
 import { resolveRuntimeEnv, requireStateKv } from '@/lib/runtime-env';
 import { AUTH } from '@/lib/constants';
@@ -105,14 +105,7 @@ export const Route = createFileRoute('/api/admin/session')({
             await clearLoginFailures(kv, ip);
           }
 
-          const sessionId = crypto.randomUUID();
-          const sessionData: SessionData = {
-            createdAt: Date.now(),
-            ip,
-          };
-          await kv.put(`${AUTH.SESSION_KEY_PREFIX}${sessionId}`, JSON.stringify(sessionData), {
-            expirationTtl: AUTH.SESSION_TTL_SECONDS,
-          });
+          const sessionId = await startSession(kv, ip);
 
           return jsonResponse({ ok: true }, 200, {
             'Set-Cookie': setSessionCookie(request, sessionId),
@@ -123,18 +116,13 @@ export const Route = createFileRoute('/api/admin/session')({
       },
 
       DELETE: async ({ request }: { request: Request }) => {
-        const env = await resolveRuntimeEnv();
-        const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
-        if (!adminCreds) {
+        if (!isSignInConfigured(await resolveRuntimeEnv())) {
           return jsonResponse({ error: 'Admin access not configured' }, 404);
         }
 
         try {
           const kv = await requireStateKv();
-          const sessionId = getAdminSessionCookie(request.headers.get('Cookie'));
-          if (sessionId) {
-            await kv.delete(`${AUTH.SESSION_KEY_PREFIX}${sessionId}`);
-          }
+          await endSession(kv, request);
           return new Response(null, {
             status: 204,
             headers: { 'Set-Cookie': clearSessionCookie(request) },

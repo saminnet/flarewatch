@@ -1,7 +1,7 @@
 import type { RequestServerOptions, RequestServerResult } from '@tanstack/react-start';
-import { getAdminSessionCookie, validateSession } from '@/lib/auth-utils';
 import { verifyBasicAuthHeader } from '@/lib/auth-secret';
 import { resolveRuntimeEnv } from '@/lib/runtime-env';
+import { resolveViewer } from '@/lib/operator.server';
 
 function isAdminRoute(pathname: string): boolean {
   return (
@@ -87,15 +87,12 @@ export async function authMiddlewareServer(
       return next();
     }
 
-    const kv = env.STATE_KV ?? env.FLAREWATCH_STATE;
-    const sessionId = getAdminSessionCookie(request.headers.get('Cookie'));
-    if (kv && sessionId) {
-      const session = await validateSession(kv, sessionId);
-      if (session) {
-        return next();
-      }
+    if ((await resolveViewer(env, request)) === 'operator') {
+      return next();
     }
 
+    // Scripts authenticate with the Basic header. Checked only here: PBKDF2
+    // verification is too costly to run on every page request.
     if (await verifyBasicAuthHeader(adminCreds, request.headers.get('Authorization'))) {
       return next();
     }
