@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { line, curveMonotoneX } from 'd3-shape';
+import { area, line, curveMonotoneX } from 'd3-shape';
 import type { MonitorState } from '@flarewatch/shared';
-import type { PublicMonitor } from '@/lib/monitors';
+import type { PublicMonitor } from '@/lib/public-view';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { linearScale, niceLinearTicks } from '@/lib/chart-scale';
 import { timeTicks } from '@/lib/chart-ticks';
@@ -32,9 +32,6 @@ type ChartPoint = {
 const VB = 100;
 const PADDING_TOP_PX = 5;
 const X_AXIS_HEIGHT_PX = 20;
-const LINE_COLOR = '#6b7280';
-const AXIS_TEXT_COLOR = '#9ca3af';
-const GRID_COLOR = '#e5e7eb';
 
 // Fraction (0..1) of the plot box -> CSS percentage for an HTML overlay.
 const pct = (frac: number) => `${frac * 100}%`;
@@ -87,6 +84,8 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
   const { t } = useTranslation();
   const plotRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  // React ids may contain non-URL-safe characters; url(#...) needs a plain id.
+  const fillId = `chart-fill-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
   const times = chartData.map((d) => d.timeMs);
   const xDomain: [number, number] = [Math.min(...times), Math.max(...times)];
@@ -115,6 +114,13 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
     line<ChartPoint>()
       .x((d) => xScale(d.timeMs))
       .y((d) => yScale(d.ping))
+      .curve(curveMonotoneX)(chartData) ?? '';
+
+  const areaPath =
+    area<ChartPoint>()
+      .x((d) => xScale(d.timeMs))
+      .y0(yScale(0))
+      .y1((d) => yScale(d.ping))
       .curve(curveMonotoneX)(chartData) ?? '';
 
   const activePoint = activeIndex === null ? null : chartData[activeIndex];
@@ -159,6 +165,23 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
           className="absolute inset-0 h-full w-full overflow-visible"
           aria-hidden="true"
         >
+          <defs>
+            <linearGradient id={fillId} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={0} y2={VB}>
+              <stop
+                offset={0}
+                stopColor="var(--muted-foreground)"
+                stopOpacity="var(--chart-fill-top)"
+              />
+              <stop
+                offset={1}
+                stopColor="var(--muted-foreground)"
+                stopOpacity="var(--chart-fill-bottom)"
+              />
+            </linearGradient>
+          </defs>
+
+          <path d={areaPath} fill={`url(#${fillId})`} />
+
           {yTicks.map((tick) => (
             <line
               key={`h-${tick}`}
@@ -166,10 +189,8 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
               x2={VB}
               y1={yScale(tick)}
               y2={yScale(tick)}
-              stroke={GRID_COLOR}
-              strokeDasharray="3 3"
+              stroke="var(--border)"
               vectorEffect="non-scaling-stroke"
-              className="dark:stroke-neutral-700"
             />
           ))}
           {xTicks.map((tick) => (
@@ -180,10 +201,8 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
               x2={xScale(tick)}
               y1={0}
               y2={VB}
-              stroke={GRID_COLOR}
-              strokeDasharray="3 3"
+              stroke="var(--border)"
               vectorEffect="non-scaling-stroke"
-              className="dark:stroke-neutral-700"
             />
           ))}
 
@@ -192,9 +211,8 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
             x2={VB}
             y1={VB}
             y2={VB}
-            stroke={GRID_COLOR}
+            stroke="var(--border)"
             vectorEffect="non-scaling-stroke"
-            className="dark:stroke-neutral-700"
           />
 
           {activePoint && (
@@ -203,7 +221,7 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
               x2={xScale(activePoint.timeMs)}
               y1={0}
               y2={VB}
-              stroke={AXIS_TEXT_COLOR}
+              stroke="var(--muted-foreground)"
               vectorEffect="non-scaling-stroke"
             />
           )}
@@ -211,8 +229,8 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
           <path
             d={linePath}
             fill="none"
-            stroke={LINE_COLOR}
-            strokeWidth={1.2}
+            stroke="var(--muted-foreground)"
+            strokeWidth={1.5}
             vectorEffect="non-scaling-stroke"
           />
         </svg>
@@ -223,7 +241,7 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
             style={{
               left: pct(activeXFrac),
               top: pct(fracY(activePoint.ping)),
-              background: LINE_COLOR,
+              background: 'var(--muted-foreground)',
             }}
           />
         )}
@@ -232,7 +250,12 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
           <span
             key={`yl-${tick}`}
             className="pointer-events-none absolute -translate-y-1/2 text-[10px] leading-none whitespace-nowrap"
-            style={{ top: pct(fracY(tick)), right: '100%', marginRight: 4, color: AXIS_TEXT_COLOR }}
+            style={{
+              top: pct(fracY(tick)),
+              right: '100%',
+              marginRight: 4,
+              color: 'var(--muted-foreground)',
+            }}
           >
             {`${tick}ms`}
           </span>
@@ -245,7 +268,7 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
             style={{
               left: pct(fracX(tick)),
               transform: xLabelTransform(fracX(tick)),
-              color: AXIS_TEXT_COLOR,
+              color: 'var(--muted-foreground)',
             }}
           >
             {formatUtc(new Date(tick), 'HH:mm')}
@@ -271,10 +294,10 @@ export function LatencyChart({ monitor, state }: LatencyChartProps) {
   if (chartData.length === 0) {
     return (
       <div
-        className="flex w-full items-center justify-center rounded-md border border-dashed border-neutral-200 dark:border-neutral-800"
+        className="flex w-full items-center justify-center rounded-md border border-dashed border-border"
         style={{ height: CHART_HEIGHT_PX }}
       >
-        <span className="text-xs text-neutral-400">{t('monitor.noResponseData')}</span>
+        <span className="text-xs text-muted-foreground">{t('monitor.noResponseData')}</span>
       </div>
     );
   }

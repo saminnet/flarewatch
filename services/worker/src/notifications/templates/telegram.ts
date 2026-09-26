@@ -1,4 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
+import { jsonOutput } from './format';
 
 export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
   const emoji = ctx.isUp ? '✅' : '🔴';
@@ -23,11 +24,7 @@ export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
     disable_web_page_preview: true,
   };
 
-  return {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  };
+  return jsonOutput(payload);
 }
 
 function escapeHtml(text: string): string {

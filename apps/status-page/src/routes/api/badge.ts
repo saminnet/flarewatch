@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { getMonitorState } from '@/lib/kv';
 import { getConfig } from '@/lib/config';
+import { publicView } from '@/lib/public-view';
 import { projectBadgeStatus } from '@/lib/status-projection';
 
 type BadgePayload = {
@@ -33,8 +34,9 @@ export const Route = createFileRoute('/api/badge')({
         try {
           const url = new URL(request.url);
           const config = await getConfig();
+          const configView = publicView(config, null);
 
-          const defaultMonitorId = config.monitors[0]?.id;
+          const defaultMonitorId = configView.monitors[0]?.id;
           const monitorId = url.searchParams.get('id') ?? defaultMonitorId;
           const label = url.searchParams.get('label') ?? monitorId ?? 'FlareWatch';
 
@@ -46,6 +48,13 @@ export const Route = createFileRoute('/api/badge')({
           if (!monitorId) {
             return new Response(JSON.stringify(errorBadge(label, 'no-monitor')), {
               status: 400,
+              headers: jsonHeaders,
+            });
+          }
+
+          if (!configView.monitors.some((monitor) => monitor.id === monitorId)) {
+            return new Response(JSON.stringify(errorBadge(label, 'unknown')), {
+              status: 404,
               headers: jsonHeaders,
             });
           }

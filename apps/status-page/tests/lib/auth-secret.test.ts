@@ -59,15 +59,21 @@ describe('auth-secret', () => {
     expect(parsed?.username).toBe('status');
   });
 
-  it('parses payload when plus signs were converted to spaces', () => {
+  it('verifies credentials when plus signs became spaces', async () => {
+    const salt = new Uint8Array([0, 1, 2, 0xfb, 0xef, 0xbe, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    const hash = await derivePbkdf2Hash('secret123', salt, 100_000);
     const payload = JSON.stringify({
       username: 'status',
-      salt: 'VGa8dmx12TIui2dId enHA==',
-      hash: 'qZjC5zK ZB5AaW6j8fzDW96IiZNVyjyFg69hOTVqDJE=',
+      salt: bytesToBase64(salt),
+      hash,
     });
-    const parsed = parseAuthSecret(payload);
+    expect(payload).toContain('+');
+
+    const parsed = parseAuthSecret(payload.replaceAll('+', ' '));
     expect(parsed).toBeTruthy();
-    expect(parsed?.username).toBe('status');
+    await expect(
+      verifyAuthSecret(payload.replaceAll('+', ' '), 'status', 'secret123'),
+    ).resolves.toBe(true);
   });
 
   it('rejects non-JSON secret format', () => {

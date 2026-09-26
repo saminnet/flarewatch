@@ -4,6 +4,7 @@ import {
   KV_KEYS,
   type Fetcher,
   type Maintenance,
+  type Monitor,
   type MonitorState,
   type MonitorTarget,
   type NotificationConfig,
@@ -11,6 +12,7 @@ import {
 } from '@flarewatch/shared';
 import Worker, { runChecks, type WorkerDeps } from '../src/index';
 import { WebhookNotifier } from '../src/notifications/webhook';
+import { asKv, createKv } from './helpers/kv';
 
 const checkMonitorMock = vi.fn<WorkerDeps['checkMonitor']>();
 const getEdgeLocationMock = vi.fn<WorkerDeps['getEdgeLocation']>();
@@ -72,23 +74,6 @@ function createMaintenance(overrides: Partial<Maintenance> = {}): Maintenance {
     updatedAt: NOW_SECONDS * 1000,
     ...overrides,
   };
-}
-
-function createKv(initial: Array<[string, unknown]> = []) {
-  const values = new Map(initial);
-  const get = vi.fn(async (key: string) => {
-    if (!values.has(key)) return null;
-    return structuredClone(values.get(key));
-  });
-  const put = vi.fn(async (key: string, value: string) => {
-    values.set(key, value);
-  });
-
-  return { get, put };
-}
-
-function asKv(kv: ReturnType<typeof createKv>): KVNamespace {
-  return kv as ReturnType<typeof createKv> & KVNamespace;
 }
 
 function setNotifications(overrides: Partial<NotificationConfig> = {}): void {
@@ -294,6 +279,54 @@ describe('worker', () => {
       expect(notifierSendMock).not.toHaveBeenCalled();
     });
 
+    it('notifies outside the maintenance window', async () => {
+      const monitor = createMonitor();
+      setNotifications();
+      mockDown();
+      const stateKv = createKv([
+        [KV_KEYS.STATE, createState()],
+        [
+          KV_KEYS.MAINTENANCES,
+          [
+            createMaintenance({
+              monitors: [monitor.id],
+              start: new Date((NOW_SECONDS + 3600) * 1000).toISOString(),
+            }),
+            createMaintenance({
+              monitors: [monitor.id],
+              start: new Date((NOW_SECONDS - 7200) * 1000).toISOString(),
+              end: new Date((NOW_SECONDS - 3600) * 1000).toISOString(),
+            }),
+          ],
+        ],
+      ]);
+
+      await runScheduled({ STATE_KV: asKv(stateKv) });
+
+      expect(notifierSendMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('suppresses only error-change notifications', async () => {
+      setNotifications({ skipErrorChangeNotification: true });
+      const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
+
+      mockDown();
+      await runScheduled({ STATE_KV: asKv(stateKv) });
+      expect(notifierSendMock).toHaveBeenCalledTimes(1);
+
+      checkMonitorMock.mockResolvedValue({
+        location: 'SFO',
+        result: { ok: false, error: 'DNS failure' },
+      });
+      await runScheduled({ STATE_KV: asKv(stateKv) });
+      expect(notifierSendMock).toHaveBeenCalledTimes(1);
+
+      mockUp();
+      await runScheduled({ STATE_KV: asKv(stateKv) });
+      expect(notifierSendMock).toHaveBeenCalledTimes(2);
+      expect(notifierSendMock.mock.calls[1]?.[0]).toMatchObject({ isUp: true });
+    });
+
     it('suppresses monitors in skipNotificationIds', async () => {
       setNotifications({ skipNotificationIds: ['test-monitor'] });
       mockDown();
@@ -306,14 +339,46 @@ describe('worker', () => {
   });
 
   describe('state persistence', () => {
-    it('saves state when a monitor status changes', async () => {
+    it('saves the down incident and overallDown', async () => {
       mockDown();
       const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
 
       expect(stateKv.put).toHaveBeenCalledTimes(1);
-      expect(stateKv.put).toHaveBeenCalledWith(KV_KEYS.STATE, expect.any(String));
+      const saved = JSON.parse(stateKv.put.mock.calls[0]?.[1] ?? '') as MonitorState;
+      expect(saved.incident['test-monitor']).toEqual([
+        { start: [NOW_SECONDS], end: undefined, error: ['Unavailable'] },
+      ]);
+      expect(saved.overallDown).toBe(1);
+    });
+
+    it('recovers from a corrupt stored state', async () => {
+      mockUp();
+      const stateKv = createKv([[KV_KEYS.STATE, { corrupt: true }]]);
+
+      await runScheduled({ STATE_KV: asKv(stateKv) });
+
+      expect(stateKv.put).toHaveBeenCalledTimes(1);
+      const saved = JSON.parse(stateKv.put.mock.calls[0]?.[1] ?? '') as MonitorState;
+      expect(saved.overallUp).toBe(1);
+      expect(saved).not.toHaveProperty('corrupt');
+    });
+
+    it('saves state despite a throwing status callback', async () => {
+      mockDown();
+      workerConfigMock.callbacks = {
+        onStatusChange: vi.fn(async () => {
+          throw new Error('callback exploded');
+        }),
+      };
+      const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
+
+      await runScheduled({ STATE_KV: asKv(stateKv) });
+
+      expect(stateKv.put).toHaveBeenCalledTimes(1);
+      const saved = JSON.parse(stateKv.put.mock.calls[0]?.[1] ?? '') as MonitorState;
+      expect(saved.incident['test-monitor']).toHaveLength(1);
     });
 
     it('saves state when the write cooldown has elapsed', async () => {
@@ -324,7 +389,7 @@ describe('worker', () => {
       expect(stateKv.put).toHaveBeenCalledTimes(1);
     });
 
-    it('skips saving state when no status changed and the cooldown has not elapsed', async () => {
+    it('skips saving without change before cooldown', async () => {
       const stateKv = createKv([[KV_KEYS.STATE, createState({ lastUpdate: NOW_SECONDS - 60 })]]);
 
       await runScheduled({ STATE_KV: asKv(stateKv) });
@@ -398,7 +463,7 @@ describe('worker', () => {
       const rejectedMonitor = createMonitor('rejected');
       const healthyMonitor = createMonitor('healthy');
       workerConfigMock.monitors = [rejectedMonitor, healthyMonitor];
-      checkMonitorMock.mockImplementation(async (monitor: MonitorTarget) => {
+      checkMonitorMock.mockImplementation(async (monitor: Monitor) => {
         if (monitor.id === rejectedMonitor.id) {
           throw new Error('Check crashed');
         }
@@ -415,6 +480,53 @@ describe('worker', () => {
         throw new Error('saved state failed the isMonitorState guard');
       expect(savedState.overallUp).toBe(1);
       expect(savedState.overallDown).toBe(1);
+    });
+  });
+
+  describe('private monitors', () => {
+    function createPrivateMonitor(id = 'private-monitor'): MonitorTarget {
+      return { ...createMonitor(id), private: true };
+    }
+
+    it('excludes private monitors from overall counts', async () => {
+      const publicMonitor = createMonitor('public-monitor');
+      const privateMonitor = createPrivateMonitor();
+      workerConfigMock.monitors = [publicMonitor, privateMonitor];
+      checkMonitorMock.mockImplementation(async (monitor: Monitor) => {
+        if (monitor.id === privateMonitor.id) {
+          return { location: 'SFO', result: { ok: false, error: 'Unavailable' } };
+        }
+        return { location: 'SFO', result: { ok: true, latency: 10 } };
+      });
+      const stateKv = createKv();
+
+      await runScheduled({ STATE_KV: asKv(stateKv) });
+
+      expect(stateKv.put).toHaveBeenCalledTimes(1);
+      const savedState = JSON.parse(stateKv.put.mock.calls[0]?.[1] as string) as MonitorState;
+      expect(savedState.overallUp).toBe(1);
+      expect(savedState.overallDown).toBe(0);
+      expect(savedState.incident[privateMonitor.id]).toHaveLength(1);
+    });
+
+    it('does not count a rejected private check as down', async () => {
+      const publicMonitor = createMonitor('public-monitor');
+      const privateMonitor = createPrivateMonitor();
+      workerConfigMock.monitors = [privateMonitor, publicMonitor];
+      checkMonitorMock.mockImplementation(async (monitor: Monitor) => {
+        if (monitor.id === privateMonitor.id) {
+          throw new Error('Check crashed');
+        }
+        return { location: 'SFO', result: { ok: true, latency: 10 } };
+      });
+      const stateKv = createKv([[KV_KEYS.STATE, createDownState(publicMonitor, NOW_SECONDS - 60)]]);
+
+      await runScheduled({ STATE_KV: asKv(stateKv) });
+
+      expect(stateKv.put).toHaveBeenCalledTimes(1);
+      const savedState = JSON.parse(stateKv.put.mock.calls[0]?.[1] as string) as MonitorState;
+      expect(savedState.overallUp).toBe(1);
+      expect(savedState.overallDown).toBe(0);
     });
   });
 });

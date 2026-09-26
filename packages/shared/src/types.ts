@@ -36,10 +36,20 @@ export type Maintenance = MaintenanceConfig & {
   updatedAt: number;
 };
 
-export type MonitorTarget = {
+export type PullMethod =
+  | 'GET'
+  | 'POST'
+  | 'PUT'
+  | 'PATCH'
+  | 'DELETE'
+  | 'HEAD'
+  | 'OPTIONS'
+  | 'TCP_PING';
+
+export type PullMonitor = {
   id: string;
   name: string;
-  method: string;
+  method: PullMethod;
   target: string;
   tooltip?: string;
   /**
@@ -62,16 +72,40 @@ export type MonitorTarget = {
   sslCheckEnabled?: boolean;
   sslCheckDaysBeforeExpiry?: number;
   sslIgnoreSelfSigned?: boolean;
+  /**
+   * Hide from the status page and public API. The monitor is still checked,
+   * stored, and alerted, only signed-in admins see it.
+   */
+  private?: boolean;
 };
+
+export type HeartbeatMonitor = {
+  id: string;
+  name: string;
+  method: 'HEARTBEAT';
+  periodSeconds: number;
+  graceSeconds: number;
+  private?: boolean;
+  link?: string | false;
+  tooltip?: string;
+};
+
+export type Monitor = PullMonitor | HeartbeatMonitor;
+
+export type MonitorTarget = PullMonitor;
+
+export function isPublicMonitor(monitor: Pick<MonitorTarget, 'private'>): boolean {
+  return monitor.private !== true;
+}
 
 export type WorkerConfig = {
   kvWriteCooldownMinutes?: number;
-  monitors: MonitorTarget[];
+  monitors: Monitor[];
   notification?: NotificationConfig;
   callbacks?: {
     onStatusChange?: (
       env: unknown,
-      monitor: MonitorTarget,
+      monitor: Monitor,
       isUp: boolean,
       timeIncidentStart: number,
       timeNow: number,
@@ -79,7 +113,7 @@ export type WorkerConfig = {
     ) => Promise<void>;
     onIncident?: (
       env: unknown,
-      monitor: MonitorTarget,
+      monitor: Monitor,
       timeIncidentStart: number,
       timeNow: number,
       reason: string,
@@ -95,7 +129,24 @@ export type NotificationConfig = {
   skipErrorChangeNotification?: boolean;
 };
 
-export type NotificationTemplate = 'slack' | 'discord' | 'telegram' | 'ntfy' | 'text';
+export const NOTIFICATION_TEMPLATES = [
+  'slack',
+  'discord',
+  'telegram',
+  'ntfy',
+  'text',
+  'teams',
+  'googlechat',
+  'matrix',
+  'pushover',
+  'gotify',
+  'zulip',
+  'resend',
+  'mattermost',
+  'rocketchat',
+] as const;
+
+export type NotificationTemplate = (typeof NOTIFICATION_TEMPLATES)[number];
 
 /** A JSON object: every value that survives `JSON.parse` on an object payload. */
 export type JsonObject = { [key: string]: JsonValue };
@@ -105,9 +156,11 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObj
 
 type SingleWebhook = {
   url: string;
-  /** Use a pre-built template (slack, discord, telegram, ntfy, text) */
+  /** Use a pre-built template (see NOTIFICATION_TEMPLATES) */
   template?: NotificationTemplate;
-  /** HTTP method (default: POST for templates, depends on payloadType otherwise) */
+  /** Extra string settings a template needs (e.g. resend from/to, pushover token/user) */
+  options?: Record<string, string>;
+  /** HTTP method (default: from the template, POST for custom payloads) */
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
   headers?: { [key: string]: string | number };
   /** Payload type (required if not using template) */
@@ -123,7 +176,7 @@ export type Webhook = SingleWebhook;
 export type WebhookConfig = SingleWebhook | SingleWebhook[];
 
 export type RuntimeConfig = {
-  monitors: MonitorTarget[];
+  monitors: Monitor[];
   statusPage?: PageConfig;
   notification?: NotificationConfig;
   kvWriteCooldownMinutes?: number;
@@ -145,11 +198,44 @@ export const KV_KEYS = {
   MAINTENANCES: 'maintenances',
 } as const;
 
+export type HeartbeatRun = {
+  /** Unix timestamp (seconds) */
+  at: number;
+  outcome: 'ok' | 'late' | 'fail' | 'miss';
+  startedAt?: number;
+};
+
+/** Cap on the per-monitor run history kept in the heartbeat signal. */
+export const HEARTBEAT_RUN_HISTORY = 90;
+
+export type HeartbeatSignal = {
+  lastSuccess?: number;
+  lastFail?: number;
+  lastStart?: number;
+  message?: string;
+  /** Recent run outcomes, oldest first, capped at HEARTBEAT_RUN_HISTORY. */
+  runs?: HeartbeatRun[];
+};
+
+export type HeartbeatStatus = 'up' | 'late' | 'pending' | 'running' | 'down';
+
+export type HeartbeatState = HeartbeatSignal & {
+  status: HeartbeatStatus;
+  deadline?: number;
+  /** Deadline timestamps the cron detected as missed, oldest first, capped at HEARTBEAT_RUN_HISTORY. */
+  misses?: number[];
+};
+
+export function heartbeatKvKey(id: string): string {
+  return `hb:v1:${id}`;
+}
+
 export type MonitorState = {
   /** Unix timestamp (seconds) */
   lastUpdate: number;
   overallUp: number;
   overallDown: number;
+  overallLate?: number;
   /** Unix timestamp (seconds) of the first check per monitor */
   startedAt: Record<string, number>;
   incident: Record<
@@ -185,6 +271,7 @@ export type MonitorState = {
       lastCheck: number;
     }
   >;
+  heartbeat?: Record<string, HeartbeatState>;
 };
 
 export interface SSLCertificateInfo {
@@ -212,6 +299,27 @@ export type CheckResult = CheckSuccess | CheckFailure;
 export interface CheckResultWithLocation {
   location: string;
   result: CheckResult;
+  heartbeat?: HeartbeatState;
+}
+
+export interface PendingHeartbeatCheckResult {
+  location: string;
+  result?: undefined;
+  heartbeat: HeartbeatState;
+}
+
+export type MonitorCheckResult = CheckResultWithLocation | PendingHeartbeatCheckResult;
+
+export interface CheckContext {
+  /**
+   * Worker bindings a checker may need. Kept structural and narrow so shared
+   * does not depend on the worker's Env type.
+   */
+  env: { FLAREWATCH_PROXY_TOKEN?: string };
+  /** Heartbeat signal storage, resolved once by the scheduler via getStateKv. */
+  stateKv?: KvStore;
+  /** Unix timestamp (seconds) for this check run; pull checkers ignore it. */
+  now: number;
 }
 
 export interface MonitorChecker {

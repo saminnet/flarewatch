@@ -26,6 +26,16 @@ export function toHeaders(headers?: { [key: string]: string | number }): Headers
   return new Headers(Object.entries(headers ?? {}).map(([key, value]) => [key, String(value)]));
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Sep 16, 07:02 UTC": the same shape the status page uses for timestamps. */
+export function formatUtcShort(seconds: number): string {
+  const d = new Date(seconds * 1000);
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${hh}:${mm} UTC`;
+}
+
 export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -229,4 +239,20 @@ export function createLogger(component: string) {
     warn: (message: string, data?: JsonObject) => log('warn', message, data),
     error: (message: string, data?: JsonObject) => log('error', message, data),
   };
+}
+
+/**
+ * Compare two strings without leaking their content through timing.
+ * Consumes the same amount of work whether or not the strings match.
+ */
+export function timingSafeEqual(a: string, b: string): boolean {
+  const aBytes = new TextEncoder().encode(a);
+  const bBytes = new TextEncoder().encode(b);
+  const maxLen = Math.max(aBytes.length, bBytes.length);
+
+  let diff = aBytes.length ^ bBytes.length;
+  for (let i = 0; i < maxLen; i++) {
+    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
+  }
+  return diff === 0;
 }

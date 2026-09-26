@@ -16,6 +16,7 @@ import { Route as ApiBadgeRouteImport } from './routes/api/badge'
 import { Route as ApiDataRouteImport } from './routes/api/data'
 import { Route as ApiMaintenancesRouteImport } from './routes/api/maintenances'
 import { Route as EmbedMonitorIdRouteImport } from './routes/embed.$monitorId'
+import { Route as PingSplatRouteImport } from './routes/ping.$'
 import { Route as ApiAdminMaintenancesRouteImport } from './routes/api/admin/maintenances'
 import { Route as ApiAdminSessionRouteImport } from './routes/api/admin/session'
 
@@ -54,6 +55,11 @@ const EmbedMonitorIdRoute = EmbedMonitorIdRouteImport.update({
   path: '/embed/$monitorId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PingSplatRoute = PingSplatRouteImport.update({
+  id: '/ping/$',
+  path: '/ping/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminMaintenancesRoute = ApiAdminMaintenancesRouteImport.update({
   id: '/api/admin/maintenances',
   path: '/api/admin/maintenances',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
+  '/ping/$': typeof PingSplatRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
   '/api/admin/session': typeof ApiAdminSessionRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
+  '/ping/$': typeof PingSplatRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
   '/api/admin/session': typeof ApiAdminSessionRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
+  '/ping/$': typeof PingSplatRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
   '/api/admin/session': typeof ApiAdminSessionRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/api/data'
     | '/api/maintenances'
     | '/embed/$monitorId'
+    | '/ping/$'
     | '/api/admin/maintenances'
     | '/api/admin/session'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/api/data'
     | '/api/maintenances'
     | '/embed/$monitorId'
+    | '/ping/$'
     | '/api/admin/maintenances'
     | '/api/admin/session'
   id:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/api/data'
     | '/api/maintenances'
     | '/embed/$monitorId'
+    | '/ping/$'
     | '/api/admin/maintenances'
     | '/api/admin/session'
   fileRoutesById: FileRoutesById
@@ -143,6 +155,7 @@ export interface RootRouteChildren {
   ApiDataRoute: typeof ApiDataRoute
   ApiMaintenancesRoute: typeof ApiMaintenancesRoute
   EmbedMonitorIdRoute: typeof EmbedMonitorIdRoute
+  PingSplatRoute: typeof PingSplatRoute
   ApiAdminMaintenancesRoute: typeof ApiAdminMaintenancesRoute
   ApiAdminSessionRoute: typeof ApiAdminSessionRoute
 }
@@ -198,6 +211,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmbedMonitorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ping/$': {
+      id: '/ping/$'
+      path: '/ping/$'
+      fullPath: '/ping/$'
+      preLoaderRoute: typeof PingSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/maintenances': {
       id: '/api/admin/maintenances'
       path: '/api/admin/maintenances'
@@ -223,6 +243,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDataRoute: ApiDataRoute,
   ApiMaintenancesRoute: ApiMaintenancesRoute,
   EmbedMonitorIdRoute: EmbedMonitorIdRoute,
+  PingSplatRoute: PingSplatRoute,
   ApiAdminMaintenancesRoute: ApiAdminMaintenancesRoute,
   ApiAdminSessionRoute: ApiAdminSessionRoute,
 }

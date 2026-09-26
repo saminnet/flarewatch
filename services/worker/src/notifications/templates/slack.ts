@@ -1,4 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
+import { jsonOutput } from './format';
 
 export function slackTemplate(ctx: TemplateContext): TemplateOutput {
   const color = ctx.isUp ? '#36a64f' : '#dc3545';
@@ -57,9 +58,5 @@ export function slackTemplate(ctx: TemplateContext): TemplateOutput {
     ],
   };
 
-  return {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  };
+  return jsonOutput(payload);
 }

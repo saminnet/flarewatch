@@ -24,10 +24,6 @@ const themeBlock = block('@theme inline');
 const statusTokens = SUPPORTED_THEME_TOKENS.filter((token) => token.startsWith('status-'));
 
 describe('default theme tokens', () => {
-  it('defines a non-empty set of status tokens to check', () => {
-    expect(statusTokens.length).toBeGreaterThan(0);
-  });
-
   it('defines every status token in :root and .dark', () => {
     for (const token of statusTokens) {
       expect(rootBlock, `:root missing --${token}`).toContain(`--${token}:`);

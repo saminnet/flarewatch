@@ -85,7 +85,7 @@ describe('WebhookNotifier', () => {
   });
 
   it.each([undefined, null, 'text', 42, ['a', 'b']])(
-    'reports failure instead of sending an empty body when a param payload is %s',
+    'fails without sending for param payload %s',
     async (payload) => {
       fetchMock.mockResolvedValue(new Response('ok', { status: 200 }));
 
@@ -129,7 +129,7 @@ describe('WebhookNotifier', () => {
     expect(body.get('retries')).toBe('3');
   });
 
-  it('uses templates when template is configured', async () => {
+  it('template body carries down state and reason', async () => {
     fetchMock.mockResolvedValue(new Response('ok', { status: 200 }));
 
     const notifier = new WebhookNotifier(
@@ -152,7 +152,29 @@ describe('WebhookNotifier', () => {
     expect(options.method).toBe('POST');
     expect(headers.get('content-type')).toBe('text/plain');
     expect(headers.get('x-test')).toBe('1');
-    expect(options.body).toBeTypeOf('string');
+    expect(options.body).toContain('Test Monitor is down');
+    expect(options.body).toContain('Connection refused');
+  });
+
+  it('uses the URL and method produced by the matrix template', async () => {
+    fetchMock.mockResolvedValue(new Response('ok', { status: 200 }));
+
+    const notifier = new WebhookNotifier(
+      {
+        url: 'https://matrix.example.com/_matrix/client/v3/rooms/!room:example.com/send/m.room.message/?access_token=s3cret',
+        template: 'matrix',
+      },
+      fetchMock,
+    );
+
+    await notifier.send(createNotificationContext(), 'ignored');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe(
+      'https://matrix.example.com/_matrix/client/v3/rooms/!room:example.com/send/m.room.message/test-monitor%3A1000-down-1970-01-01T00%3A16%3A40.000Z?access_token=s3cret',
+    );
+    expect(options?.method).toBe('PUT');
   });
 
   it('returns success=false when webhook responds with non-2xx', async () => {
@@ -170,5 +192,26 @@ describe('WebhookNotifier', () => {
     const results = await notifier.send(createNotificationContext(), 'hello');
 
     expect(results).toEqual([{ success: false, statusCode: 500, error: 'HTTP 500' }]);
+  });
+
+  it('sends the other webhooks when one fails', async () => {
+    fetchMock.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(new Response('ok', { status: 200 })));
+
+    const notifier = new WebhookNotifier(
+      [
+        { url: 'https://hooks.example.com/first' },
+        { url: 'https://hooks.example.com/second', template: 'text' },
+      ],
+      fetchMock,
+    );
+
+    const results = await notifier.send(createNotificationContext(), 'hello');
+
+    expect(results).toEqual([
+      { success: false, error: 'boom' },
+      { success: true, statusCode: 200 },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

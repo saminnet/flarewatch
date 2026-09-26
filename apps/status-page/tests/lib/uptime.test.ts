@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test'
 import type { MonitorState } from '@flarewatch/shared';
 import {
   calculateUptimePercent,
+  generateAggregateDailyStatus,
   generateDailyStatus,
   isMonitorUp,
   getMonitorError,
@@ -90,10 +91,27 @@ describe('uptime utilities', () => {
 
       expect(result).toBe(75);
     });
+
+    it('clips incident downtime at the window start', () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const state = createEmptyState();
+      state.startedAt['test'] = nowSec - 200 * 24 * 60 * 60;
+      state.incident['test'] = [
+        {
+          start: [nowSec - 100 * 24 * 60 * 60],
+          end: nowSec - 50 * 24 * 60 * 60,
+          error: ['Error'],
+        },
+      ];
+
+      const result = calculateUptimePercent('test', state);
+
+      expect(result).toBeCloseTo(55.5556, 3);
+    });
   });
 
   describe('generateDailyStatus', () => {
-    it('returns unknown status for days before monitor start', () => {
+    it('marks days before monitor start unknown', () => {
       const nowSec = Math.floor(Date.now() / 1000);
       const state = createEmptyState();
       state.startedAt['test'] = nowSec - 3600;
@@ -101,8 +119,9 @@ describe('uptime utilities', () => {
 
       const result = generateDailyStatus('test', state);
 
-      const oldDays = result.filter((d) => d.status === 'unknown');
-      expect(oldDays.length).toBeGreaterThan(85);
+      expect(result).toHaveLength(90);
+      expect(result.filter((day) => day.status === 'unknown')).toHaveLength(89);
+      expect(result[89]?.status).toBe('up');
     });
 
     it('returns correct status based on downtime thresholds', () => {
@@ -136,6 +155,42 @@ describe('uptime utilities', () => {
 
       const todayStatus = result[result.length - 1];
       expect(todayStatus?.status).toBe('partial');
+    });
+  });
+
+  describe('generateAggregateDailyStatus', () => {
+    const now = new Date('2025-01-15T12:00:00Z');
+    const nowSec = Math.floor(now.getTime() / 1000);
+    const dayStart = new Date('2025-01-05T00:00:00Z').getTime() / 1000;
+
+    it('prefers down over partial and skips unknown monitors', () => {
+      const state = createEmptyState(nowSec);
+      state.startedAt['down'] = nowSec - 90 * 24 * 60 * 60;
+      state.startedAt['partial'] = nowSec - 90 * 24 * 60 * 60;
+      state.incident['down'] = [
+        { start: [dayStart], end: dayStart + 0.6 * 86_400, error: ['Down'] },
+      ];
+      state.incident['partial'] = [
+        { start: [dayStart], end: dayStart + 0.2 * 86_400, error: ['Degraded'] },
+      ];
+
+      const days = generateAggregateDailyStatus(
+        ['down', 'partial', 'unknown'],
+        new Map([
+          ['down', 'Down monitor'],
+          ['partial', 'Partial monitor'],
+          ['unknown', 'Unknown monitor'],
+        ]),
+        state,
+      );
+
+      const downDay = days.find((day) => day.date.getTime() / 1000 === dayStart);
+      expect(downDay?.status).toBe('down');
+      expect(downDay?.uptime).toBe(60);
+
+      const normalDay = days[days.length - 1];
+      expect(normalDay?.status).toBe('up');
+      expect(normalDay?.uptime).toBe(100);
     });
   });
 
@@ -215,6 +270,15 @@ describe('uptime utilities', () => {
       state.overallDown = 0;
 
       expect(getOverallStatus(state)).toBe('operational');
+    });
+
+    it('returns degraded when a heartbeat monitor is late and none are down', () => {
+      const state = createEmptyState();
+      state.overallUp = 3;
+      state.overallDown = 0;
+      state.overallLate = 1;
+
+      expect(getOverallStatus(state)).toBe('degraded');
     });
 
     it('returns degraded when some monitors are down', () => {

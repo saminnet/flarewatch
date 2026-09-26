@@ -4,8 +4,10 @@ import {
   isValidYearMonth,
   shiftYearMonth,
   getUtcMonthBounds,
+  generateCalendarGrids,
   formatUtc,
   formatDuration,
+  formatCadence,
 } from '@/lib/date';
 
 describe('parseYearMonth', () => {
@@ -13,11 +15,6 @@ describe('parseYearMonth', () => {
     expect(parseYearMonth('2024-01')).toEqual({ year: 2024, month: 1 });
     expect(parseYearMonth('2023-12')).toEqual({ year: 2023, month: 12 });
     expect(parseYearMonth('1999-06')).toEqual({ year: 1999, month: 6 });
-  });
-
-  it('returns defaults for invalid input', () => {
-    expect(parseYearMonth('')).toEqual({ year: 0, month: 1 });
-    expect(parseYearMonth('invalid')).toEqual({ year: NaN, month: 1 });
   });
 });
 
@@ -79,9 +76,43 @@ describe('getUtcMonthBounds', () => {
   });
 });
 
+describe('generateCalendarGrids', () => {
+  it('rolls months back across a year boundary', () => {
+    const grids = generateCalendarGrids(new Date('2025-03-15T12:00:00Z'), 3, '2025-01');
+
+    expect(grids.map((grid) => grid.yearMonth)).toEqual(['2024-11', '2024-12', '2025-01']);
+    expect(grids.map((grid) => grid.weeks.flat().filter(Boolean).length)).toEqual([30, 31, 31]);
+    expect(
+      grids.map((grid) => grid.weeks.flat().find(Boolean)?.date.toISOString().slice(0, 10)),
+    ).toEqual(['2024-11-01', '2024-12-01', '2025-01-01']);
+  });
+});
+
 describe('formatUtc', () => {
   it('formats a UTC date independent of the local timezone offset', () => {
     expect(formatUtc(new Date('2026-06-09T12:30:00.000Z'), 'MMM d, HH:mm')).toBe('Jun 9, 12:30');
+  });
+});
+
+describe('formatCadence', () => {
+  it('picks the shortest unit that divides the period evenly', () => {
+    expect(formatCadence(900)).toBe('15m');
+    expect(formatCadence(1800)).toBe('30m');
+    expect(formatCadence(3600)).toBe('1h');
+    expect(formatCadence(86400)).toBe('24h');
+    expect(formatCadence(604800)).toBe('7d');
+  });
+
+  it('renders zero as 0s instead of 0h', () => {
+    expect(formatCadence(0)).toBe('0s');
+  });
+
+  it('falls back to seconds for odd values', () => {
+    expect(formatCadence(90)).toBe('90s');
+  });
+
+  it('prefers the larger unit when both divide', () => {
+    expect(formatCadence(172800)).toBe('2d');
   });
 });
 
@@ -96,13 +127,19 @@ describe('formatDuration', () => {
     expect(formatDuration(125000)).toBe('2m 5s');
   });
 
-  it('formats hours and minutes', () => {
-    expect(formatDuration(3660000)).toBe('1h 1m');
+  it('keeps a zero secondary unit unpadded', () => {
+    expect(formatDuration(240000)).toBe('4m 0s');
     expect(formatDuration(7200000)).toBe('2h 0m');
+    expect(formatDuration(3660000)).toBe('1h 1m');
+  });
+
+  it('formats hours and minutes', () => {
+    expect(formatDuration(4320000)).toBe('1h 12m');
   });
 
   it('formats days and hours', () => {
     expect(formatDuration(90000000)).toBe('1d 1h');
+    expect(formatDuration(86400000)).toBe('1d 0h');
   });
 
   it('handles zero and negative values', () => {

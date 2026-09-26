@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 
 interface OverallStatusProps {
   state: MonitorState;
+  monitorCount: number;
+  jobCount: number;
 }
 
 const statusConfig = {
@@ -39,7 +41,7 @@ const statusConfig = {
   },
 };
 
-export function OverallStatus({ state }: OverallStatusProps) {
+export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusProps) {
   const { t } = useTranslation();
   const status = getOverallStatus(state);
   const { currentTime, isStale, willRefreshSoon, refreshCountdown } = useAutoRefresh({
@@ -50,6 +52,7 @@ export function OverallStatus({ state }: OverallStatusProps) {
   const StatusIcon = config.icon;
   const isInitialState = state.lastUpdate === 0;
   const secondsAgo = currentTime - state.lastUpdate;
+  const late = state.overallLate ?? 0;
 
   function formatLastUpdated(): string {
     return new Date(state.lastUpdate * 1000)
@@ -59,13 +62,12 @@ export function OverallStatus({ state }: OverallStatusProps) {
   }
 
   function getStatusTitle(): string {
-    if (status === 'degraded') {
-      return t('status.someDown', {
-        down: state.overallDown,
-        total: state.overallUp + state.overallDown,
-      });
+    if (status !== 'degraded') return t(config.titleKey);
+
+    if (state.overallDown === 0) {
+      return t('status.someLate', { late, total: jobCount });
     }
-    return t(config.titleKey);
+    return t('status.someDown', { down: state.overallDown, total: monitorCount });
   }
 
   function getRefreshMessage(): string {
@@ -91,7 +93,11 @@ export function OverallStatus({ state }: OverallStatusProps) {
               {getStatusTitle()}
             </h2>
             <Badge variant={config.badgeVariant} className="shrink-0">
-              {state.overallUp} up / {state.overallDown} down
+              {t(late > 0 ? 'status.countsLate' : 'status.counts', {
+                up: state.overallUp - late,
+                late,
+                down: state.overallDown,
+              })}
             </Badge>
           </div>
 

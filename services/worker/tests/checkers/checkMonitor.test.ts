@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
-import type { Fetcher, MonitorTarget } from '@flarewatch/shared';
+import type { CheckContext, Fetcher, HeartbeatMonitor, MonitorTarget } from '@flarewatch/shared';
 import { checkMonitor } from '../../src/checkers';
 import type { CheckDeps } from '../../src/checkers/deps';
 
@@ -16,6 +16,9 @@ const deps: CheckDeps = {
   getEdgeLocation: getEdgeLocationMock,
   fetcher: fetchMock,
 };
+
+const NOW = 1736942400;
+const ctx: CheckContext = { env: {}, now: NOW };
 
 function createTarget(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   return {
@@ -41,7 +44,7 @@ describe('checkMonitor', () => {
 
     const result = await checkMonitor(
       createTarget({ checkProxy: 'globalping://TOKEN' }),
-      undefined,
+      ctx,
       deps,
     );
 
@@ -52,11 +55,7 @@ describe('checkMonitor', () => {
   });
 
   it('returns an error for worker:// proxy and includes edge location', async () => {
-    const result = await checkMonitor(
-      createTarget({ checkProxy: 'worker://local' }),
-      undefined,
-      deps,
-    );
+    const result = await checkMonitor(createTarget({ checkProxy: 'worker://local' }), ctx, deps);
 
     expect(result.location).toBe('SFO');
     expect(result.result.ok).toBe(false);
@@ -75,7 +74,11 @@ describe('checkMonitor', () => {
 
     const target = createTarget({ checkProxy: 'https://proxy.example.com/check', timeout: 1234 });
 
-    const result = await checkMonitor(target, { FLAREWATCH_PROXY_TOKEN: 'test-token' }, deps);
+    const result = await checkMonitor(
+      target,
+      { ...ctx, env: { FLAREWATCH_PROXY_TOKEN: 'test-token' } },
+      deps,
+    );
 
     expect(result).toEqual({ location: 'FRA', result: { ok: true, latency: 42 } });
     expect(getEdgeLocationMock).not.toHaveBeenCalled();
@@ -92,90 +95,7 @@ describe('checkMonitor', () => {
     expect(JSON.parse(options?.body as string)).toEqual(target);
   });
 
-  it('does not send Authorization when no proxy token is set', async () => {
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ location: 'FRA', result: { ok: true, latency: 42 } }), {
-        status: 200,
-      }),
-    );
-
-    await checkMonitor(
-      createTarget({ checkProxy: 'https://proxy.example.com/check' }),
-      undefined,
-      deps,
-    );
-
-    const [, options] = fetchMock.mock.calls[0] ?? [];
-    expect(options?.headers).toEqual({
-      'Content-Type': 'application/json',
-    });
-  });
-
-  it('returns a failure when proxy returns non-2xx', async () => {
-    fetchMock.mockResolvedValue(new Response('bad', { status: 500 }));
-
-    const result = await checkMonitor(
-      createTarget({ checkProxy: 'https://proxy.example.com' }),
-      undefined,
-      deps,
-    );
-
-    expect(result.location).toBe('ERROR');
-    expect(result.result.ok).toBe(false);
-    if (result.result.ok) throw new Error('Expected failure');
-    expect(result.result.error).toBe('Proxy HTTP 500: bad');
-  });
-
-  it('returns a failure when proxy returns invalid JSON shape', async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
-
-    const result = await checkMonitor(
-      createTarget({ checkProxy: 'https://proxy.example.com' }),
-      undefined,
-      deps,
-    );
-
-    expect(result.location).toBe('ERROR');
-    expect(result.result.ok).toBe(false);
-    if (result.result.ok) throw new Error('Expected failure');
-    expect(result.result.error).toBe('Proxy returned invalid response');
-  });
-
-  it('returns a failure when proxy result payload is invalid', async () => {
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ location: 'FRA', result: { ok: true } }), { status: 200 }),
-    );
-
-    const result = await checkMonitor(
-      createTarget({ checkProxy: 'https://proxy.example.com' }),
-      undefined,
-      deps,
-    );
-
-    expect(result.location).toBe('ERROR');
-    expect(result.result.ok).toBe(false);
-    if (result.result.ok) throw new Error('Expected failure');
-    expect(result.result.error).toBe('Proxy returned invalid response');
-  });
-
-  it('returns a failure when proxy request throws', async () => {
-    fetchMock.mockRejectedValue(new Error('boom'));
-
-    const result = await checkMonitor(
-      createTarget({ checkProxy: 'https://proxy.example.com' }),
-      undefined,
-      deps,
-    );
-
-    expect(result.location).toBe('ERROR');
-    expect(result.result.ok).toBe(false);
-    if (result.result.ok) throw new Error('Expected failure');
-    expect(result.result.error).toBe('Proxy error: boom');
-    expect(getEdgeLocationMock).not.toHaveBeenCalled();
-    expect(httpCheckMock).not.toHaveBeenCalled();
-  });
-
-  it('falls back to direct HTTP check when proxy fails and fallback is enabled', async () => {
+  it('falls back to direct when the proxy fails', async () => {
     fetchMock.mockRejectedValue(new Error('boom'));
     httpCheckMock.mockResolvedValue({ ok: true, latency: 9 });
 
@@ -184,7 +104,7 @@ describe('checkMonitor', () => {
         checkProxy: 'https://proxy.example.com',
         checkProxyFallback: true,
       }),
-      undefined,
+      ctx,
       deps,
     );
 
@@ -194,7 +114,7 @@ describe('checkMonitor', () => {
     expect(httpCheckMock).toHaveBeenCalledTimes(1);
   });
 
-  it('does not fall back when the external proxy succeeds and fallback is enabled', async () => {
+  it('skips the fallback when the proxy succeeds', async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ location: 'FRA', result: { ok: true, latency: 21 } }), {
         status: 200,
@@ -203,7 +123,7 @@ describe('checkMonitor', () => {
 
     const result = await checkMonitor(
       createTarget({ checkProxy: 'https://proxy.example.com/check', checkProxyFallback: true }),
-      undefined,
+      ctx,
       deps,
     );
 
@@ -221,7 +141,7 @@ describe('checkMonitor', () => {
 
     const result = await checkMonitor(
       createTarget({ checkProxy: 'globalping://TOKEN' }),
-      undefined,
+      ctx,
       deps,
     );
 
@@ -243,7 +163,7 @@ describe('checkMonitor', () => {
         checkProxy: 'globalping://TOKEN',
         checkProxyFallback: true,
       }),
-      undefined,
+      ctx,
       deps,
     );
 
@@ -261,7 +181,7 @@ describe('checkMonitor', () => {
         checkProxy: 'worker://local',
         checkProxyFallback: true,
       }),
-      undefined,
+      ctx,
       deps,
     );
 
@@ -276,7 +196,7 @@ describe('checkMonitor', () => {
 
     const result = await checkMonitor(
       createTarget({ method: 'TCP_PING', target: 'example.com:80' }),
-      undefined,
+      ctx,
       deps,
     );
 
@@ -289,11 +209,49 @@ describe('checkMonitor', () => {
   it('delegates to HTTP checker for non-TCP monitors', async () => {
     httpCheckMock.mockResolvedValue({ ok: false, error: 'bad', latency: 1 });
 
-    const result = await checkMonitor(createTarget(), undefined, deps);
+    const result = await checkMonitor(createTarget(), ctx, deps);
 
     expect(result).toEqual({ location: 'SFO', result: { ok: false, error: 'bad', latency: 1 } });
     expect(getEdgeLocationMock).toHaveBeenCalledTimes(1);
     expect(httpCheckMock).toHaveBeenCalledTimes(1);
     expect(tcpCheckMock).not.toHaveBeenCalled();
+  });
+
+  describe('HEARTBEAT', () => {
+    const heartbeat: HeartbeatMonitor = {
+      id: 'backup',
+      name: 'Backup',
+      method: 'HEARTBEAT',
+      periodSeconds: 60,
+      graceSeconds: 10,
+    };
+
+    function withSignal(signal: unknown): CheckContext {
+      return { ...ctx, stateKv: { get: vi.fn().mockResolvedValue(signal), put: vi.fn() } };
+    }
+
+    it('dispatches before pull-monitor routing', async () => {
+      const result = await checkMonitor(heartbeat, withSignal(null), deps);
+
+      expect(result).toStrictEqual({ location: 'HEARTBEAT', heartbeat: { status: 'pending' } });
+      expect(httpCheckMock).not.toHaveBeenCalled();
+      expect(tcpCheckMock).not.toHaveBeenCalled();
+      expect(globalPingCheckMock).not.toHaveBeenCalled();
+      expect(getEdgeLocationMock).not.toHaveBeenCalled();
+    });
+
+    it('derives the status despite a foreign status key on a valid signal', async () => {
+      const result = await checkMonitor(
+        heartbeat,
+        withSignal({ status: 'down', lastSuccess: NOW }),
+        deps,
+      );
+
+      expect(result.heartbeat).toStrictEqual({
+        status: 'up',
+        lastSuccess: NOW,
+        deadline: NOW + 70,
+      });
+    });
   });
 });

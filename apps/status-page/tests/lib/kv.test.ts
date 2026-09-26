@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { MonitorState } from '@flarewatch/shared';
-import { createEmptyMonitorState, resolveMonitorState } from '@/lib/monitor-state';
+import { resolveMonitorState } from '@/lib/monitor-state';
 
 function createState(overrides: Partial<MonitorState> = {}): MonitorState {
   return {
@@ -15,12 +15,17 @@ function createState(overrides: Partial<MonitorState> = {}): MonitorState {
 }
 
 describe('kv monitor state bootstrap', () => {
-  it('returns initializing state when KV is empty and trigger dispatch succeeds', async () => {
+  it('returns the initializing state when KV is empty and trigger dispatch succeeds', async () => {
     const triggerCheck = vi.fn<Parameters<typeof resolveMonitorState>[1]>().mockResolvedValue(true);
 
-    await expect(resolveMonitorState(null, triggerCheck)).resolves.toEqual(
-      createEmptyMonitorState(),
-    );
+    await expect(resolveMonitorState(null, triggerCheck)).resolves.toEqual({
+      incident: {},
+      latency: {},
+      overallUp: 0,
+      overallDown: 0,
+      lastUpdate: 0,
+      startedAt: {},
+    });
     expect(triggerCheck).toHaveBeenCalledTimes(1);
   });
 

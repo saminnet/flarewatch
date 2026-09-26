@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { loadRuntimeConfig, type RuntimeConfig } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
+import { publicView, type PublicMonitor } from './public-view';
 import { resolveRuntimeEnv } from './runtime-env';
 
 // Valid 30s per warm isolate; isolates share no cache state and may be recycled.
@@ -54,16 +55,17 @@ export async function getConfig(): Promise<RuntimeConfig> {
 
 // Narrow type: the full RuntimeConfig breaks createServerFn's inference.
 type StatusPageConfig = {
-  monitors: RuntimeConfig['monitors'];
+  monitors: PublicMonitor[];
   statusPage: RuntimeConfig['statusPage'];
 };
 
 export const getConfigServerFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<StatusPageConfig> => {
     const config = await getConfig();
+    const view = publicView(config, null);
     return {
-      monitors: config.monitors,
-      statusPage: config.statusPage,
+      monitors: view.monitors,
+      statusPage: view.statusPage,
     };
   },
 );

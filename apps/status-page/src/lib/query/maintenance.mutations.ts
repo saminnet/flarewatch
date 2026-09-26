@@ -14,10 +14,12 @@ function setMaintenances(
   updater: (current: Maintenance[]) => Maintenance[],
   { sort = false } = {},
 ): void {
-  queryClient.setQueryData<Maintenance[]>(qk.maintenances, (current) => {
+  queryClient.setQueryData<Maintenance[]>(qk.adminMaintenances, (current) => {
     const result = updater(current ?? []);
     return sort ? result.sort((a, b) => compareByStart(b, a)) : result;
   });
+  void queryClient.invalidateQueries({ queryKey: qk.adminMaintenances });
+  void queryClient.invalidateQueries({ queryKey: qk.maintenances });
 }
 
 function normalizeMutationError(error: unknown, t: TranslateFn): Error {
@@ -71,7 +73,6 @@ export function useCreateMaintenance(callbacks?: MutationCallbacks) {
     },
     onSuccess: (result) => {
       setMaintenances(queryClient, (current) => [...current, result], { sort: true });
-      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
       callbacks?.onSuccess?.(result);
     },
     onError: (error) => {
@@ -98,7 +99,6 @@ export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
         (current) => current.map((m) => (m.id === result.id ? result : m)),
         { sort: true },
       );
-      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
       callbacks?.onSuccess?.(result);
     },
     onError: (error) => {
@@ -122,7 +122,6 @@ export function useDeleteMaintenance(callbacks?: MutationCallbacks<string>) {
     },
     onSuccess: (id) => {
       setMaintenances(queryClient, (current) => current.filter((m) => m.id !== id));
-      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
       callbacks?.onSuccess?.(id);
     },
     onError: (error) => {

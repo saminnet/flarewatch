@@ -1,0 +1,35 @@
+{
+  "lastUpdate": 1736942400,
+  "overallUp": 5,
+  "overallDown": 1,
+  "startedAt": {
+    "legacy": 1736938800
+  },
+  "incident": {
+    "legacy": [
+      {
+        "start": [1736939400],
+        "end": 1736940000,
+        "error": ["Legacy outage"]
+      }
+    ]
+  },
+  "latency": {
+    "legacy": {
+      "recent": [
+        {
+          "loc": "HEL",
+          "ping": 42,
+          "time": 1736942300
+        }
+      ]
+    }
+  },
+  "sslCertificates": {
+    "legacy": {
+      "expiryDate": 1740000000,
+      "daysUntilExpiry": 35,
+      "lastCheck": 1736942300
+    }
+  }
+}

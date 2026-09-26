@@ -74,6 +74,26 @@ export const workerConfig: WorkerConfig = {
     //   link: false, // Don't expose internal URL to status page visitors
     // },
 
+    // Private monitor (checked and alerted like any other, but hidden from
+    // the public page and public API; visible only under /admin)
+    // {
+    //   id: 'private-database',
+    //   name: 'Database (private)',
+    //   method: 'TCP_PING',
+    //   target: 'db.internal.example.com:5432',
+    //   private: true,
+    //   checkProxy: 'https://your-proxy.example.com/check',
+    // },
+
+    // Scheduled job heartbeat (ping route and token are configured separately)
+    // {
+    //   id: 'nightly-backup',
+    //   name: 'Nightly backup',
+    //   method: 'HEARTBEAT',
+    //   periodSeconds: 86400,
+    //   graceSeconds: 3600,
+    // },
+
     // SSL certificate monitoring (requires a check proxy)
     // {
     //   id: 'ssl-check',

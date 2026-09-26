@@ -3,7 +3,7 @@ import { IconTool } from '@tabler/icons-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MaintenanceStatusBadge } from '@/components/maintenance/status-badge';
-import type { PublicMonitor } from '@/lib/monitors';
+import type { PublicMonitor } from '@/lib/public-view';
 import { cn } from '@/lib/utils';
 import {
   getMaintenanceStatus,

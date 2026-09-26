@@ -7,6 +7,24 @@ describe('isMonitorState', () => {
     expect(isMonitorState(createInitialState())).toBe(true);
   });
 
+  it('accepts well-formed run history and misses, rejects corrupt entries', () => {
+    const good = createInitialState();
+    good.heartbeat = {
+      backup: { status: 'up', runs: [{ at: 1, outcome: 'ok', startedAt: 0 }], misses: [1] },
+    };
+
+    expect(isMonitorState(good)).toBe(true);
+
+    const corrupt: unknown[] = [
+      { backup: { status: 'up', runs: [{ at: 'nope', outcome: 'ok' }] } },
+      { backup: { status: 'up', runs: [{ at: 1, outcome: 'nope' }] } },
+      { backup: { status: 'down', misses: ['soon'] } },
+    ];
+    for (const heartbeat of corrupt) {
+      expect(isMonitorState({ ...createInitialState(), heartbeat })).toBe(false);
+    }
+  });
+
   it('rejects null', () => {
     expect(isMonitorState(null)).toBe(false);
   });

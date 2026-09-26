@@ -11,7 +11,7 @@ describe('parseUiPrefsCookie', () => {
     expect(parseUiPrefsCookie('[]')).toStrictEqual(DEFAULT_PREFS);
   });
 
-  it('falls back per key when a value is not an array of strings', () => {
+  it('falls back per key for invalid arrays', () => {
     expect(
       parseUiPrefsCookie(JSON.stringify({ collapsedMonitors: ['a', 1], collapsedGroups: 'nope' })),
     ).toStrictEqual(DEFAULT_PREFS);

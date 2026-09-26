@@ -139,33 +139,6 @@ describe('GlobalPingChecker', () => {
     });
   });
 
-  it('accepts a TCP_PING target on port 443', async () => {
-    mockCompletedMeasurement({
-      status: 'finished',
-      results: [
-        {
-          probe: { country: 'NL', city: 'Amsterdam' },
-          result: { status: 'finished', stats: { avg: 4.2 } },
-        },
-      ],
-    });
-
-    const result = await checker.check(
-      createMonitor({
-        method: 'TCP_PING',
-        target: 'example.com:443',
-        checkProxy: 'globalping://tcp-token',
-      }),
-    );
-
-    expect(result).toEqual({ location: 'NL/Amsterdam', result: { ok: true, latency: 4 } });
-
-    const [, options] = fetchMock.mock.calls[0] ?? [];
-    expect(JSON.parse(options?.body as string)).toMatchObject({
-      measurementOptions: { port: 443 },
-    });
-  });
-
   it('returns an error for an unsupported HTTP method', async () => {
     const result = await checker.check(createMonitor({ method: 'POST' }));
 
@@ -286,6 +259,25 @@ describe('GlobalPingChecker', () => {
     });
   });
 
+  it('fails an unauthorized TLS certificate by default', async () => {
+    mockCompletedMeasurement(
+      finishedHttpMeasurement({
+        tls: { authorized: false, error: 'unable to verify the first certificate' },
+      }),
+    );
+
+    const result = await checker.check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'FI/Helsinki',
+      result: {
+        ok: false,
+        error: 'TLS error: unable to verify the first certificate',
+        latency: 13,
+      },
+    });
+  });
+
   it('ignores an unauthorized self-signed certificate when configured', async () => {
     mockCompletedMeasurement(
       finishedHttpMeasurement({
@@ -337,7 +329,7 @@ describe('GlobalPingChecker', () => {
     });
   });
 
-  it('uses the API error message when creation is rejected with an error payload', async () => {
+  it('uses the API error message on rejection', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: { message: 'Invalid token' } }, 401));
 
     const result = await checker.check(createMonitor());

@@ -71,6 +71,10 @@ code {
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
+  /* Latency chart fill, neutral fade from the line colour (see latency-chart.tsx). */
+  --chart-fill-top: 0.18;
+  --chart-fill-bottom: 0.02;
+
   /* Status tokens — public runtime contract (see runtime-contract.ts). */
   --status-operational: oklch(0.696 0.17 162.48);
   --status-operational-bg: oklch(0.979 0.021 166.113);
@@ -78,9 +82,11 @@ code {
   --status-degraded: oklch(0.769 0.188 70.08);
   --status-degraded-bg: oklch(0.987 0.022 95.277);
   --status-degraded-border: oklch(0.924 0.12 95.746);
+  --status-degraded-text: oklch(0.55 0.14 60);
   --status-down: oklch(0.637 0.237 25.331);
   --status-down-bg: oklch(0.971 0.013 17.38);
   --status-down-border: oklch(0.885 0.062 18.334);
+  --status-down-text: oklch(0.55 0.22 27);
   --status-maintenance: oklch(0.623 0.214 259.815);
   --status-maintenance-bg: oklch(0.97 0.014 254.604);
   --status-maintenance-border: oklch(0.882 0.059 254.128);
@@ -129,15 +135,20 @@ code {
   --status-degraded: oklch(0.769 0.188 70.08);
   --status-degraded-bg: oklch(0.279 0.077 45.635 / 30%);
   --status-degraded-border: oklch(0.473 0.137 46.201);
+  --status-degraded-text: var(--status-degraded);
   --status-down: oklch(0.637 0.237 25.331);
   --status-down-bg: oklch(0.258 0.092 26.042 / 30%);
   --status-down-border: oklch(0.396 0.141 25.723);
+  --status-down-text: var(--status-down);
   --status-maintenance: oklch(0.623 0.214 259.815);
   --status-maintenance-bg: oklch(0.282 0.091 267.935 / 30%);
   --status-maintenance-border: oklch(0.379 0.146 265.522);
   --status-unknown: oklch(0.708 0 0);
   --status-unknown-bg: oklch(0.269 0 0);
   --status-unknown-border: oklch(1 0 0 / 10%);
+
+  --chart-fill-top: 0.2;
+  --chart-fill-bottom: 0.03;
 }
 
 @theme inline {
@@ -179,9 +190,11 @@ code {
   --color-status-degraded: var(--status-degraded);
   --color-status-degraded-bg: var(--status-degraded-bg);
   --color-status-degraded-border: var(--status-degraded-border);
+  --color-status-degraded-text: var(--status-degraded-text);
   --color-status-down: var(--status-down);
   --color-status-down-bg: var(--status-down-bg);
   --color-status-down-border: var(--status-down-border);
+  --color-status-down-text: var(--status-down-text);
   --color-status-maintenance: var(--status-maintenance);
   --color-status-maintenance-bg: var(--status-maintenance-bg);
   --color-status-maintenance-border: var(--status-maintenance-border);

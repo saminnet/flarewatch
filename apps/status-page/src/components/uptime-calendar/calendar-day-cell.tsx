@@ -58,7 +58,7 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
     STATUS_COLORS[status],
     DAY_TEXT_COLORS[status],
     hasIncidents ? 'cursor-pointer hover:z-10' : 'cursor-default',
-    day.isToday && 'ring-[1.5px] ring-foreground/40 ring-offset-1 ring-offset-background',
+    day.isToday && 'ring-2 ring-foreground/40 ring-offset-1 ring-offset-background',
   );
 
   const sharedProps = {

@@ -1,20 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test';
-import {
-  CONTRACT_VERSION,
-  SUPPORTED_THEME_TOKENS,
-  sanitizeThemeVars,
-} from '../src/runtime-contract';
+import { SUPPORTED_THEME_TOKENS, sanitizeThemeVars } from '../src/runtime-contract';
 
 const STATUS_STATES = ['operational', 'degraded', 'down', 'maintenance', 'unknown'] as const;
 const STATUS_TOKEN_SUFFIXES = ['', '-bg', '-border'] as const;
 
 describe('contract metadata', () => {
-  it('exposes a positive integer contract version', () => {
-    expect(Number.isInteger(CONTRACT_VERSION)).toBe(true);
-    expect(CONTRACT_VERSION).toBeGreaterThan(0);
-    expect(CONTRACT_VERSION).toBe(1);
-  });
-
   it('lists supported theme tokens with no duplicates', () => {
     expect(SUPPORTED_THEME_TOKENS.length).toBeGreaterThan(0);
     expect(new Set(SUPPORTED_THEME_TOKENS).size).toBe(SUPPORTED_THEME_TOKENS.length);

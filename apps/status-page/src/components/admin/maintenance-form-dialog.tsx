@@ -13,7 +13,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import type { Maintenance } from '@flarewatch/shared';
-import type { PublicMonitor } from '@/lib/monitors';
+import type { PublicMonitor } from '@/lib/public-view';
 import { SEVERITY_OPTIONS, getMaintenanceColors } from '@/lib/maintenance';
 import type { MaintenanceFormData } from '@/lib/hooks/use-maintenance-form';
 

@@ -3,6 +3,8 @@ import { isJsonObject } from '@flarewatch/shared';
 import { useTranslation } from 'react-i18next';
 import { qk } from './keys';
 
+const ADMIN_QUERY_KEYS = [qk.adminMonitors, qk.adminMonitorState, qk.adminMaintenances];
+
 type LoginCredentials = {
   username: string;
   password: string;
@@ -45,8 +47,7 @@ export function useAdminLogin(options?: {
       return { ok: true };
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.publicMonitors });
-      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
+      for (const queryKey of ADMIN_QUERY_KEYS) void queryClient.invalidateQueries({ queryKey });
       options?.onSuccess?.();
     },
     onError: options?.onError,
@@ -64,8 +65,7 @@ export function useAdminLogout(options?: {
       await fetch('/api/admin/session', { method: 'DELETE' });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.publicMonitors });
-      void queryClient.invalidateQueries({ queryKey: qk.maintenances });
+      for (const queryKey of ADMIN_QUERY_KEYS) queryClient.removeQueries({ queryKey });
       options?.onSuccess?.();
     },
     onError: options?.onError,

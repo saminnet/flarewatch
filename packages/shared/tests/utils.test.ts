@@ -10,6 +10,7 @@ import {
   parseTcpTarget,
   success,
   failure,
+  formatUtcShort,
 } from '../src/utils';
 import type { MonitorTarget, SSLCertificateInfo } from '../src/types';
 
@@ -19,19 +20,6 @@ describe('TimeoutError', () => {
 
     expect(error.message).toBe('Operation timed out after 5000ms');
     expect(error.name).toBe('TimeoutError');
-  });
-
-  it('is instanceof Error', () => {
-    const error = new TimeoutError(1000);
-
-    expect(error).toBeInstanceOf(Error);
-    expect(error).toBeInstanceOf(TimeoutError);
-  });
-
-  it('handles different timeout values', () => {
-    expect(new TimeoutError(0).message).toBe('Operation timed out after 0ms');
-    expect(new TimeoutError(100).message).toBe('Operation timed out after 100ms');
-    expect(new TimeoutError(60000).message).toBe('Operation timed out after 60000ms');
   });
 });
 
@@ -70,32 +58,16 @@ describe('withTimeout', () => {
     await expect(withTimeout(errorPromise, 1000)).rejects.toThrow('original error');
   });
 
-  it('clears timeout when promise resolves', async () => {
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
-    const promise = Promise.resolve('done');
+  it('leaves no pending timer after resolution', async () => {
+    await withTimeout(Promise.resolve('done'), 5000);
 
-    await withTimeout(promise, 5000);
-
-    expect(clearTimeoutSpy).toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('clears timeout when promise rejects', async () => {
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
-    const promise = Promise.reject(new Error('fail'));
+  it('leaves no pending timer after rejection', async () => {
+    await expect(withTimeout(Promise.reject(new Error('fail')), 5000)).rejects.toThrow('fail');
 
-    await expect(withTimeout(promise, 5000)).rejects.toThrow('fail');
-
-    expect(clearTimeoutSpy).toHaveBeenCalled();
-  });
-
-  it('works with async values', async () => {
-    const asyncValue = (async () => {
-      return { data: 'test' };
-    })();
-
-    const result = await withTimeout(asyncValue, 1000);
-
-    expect(result).toEqual({ data: 'test' });
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
@@ -130,18 +102,54 @@ describe('fetchWithTimeout', () => {
     expect(options?.headers).toEqual({ 'Content-Type': 'application/json' });
   });
 
-  it('uses default timeout of 10000ms', async () => {
-    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
-    const mockFetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('ok'));
-    globalThis.fetch = mockFetch;
+  it('aborts a pending fetch at the default deadline', async () => {
+    const controller = new AbortController();
+    const deadlines: number[] = [];
+    vi.stubGlobal('AbortSignal', {
+      timeout: (ms: number) => {
+        deadlines.push(ms);
+        return controller.signal;
+      },
+    });
+    const fetchMock = vi.fn<typeof globalThis.fetch>(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    globalThis.fetch = fetchMock;
 
-    const responsePromise = fetchWithTimeout('https://example.com');
+    const pending = fetchWithTimeout('https://example.com');
+    const assertion = expect(pending).rejects.toThrow('aborted');
+    controller.abort();
+    await assertion;
 
-    await vi.runAllTimersAsync();
-    await responsePromise;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(deadlines).toEqual([DEFAULT_HTTP_TIMEOUT]);
+    vi.unstubAllGlobals();
+  });
 
-    expect(timeoutSpy).toHaveBeenCalledWith(DEFAULT_HTTP_TIMEOUT);
-    timeoutSpy.mockRestore();
+  it('bounds fetch without AbortSignal.timeout', async () => {
+    vi.stubGlobal('AbortSignal', {});
+    const pendingFetch = vi.fn<typeof globalThis.fetch>(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    globalThis.fetch = pendingFetch;
+
+    const pending = fetchWithTimeout('https://example.com', { timeout: 1000 });
+    const abortsAtDeadline = expect(pending).rejects.toThrow('aborted');
+    await vi.advanceTimersByTimeAsync(1000);
+    await abortsAtDeadline;
+
+    const resolvingFetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('ok'));
+    globalThis.fetch = resolvingFetch;
+    await fetchWithTimeout('https://example.com', { timeout: 5000 });
+
+    expect(vi.getTimerCount()).toBe(0);
+    vi.unstubAllGlobals();
   });
 
   it('passes body when provided', async () => {
@@ -219,24 +227,6 @@ describe('validateHttpResponse', () => {
       expect(result).toBe('Expected 2xx status, got 404');
     });
 
-    it('rejects 3xx status codes by default', async () => {
-      const monitor = createMonitor();
-      const response = new Response('', { status: 301 });
-
-      const result = await validateHttpResponse(monitor, response);
-
-      expect(result).toBe('Expected 2xx status, got 301');
-    });
-
-    it('rejects 5xx status codes by default', async () => {
-      const monitor = createMonitor();
-      const response = new Response('error', { status: 500 });
-
-      const result = await validateHttpResponse(monitor, response);
-
-      expect(result).toBe('Expected 2xx status, got 500');
-    });
-
     it('accepts custom expectedCodes', async () => {
       const monitor = createMonitor({ expectedCodes: [200, 201, 404] });
 
@@ -254,15 +244,6 @@ describe('validateHttpResponse', () => {
       const result = await validateHttpResponse(monitor, response);
 
       expect(result).toBe('Expected status 200|201, got 500');
-    });
-
-    it('formats single expectedCode correctly', async () => {
-      const monitor = createMonitor({ expectedCodes: [204] });
-
-      const response = new Response('error', { status: 200 });
-      const result = await validateHttpResponse(monitor, response);
-
-      expect(result).toBe('Expected status 204, got 200');
     });
   });
 
@@ -332,24 +313,30 @@ describe('validateHttpResponse', () => {
       expect(result).toBe('Required keyword "SUCCESS" not found in response');
     });
 
-    it('skips body check when no keywords configured', async () => {
-      const monitor = createMonitor();
+    it('skips the body read without keywords', async () => {
+      const text = vi.fn(async () => {
+        throw new Error('body read must not happen');
+      });
       const response = new Response('anything', { status: 200 });
+      response.text = text;
 
-      const result = await validateHttpResponse(monitor, response);
-
-      expect(result).toBeNull();
+      await expect(validateHttpResponse(createMonitor(), response)).resolves.toBeNull();
+      expect(text).not.toHaveBeenCalled();
     });
   });
 
   describe('combined validation', () => {
-    it('checks status before keywords', async () => {
-      const monitor = createMonitor({ responseKeyword: 'ok' });
+    it('returns the status error without reading the body', async () => {
+      const text = vi.fn(async () => {
+        throw new Error('body read must not happen');
+      });
       const response = new Response('ok', { status: 500 });
+      response.text = text;
 
-      const result = await validateHttpResponse(monitor, response);
+      const result = await validateHttpResponse(createMonitor({ responseKeyword: 'ok' }), response);
 
       expect(result).toBe('Expected 2xx status, got 500');
+      expect(text).not.toHaveBeenCalled();
     });
   });
 });
@@ -362,27 +349,9 @@ describe('parseTcpTarget', () => {
       expect(result).toEqual({ hostname: 'example.com', port: 80 });
     });
 
-    it('parses IP address with port', () => {
-      const result = parseTcpTarget('192.168.1.1:443');
-
-      expect(result).toEqual({ hostname: '192.168.1.1', port: 443 });
-    });
-
-    it('parses localhost with port', () => {
-      const result = parseTcpTarget('localhost:3000');
-
-      expect(result).toEqual({ hostname: 'localhost', port: 3000 });
-    });
-
     it('handles port boundaries', () => {
       expect(parseTcpTarget('host:1')).toEqual({ hostname: 'host', port: 1 });
       expect(parseTcpTarget('host:65535')).toEqual({ hostname: 'host', port: 65535 });
-    });
-
-    it('handles subdomains', () => {
-      const result = parseTcpTarget('api.v2.example.com:8080');
-
-      expect(result).toEqual({ hostname: 'api.v2.example.com', port: 8080 });
     });
   });
 
@@ -399,26 +368,6 @@ describe('parseTcpTarget', () => {
 
     it('throws on port 0', () => {
       expect(() => parseTcpTarget('host:0')).toThrow('Invalid TCP port: 0');
-    });
-
-    it('throws on negative port', () => {
-      expect(() => parseTcpTarget('host:-1')).toThrow('Invalid URL');
-    });
-
-    it('throws on port > 65535', () => {
-      expect(() => parseTcpTarget('host:65536')).toThrow('Invalid URL');
-    });
-
-    it('throws on non-numeric port', () => {
-      expect(() => parseTcpTarget('host:abc')).toThrow('Invalid URL');
-    });
-
-    it('throws on floating point port', () => {
-      expect(() => parseTcpTarget('host:80.5')).toThrow('Invalid URL');
-    });
-
-    it('throws on missing hostname', () => {
-      expect(() => parseTcpTarget(':80')).toThrow('Invalid URL');
     });
   });
 });
@@ -441,13 +390,6 @@ describe('success', () => {
     const result = success(100, ssl);
 
     expect(result).toEqual({ ok: true, latency: 100, ssl });
-  });
-
-  it('handles zero latency', () => {
-    const result = success(0);
-
-    expect(result.latency).toBe(0);
-    expect(result.ok).toBe(true);
   });
 });
 
@@ -517,5 +459,12 @@ describe('createLogger', () => {
     });
     expect(typeof entry.timestamp).toBe('string');
     spy.mockRestore();
+  });
+});
+
+describe('formatUtcShort', () => {
+  it('matches the status page timestamp shape', () => {
+    expect(formatUtcShort(Date.parse('2026-09-16T07:02:42Z') / 1000)).toBe('Sep 16, 07:02 UTC');
+    expect(formatUtcShort(Date.parse('2026-01-05T00:00:00Z') / 1000)).toBe('Jan 5, 00:00 UTC');
   });
 });

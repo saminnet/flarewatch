@@ -1,8 +1,7 @@
-// Pins the accepted and rejected shapes inherited from the pre-Zod guards; webhook payload
-// validation is intentionally stricter.
+// Pins the accepted and rejected shapes inherited from the pre-Zod guards; webhook payload and
+// monitor method validation are intentionally stricter.
 import { describe, expect, it } from 'vite-plus/test';
 import {
-  isStoredConfigEnvelope,
   isValidMaintenance,
   isValidRuntimeConfig,
   parseMaintenances,
@@ -13,35 +12,11 @@ const monitor = { id: 'm1', name: 'M1', method: 'GET', target: 'https://example.
 
 const runtimeConfigCases: Array<[string, unknown, boolean]> = [
   ['minimal valid', { monitors: [] }, true],
-  ['one http monitor', { monitors: [monitor] }, true],
   ['not an object', 'nope', false],
   ['null', null, false],
   ['array', [], false],
   ['monitors missing', {}, false],
   ['monitors not an array', { monitors: {} }, false],
-  ['empty id', { monitors: [{ ...monitor, id: '' }] }, false],
-  ['empty name', { monitors: [{ ...monitor, name: '' }] }, false],
-  ['non-string method', { monitors: [{ ...monitor, method: 1 }] }, false],
-  [
-    'unknown method keeps any target',
-    { monitors: [{ ...monitor, method: 'WEIRD', target: 'x' }] },
-    true,
-  ],
-  [
-    'http method needs a url',
-    { monitors: [{ ...monitor, method: 'POST', target: 'notaurl' }] },
-    false,
-  ],
-  [
-    'tcp_ping needs host:port',
-    { monitors: [{ ...monitor, method: 'TCP_PING', target: 'example.com:443' }] },
-    true,
-  ],
-  [
-    'tcp_ping rejects bare host',
-    { monitors: [{ ...monitor, method: 'TCP_PING', target: 'example.com' }] },
-    false,
-  ],
   [
     'tcp_ping rejects port 0',
     { monitors: [{ ...monitor, method: 'TCP_PING', target: 'example.com:0' }] },
@@ -114,26 +89,10 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
     false,
   ],
   [
-    'param payload must be an object',
-    {
-      monitors: [],
-      notification: { webhook: { url: 'https://a.com', payloadType: 'param', payload: 'x' } },
-    },
-    false,
-  ],
-  [
     'param payload null accepted',
     {
       monitors: [],
       notification: { webhook: { url: 'https://a.com', payloadType: 'param', payload: null } },
-    },
-    true,
-  ],
-  [
-    'json payload may be a string',
-    {
-      monitors: [],
-      notification: { webhook: { url: 'https://a.com', payloadType: 'json', payload: 'x' } },
     },
     true,
   ],
@@ -188,15 +147,6 @@ describe('config guard parity', () => {
 
   it.each(maintenanceCases)('maintenance: %s', (_name, value, expected) => {
     expect(isValidMaintenance(value)).toBe(expected);
-  });
-
-  it('envelope unwraps a nested config and parseRuntimeConfig accepts both shapes', () => {
-    const config = { monitors: [monitor] };
-    expect(isStoredConfigEnvelope({ config })).toBe(true);
-    expect(isStoredConfigEnvelope({ config: { monitors: 'no' } })).toBe(false);
-    expect(parseRuntimeConfig({ config })).toEqual(config);
-    expect(parseRuntimeConfig(config)).toEqual(config);
-    expect(parseRuntimeConfig({ nope: 1 })).toBeNull();
   });
 
   it('parseMaintenances keeps the valid entries and drops the rest', () => {

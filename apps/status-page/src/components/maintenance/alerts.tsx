@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { IconCalendar } from '@tabler/icons-react';
 import type { Maintenance } from '@flarewatch/shared';
-import type { PublicMonitor } from '@/lib/monitors';
+import type { PublicMonitor } from '@/lib/public-view';
 import { filterMaintenances } from '@/lib/maintenance';
 import { MaintenanceCard } from './maintenance-card';
 

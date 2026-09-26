@@ -1,6 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { AdminPage } from '@/components/routes/admin-page';
-import { publicMonitorsQuery, maintenancesQuery } from '@/lib/query/monitors.queries';
+import {
+  adminMonitorsQuery,
+  adminMaintenancesQuery,
+  adminMonitorStateQuery,
+} from '@/lib/query/monitors.queries';
 import { checkAdminAuthServerFn } from '@/lib/auth-server';
 
 export const Route = createFileRoute('/admin')({
@@ -13,8 +17,9 @@ export const Route = createFileRoute('/admin')({
 
     if (authState === 'authenticated') {
       await Promise.all([
-        context.queryClient.ensureQueryData(publicMonitorsQuery()),
-        context.queryClient.ensureQueryData(maintenancesQuery()),
+        context.queryClient.ensureQueryData(adminMonitorsQuery()),
+        context.queryClient.ensureQueryData(adminMaintenancesQuery()),
+        context.queryClient.ensureQueryData(adminMonitorStateQuery()),
       ]);
     }
 

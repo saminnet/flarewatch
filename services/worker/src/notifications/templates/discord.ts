@@ -1,4 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
+import { jsonOutput } from './format';
 
 export function discordTemplate(ctx: TemplateContext): TemplateOutput {
   // Discord uses decimal color values
@@ -31,9 +32,5 @@ export function discordTemplate(ctx: TemplateContext): TemplateOutput {
     ],
   };
 
-  return {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  };
+  return jsonOutput(payload);
 }

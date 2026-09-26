@@ -45,7 +45,7 @@ function StatusBarSegment({ day, isMobile, onClick }: StatusBarSegmentProps) {
               })
         }
         className={cn(
-          'h-6 rounded-sm transition-all duration-150',
+          'h-6 rounded-sm transition-[scale,filter,background-color,box-shadow] duration-150 ease-out',
           isMobile ? 'w-2.5 shrink-0' : 'min-w-0 flex-1',
           STATUS_DOT_COLORS[day.status],
           day.downtime > 0

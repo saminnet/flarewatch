@@ -1,15 +1,22 @@
 import {
+  type CheckContext,
   createLogger,
+  HEARTBEAT_RUN_HISTORY,
+  type HeartbeatState,
   isMonitorState,
+  isPublicMonitor,
   KV_KEYS,
-  loadRuntimeConfig,
   type Maintenance,
+  type Monitor,
+  type MonitorCheckResult,
   readMaintenancesFromStorage,
   type RuntimeConfig,
   type WorkerConfig,
 } from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
 
+import { getStateKv, loadEffectiveConfig, type Env } from './env';
+import { handlePing, handlePingUrl } from './ping';
 import { getEdgeLocation } from './utils/location';
 import { checkMonitor } from './checkers';
 import {
@@ -28,44 +35,9 @@ import {
 
 const log = createLogger('Worker');
 
-interface Env {
-  CONFIG_KV?: KVNamespace;
-  STATE_KV?: KVNamespace;
-  FLAREWATCH_STATE?: KVNamespace;
-  /** Sent as `Authorization: Bearer <token>` on every external proxy check. */
-  FLAREWATCH_PROXY_TOKEN?: string;
-}
-
 const DEFAULT_COOLDOWN_MINUTES = 3;
 
 const GRACE_PERIOD_BUFFER_SECONDS = 30;
-
-function getStateKv(env: Env): KVNamespace {
-  const kv = env.STATE_KV ?? env.FLAREWATCH_STATE;
-  if (!kv) {
-    throw new Error('STATE_KV (or FLAREWATCH_STATE) binding not found');
-  }
-  return kv;
-}
-
-async function loadEffectiveConfig(env: Env, staticConfig: WorkerConfig): Promise<RuntimeConfig> {
-  if (env.CONFIG_KV) {
-    const runtimeConfig = await loadRuntimeConfig(env.CONFIG_KV);
-    if (runtimeConfig) {
-      return runtimeConfig;
-    }
-    log.error('Invalid runtime config in CONFIG_KV, falling back to static config');
-  }
-
-  const config: RuntimeConfig = { monitors: staticConfig.monitors };
-  if (staticConfig.notification) {
-    config.notification = staticConfig.notification;
-  }
-  if (staticConfig.kvWriteCooldownMinutes !== undefined) {
-    config.kvWriteCooldownMinutes = staticConfig.kvWriteCooldownMinutes;
-  }
-  return config;
-}
 
 function isInMaintenance(
   monitorId: string,
@@ -127,7 +99,10 @@ function shouldNotify(
   statusChanged: boolean,
   isUp: boolean,
   config: RuntimeConfig,
+  ignoreGracePeriod: boolean,
 ): boolean {
+  if (ignoreGracePeriod) return statusChanged;
+
   const gracePeriod = config.notification?.gracePeriod;
 
   if (gracePeriod === undefined) {
@@ -155,8 +130,23 @@ function shouldNotify(
   return false;
 }
 
+function heartbeatStateChanged(
+  previous: HeartbeatState | undefined,
+  next: HeartbeatState,
+): boolean {
+  return (
+    previous?.status !== next.status ||
+    previous.lastSuccess !== next.lastSuccess ||
+    previous.lastFail !== next.lastFail ||
+    previous.lastStart !== next.lastStart ||
+    previous.message !== next.message ||
+    previous.deadline !== next.deadline ||
+    previous.misses?.[previous.misses.length - 1] !== next.misses?.[next.misses.length - 1]
+  );
+}
+
 export interface WorkerDeps {
-  readonly checkMonitor: typeof checkMonitor;
+  readonly checkMonitor: (target: Monitor, ctx: CheckContext) => Promise<MonitorCheckResult>;
   readonly createNotifier: typeof createNotifier;
   readonly formatNotificationMessage: typeof formatNotificationMessage;
   readonly getEdgeLocation: () => Promise<string>;
@@ -183,6 +173,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
     type: 'json',
   });
   const state = isMonitorState(storedState) ? storedState : createInitialState();
+  state.heartbeat ??= {};
   resetCounters(state);
 
   const maintenances = await loadMaintenances(stateKv);
@@ -191,34 +182,85 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const notifier = deps.createNotifier(config.notification?.webhook);
 
   const checkResults = await Promise.allSettled(
-    config.monitors.map(async (monitor) => {
+    config.monitors.map((monitor) => {
       log.info('Checking monitor', { name: monitor.name });
-      const result = await deps.checkMonitor(monitor, env);
-
-      return { monitor, result };
+      return deps.checkMonitor(monitor, { env, now: currentTime, stateKv });
     }),
   );
 
   let stateChanged = false;
 
-  for (const settled of checkResults) {
+  for (const [index, settled] of checkResults.entries()) {
+    const monitor = config.monitors[index]!;
     if (settled.status === 'rejected') {
-      log.error('Check failed', { reason: String(settled.reason) });
-      state.overallDown++;
+      log.error('Check failed', { monitor: monitor.id, error: String(settled.reason) });
+      if (isPublicMonitor(monitor)) state.overallDown++;
       continue;
     }
 
-    const { monitor, result } = settled.value;
-    const { location: checkLocation, result: checkResult } = result;
+    const { location: checkLocation, result: checkResult, heartbeat } = settled.value;
+
+    if (heartbeat) {
+      const previous = state.heartbeat[monitor.id];
+
+      // Deadline misses live in the state blob, never in the ping signal: the
+      // checker must not read-modify-write hb:v1:<id>, where a concurrent ping
+      // would be erased. While a job stays overdue, one miss is appended per
+      // elapsed period so a long outage shows every skipped run.
+      const previousMisses = previous?.misses;
+      if (previousMisses?.length) heartbeat.misses = previousMisses;
+      if (
+        monitor.method === 'HEARTBEAT' &&
+        heartbeat.status === 'down' &&
+        heartbeat.lastFail === undefined &&
+        heartbeat.deadline !== undefined
+      ) {
+        const period = monitor.periodSeconds;
+        const lastMiss = previousMisses?.[previousMisses.length - 1];
+        const firstMiss = Math.max(
+          heartbeat.deadline,
+          lastMiss === undefined ? -Infinity : lastMiss + period,
+        );
+        const count = Math.floor((currentTime - firstMiss) / period) + 1;
+        if (count > 0) {
+          const skipped = Math.max(0, count - HEARTBEAT_RUN_HISTORY);
+          const appended = Array.from(
+            { length: count - skipped },
+            (_, i) => firstMiss + (skipped + i) * period,
+          );
+          heartbeat.misses = [...(previousMisses ?? []), ...appended].slice(-HEARTBEAT_RUN_HISTORY);
+        }
+      }
+
+      stateChanged ||= heartbeatStateChanged(previous, heartbeat);
+      state.heartbeat[monitor.id] = heartbeat;
+      if (heartbeat.status === 'late' && isPublicMonitor(monitor)) {
+        state.overallLate = (state.overallLate ?? 0) + 1;
+      }
+
+      // Pending and running produce no check result, so count them here: up,
+      // unless a restart happens inside an overdue incident that is still open.
+      if (
+        isPublicMonitor(monitor) &&
+        (heartbeat.status === 'pending' || heartbeat.status === 'running')
+      ) {
+        const incidents = state.incident[monitor.id];
+        const last = incidents?.[incidents.length - 1];
+        if (last && last.end === undefined) state.overallDown++;
+        else state.overallUp++;
+      }
+    }
+
+    if (!checkResult) continue;
 
     const update = processCheckResult(state, monitor, checkResult, currentTime);
     stateChanged ||= update.statusChanged;
 
-    const latency = checkResult.latency ?? 0;
-    updateLatency(state, monitor.id, checkLocation, latency, currentTime);
-
-    if (checkResult.ok && checkResult.ssl) {
-      updateSSLCertificate(state, monitor.id, checkResult.ssl, currentTime);
+    if (monitor.method !== 'HEARTBEAT') {
+      updateLatency(state, monitor.id, checkLocation, checkResult.latency ?? 0, currentTime);
+      if (checkResult.ok && checkResult.ssl) {
+        updateSSLCertificate(state, monitor.id, checkResult.ssl, currentTime);
+      }
     }
 
     cleanupOldIncidents(state, monitor.id, currentTime);
@@ -236,6 +278,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
         statusChangedForNotification,
         update.isUp,
         config,
+        monitor.method === 'HEARTBEAT',
       );
 
       if (shouldSend) {
@@ -289,18 +332,36 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
     log.debug('Skipping state save', { cooldownRemaining: cooldownSeconds - timeSinceUpdate });
   }
 
-  log.info('Complete', { up: state.overallUp, down: state.overallDown });
+  log.info('Complete', {
+    up: state.overallUp,
+    down: state.overallDown,
+    late: state.overallLate ?? 0,
+  });
 }
 
 const Worker = {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext,
+    deps: WorkerDeps = defaultWorkerDeps,
+  ): Promise<Response> {
     const url = new URL(request.url);
 
     // Trigger check (internal binding only). If you route this worker publicly,
     // add a secret check here.
     if (url.pathname === '/trigger' && request.method === 'POST') {
-      ctx.waitUntil(runChecks(env));
+      ctx.waitUntil(runChecks(env, deps));
       return Response.json({ success: true, message: 'Check triggered' }, { status: 202 });
+    }
+
+    // Ping routes and /ping-url are only reachable through the MONITOR_WORKER
+    // service binding; the worker has no public ingress (workers_dev = false).
+    if (url.pathname.startsWith('/ping/')) {
+      return handlePing(request, env, () => loadEffectiveConfig(env, deps.staticConfig));
+    }
+    if (url.pathname.startsWith('/ping-url/')) {
+      return handlePingUrl(request, env, await loadEffectiveConfig(env, deps.staticConfig));
     }
 
     return new Response('Not Found', { status: 404 });

@@ -1,6 +1,11 @@
 import { queryOptions } from '@tanstack/react-query';
-import { getMaintenances, getMonitorState } from '@/lib/kv';
-import { getPublicMonitors } from '@/lib/monitors';
+import {
+  getAdminMaintenances,
+  getAdminMonitorState,
+  getMaintenances,
+  getMonitorState,
+} from '@/lib/kv';
+import { getAdminMonitors, getPublicMonitors } from '@/lib/monitors';
 import { getUiPrefsServerFn } from '@/lib/ui-prefs-server';
 import { getConfigServerFn } from '@/lib/config';
 import { qk } from './keys';
@@ -20,10 +25,24 @@ export const monitorStateQuery = () =>
     staleTime: QUERY_STALE_TIME.DEFAULT, // 30 seconds - KV-backed data
   });
 
+export const adminMonitorStateQuery = () =>
+  queryOptions({
+    queryFn: () => getAdminMonitorState(),
+    queryKey: qk.adminMonitorState,
+    staleTime: QUERY_STALE_TIME.DEFAULT,
+  });
+
 export const publicMonitorsQuery = () =>
   queryOptions({
     queryFn: () => getPublicMonitors(),
     queryKey: qk.publicMonitors,
+    staleTime: QUERY_STALE_TIME.MONITORS,
+  });
+
+export const adminMonitorsQuery = () =>
+  queryOptions({
+    queryFn: () => getAdminMonitors(),
+    queryKey: qk.adminMonitors,
     staleTime: QUERY_STALE_TIME.MONITORS,
   });
 
@@ -38,5 +57,12 @@ export const maintenancesQuery = () =>
   queryOptions({
     queryFn: () => getMaintenances(),
     queryKey: qk.maintenances,
+    staleTime: QUERY_STALE_TIME.DEFAULT,
+  });
+
+export const adminMaintenancesQuery = () =>
+  queryOptions({
+    queryFn: () => getAdminMaintenances(),
+    queryKey: qk.adminMaintenances,
     staleTime: QUERY_STALE_TIME.DEFAULT,
   });

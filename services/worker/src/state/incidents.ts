@@ -1,8 +1,9 @@
-import type {
-  MonitorState,
-  MonitorTarget,
-  CheckResult,
-  SSLCertificateInfo,
+import {
+  isPublicMonitor,
+  type CheckResult,
+  type MonitorState,
+  type Monitor,
+  type SSLCertificateInfo,
 } from '@flarewatch/shared';
 
 const INCIDENT_RETENTION_SECONDS = 90 * 24 * 60 * 60;
@@ -18,7 +19,7 @@ interface IncidentUpdate {
 
 export function processCheckResult(
   state: MonitorState,
-  monitor: MonitorTarget,
+  monitor: Monitor,
   result: CheckResult,
   currentTime: number,
 ): IncidentUpdate {
@@ -33,7 +34,7 @@ export function processCheckResult(
   let changeType: IncidentUpdate['changeType'] = 'none';
 
   if (result.ok) {
-    state.overallUp++;
+    if (isPublicMonitor(monitor)) state.overallUp++;
 
     if (lastIncident && lastIncident.end === undefined) {
       lastIncident.end = currentTime;
@@ -50,7 +51,7 @@ export function processCheckResult(
       error: '',
     };
   } else {
-    state.overallDown++;
+    if (isPublicMonitor(monitor)) state.overallDown++;
 
     if (!lastIncident || lastIncident.end !== undefined) {
       incidents.push({
@@ -147,13 +148,16 @@ export function createInitialState(): MonitorState {
     lastUpdate: 0,
     overallUp: 0,
     overallDown: 0,
+    overallLate: 0,
     startedAt: {},
     incident: {},
     latency: {},
+    heartbeat: {},
   };
 }
 
 export function resetCounters(state: MonitorState): void {
   state.overallUp = 0;
   state.overallDown = 0;
+  state.overallLate = 0;
 }

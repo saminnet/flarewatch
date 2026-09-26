@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { getMonitorState } from '@/lib/kv';
 import { getCorsHeaders } from '@/lib/cors';
 import { getConfig } from '@/lib/config';
+import { publicView } from '@/lib/public-view';
 import { projectPublicData } from '@/lib/status-projection';
 
 export const Route = createFileRoute('/api/data')({
@@ -9,6 +10,7 @@ export const Route = createFileRoute('/api/data')({
     handlers: {
       GET: async ({ request }: { request: Request }) => {
         const config = await getConfig();
+        const configView = publicView(config, null);
         const corsHeaders = getCorsHeaders(request, config.statusPage?.apiCorsOrigins);
         try {
           const state = await getMonitorState();
@@ -20,7 +22,9 @@ export const Route = createFileRoute('/api/data')({
             });
           }
 
-          return Response.json(projectPublicData(config.monitors, state), { headers: corsHeaders });
+          return Response.json(projectPublicData(configView.monitors, state), {
+            headers: corsHeaders,
+          });
         } catch (error) {
           console.error('Error in /api/data:', error);
           return new Response(JSON.stringify({ error: 'Internal server error' }), {

@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from 'vite-plus/test';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { Route } from '@/routes/api/admin/session';
+import { AUTH } from '@/lib/constants';
 
 type SessionHandler = (ctx: { request: Request }) => Promise<Response>;
 
@@ -41,12 +42,62 @@ describe('POST /api/admin/session body guard', () => {
       expect(response.status).toBe(400);
     }
   });
+});
 
-  it('still rejects when no state KV binding exists, proving the guard runs first', async () => {
-    globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: 'e2e-admin:secret' };
+describe('POST /api/admin/session login rate limit', () => {
+  function sessionKv(): KVNamespace {
+    const values = new Map<string, string>();
+    const kv = {
+      get: vi.fn(async (key: string) => values.get(key) ?? null),
+      put: vi.fn(async (key: string, value: string) => {
+        values.set(key, value);
+      }),
+      delete: vi.fn(async (key: string) => {
+        values.delete(key);
+      }),
+    };
+    return kv as typeof kv & KVNamespace;
+  }
 
-    const response = await getPostHandler()({ request: postRequest('[]') });
+  function loginRequest(password: string): Request {
+    return new Request('https://flarewatch.test/api/admin/session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '203.0.113.7',
+      },
+      body: JSON.stringify({ username: 'e2e-admin', password }),
+    });
+  }
 
-    expect(response.status).toBe(400);
+  it('blocks the next attempt after the failure maximum', async () => {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode('e2e-password'),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits'],
+    );
+    const bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations: 100_000 },
+      keyMaterial,
+      256,
+    );
+    const secret = JSON.stringify({
+      username: 'e2e-admin',
+      salt: btoa(String.fromCharCode(...salt)),
+      hash: btoa(String.fromCharCode(...new Uint8Array(bits))),
+    });
+    const kv = sessionKv();
+    globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: secret, STATE_KV: kv };
+
+    for (let attempt = 0; attempt < AUTH.LOGIN_RATE_LIMIT_MAX_ATTEMPTS; attempt++) {
+      const response = await getPostHandler()({ request: loginRequest('wrong') });
+      expect(response.status).toBe(401);
+    }
+
+    const blocked = await getPostHandler()({ request: loginRequest('e2e-password') });
+    expect(blocked.status).toBe(429);
   });
 });

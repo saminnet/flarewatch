@@ -1,6 +1,6 @@
-import type { Maintenance, MonitorState, MonitorTarget } from '@flarewatch/shared';
+import type { Maintenance, MonitorState } from '@flarewatch/shared';
 import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/events/types';
-import type { PublicMonitor } from '@/lib/monitors';
+import type { PublicMonitor } from '@/lib/public-view';
 import { getMaintenanceStatus } from '@/lib/maintenance';
 import { getLatestLatency, getMonitorError, isMonitorUp } from '@/lib/uptime';
 
@@ -47,7 +47,7 @@ function getEventStartMs(event: TimelineEvent): number {
 }
 
 export function projectPublicData(
-  monitors: MonitorTarget[],
+  monitors: PublicMonitor[],
   state: MonitorState,
 ): PublicDataProjection {
   const projectedMonitors: Record<string, PublicDataMonitor> = {};
@@ -76,8 +76,11 @@ export function projectPublicData(
 export function projectBadgeStatus(monitorId: string, state: MonitorState): BadgeStatusProjection {
   const hasIncidentHistory = Boolean(state.incident?.[monitorId]);
   const hasLatencyData = Boolean(state.latency?.[monitorId]?.recent?.length);
+  const heartbeatStatus = state.heartbeat?.[monitorId]?.status;
+  const hasCheckData =
+    hasLatencyData || (heartbeatStatus !== undefined && heartbeatStatus !== 'pending');
 
-  if (!hasIncidentHistory || !hasLatencyData) {
+  if (!hasIncidentHistory || !hasCheckData) {
     return { status: 'unknown' };
   }
 

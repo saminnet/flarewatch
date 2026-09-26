@@ -1,5 +1,4 @@
-import { timingSafeEqual } from './auth-utils';
-import { isJsonObject, isNonEmptyString } from '@flarewatch/shared';
+import { isJsonObject, isNonEmptyString, timingSafeEqual } from '@flarewatch/shared';
 
 const AUTH_SECRET_ITERATIONS = 100_000;
 const PBKDF2_HASH_BITS = 256;

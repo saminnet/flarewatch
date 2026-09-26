@@ -50,6 +50,13 @@ export async function authMiddlewareServer(
   const { request, pathname, next } = opts;
   const env = await resolveRuntimeEnv();
 
+  // Ping endpoints carry their own HMAC token, verified by the monitoring
+  // worker over the service binding. Basic Auth would break curl and systemd
+  // reporters, so they are exempt here.
+  if (pathname.startsWith('/ping/')) {
+    return next();
+  }
+
   if (isAdminRoute(pathname)) {
     const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
     if (!adminCreds) {

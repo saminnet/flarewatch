@@ -72,6 +72,8 @@ Optional GitHub Actions secrets are uploaded with `wrangler secret put` when set
 - `FLAREWATCH_PROXY_TOKEN`
 - `FLAREWATCH_STATUS_PAGE_BASIC_AUTH`
 - `FLAREWATCH_ADMIN_BASIC_AUTH`
+- `HEARTBEAT_SECRET` (root secret for heartbeat ping URLs; see
+  [Heartbeat monitors](#heartbeat-monitors) in the README)
 
 Secrets are uploaded right after each `wrangler deploy`, so the very first deployment can serve traffic for a few seconds before basic auth is active. Removing a GitHub secret does not remove the Worker secret — delete it manually, for example:
 

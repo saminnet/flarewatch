@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { getAdminSessionCookie, timingSafeEqual, validateSession } from '@/lib/auth-utils';
+import { getAdminSessionCookie, validateSession } from '@/lib/auth-utils';
 import { isSessionExpiredError, SessionExpiredError } from '@/lib/query/auth.mutations';
 
 type TestKv = Parameters<typeof validateSession>[0];
@@ -15,12 +15,6 @@ function createKv(value: string | null, shouldThrow = false): TestKv {
 }
 
 describe('auth-utils', () => {
-  it('compares strings without accepting unequal values or lengths', () => {
-    expect(timingSafeEqual('secret', 'secret')).toBe(true);
-    expect(timingSafeEqual('secret', 'wrong')).toBe(false);
-    expect(timingSafeEqual('secret', 'secret-extra')).toBe(false);
-  });
-
   it('extracts and decodes the admin session cookie', () => {
     const header = 'theme=dark; flarewatch_admin_session=session%3Dabc%2B123; other=value';
 

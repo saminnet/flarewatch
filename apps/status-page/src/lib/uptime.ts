@@ -95,7 +95,7 @@ export function formatUptimeDisplay(
 }
 
 export function getOverallStatus(state: MonitorState): 'operational' | 'degraded' | 'down' {
-  if (state.overallDown === 0) return 'operational';
+  if (state.overallDown === 0) return (state.overallLate ?? 0) > 0 ? 'degraded' : 'operational';
   if (state.overallUp > 0) return 'degraded';
   return 'down';
 }

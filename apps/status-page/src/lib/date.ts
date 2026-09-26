@@ -139,3 +139,16 @@ export function formatDuration(ms: number, options?: { minUnit?: 'seconds' | 'mi
   if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
   return `${seconds}s`;
 }
+
+/**
+ * Format a period in seconds the way the card header reads it:
+ * 900 -> "15m", 3600 -> "1h", 86400 -> "24h", 604800 -> "7d".
+ * Days start at 48h so a daily job stays "24h", like the mockup.
+ */
+export function formatCadence(seconds: number): string {
+  if (seconds <= 0) return '0s';
+  if (seconds >= 2 * 86400 && seconds % 86400 === 0) return `${seconds / 86400}d`;
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
+}

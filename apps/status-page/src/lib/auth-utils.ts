@@ -6,18 +6,6 @@ export type SessionData = {
   ip: string | null;
 };
 
-export function timingSafeEqual(a: string, b: string): boolean {
-  const aBytes = new TextEncoder().encode(a);
-  const bBytes = new TextEncoder().encode(b);
-  const maxLen = Math.max(aBytes.length, bBytes.length);
-
-  let diff = aBytes.length ^ bBytes.length;
-  for (let i = 0; i < maxLen; i++) {
-    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
-  }
-  return diff === 0;
-}
-
 function parseCookies(header: string | null): Record<string, string> {
   if (!header) return {};
   const out: Record<string, string> = {};

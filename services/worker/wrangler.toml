@@ -5,7 +5,7 @@ main = "src/index.ts"
 compatibility_date = "2025-11-17"
 compatibility_flags = []
 
-# The trigger endpoint is only for the status page's service binding — never expose it publicly.
+# The trigger and ping endpoints are only for the status page's service binding — never expose this worker publicly.
 workers_dev = false
 
 # CI creates/adopts the flarewatch-state namespace and replaces this placeholder before deploy.
@@ -13,3 +13,17 @@ kv_namespaces = [{ binding = "FLAREWATCH_STATE", id = "__FLAREWATCH_STATE_KV_NAM
 
 [triggers]
 crons = ["* * * * *"]
+
+# Ping URL origin for /ping-url responses. Leave empty to build URLs from the
+# origin of the status page request that asked for them.
+[vars]
+PUBLIC_ORIGIN = ""
+
+# HEARTBEAT_SECRET is a Wrangler secret, not a var:
+#   wrangler secret put HEARTBEAT_SECRET
+# Rotating it invalidates every ping URL at once.
+
+[[ratelimits]]
+name = "HEARTBEAT_RATE_LIMIT"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }

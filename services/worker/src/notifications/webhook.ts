@@ -1,6 +1,6 @@
 import {
   type JsonValue,
-  type MonitorTarget,
+  type Monitor,
   type Webhook,
   type WebhookConfig,
   fetchWithTimeout,
@@ -27,7 +27,7 @@ function createDateFormatter(timeZone: string) {
 }
 
 export interface NotificationContext {
-  monitor: MonitorTarget;
+  monitor: Monitor;
   isUp: boolean;
   incidentStartTime: number;
   currentTime: number;
@@ -113,7 +113,7 @@ function appendFormValue(target: URLSearchParams, key: string, value: JsonValue)
   target.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
 }
 
-function buildTemplateContext(ctx: NotificationContext): TemplateContext {
+export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook): TemplateContext {
   const { monitor, isUp, incidentStartTime, currentTime, reason, timeZone } = ctx;
   const formatter = createDateFormatter(timeZone);
   const downtimeMinutes = Math.round((currentTime - incidentStartTime) / 60);
@@ -123,7 +123,8 @@ function buildTemplateContext(ctx: NotificationContext): TemplateContext {
   return {
     monitorName: monitor.name,
     monitorId: monitor.id,
-    targetUrl: monitor.target,
+    targetUrl:
+      'target' in monitor ? monitor.target : typeof monitor.link === 'string' ? monitor.link : '',
     isUp,
     isRecovery: isUp && currentTime !== incidentStartTime,
     isInitialOutage: !isUp && currentTime === incidentStartTime,
@@ -131,6 +132,9 @@ function buildTemplateContext(ctx: NotificationContext): TemplateContext {
     reason: reason || 'Unknown',
     timestamp,
     timestampIso,
+    incidentKey: `${monitor.id}:${incidentStartTime}`,
+    webhookUrl: webhook.url,
+    options: webhook.options ?? {},
   };
 }
 
@@ -158,7 +162,7 @@ export class WebhookNotifier {
       let finalUrl = url;
 
       if (template) {
-        const templateCtx = buildTemplateContext(ctx);
+        const templateCtx = buildTemplateContext(ctx, webhook);
         const output = getTemplate(template)(templateCtx);
 
         const requestHeaders = toHeaders(headers);
@@ -167,6 +171,8 @@ export class WebhookNotifier {
             requestHeaders.set(key, value);
           }
         }
+
+        finalUrl = output.url ?? finalUrl;
 
         requestInit = {
           method: method ?? output.method,

@@ -17,6 +17,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { MaintenanceRow } from '@/components/admin/maintenance-row';
 import { MaintenanceFormDialog } from '@/components/admin/maintenance-form-dialog';
 import { AdminLoginForm } from '@/components/admin/admin-login-form';
+import { MonitorList } from '@/components/monitor-list';
+import { CopyPingUrlButton } from '@/components/admin/copy-ping-url-button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
@@ -25,7 +27,11 @@ import {
   DialogTitle,
   DialogClose,
 } from '@/components/ui/dialog';
-import { publicMonitorsQuery, maintenancesQuery } from '@/lib/query/monitors.queries';
+import {
+  adminMonitorsQuery,
+  adminMaintenancesQuery,
+  adminMonitorStateQuery,
+} from '@/lib/query/monitors.queries';
 import {
   useCreateMaintenance,
   useUpdateMaintenance,
@@ -36,8 +42,10 @@ import { useAdminLogout, isSessionExpiredError } from '@/lib/query/auth.mutation
 import type { AdminAuthState } from '@/lib/auth-server';
 import { useMaintenanceForm } from '@/lib/hooks/use-maintenance-form';
 import { useNow } from '@/lib/hooks/use-now';
+import { createEmptyMonitorState } from '@/lib/monitor-state';
 import type { Maintenance, MaintenanceConfig } from '@flarewatch/shared';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
+import { getHeartbeatPingUrl } from '@/lib/heartbeat-ping-url';
 
 const adminRoute = getRouteApi('/admin');
 
@@ -107,8 +115,9 @@ function MaintenancesAdminAuthed({
   nowMs: number;
 }) {
   const { t } = useTranslation();
-  const { data: monitors } = useSuspenseQuery(publicMonitorsQuery());
-  const { data: maintenances } = useSuspenseQuery(maintenancesQuery());
+  const { data: monitors } = useSuspenseQuery(adminMonitorsQuery());
+  const { data: maintenances } = useSuspenseQuery(adminMaintenancesQuery());
+  const { data: state } = useSuspenseQuery(adminMonitorStateQuery());
 
   const [editingMaintenance, setEditingMaintenance] = useState<Maintenance | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -207,6 +216,11 @@ function MaintenancesAdminAuthed({
       deleteMutation.mutate(deleteConfirm);
     }
   }
+
+  const privateCount = monitors.filter((monitor) => monitor.private).length;
+  const sortedMonitors = [...monitors].sort(
+    (a, b) => Number(Boolean(b.private)) - Number(Boolean(a.private)),
+  );
 
   const sortedMaintenances = Array.from(maintenances);
   sortedMaintenances.sort((a, b) => compareByStart(b, a));
@@ -324,6 +338,33 @@ function MaintenancesAdminAuthed({
           ))}
         </div>
       )}
+
+      <section className="mt-10">
+        <div className="mb-3 flex items-baseline gap-2">
+          <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+            {t('monitor.title')}
+          </h2>
+          <span className="text-sm text-neutral-500">
+            {t('admin.monitorCount', {
+              public: monitors.length - privateCount,
+              private: privateCount,
+            })}
+          </span>
+        </div>
+        <MonitorList
+          monitors={sortedMonitors}
+          state={state ?? createEmptyMonitorState()}
+          pingUrlSlot={(monitor) =>
+            monitor.method === 'HEARTBEAT' ? (
+              <CopyPingUrlButton
+                monitorId={monitor.id}
+                monitorName={monitor.name}
+                loadPingUrl={(id) => getHeartbeatPingUrl({ data: { id } })}
+              />
+            ) : null
+          }
+        />
+      </section>
 
       <MaintenanceFormDialog
         open={isCreating || !!editingMaintenance}

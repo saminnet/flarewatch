@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test';
-import type { MonitorTarget } from '@flarewatch/shared';
+import type { MonitorTarget, Webhook } from '@flarewatch/shared';
 import {
+  buildTemplateContext,
   formatNotificationMessage,
   type NotificationContext,
 } from '../../src/notifications/webhook';
@@ -86,6 +87,39 @@ describe('webhook notifications', () => {
       const message = formatNotificationMessage(ctx);
 
       expect(message).toContain('Reason: Unknown');
+    });
+  });
+
+  describe('buildTemplateContext', () => {
+    const webhook: Webhook = { url: 'https://hooks.example.com/webhook' };
+
+    it('reuses one incidentKey across down and up', () => {
+      const down = buildTemplateContext(
+        createContext({ incidentStartTime: 1700000000, currentTime: 1700000000 }),
+        webhook,
+      );
+      const up = buildTemplateContext(
+        createContext({
+          isUp: true,
+          incidentStartTime: 1700000000,
+          currentTime: 1700000300,
+        }),
+        webhook,
+      );
+
+      expect(down.incidentKey).toBe('test-monitor:1700000000');
+      expect(up.incidentKey).toBe(down.incidentKey);
+      expect(up.isRecovery).toBe(true);
+    });
+
+    it('passes webhook url and options into the template context', () => {
+      const ctx = buildTemplateContext(createContext(), {
+        url: 'https://hooks.example.com/webhook',
+        options: { token: 't0k3n' },
+      });
+
+      expect(ctx.webhookUrl).toBe('https://hooks.example.com/webhook');
+      expect(ctx.options).toEqual({ token: 't0k3n' });
     });
   });
 });

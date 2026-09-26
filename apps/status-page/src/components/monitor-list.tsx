@@ -1,26 +1,54 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
+import { IconWorld, IconClockPlay } from '@tabler/icons-react';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { MonitorCard } from '@/components/monitor-card';
 import type { MonitorState, PageConfigGroup } from '@flarewatch/shared';
-import type { PublicMonitor } from '@/lib/monitors';
+import type { AdminMonitor } from '@/lib/public-view';
 import { setUiPrefsServerFn, type UiPrefs } from '@/lib/ui-prefs-server';
 import { qk } from '@/lib/query/keys';
+import { cn } from '@/lib/utils';
+
+export type MonitorKindFilter = 'web' | 'jobs';
+
+/** Key the default heartbeat group uses in collapsedGroups; never a config group name. */
+const SCHEDULED_JOBS_GROUP_KEY = '__scheduled_jobs__';
+
+/** Concentric with the rounded-lg cards inside, which sit px-3 from the group edge. */
+const GROUP_RADIUS = 'rounded-[calc(var(--radius-lg)+--spacing(3))]';
+
+interface MonitorGroup {
+  key: string;
+  name: string;
+  monitors: AdminMonitor[];
+}
 
 interface MonitorListProps {
-  monitors: PublicMonitor[];
+  monitors: AdminMonitor[];
   state: MonitorState;
   groups?: PageConfigGroup;
   uiPrefs?: UiPrefs;
+  pingUrlSlot?: (monitor: AdminMonitor) => ReactNode;
+  kind?: MonitorKindFilter;
+  onKindChange?: (kind: MonitorKindFilter | undefined) => void;
 }
 
-export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListProps) {
+export function MonitorList({
+  monitors,
+  state,
+  groups,
+  uiPrefs,
+  pingUrlSlot,
+  kind,
+  onKindChange,
+}: MonitorListProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [collapsedMonitors, setCollapsedMonitors] = useState<string[]>(
@@ -54,7 +82,7 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
     });
   }
 
-  function renderMonitorCard(monitor: PublicMonitor, index: number) {
+  function renderMonitorCard(monitor: AdminMonitor, index: number) {
     return (
       <MonitorCard
         key={monitor.id}
@@ -62,79 +90,133 @@ export function MonitorList({ monitors, state, groups, uiPrefs }: MonitorListPro
         state={state}
         open={!collapsedMonitors.includes(monitor.id)}
         onOpenChange={(open) => onMonitorOpenChange(monitor.id, open)}
+        pingUrlSlot={pingUrlSlot?.(monitor)}
         className="animate-fade-in-up opacity-0"
         style={{ animationDelay: `${index * 30}ms` }}
       />
     );
   }
 
-  const activeGroups: Array<{ name: string; monitors: PublicMonitor[] }> = [];
-  if (groups) {
-    const monitorById = new Map(monitors.map((monitor) => [monitor.id, monitor]));
+  const hasHeartbeats = monitors.some((monitor) => monitor.method === 'HEARTBEAT');
+  const hasPulls = monitors.some((monitor) => monitor.method !== 'HEARTBEAT');
+  const hasBothKinds = hasHeartbeats && hasPulls;
+  const filterActive = Boolean(onKindChange && hasBothKinds);
 
+  const isHeartbeat = (monitor: AdminMonitor) => monitor.method === 'HEARTBEAT';
+  const matchesKind = (monitor: AdminMonitor) =>
+    !filterActive || !kind || (kind === 'jobs') === isHeartbeat(monitor);
+
+  const activeGroups: MonitorGroup[] = [];
+  const monitorById = new Map(monitors.map((monitor) => [monitor.id, monitor]));
+  const groupedMonitorIds = new Set<string>();
+
+  if (groups) {
     for (const [name, ids] of Object.entries(groups)) {
-      const groupMonitors: PublicMonitor[] = [];
-      for (const id of ids) {
-        const monitor = monitorById.get(id);
-        if (monitor) groupMonitors.push(monitor);
-      }
+      const groupMonitors = ids
+        .map((id) => monitorById.get(id))
+        .filter(
+          (monitor): monitor is AdminMonitor => monitor !== undefined && matchesKind(monitor),
+        );
+
+      for (const id of ids) groupedMonitorIds.add(id);
 
       if (groupMonitors.length > 0) {
-        activeGroups.push({ name, monitors: groupMonitors });
+        activeGroups.push({ key: name, name, monitors: groupMonitors });
       }
     }
   }
 
-  const groupedMonitorIds = new Set(activeGroups.flatMap((g) => g.monitors.map((m) => m.id)));
-  const ungroupedMonitors = monitors.filter((m) => !groupedMonitorIds.has(m.id));
+  const ungroupedMonitors = monitors.filter(
+    (monitor) => !groupedMonitorIds.has(monitor.id) && matchesKind(monitor),
+  );
 
-  const activeGroupNames = activeGroups.map((g) => g.name);
-  const collapsedGroupNames = new Set(collapsedGroups);
-  const openGroupNames = activeGroupNames.filter((name) => !collapsedGroupNames.has(name));
-
-  // If no active groups exist, render as flat list (no labels needed)
-  if (activeGroups.length === 0) {
-    return <div className="space-y-2">{monitors.map(renderMonitorCard)}</div>;
+  if (hasBothKinds) {
+    const scheduledJobs = ungroupedMonitors.filter(isHeartbeat);
+    if (scheduledJobs.length > 0) {
+      activeGroups.push({
+        key: SCHEDULED_JOBS_GROUP_KEY,
+        name: t('monitor.scheduledJobs'),
+        monitors: scheduledJobs,
+      });
+    }
   }
+
+  const flatMonitors = hasBothKinds
+    ? ungroupedMonitors.filter((monitor) => !isHeartbeat(monitor))
+    : ungroupedMonitors;
+
+  const activeGroupKeys = activeGroups.map((group) => group.key);
+  const collapsedGroupKeys = new Set(collapsedGroups);
+  const openGroupKeys = activeGroupKeys.filter((key) => !collapsedGroupKeys.has(key));
 
   return (
     <div className="space-y-3">
-      {ungroupedMonitors.length > 0 && (
-        <div className="space-y-2">{ungroupedMonitors.map(renderMonitorCard)}</div>
+      {filterActive && (
+        <ToggleGroup
+          variant="outline"
+          size="sm"
+          value={[kind ?? 'all']}
+          onValueChange={(value) => {
+            const selected = Array.isArray(value) ? value[0] : value;
+            onKindChange?.(selected === 'web' || selected === 'jobs' ? selected : undefined);
+          }}
+          aria-label={t('filter.byKind')}
+        >
+          <ToggleGroupItem value="all">{t('filter.all')}</ToggleGroupItem>
+          <ToggleGroupItem value="web">
+            <IconWorld aria-hidden="true" />
+            {t('filter.websites')}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="jobs">
+            <IconClockPlay aria-hidden="true" />
+            {t('monitor.scheduledJobs')}
+          </ToggleGroupItem>
+        </ToggleGroup>
       )}
 
-      <Accordion
-        multiple
-        value={openGroupNames}
-        onValueChange={(value) => {
-          const open = value.filter((v): v is string => typeof v === 'string');
-          const nextCollapsed = activeGroupNames.filter((name) => !open.includes(name));
-          setCollapsedGroups(nextCollapsed);
-        }}
-        className="space-y-2"
-      >
-        {activeGroups.map(({ name: groupName, monitors: groupMonitors }) => (
-          <AccordionItem key={groupName} value={groupName} className="border rounded-lg">
-            <AccordionTrigger
-              className="px-3 py-2.5 hover:no-underline hover:bg-muted/50 rounded-lg"
-              aria-label={t('monitor.toggleGroup', {
-                name: groupName,
-                count: groupMonitors.length,
-              })}
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{groupName}</span>
-                <span className="text-sm text-muted-foreground">
-                  ({t('monitor.count', { count: groupMonitors.length })})
-                </span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-3 pb-3 pt-1.5">
-              <div className="space-y-2">{groupMonitors.map(renderMonitorCard)}</div>
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
+      {activeGroups.length === 0 ? (
+        <div className="space-y-2">{flatMonitors.map(renderMonitorCard)}</div>
+      ) : (
+        <>
+          {flatMonitors.length > 0 && (
+            <div className="space-y-2">{flatMonitors.map(renderMonitorCard)}</div>
+          )}
+
+          <Accordion
+            multiple
+            value={openGroupKeys}
+            onValueChange={(value) => {
+              const open = new Set(value.filter((v): v is string => typeof v === 'string'));
+              const nextCollapsed = activeGroupKeys.filter((key) => !open.has(key));
+              setCollapsedGroups(nextCollapsed);
+            }}
+            className="space-y-2"
+          >
+            {activeGroups.map(({ key, name, monitors: groupMonitors }) => {
+              const countLabel = t(
+                groupMonitors.every(isHeartbeat) ? 'monitor.jobCount' : 'monitor.count',
+                { count: groupMonitors.length },
+              );
+              return (
+                <AccordionItem key={key} value={key} className={cn('border', GROUP_RADIUS)}>
+                  <AccordionTrigger
+                    className={cn('px-3 py-2.5 hover:no-underline hover:bg-muted/50', GROUP_RADIUS)}
+                    aria-label={t('monitor.toggleGroup', { name, countLabel })}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{name}</span>
+                      <span className="text-sm text-muted-foreground">({countLabel})</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-3 pb-3 pt-1.5">
+                    <div className="space-y-2">{groupMonitors.map(renderMonitorCard)}</div>
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
+        </>
+      )}
     </div>
   );
 }

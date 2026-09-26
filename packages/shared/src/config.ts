@@ -1,19 +1,33 @@
 import * as z from 'zod/mini';
 import {
   KV_KEYS,
+  NOTIFICATION_TEMPLATES,
+  type HeartbeatSignal,
   type KvStore,
   type Maintenance,
   type MonitorState,
-  type MonitorTarget,
   type NotificationConfig,
   type PageConfig,
   type RuntimeConfig,
   type RuntimeConfigEnvelope,
   type Webhook,
 } from './types';
-import { isJsonObject } from './utils';
+import { isJsonObject, isNonEmptyString } from './utils';
 
-const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+const PULL_METHODS = [
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'HEAD',
+  'OPTIONS',
+  'TCP_PING',
+] as const;
+const MONITOR_METHODS = new Set<string>([...PULL_METHODS, 'HEARTBEAT']);
+const HEARTBEAT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const MAX_HEARTBEAT_PERIOD_SECONDS = 2_678_400;
+const MAX_HEARTBEAT_GRACE_SECONDS = 604_800;
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -43,24 +57,13 @@ function isValidHostPort(value: string): boolean {
   }
 }
 
-function isValidMonitorTarget(target: string, method?: string): boolean {
-  const trimmed = target.trim();
-  if (!trimmed) return false;
-
-  if (!method) {
-    return isValidHttpUrl(trimmed);
+function targetIssue(method: string, target: string): string | null {
+  if (method === 'TCP_PING') {
+    return isValidHostPort(target)
+      ? null
+      : 'TCP_PING target must be host:port (e.g. "example.com:443")';
   }
-
-  const normalizedMethod = method.toUpperCase();
-  if (normalizedMethod === 'TCP_PING') {
-    return isValidHostPort(trimmed);
-  }
-
-  if (HTTP_METHODS.has(normalizedMethod)) {
-    return isValidHttpUrl(trimmed);
-  }
-
-  return true;
+  return isValidHttpUrl(target.trim()) ? null : `${method} target must be an http(s) URL`;
 }
 
 function isAllowedPayload(payloadType: string | undefined, payload: unknown): boolean {
@@ -75,6 +78,37 @@ function isAllowedPayload(payloadType: string | undefined, payload: unknown): bo
 
 function asTypeGuard<T>(schema: z.ZodMiniType<SchemaOutput<T>>): (value: unknown) => value is T {
   return (value): value is T => schema.safeParse(value).success;
+}
+
+/** Like {@link asTypeGuard}, but names each rejected monitor so a discarded config is traceable. */
+function warningTypeGuard<T>(
+  schema: z.ZodMiniType<SchemaOutput<T>>,
+): (value: unknown) => value is T {
+  return (value): value is T => {
+    const result = schema.safeParse(value);
+    if (!result.success) warnRejectedMonitors(value, result.error.issues);
+    return result.success;
+  };
+}
+
+function warnRejectedMonitors(
+  value: unknown,
+  issues: readonly { path: PropertyKey[]; message: string }[],
+): void {
+  const config = isJsonObject(value) && isJsonObject(value.config) ? value.config : value;
+  const monitors = isJsonObject(config) && Array.isArray(config.monitors) ? config.monitors : [];
+  const warned = new Set<number>();
+
+  for (const issue of issues) {
+    const at = issue.path.indexOf('monitors');
+    const index = issue.path[at + 1];
+    if (at === -1 || typeof index !== 'number' || warned.has(index)) continue;
+
+    warned.add(index);
+    const monitor: unknown = monitors[index];
+    const id = isJsonObject(monitor) && isNonEmptyString(monitor.id) ? monitor.id : '<no id>';
+    console.warn(`[Config] Rejected monitor "${id}": ${issue.message}`);
+  }
 }
 
 type Prev = [never, 0, 1, 2, 3];
@@ -103,14 +137,79 @@ const maintenanceSchema: z.ZodMiniType<SchemaOutput<Maintenance>> = z.object({
   monitors: z.optional(z.array(z.string())),
 });
 
-const monitorSchema: z.ZodMiniType<SchemaOutput<MonitorTarget>> = z
-  .object({
-    id: z.string().check(z.minLength(1)),
-    name: z.string().check(z.minLength(1)),
-    method: z.string(),
-    target: z.string(),
+function nonEmptyString(field: string) {
+  const error = `${field} must be a non-empty string`;
+  return z.string({ error }).check(z.minLength(1, { error }));
+}
+
+function intInRange(field: string, min: number, max: number) {
+  const error = `${field} must be an integer from ${min} to ${max}`;
+  return z.int({ error }).check(z.gte(min, { error }), z.lte(max, { error }));
+}
+
+const monitorCommon = {
+  id: nonEmptyString('id'),
+  name: nonEmptyString('name'),
+  private: z.optional(z.boolean({ error: 'private must be a boolean' })),
+};
+
+const pullMonitorSchema = z
+  .looseObject({
+    ...monitorCommon,
+    method: z.enum(PULL_METHODS),
+    target: z.string({ error: 'target must be a string' }),
   })
-  .check(z.refine((monitor) => isValidMonitorTarget(monitor.target, monitor.method)));
+  .check((ctx) => {
+    const issue = targetIssue(ctx.value.method, ctx.value.target);
+    if (issue) ctx.issues.push({ code: 'custom', message: issue, input: ctx.value });
+  });
+
+const heartbeatMonitorSchema = z.looseObject({
+  ...monitorCommon,
+  id: z
+    .string()
+    .check(z.regex(HEARTBEAT_ID, { error: 'HEARTBEAT id must match ^[A-Za-z0-9_-]{1,64}$' })),
+  method: z.literal('HEARTBEAT'),
+  periodSeconds: intInRange('periodSeconds', 60, MAX_HEARTBEAT_PERIOD_SECONDS),
+  graceSeconds: intInRange('graceSeconds', 0, MAX_HEARTBEAT_GRACE_SECONDS),
+  target: z.optional(z.never({ error: 'HEARTBEAT must not define target' })),
+  checkProxy: z.optional(z.never({ error: 'HEARTBEAT must not define checkProxy' })),
+});
+
+function methodIssue(method: unknown): string {
+  const upper = typeof method === 'string' ? method.toUpperCase() : undefined;
+  return upper !== undefined && upper !== method && MONITOR_METHODS.has(upper)
+    ? `method must be uppercase: "${upper}"`
+    : `unknown method ${JSON.stringify(method)}`;
+}
+
+const monitorSchema = z.pipe(
+  z.looseObject(
+    { method: z.string({ error: 'method must be a string' }) },
+    { error: 'entry must be an object' },
+  ),
+  z.discriminatedUnion('method', [pullMonitorSchema, heartbeatMonitorSchema], {
+    error: (issue) =>
+      issue.code === 'invalid_union' && isJsonObject(issue.input)
+        ? methodIssue(issue.input.method)
+        : undefined,
+  }),
+);
+
+const monitorListSchema = z.array(monitorSchema).check((ctx) => {
+  const ids = new Set<string>();
+  ctx.value.forEach((monitor, index) => {
+    if (ids.has(monitor.id)) {
+      ctx.issues.push({
+        code: 'custom',
+        message: 'id must be unique',
+        input: monitor,
+        path: [index],
+      });
+    }
+    ids.add(monitor.id);
+  });
+});
 
 const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.object({
   title: z.optional(z.string()),
@@ -124,7 +223,8 @@ const webhookMethod = z.pipe(
 const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
   .object({
     url: z.string().check(z.refine(isValidHttpUrl)),
-    template: z.optional(z.enum(['slack', 'discord', 'telegram', 'ntfy', 'text'])),
+    template: z.optional(z.enum(NOTIFICATION_TEMPLATES)),
+    options: z.optional(z.record(z.string(), z.string())),
     method: z.optional(webhookMethod),
     headers: z.optional(z.record(z.string(), z.union([z.string(), z.number()]))),
     payloadType: z.optional(z.enum(['param', 'json', 'x-www-form-urlencoded'])),
@@ -142,7 +242,7 @@ const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.ob
 });
 
 const runtimeConfigSchema: z.ZodMiniType<SchemaOutput<RuntimeConfig>> = z.object({
-  monitors: z.array(monitorSchema),
+  monitors: monitorListSchema,
   statusPage: z.optional(statusPageSchema),
   notification: z.optional(notificationSchema),
 });
@@ -151,10 +251,34 @@ const envelopeSchema: z.ZodMiniType<SchemaOutput<RuntimeConfigEnvelope>> = z.obj
   config: runtimeConfigSchema,
 });
 
+const heartbeatRunSchema = z.object({
+  at: z.number(),
+  outcome: z.enum(['ok', 'late', 'fail', 'miss']),
+  startedAt: z.exactOptional(z.number()),
+});
+
+const heartbeatSignalShape = {
+  lastSuccess: z.exactOptional(z.number()),
+  lastFail: z.exactOptional(z.number()),
+  lastStart: z.exactOptional(z.number()),
+  message: z.exactOptional(z.string()),
+  runs: z.exactOptional(z.array(heartbeatRunSchema)),
+};
+
+const heartbeatSignalSchema = z.object(heartbeatSignalShape);
+
+const heartbeatStateSchema = z.object({
+  ...heartbeatSignalShape,
+  status: z.enum(['up', 'late', 'pending', 'running', 'down']),
+  deadline: z.exactOptional(z.number()),
+  misses: z.exactOptional(z.array(z.number())),
+});
+
 const monitorStateSchema: z.ZodMiniType<SchemaOutput<MonitorState>> = z.object({
   lastUpdate: z.number(),
   overallUp: z.number(),
   overallDown: z.number(),
+  overallLate: z.optional(z.number()),
   startedAt: z.record(z.string(), z.number()),
   incident: z.record(
     z.string(),
@@ -184,12 +308,19 @@ const monitorStateSchema: z.ZodMiniType<SchemaOutput<MonitorState>> = z.object({
       }),
     ),
   ),
+  heartbeat: z.optional(z.record(z.string(), heartbeatStateSchema)),
 });
 
 export const isValidMaintenance = asTypeGuard<Maintenance>(maintenanceSchema);
 export const isMonitorState = asTypeGuard<MonitorState>(monitorStateSchema);
-export const isValidRuntimeConfig = asTypeGuard<RuntimeConfig>(runtimeConfigSchema);
-export const isStoredConfigEnvelope = asTypeGuard<RuntimeConfigEnvelope>(envelopeSchema);
+export const isValidRuntimeConfig = warningTypeGuard<RuntimeConfig>(runtimeConfigSchema);
+export const isStoredConfigEnvelope = warningTypeGuard<RuntimeConfigEnvelope>(envelopeSchema);
+
+/** Returns only the known signal fields, so a foreign key in storage cannot override derived state. */
+export function parseHeartbeatSignal(value: unknown): HeartbeatSignal | null {
+  const result = heartbeatSignalSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
 
 export function parseMaintenances(value: unknown): Maintenance[] {
   return Array.isArray(value) ? value.filter(isValidMaintenance) : [];

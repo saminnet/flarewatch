@@ -48,7 +48,9 @@ Live demo: <https://demo.flarewatch.app>
 - SSL certificate expiry monitoring on proxy/Globalping-backed HTTPS checks,
   with configurable warning thresholds.
 - Multi-region checks through Globalping integration.
-- Slack, Discord, Telegram, ntfy, and custom webhook notifications.
+- Slack, Discord, Telegram, ntfy, Teams, Google Chat, Matrix, Pushover, Gotify,
+  Zulip, Resend email, and custom webhook notifications. Mattermost and
+  Rocket.Chat use the Slack template.
 - Incident history, latency history, uptime percentages, and uptime calendar.
 - Scheduled maintenance windows managed from the `/admin` UI.
 - Embeddable SVG badges and per-monitor status widgets.
@@ -239,6 +241,137 @@ export const pageConfig = {
   group: { Services: ['api'] },
 };
 ```
+
+### Private monitors
+
+Set `private: true` on a monitor to keep it off the status page: private
+monitors are checked, stored, and alerted like any other, but they never appear
+on the public page or the public API. You can see them (marked with a
+"private" badge) and attach them to maintenance windows under `/admin` after
+signing in.
+
+## Notifications
+
+Set `notification.webhook` in `packages/config/src/worker.ts`. Each entry needs
+a `url` and a `template`. Down and up events are rendered for you, so no
+message text goes into the config.
+
+| Template                   | Configure the URL as                                                                                                                                                                              | Secrets and settings                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `slack`                    | Incoming webhook URL, e.g. `https://hooks.slack.com/services/...`                                                                                                                                 | none                                                                                   |
+| `discord`                  | Discord webhook URL                                                                                                                                                                               | none                                                                                   |
+| `telegram`                 | `https://api.telegram.org/bot<token>/sendMessage`                                                                                                                                                 | bot token in the URL                                                                   |
+| `ntfy`                     | Topic URL, e.g. `https://ntfy.sh/my-status`                                                                                                                                                       | optional access token                                                                  |
+| `teams`                    | Incoming webhook URL of a Teams channel                                                                                                                                                           | none                                                                                   |
+| `googlechat`               | Incoming webhook URL of a Google Chat space                                                                                                                                                       | none                                                                                   |
+| `matrix`                   | Homeserver URL ending in `/send/m.room.message/`, with the room id and access token, e.g. `https://matrix.example.com/_matrix/client/v3/rooms/<roomId>/send/m.room.message/?access_token=<token>` | access token in the URL                                                                |
+| `pushover`                 | `https://api.pushover.net/1/messages.json`                                                                                                                                                        | `options.token`, `options.user`                                                        |
+| `gotify`                   | `https://<gotify-host>/message?token=<app-token>`                                                                                                                                                 | app token in the URL                                                                   |
+| `zulip`                    | `https://<bot-email>:<bot-api-key>@<zulip-host>/api/v1/messages`                                                                                                                                  | bot credentials in the URL, `options.to` and `options.topic` for the stream            |
+| `resend`                   | `https://api.resend.com/emails`                                                                                                                                                                   | API key in `headers` as `Authorization: Bearer <key>`, `options.from` and `options.to` |
+| `mattermost`, `rocketchat` | Incoming webhook URL of your instance                                                                                                                                                             | optional token in the URL                                                              |
+
+Signal, WhatsApp, and SMS are reachable through a custom payload: point the
+webhook at a gateway such as CallMeBot or Twilio and put a `$MSG` placeholder
+in `payload`.
+
+Resend delivery is best effort: FlareWatch tries once and does not retry.
+
+```ts
+// packages/config/src/worker.ts
+export const workerConfig = {
+  monitors: [/* ... */],
+  notification: {
+    webhook: [
+      { url: 'https://hooks.slack.com/services/...', template: 'slack' },
+      {
+        url: 'https://api.pushover.net/1/messages.json',
+        template: 'pushover',
+        options: { token: 'app-token', user: 'user-key' },
+      },
+    ],
+  },
+};
+```
+
+## Heartbeat monitors
+
+Heartbeat monitors watch jobs that report in instead of being polled: cron
+scripts, systemd timers, CI pipelines. The monitor goes down when the expected
+ping does not arrive, or when the job reports a failure.
+
+```ts
+// packages/config/src/worker.ts
+export const workerConfig = {
+  monitors: [
+    {
+      id: 'nightly-backup',
+      name: 'Nightly backup',
+      method: 'HEARTBEAT',
+      periodSeconds: 86400, // how often the job should report
+      graceSeconds: 3600, // extra time before a missing ping counts as down
+    },
+  ],
+};
+```
+
+Each monitor has a ping URL at `/ping/<id>/<token>`. The token is derived from
+the `HEARTBEAT_SECRET` secret. Set it once per deployment:
+
+```bash
+vp exec --filter worker -- wrangler secret put HEARTBEAT_SECRET
+```
+
+Compute the token for a monitor id with the same recipe the monitoring Worker
+uses:
+
+```bash
+printf 'v1:%s' "nightly-backup" \
+  | openssl dgst -sha256 -hmac "$HEARTBEAT_SECRET" -binary \
+  | openssl base64 -A | tr '+/' '-_' | tr -d '=' | cut -c1-32
+```
+
+The routes, all on your status page domain:
+
+| Route                                  | Reports                                             |
+| -------------------------------------- | --------------------------------------------------- |
+| `GET\|POST\|HEAD /ping/<id>/<token>`   | Job finished                                        |
+| `GET\|POST /ping/<id>/<token>/start`   | Job started                                         |
+| `POST /ping/<id>/<token>/fail`         | Job failed; the request body is the failure message |
+| `GET\|POST /ping/<id>/<token>/<0-255>` | Job exited with this code; 0 counts as success      |
+
+Ping only when the job succeeds with `&&` gating:
+
+```bash
+./backup.sh && curl -fsS "https://status.example.com/ping/nightly-backup/<token>"
+```
+
+Or send the exit status, so a failure reaches FlareWatch right away:
+
+```bash
+./backup.sh; curl -fsS "https://status.example.com/ping/nightly-backup/<token>/$?"
+```
+
+A systemd unit that reports start and finish:
+
+```ini
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/curl -fsS https://status.example.com/ping/nightly-backup/<token>/start
+ExecStart=/usr/local/bin/backup.sh
+ExecStopPost=/usr/bin/curl -fsS "https://status.example.com/ping/nightly-backup/<token>/${EXIT_STATUS}"
+```
+
+If no ping arrives within `periodSeconds + graceSeconds`, or a ping reports a
+failure, the monitor goes down and notifications fire as for any other
+monitor.
+
+Each ping writes one KV record per monitor. The free plan allows 1,000 KV
+writes per day and one write per second per key, so daily and hourly jobs are
+fine; per-minute jobs are not. Pings are rate limited to 30 per minute per
+monitor. That stops a looping script from hammering one key. It won't save your
+daily budget, though: a monitor pinging at the limit uses up 1,000 writes in
+about half an hour.
 
 ## Docs
 

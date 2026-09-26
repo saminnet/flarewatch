@@ -233,23 +233,27 @@ describe('incidents', () => {
         lastUpdate: 0,
         overallUp: 0,
         overallDown: 0,
+        overallLate: 0,
         startedAt: {},
         incident: {},
         latency: {},
+        heartbeat: {},
       });
     });
   });
 
   describe('resetCounters', () => {
-    it('resets overallUp and overallDown to zero', () => {
+    it('resets overall counters to zero', () => {
       const state = createInitialState();
       state.overallUp = 5;
       state.overallDown = 2;
+      state.overallLate = 1;
 
       resetCounters(state);
 
       expect(state.overallUp).toBe(0);
       expect(state.overallDown).toBe(0);
+      expect(state.overallLate).toBe(0);
     });
   });
 });

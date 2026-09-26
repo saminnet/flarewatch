@@ -1,17 +1,39 @@
-import { type MonitorTarget, type CheckResultWithLocation, failure } from '@flarewatch/shared';
+import {
+  type CheckContext,
+  type CheckResultWithLocation,
+  type Monitor,
+  type MonitorCheckResult,
+  type MonitorTarget,
+  failure,
+} from '@flarewatch/shared';
 import { defaultCheckDeps, type CheckDeps } from './deps';
 import { checkDirectMonitor } from './direct';
+import { checkHeartbeat } from './heartbeat';
 import { checkExternalProxy } from './proxy';
 
 function shouldFallbackToDirect(target: MonitorTarget, result: CheckResultWithLocation): boolean {
   return Boolean(target.checkProxyFallback && !result.result.ok);
 }
 
-export async function checkMonitor(
+export function checkMonitor(
   target: MonitorTarget,
-  env?: { FLAREWATCH_PROXY_TOKEN?: string },
+  ctx: CheckContext,
+  deps?: CheckDeps,
+): Promise<CheckResultWithLocation>;
+export function checkMonitor(
+  target: Monitor,
+  ctx: CheckContext,
+  deps?: CheckDeps,
+): Promise<MonitorCheckResult>;
+export async function checkMonitor(
+  target: Monitor,
+  ctx: CheckContext,
   deps: CheckDeps = defaultCheckDeps,
-): Promise<CheckResultWithLocation> {
+): Promise<MonitorCheckResult> {
+  if (target.method === 'HEARTBEAT') {
+    return checkHeartbeat(target, ctx);
+  }
+
   if (target.checkProxy?.startsWith('globalping://')) {
     const result = await deps.globalPing.check(target);
     return shouldFallbackToDirect(target, result) ? checkDirectMonitor(target, deps) : result;
@@ -30,7 +52,7 @@ export async function checkMonitor(
   }
 
   if (target.checkProxy) {
-    const result = await checkExternalProxy(target, env, deps.fetcher);
+    const result = await checkExternalProxy(target, ctx.env, deps.fetcher);
     return shouldFallbackToDirect(target, result) ? checkDirectMonitor(target, deps) : result;
   }
 

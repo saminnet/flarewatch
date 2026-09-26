@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
-import type { PublicMonitor } from '@/lib/monitors';
+import type { PublicMonitor } from '@/lib/public-view';
 import type { MonitorState } from '@flarewatch/shared';
 import { generateAggregateDailyStatus, type AggregatedDayData } from '@/lib/uptime';
 import { generateCalendarGrids, getDateKey } from '@/lib/date';
