@@ -23,9 +23,9 @@ export function Header({ config }: HeaderProps) {
           {config?.logo ? (
             <img src={config.logo} alt="Logo" className="h-8 w-8" />
           ) : (
-            <IconFlame className="h-7 w-7 text-orange-500" />
+            <IconFlame className="h-7 w-7 text-primary" />
           )}
-          <span className="text-lg font-semibold text-foreground group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+          <span className="text-lg font-semibold text-foreground group-hover:text-primary/80 transition-colors">
             {config?.title || 'FlareWatch'}
           </span>
         </Link>

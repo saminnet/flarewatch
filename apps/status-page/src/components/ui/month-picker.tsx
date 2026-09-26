@@ -41,7 +41,7 @@ export function MonthPicker({ value, onChange, className }: MonthPickerProps) {
       <PopoverTrigger
         render={
           <Button variant="outline" size="sm" className={cn('gap-1.5', className)}>
-            <IconCalendar className="h-4 w-4 text-neutral-500" />
+            <IconCalendar className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">{formatUtc(displayDate, 'MMM yyyy')}</span>
           </Button>
         }

@@ -16,7 +16,7 @@ export function CalendarLegend() {
         </li>
       ))}
       <li className="flex items-center gap-1">
-        <div className="size-2 rounded-full bg-neutral-500 ring-1 ring-white/90 dark:bg-neutral-400 dark:ring-neutral-950" />
+        <div className="size-2 rounded-full bg-muted-foreground ring-1 ring-background/90" />
         <span className="text-[10px] text-muted-foreground">Incident</span>
       </li>
       <li className="flex items-center gap-1">

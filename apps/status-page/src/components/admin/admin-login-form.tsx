@@ -38,15 +38,13 @@ export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-4 text-center">
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-            Admin sign-in
-          </h1>
-          <p className="mt-1 text-sm text-neutral-500">
+          <h1 className="text-2xl font-bold text-foreground">Admin sign-in</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Sign in to manage scheduled maintenance windows.
           </p>
         </div>
 
-        <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
+        <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
           {loginError && (
             <Alert variant="destructive" className="mb-6" id="login-error" role="alert">
               <AlertDescription>{loginError}</AlertDescription>
@@ -83,7 +81,7 @@ export function AdminLoginForm({ onLoginSuccess }: AdminLoginFormProps) {
             <Button
               type="submit"
               disabled={!username || !password || loginMutation.isPending}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full"
             >
               <IconLock className="mr-2 size-4" />
               {loginMutation.isPending ? 'Signing in...' : 'Sign in'}

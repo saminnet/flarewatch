@@ -80,7 +80,7 @@ describe('maintenance helpers', () => {
   });
 
   it('resolves display metadata with defaults', () => {
-    expect(getMaintenanceColors('green').dot).toBe('bg-emerald-500');
+    expect(getMaintenanceColors('green').dot).toBe('bg-status-unknown');
     expect(getSeverityOption('red').label).toBe('Critical');
     expect(getSeverityOption('missing').value).toBe('yellow');
   });

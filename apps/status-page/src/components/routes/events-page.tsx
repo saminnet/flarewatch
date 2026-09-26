@@ -70,8 +70,8 @@ export function EventsPage() {
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="mb-4">
-        <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Events</h1>
-        <p className="mt-1 text-sm text-neutral-500">Incidents and scheduled maintenance</p>
+        <h1 className="text-2xl font-bold text-foreground">Events</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Incidents and scheduled maintenance</p>
       </div>
 
       {state && <UptimeCalendar monitors={monitors} state={state} selectedMonth={resolvedMonth} />}
@@ -178,7 +178,7 @@ export function EventsPage() {
 
           {timeline.length > 0 && (
             <div className="space-y-3">
-              {pinned.length > 0 && <hr className="border-neutral-200 dark:border-neutral-800" />}
+              {pinned.length > 0 && <hr className="border-border" />}
               {timeline.map((event) =>
                 event.type === 'incident' ? (
                   <IncidentCard

@@ -17,7 +17,7 @@ export function Footer({ config, theme = 'system' }: FooterProps) {
       <div className={PAGE_CONTAINER_CLASSES}>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <IconFlame className="h-4 w-4 text-orange-500" />
+            <IconFlame className="h-4 w-4 text-primary" />
             <span>
               Powered by{' '}
               <a

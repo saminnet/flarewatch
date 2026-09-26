@@ -9,7 +9,7 @@ interface DateRangeProps {
 
 export function DateRange({ start, end, noEndLabel, noEndClassName }: DateRangeProps) {
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-neutral-500">
+    <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
       <span>
         <strong>From</strong> {formatUtc(start, 'PPp')}
       </span>

@@ -12,7 +12,7 @@ export function NotFound({ message }: { message?: string }) {
           <CardTitle className="text-2xl font-semibold">Page not found</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          <p className="text-sm text-muted-foreground">
             {message ?? "The page you're looking for doesn't exist."}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">

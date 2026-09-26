@@ -80,7 +80,7 @@ export function MaintenanceFormDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs text-neutral-500">Start *</Label>
+              <Label className="text-xs text-muted-foreground">Start *</Label>
               <DateTimePicker
                 value={formData.start}
                 onChange={(date) => updateField('start', date)}
@@ -88,7 +88,7 @@ export function MaintenanceFormDialog({
               />
             </div>
             <div>
-              <Label className="text-xs text-neutral-500">End</Label>
+              <Label className="text-xs text-muted-foreground">End</Label>
               <DateTimePicker
                 value={formData.end}
                 onChange={(date) => updateField('end', date)}
@@ -96,15 +96,13 @@ export function MaintenanceFormDialog({
                 clearLabel="Clear"
               />
               {isEndBeforeStart && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                  End must be after start
-                </p>
+                <p className="mt-1 text-xs text-destructive">End must be after start</p>
               )}
             </div>
           </div>
 
           <fieldset>
-            <legend className="text-xs text-neutral-500">Severity</legend>
+            <legend className="text-xs text-muted-foreground">Severity</legend>
             <div className="mt-1.5 flex gap-2">
               {SEVERITY_OPTIONS.map((option) => (
                 <button
@@ -115,8 +113,8 @@ export function MaintenanceFormDialog({
                   aria-pressed={formData.color === option.value}
                   className={`flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${
                     formData.color === option.value
-                      ? 'border-neutral-900 bg-neutral-100 dark:border-neutral-100 dark:bg-neutral-800'
-                      : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600'
+                      ? 'border-foreground bg-muted'
+                      : 'border-border hover:border-input'
                   }`}
                 >
                   <span
@@ -130,7 +128,7 @@ export function MaintenanceFormDialog({
           </fieldset>
 
           <div>
-            <Label className="text-xs text-neutral-500">Affected Monitors</Label>
+            <Label className="text-xs text-muted-foreground">Affected Monitors</Label>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {monitors.map((monitor) => (
                 <Badge

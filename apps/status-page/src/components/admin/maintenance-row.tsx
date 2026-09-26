@@ -49,7 +49,7 @@ export function MaintenanceRow({
   const StatusIcon = STATUS_ICONS[status];
 
   return (
-    <div className="flex items-stretch rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
+    <div className="flex items-stretch rounded-lg border border-border bg-card overflow-hidden">
       <div className={cn('w-1.5 shrink-0', colors.dot)} />
 
       <div className="flex-1 p-4">
@@ -59,23 +59,21 @@ export function MaintenanceRow({
               <StatusIcon
                 className={cn(
                   'size-4 shrink-0',
-                  status === 'active' && 'text-amber-500',
-                  (status === 'upcoming' || status === 'scheduled') && 'text-blue-500',
-                  status === 'past' && 'text-emerald-500',
+                  status === 'active' && 'text-status-degraded-text',
+                  (status === 'upcoming' || status === 'scheduled') && 'text-status-maintenance',
+                  status === 'past' && 'text-status-operational',
                 )}
               />
-              <h3 className="font-medium text-neutral-900 dark:text-neutral-100 truncate">
+              <h3 className="font-medium text-foreground truncate">
                 {maintenance.title ?? 'Scheduled Maintenance'}
               </h3>
               <Badge className={severity.badge}>{severity.label}</Badge>
               <MaintenanceStatusBadge status={status} />
             </div>
 
-            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400 line-clamp-2">
-              {maintenance.body}
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{maintenance.body}</p>
 
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <span className="font-medium">From:</span>
                 {formatUtc(startDate, "MMM d, yyyy h:mm a 'UTC'")}
@@ -105,7 +103,7 @@ export function MaintenanceRow({
               size="icon-sm"
               onClick={onEdit}
               aria-label={'Edit ' + (maintenance.title ?? 'maintenance')}
-              className="text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+              className="text-muted-foreground hover:text-foreground"
             >
               <IconPencil className="size-4" />
             </Button>
@@ -114,7 +112,7 @@ export function MaintenanceRow({
               size="icon-sm"
               onClick={onDelete}
               aria-label={'Delete ' + (maintenance.title ?? 'maintenance')}
-              className="text-neutral-500 hover:text-red-500"
+              className="text-muted-foreground hover:text-destructive"
             >
               <IconTrash className="size-4" />
             </Button>

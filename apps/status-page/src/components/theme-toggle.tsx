@@ -70,7 +70,7 @@ export function ThemeToggle({ initialTheme }: { initialTheme: ThemePreference })
           <button
             type="button"
             onClick={cycleTheme}
-            className="text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 transition-colors"
+            className="text-muted-foreground hover:text-foreground transition-colors"
             aria-label={themeLabel}
           >
             <ThemeIcon theme={theme} />

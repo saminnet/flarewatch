@@ -4,11 +4,11 @@ import { formatUtc, type CalendarDay } from '@/lib/date';
 import type { AggregatedDayData, DayStatus } from '@/lib/uptime';
 import { STATUS_COLORS } from '@/lib/constants';
 
-// White/amber overlays are tuned for contrast on the solid status fills.
+// Overlays are tuned for contrast on the solid status fills.
 const DAY_TEXT_COLORS = {
-  up: 'text-white/70',
-  down: 'text-white/80',
-  partial: 'text-amber-900/50 dark:text-white/70',
+  up: 'text-background/70',
+  down: 'text-background/80',
+  partial: 'text-status-degraded-text/50 dark:text-foreground/70',
   unknown: 'text-muted-foreground',
 } satisfies Record<DayStatus, string>;
 
@@ -69,7 +69,7 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
       {dayNum}
       {hasIncidents && (
         <span
-          className="absolute right-1 top-1 size-1.5 rounded-full bg-neutral-500 ring-1 ring-white/90 dark:bg-neutral-400 dark:ring-neutral-950"
+          className="absolute right-1 top-1 size-1.5 rounded-full bg-muted-foreground ring-1 ring-background/90"
           aria-hidden
         />
       )}
@@ -93,7 +93,7 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
       <TooltipContent side="top" className="text-xs">
         <div className="font-medium">{label}</div>
         {hasIncidents && (
-          <div className="text-neutral-400">
+          <div className="text-muted-foreground">
             {`${incidentCount} ${incidentCount === 1 ? 'incident' : 'incidents'}`}
           </div>
         )}

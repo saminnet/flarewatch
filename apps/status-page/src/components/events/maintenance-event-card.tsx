@@ -39,12 +39,12 @@ export function MaintenanceEventCard({ event, monitors, nowMs }: MaintenanceEven
       </AlertTitle>
 
       <AlertDescription className="mt-1.5">
-        <p className="text-neutral-700 dark:text-neutral-300">{maintenance.body}</p>
+        <p className="text-foreground">{maintenance.body}</p>
         <DateRange start={startDate} end={endDate} noEndLabel="Until further notice" />
 
         {affectedMonitors.length > 0 && (
           <div className="mt-2">
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-muted-foreground">
               Affected Monitors
               {': '}
             </span>

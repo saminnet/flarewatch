@@ -61,9 +61,7 @@ function DashboardPage() {
         />
 
         <section>
-          <h2 className="mb-3 text-base font-semibold text-neutral-900 dark:text-neutral-100">
-            Monitors
-          </h2>
+          <h2 className="mb-3 text-base font-semibold text-foreground">Monitors</h2>
           <MonitorList
             monitors={monitors}
             state={state}

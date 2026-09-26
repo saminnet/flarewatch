@@ -95,28 +95,28 @@ type MaintenanceColorName = 'blue' | 'yellow' | 'red' | 'green';
 
 const MAINTENANCE_COLOR_MAP = {
   blue: {
-    bg: 'bg-blue-50 dark:bg-blue-950/30',
-    border: 'border-blue-200 dark:border-blue-800',
-    icon: 'text-blue-500',
-    dot: 'bg-blue-500',
+    bg: 'bg-status-maintenance-bg',
+    border: 'border-status-maintenance-border',
+    icon: 'text-status-maintenance',
+    dot: 'bg-status-maintenance',
   },
   yellow: {
-    bg: 'bg-amber-50 dark:bg-amber-950/30',
-    border: 'border-amber-200 dark:border-amber-800',
-    icon: 'text-amber-500',
-    dot: 'bg-amber-500',
+    bg: 'bg-status-degraded-bg',
+    border: 'border-status-degraded-border',
+    icon: 'text-status-degraded-text',
+    dot: 'bg-status-degraded',
   },
   red: {
-    bg: 'bg-red-50 dark:bg-red-950/30',
-    border: 'border-red-200 dark:border-red-800',
-    icon: 'text-red-500',
-    dot: 'bg-red-500',
+    bg: 'bg-status-down-bg',
+    border: 'border-status-down-border',
+    icon: 'text-status-down-text',
+    dot: 'bg-status-down',
   },
   green: {
-    bg: 'bg-emerald-50 dark:bg-emerald-950/30',
-    border: 'border-emerald-200 dark:border-emerald-800',
-    icon: 'text-emerald-500',
-    dot: 'bg-emerald-500',
+    bg: 'bg-status-unknown-bg',
+    border: 'border-status-unknown-border',
+    icon: 'text-muted-foreground',
+    dot: 'bg-status-unknown',
   },
 } satisfies Record<MaintenanceColorName, MaintenanceColors>;
 
@@ -141,22 +141,22 @@ export const SEVERITY_OPTIONS = [
   {
     value: 'green',
     label: 'Minor',
-    badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+    badge: 'bg-status-unknown-bg text-muted-foreground',
   },
   {
     value: 'yellow',
     label: 'Maintenance',
-    badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    badge: 'bg-status-degraded-bg text-status-degraded-text',
   },
   {
     value: 'blue',
     label: 'Info',
-    badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    badge: 'bg-status-maintenance-bg text-status-maintenance',
   },
   {
     value: 'red',
     label: 'Critical',
-    badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    badge: 'bg-status-down-bg text-status-down-text',
   },
 ] as const;
 
