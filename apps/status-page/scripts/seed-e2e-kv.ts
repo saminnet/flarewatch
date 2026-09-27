@@ -72,7 +72,11 @@ if (!isJsonObject(parsedWranglerConfig)) {
 const existingVars = isJsonObject(parsedWranglerConfig.vars) ? parsedWranglerConfig.vars : {};
 const wranglerConfig = {
   ...parsedWranglerConfig,
-  vars: { ...existingVars, FLAREWATCH_ADMIN_BASIC_AUTH: E2E_ADMIN_AUTH_SECRET },
+  vars: {
+    ...existingVars,
+    FLAREWATCH_ADMIN_BASIC_AUTH: E2E_ADMIN_AUTH_SECRET,
+    FLAREWATCH_AUTH_SECRET: 'e2e-sign-in-cookie-secret',
+  },
 };
 
 writeFileSync(e2eConfigPath, `${JSON.stringify(wranglerConfig, null, 2)}\n`);

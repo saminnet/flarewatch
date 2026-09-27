@@ -3,8 +3,14 @@ import type { HubView, LatencySample } from '@flarewatch/shared';
 import { INITIAL_TRIGGER_RETRY_MS } from '@/lib/constants';
 import { getConfig, isPrivateOnly } from '@/lib/config';
 import { fetchHubView, fetchLatency } from '@/lib/hub';
-import { requireOperator } from '@/lib/operator.server';
-import { latencyAccess, operatorSnapshot, visitorSnapshot, type Snapshot } from '@/lib/public-view';
+import { getPrincipal, requireMember, requireOperator } from '@/lib/operator.server';
+import {
+  canReadLatency,
+  memberSnapshot,
+  operatorSnapshot,
+  visitorSnapshot,
+  type Snapshot,
+} from '@/lib/public-view';
 import { resolveRuntimeEnv } from '@/lib/runtime-env';
 
 let initialTriggerPromise: Promise<boolean> | null = null;
@@ -80,9 +86,11 @@ export async function readVisitorSnapshot(): Promise<Snapshot> {
   return visitorSnapshot(getConfig(), view, view?.maintenances ?? []);
 }
 
-/** A private-only page serves the visitor snapshot only to the operator's Visitor view. */
+/** A private-only page serves the visitor snapshot only to someone signed in, for their Visitor view. */
 export const getVisitorSnapshot = createServerFn({ method: 'GET' }).handler(async () => {
-  if (isPrivateOnly(getConfig(), await resolveRuntimeEnv())) await requireOperator();
+  if (isPrivateOnly(getConfig(), await resolveRuntimeEnv()) && !(await getPrincipal())) {
+    throw new Error('Not authenticated');
+  }
   return readVisitorSnapshot();
 });
 
@@ -95,13 +103,25 @@ export const getOperatorSnapshot = createServerFn({ method: 'GET' }).handler(
   },
 );
 
-/** One monitor's latency, with the same audience rules as the snapshot it belongs to. */
+/** The monitors a signed-in member may see, read only. */
+export const getMemberSnapshot = createServerFn({ method: 'GET' }).handler(
+  async (): Promise<Snapshot> => {
+    const principal = await requireMember();
+    const view = await readHubView(true);
+    return memberSnapshot(getConfig(), view, view.maintenances, principal);
+  },
+);
+
+/**
+ * One monitor's latency, for whoever may see that monitor. Anything else gets
+ * an empty list, so the answer does not reveal that a hidden monitor exists.
+ */
 export const getMonitorLatency = createServerFn({ method: 'GET' })
   .validator((input: { id: string }) => input)
   .handler(async ({ data }): Promise<LatencySample[]> => {
     const config = getConfig();
-    const access = latencyAccess(config, data.id, isPrivateOnly(config, await resolveRuntimeEnv()));
-    if (access === 'none') return [];
-    if (access === 'operator') await requireOperator();
+    const principal = await getPrincipal();
+    if (!principal && isPrivateOnly(config, await resolveRuntimeEnv())) return [];
+    if (!canReadLatency(config, data.id, principal)) return [];
     return logAndFallback(fetchLatency(data.id), 'Error fetching latency:', []);
   });

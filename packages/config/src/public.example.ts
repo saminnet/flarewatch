@@ -10,7 +10,7 @@ export const pageConfig: PageConfig = {
   // Page title (appears in browser tab and header)
   title: 'FlareWatch Demo',
 
-  // Optional: 'private' shows visitors only the sign-in page (needs FLAREWATCH_ADMIN_BASIC_AUTH).
+  // Optional: 'private' shows visitors only the sign-in page (needs a password or a provider to sign in).
   // visibility: 'private',
 
   // Optional: restrict CORS for public API endpoints (e.g. GET /api/data)

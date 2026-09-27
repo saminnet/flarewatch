@@ -8,7 +8,8 @@ import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 
-// Browser-test builds swap in test monitors; FLAREWATCH_E2E=private also makes the page private.
+// Browser-test builds swap in test monitors, a test sign-in provider and a Partner page
+// group; FLAREWATCH_E2E=private also makes the page private.
 const e2e = process.env.FLAREWATCH_E2E;
 const e2eConfig = path.resolve(import.meta.dirname, 'tests/e2e/config');
 
@@ -33,10 +34,14 @@ const config = defineConfig({
     alias: [
       { find: '@', replacement: path.resolve(import.meta.dirname, './src') },
       ...(e2e
-        ? [{ find: /^@flarewatch\/config\/worker$/, replacement: `${e2eConfig}/worker.ts` }]
-        : []),
-      ...(e2e === 'private'
-        ? [{ find: /^@flarewatch\/config$/, replacement: `${e2eConfig}/private.ts` }]
+        ? [
+            { find: /^@flarewatch\/config\/worker$/, replacement: `${e2eConfig}/worker.ts` },
+            { find: /^@flarewatch\/config\/access$/, replacement: `${e2eConfig}/access.ts` },
+            {
+              find: /^@flarewatch\/config$/,
+              replacement: `${e2eConfig}/${e2e === 'private' ? 'private' : 'public'}.ts`,
+            },
+          ]
         : []),
     ],
     dedupe: ['react', 'react-dom'],

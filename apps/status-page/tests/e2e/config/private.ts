@@ -1,4 +1,4 @@
 import type { PageConfig } from '@flarewatch/shared';
-import { pageConfig as demoPageConfig } from '../../../../../packages/config/src/public.ts';
+import { pageConfig as publicPageConfig } from './public.ts';
 
-export const pageConfig: PageConfig = { ...demoPageConfig, visibility: 'private' };
+export const pageConfig: PageConfig = { ...publicPageConfig, visibility: 'private' };

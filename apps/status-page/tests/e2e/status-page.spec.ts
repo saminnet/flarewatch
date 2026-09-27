@@ -513,13 +513,21 @@ async function signIn(page: Page): Promise<void> {
   }, adminCredentials);
 }
 
-test('the browser bundle carries no monitor config', () => {
+test('the browser bundle carries no monitor or access config', () => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'reads the local e2e build');
   const assets = path.join(process.cwd(), '.wrangler/e2e/public/build/client/assets');
   const scripts = readdirSync(assets).filter((file) => file.endsWith('.js'));
   expect(scripts.length).toBeGreaterThan(0);
 
-  const markers = [privateMonitor.id, privateMonitor.name, 'internal.example.com'];
+  // Access rules and client ids stay on the server; provider names reach the sign-in page at run time.
+  const markers = [
+    privateMonitor.id,
+    privateMonitor.name,
+    'internal.example.com',
+    'operator@e2e.test',
+    'partner@e2e.test',
+    'flarewatch-e2e',
+  ];
   for (const file of scripts) {
     const js = readFileSync(path.join(assets, file), 'utf8');
     expect(
@@ -828,5 +836,55 @@ test.describe.serial('operator maintenance lifecycle', () => {
     await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
     expect((await page.request.get('/')).headers()['cache-control']).not.toBe('private, no-store');
     expect(clientErrors).toEqual([]);
+  });
+});
+
+test.describe('provider sign-in', () => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'needs the local fake provider');
+
+  async function signInAs(page: Page, email: string): Promise<void> {
+    await page.goto('/login');
+    await page.getByRole('link', { name: 'Continue with Test ID' }).click();
+    await page.getByRole('link', { name: email }).click();
+  }
+
+  test('a member sees every monitor, private ones too, and edits nothing', async ({ page }) => {
+    await signInAs(page, 'member@e2e.test');
+
+    await expect(
+      page.getByRole('button', { name: /Account menu, signed in as member/ }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Internal Billing API' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Internal Vault Backup' })).toBeVisible();
+    await page.getByRole('link', { name: 'History' }).click();
+    await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add maintenance window' })).toHaveCount(0);
+  });
+
+  test('an audience member sees their page group and no other private monitor', async ({
+    page,
+  }) => {
+    await signInAs(page, 'partner@e2e.test');
+
+    await expect(page.getByRole('heading', { name: 'Internal Billing API' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Internal Vault Backup' })).toHaveCount(0);
+  });
+
+  test('the operator signs in with the provider and can edit maintenance', async ({ page }) => {
+    await signInAs(page, 'operator@e2e.test');
+
+    await expect(page.getByRole('heading', { name: 'Internal Vault Backup' })).toBeVisible();
+    await page.getByRole('link', { name: 'History' }).click();
+    await expect(page.getByRole('button', { name: 'Add maintenance window' })).toBeVisible();
+  });
+
+  test('someone no rule lets in is sent back to sign-in with a reason', async ({ page }) => {
+    await signInAs(page, 'stranger@e2e.test');
+
+    await expect(page).toHaveURL(/\/login\?error=denied$/);
+    await expect(page.getByRole('alert')).toHaveText(
+      'This account is not allowed to sign in here.',
+    );
+    await expect(page.getByRole('heading', { name: 'Internal Billing API' })).toHaveCount(0);
   });
 });

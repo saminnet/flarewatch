@@ -12,6 +12,11 @@ All notable changes to FlareWatch will be documented in this file.
 - The `/admin` page is gone. Sign in at `/login` (`/admin` redirects there). Once signed in, the same pages show private monitors, and you add and edit maintenance windows on History.
 - Monitor state lives in a Durable Object instead of KV, and every check run is saved, so latency charts get a sample every minute. The first start after the upgrade copies your 1.x history across and leaves the KV data in place. `kvWriteCooldownMinutes` is gone: remove it from `worker.ts`, or the build fails. A check that crashes now opens an incident instead of only counting as down.
 
+### Added
+
+- Sign in with any OpenID Connect provider or GitHub, set in `packages/config/src/access.ts`. Besides operators, you can let in members, who see private monitors but change nothing, and audiences, who see certain page groups.
+- Sign-in attempts are limited per IP by a rate-limit binding, so failed logins no longer use KV writes.
+
 ## 1.1.0 - 2026-08-31
 
 - GlobalPing TCP_PING monitors on port 443 no longer fail with a missing port error.

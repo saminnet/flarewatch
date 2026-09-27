@@ -1,9 +1,15 @@
 import { queryOptions } from '@tanstack/react-query';
-import { getMonitorLatency, getOperatorSnapshot, getVisitorSnapshot } from '@/lib/kv';
+import {
+  getMemberSnapshot,
+  getMonitorLatency,
+  getOperatorSnapshot,
+  getVisitorSnapshot,
+} from '@/lib/kv';
 import { getUiPrefsServerFn } from '@/lib/ui-prefs-server';
 import { getConfigServerFn } from '@/lib/config';
 import { getSessionServerFn } from '@/lib/session';
 import type { Viewer } from '@/lib/operator.server';
+import type { Snapshot } from '@/lib/public-view';
 import { qk } from './keys';
 import { QUERY_STALE_TIME } from '@/lib/constants';
 
@@ -14,10 +20,16 @@ export const configQuery = () =>
     staleTime: QUERY_STALE_TIME.MONITORS, // 5 minutes - config rarely changes
   });
 
+const SNAPSHOTS = {
+  operator: { read: () => getOperatorSnapshot(), key: qk.operatorSnapshot },
+  member: { read: () => getMemberSnapshot(), key: qk.memberSnapshot },
+  visitor: { read: () => getVisitorSnapshot(), key: qk.visitorSnapshot },
+} satisfies Record<Viewer, { read: () => Promise<Snapshot>; key: readonly string[] }>;
+
 export const snapshotQuery = (audience: Viewer) =>
   queryOptions({
-    queryFn: () => (audience === 'operator' ? getOperatorSnapshot() : getVisitorSnapshot()),
-    queryKey: audience === 'operator' ? qk.operatorSnapshot : qk.visitorSnapshot,
+    queryFn: () => SNAPSHOTS[audience].read(),
+    queryKey: SNAPSHOTS[audience].key,
     staleTime: QUERY_STALE_TIME.DEFAULT, // 30 seconds; the hub updates once a minute
   });
 

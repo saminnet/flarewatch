@@ -26,15 +26,17 @@ Your account ID is under **Workers & Pages > Account details**.
 
 In your fork, open **Settings > Secrets and variables > Actions**.
 
-| Secret                        | What it's for                                                          |
-| ----------------------------- | ---------------------------------------------------------------------- |
-| `CLOUDFLARE_ACCOUNT_ID`       | Required. Your account ID.                                             |
-| `CLOUDFLARE_API_TOKEN`        | Required. The token from step 2.                                       |
-| `FLAREWATCH_ADMIN_BASIC_AUTH` | Signing in to your status page.                                        |
-| `HEARTBEAT_SECRET`            | [Heartbeat](monitors.md#heartbeats) ping URLs. Any long random string. |
-| `FLAREWATCH_PROXY_TOKEN`      | A [check proxy](monitors.md#other-regions-and-private-networks).       |
+| Secret                        | What it's for                                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID`       | Required. Your account ID.                                                                    |
+| `CLOUDFLARE_API_TOKEN`        | Required. The token from step 2.                                                              |
+| `FLAREWATCH_ADMIN_BASIC_AUTH` | Signing in to your status page with a password.                                               |
+| `FLAREWATCH_AUTH_SECRET`      | [Signing in with a provider](status-page.md#sign-in-with-a-provider). Any long random string. |
+| `FLAREWATCH_OIDC_SECRETS`     | Your providers' client secrets, as JSON: `{"github": "..."}`.                                 |
+| `HEARTBEAT_SECRET`            | [Heartbeat](monitors.md#heartbeats) ping URLs. Any long random string.                        |
+| `FLAREWATCH_PROXY_TOKEN`      | A [check proxy](monitors.md#other-regions-and-private-networks).                              |
 
-Make the sign-in secret from a username and password, and paste the whole output as the value:
+Make the password secret from a username and password, and paste the whole output as the value:
 
 ```bash
 vp run auth:secret -- <username> '<password>'

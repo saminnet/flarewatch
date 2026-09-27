@@ -30,6 +30,11 @@ export default defineConfig({
     ? undefined
     : [
         {
+          command: 'node --experimental-strip-types tests/e2e/fake-oidc.ts',
+          url: 'http://127.0.0.1:3102/.well-known/openid-configuration',
+          reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
+        },
+        {
           command: e2eServer('public', port),
           url: baseURL,
           reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',

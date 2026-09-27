@@ -7,6 +7,7 @@ import {
   type RuntimeConfig,
   type StatusView,
 } from '@flarewatch/shared';
+import type { Principal } from './auth/access';
 
 export type PublicMonitor = Pick<Monitor, 'id' | 'name' | 'tooltip' | 'method'> & {
   hideLatencyChart?: boolean;
@@ -101,26 +102,47 @@ export function publicView(config: RuntimeConfig, state: StatusView | null): Pub
 }
 
 /**
- * Maintenance records for public surfaces: ids of private monitors are
- * stripped, and a scoped record left without any public monitor is dropped.
+ * Maintenance records someone may see: ids of monitors hidden from them are
+ * stripped, and a scoped record left without any visible monitor is dropped.
  */
-export function publicMaintenances(
-  config: RuntimeConfig,
-  maintenances: Maintenance[],
-): Maintenance[] {
-  const publicIds = new Set(config.monitors.filter(isPublicMonitor).map((monitor) => monitor.id));
+function maintenancesFor(maintenances: Maintenance[], visibleIds: Set<string>): Maintenance[] {
   const result: Maintenance[] = [];
-
   for (const maintenance of maintenances) {
     if (!maintenance.monitors?.length) {
       result.push(maintenance);
       continue;
     }
-    const monitors = maintenance.monitors.filter((id) => publicIds.has(id));
+    const monitors = maintenance.monitors.filter((id) => visibleIds.has(id));
     if (monitors.length > 0) result.push({ ...maintenance, monitors });
   }
-
   return result;
+}
+
+export function publicMaintenances(
+  config: RuntimeConfig,
+  maintenances: Maintenance[],
+): Maintenance[] {
+  return maintenancesFor(maintenances, visibleMonitorIds(config, null));
+}
+
+/**
+ * The monitors someone may see: the published ones for visitors, plus their
+ * page groups for an audience member, and all of them for the operator and
+ * for members.
+ */
+export function visibleMonitorIds(config: RuntimeConfig, principal: Principal | null): Set<string> {
+  const all = config.monitors.map((monitor) => monitor.id);
+  if (principal && (principal.role === 'operator' || principal.groups === 'all')) {
+    return new Set(all);
+  }
+  const ids = new Set(config.monitors.filter(isPublicMonitor).map((monitor) => monitor.id));
+  const configured = new Set(all);
+  for (const group of principal?.groups ?? []) {
+    for (const id of config.statusPage?.group?.[group] ?? []) {
+      if (configured.has(id)) ids.add(id);
+    }
+  }
+  return ids;
 }
 
 export function toAdminMonitors(config: RuntimeConfig): AdminMonitor[] {
@@ -160,15 +182,34 @@ export function operatorSnapshot(
 }
 
 /**
- * Who may read a monitor's latency: nobody when it has no chart, the operator
- * for a private monitor or a private-only page, anyone otherwise.
+ * A signed-in member's page. Members who see everything also see the jobs'
+ * failure messages; an audience sees its groups the way visitors see the rest.
  */
-export function latencyAccess(
+export function memberSnapshot(
+  config: RuntimeConfig,
+  state: StatusView | null,
+  maintenances: Maintenance[],
+  principal: Extract<Principal, { role: 'member' }>,
+): Snapshot {
+  const monitorIds = visibleMonitorIds(config, principal);
+  return {
+    monitors: toAdminMonitors(config).filter((monitor) => monitorIds.has(monitor.id)),
+    groups: groupsOf(config, monitorIds),
+    state: state && viewOf(state, monitorIds, principal.groups === 'all'),
+    maintenances: maintenancesFor(maintenances, monitorIds),
+  };
+}
+
+/** Whether someone may read a monitor's latency: it is visible to them and has a chart. */
+export function canReadLatency(
   config: RuntimeConfig,
   monitorId: string,
-  privateOnly: boolean,
-): 'none' | 'operator' | 'anyone' {
+  principal: Principal | null,
+): boolean {
   const monitor = config.monitors.find((candidate) => candidate.id === monitorId);
-  if (!monitor || monitor.method === 'HEARTBEAT') return 'none';
-  return privateOnly || !isPublicMonitor(monitor) ? 'operator' : 'anyone';
+  return (
+    monitor !== undefined &&
+    monitor.method !== 'HEARTBEAT' &&
+    visibleMonitorIds(config, principal).has(monitorId)
+  );
 }

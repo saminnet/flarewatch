@@ -11,7 +11,7 @@ export function RootComponent() {
   const { theme, statusPage } = rootRoute.useLoaderData();
   const { session } = rootRoute.useRouteContext();
   const { view } = rootRoute.useSearch();
-  const visitorView = session.viewer === 'operator' && view === 'visitor';
+  const visitorView = session.viewer !== 'visitor' && view === 'visitor';
   const themeInitScript = getThemeInitScript(theme);
   const isDark = theme === 'dark';
   const title = statusPage?.title || 'FlareWatch';

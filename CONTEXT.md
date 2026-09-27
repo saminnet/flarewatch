@@ -5,8 +5,16 @@ FlareWatch checks websites and background jobs from Cloudflare Workers and shows
 ## People
 
 **Operator**:
-The person who deploys FlareWatch and signs in to it. There is exactly one.
+Someone who signs in and can change things: maintenance windows, ping URLs. The person who deploys FlareWatch is one, through the password or a provider.
 _Avoid_: Admin, user, owner
+
+**Member**:
+Someone who signs in to see more than visitors do, and changes nothing. A member sees every monitor, or, as part of an audience, the public monitors plus some page groups.
+_Avoid_: Viewer, user, guest
+
+**Audience**:
+A named set of members who see the public monitors plus the monitors in certain page groups. Set in `access.ts`.
+_Avoid_: Tenant, client, team
 
 **Visitor**:
 Anyone reading the status page without signing in.
@@ -19,11 +27,11 @@ The site the status-page worker serves: the dashboard, History and monitor pages
 _Avoid_: Public page, frontend
 
 **Signed-in mode**:
-The status page as the operator sees it: all monitors, operator details on each card, and maintenance editing on History.
+The status page as an operator or member sees it: more monitors, and for the operator, operator details on each card and maintenance editing on History.
 _Avoid_: Admin page, admin panel, dashboard mode
 
 **Visitor view**:
-A switch that shows a signed-in operator the status page exactly as a visitor sees it.
+A switch that shows someone signed in the status page exactly as a visitor sees it.
 _Avoid_: Preview, public preview
 
 **Private-only**:
@@ -52,7 +60,7 @@ A monitor visitors can see. Monitors are published unless marked private.
 _Avoid_: Public monitor
 
 **Private monitor**:
-A monitor only the operator sees. It is still checked, and it never appears in visitor responses: pages, API, badges or embeds.
+A monitor only operators and members see, or an audience whose page group holds it. It is still checked, and it never appears in visitor responses: pages, API, badges or embeds.
 _Avoid_: Hidden monitor, internal monitor
 
 ## History

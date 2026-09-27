@@ -4,7 +4,12 @@ The status page is a Worker that reads what the monitor Worker saves. Visitors s
 
 ## Sign in
 
-Set the `FLAREWATCH_ADMIN_BASIC_AUTH` secret ([how](deploy.md#3-add-secrets-to-your-fork)) and sign in at `/login`. The footer links to it. Once you're signed in, the same pages show everything:
+There are two ways to sign in at `/login`, and you can use both. The footer links to it.
+
+- **A password**, for you alone: set the `FLAREWATCH_ADMIN_BASIC_AUTH` secret ([how](deploy.md#3-add-secrets-to-your-fork)).
+- **A provider**, for you and anyone else you let in: [below](#sign-in-with-a-provider).
+
+As the operator, the same pages show you everything:
 
 - private monitors, with a Private badge
 - the ping URL of each heartbeat
@@ -12,7 +17,37 @@ Set the `FLAREWATCH_ADMIN_BASIC_AUTH` secret ([how](deploy.md#3-add-secrets-to-y
 
 The account menu has a **Visitor view** switch that shows the page the way visitors see it.
 
-Without the secret, `/login` says sign-in isn't set up. In local development you are always signed in.
+Without a password or a provider, `/login` says sign-in isn't set up. In local development you are always signed in.
+
+## Sign in with a provider
+
+Any OpenID Connect provider works: Pocket ID, Google, Authentik, Keycloak and others. So does GitHub. List them in `packages/config/src/access.ts`, along with who may sign in and what they see:
+
+```ts
+export const accessConfig: AccessConfig = {
+  providers: [
+    { id: 'pocket-id', name: 'Pocket ID', issuer: 'https://id.example.com', clientId: '...' },
+    { id: 'github', name: 'GitHub', type: 'github', clientId: '...' },
+  ],
+  operators: ['you@example.com', 'group:flarewatch-admins'],
+  members: ['*@example.com', 'github:teammate'],
+  audiences: { acme: { members: ['*@acme.example'], groups: ['Acme'] } },
+};
+```
+
+- **Operators** see and edit everything, like the password sign-in.
+- **Members** see every monitor, private ones too, but can't change anything or copy ping URLs.
+- **Audiences** see the public monitors plus the monitors in the page groups you list. That's how a client sees their own private monitors and nobody else's.
+
+A rule is an email, a whole domain (`*@example.com`), a group from the provider (`group:admins`) or a GitHub login (`github:octocat`). An email only counts once the provider has verified it. The rules are checked on every request, so removing someone from the list locks them out straight away. Anyone the rules don't cover is turned away at sign-in.
+
+To set up a provider:
+
+1. Create an OAuth or OpenID Connect client with the provider. The callback URL is `https://<your status page>/auth/callback`.
+2. Add it to `access.ts` with the client ID.
+3. Add two GitHub secrets ([how](deploy.md#3-add-secrets-to-your-fork)): `FLAREWATCH_AUTH_SECRET`, any long random string, and `FLAREWATCH_OIDC_SECRETS`, each client secret keyed by provider id, like `{"pocket-id": "...", "github": "..."}`. A Pocket ID client set up as public needs no client secret.
+
+Pocket ID sends your groups when the client asks for them, so `group:` rules follow the groups you manage there.
 
 ## Maintenance
 

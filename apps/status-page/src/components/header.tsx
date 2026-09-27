@@ -40,7 +40,7 @@ export function Header({ config, session, visitorView }: HeaderProps) {
               History
             </Link>
 
-            {session.viewer === 'operator' && (
+            {session.viewer !== 'visitor' && (
               <UserMenu session={session} visitorView={visitorView} />
             )}
           </nav>

@@ -25,7 +25,7 @@
 - Heartbeats for backups, cron jobs and CI. They ping when they finish, and you hear about it when one doesn't.
 - Alerts to Slack, Discord, Telegram, ntfy, email and [more](docs/alerts.md).
 - A status page with uptime, response times and incident history.
-- A sign-in for you, to see private monitors and plan maintenance. The whole page can be private too.
+- Sign-in with a password or your own identity provider (Pocket ID, Google, GitHub and others), for you and anyone you choose to let in. The whole page can be private too.
 - Badges, embeds and a JSON API.
 
 ## Deploy
