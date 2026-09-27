@@ -91,7 +91,7 @@ ExecStart=/usr/local/bin/backup.sh
 ExecStopPost=/usr/bin/curl -fsS "https://status.example.com/ping/nightly-backup/<token>/${EXIT_STATUS}"
 ```
 
-Every ping is one KV write, and the free tier allows 1,000 a day. Daily and hourly jobs are fine. A job that runs every minute is not. Pings are limited to 30 a minute per monitor, which stops a looping script, but a monitor at that limit would still use up the day's writes in about half an hour.
+Pings are limited to 30 a minute per monitor, which stops a looping script. Jobs that run every minute are fine.
 
 ## Other regions and private networks
 

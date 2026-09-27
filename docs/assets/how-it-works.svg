@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
   <title id="title">How FlareWatch works</title>
-  <desc id="desc">Everything runs in your Cloudflare account. The monitor Worker runs every minute. It checks your sites and APIs, saves the results to KV storage, and sends alerts when something goes down or comes back up. Scheduled jobs such as backups ping the status page Worker when they finish. The status page Worker reads KV storage and serves the status page. Visitors see what you publish; you sign in to see everything. Optionally, checks can run from other regions or private networks through Globalping or your own proxy.</desc>
+  <desc id="desc">Everything runs in your Cloudflare account. The monitor Worker runs every minute. It checks your sites and APIs, saves the results in a Durable Object, and sends alerts when something goes down or comes back up. Scheduled jobs such as backups ping the status page Worker when they finish. The status page Worker reads the Durable Object through the monitor Worker and serves the status page. Visitors see what you publish; you sign in to see everything. Optionally, checks can run from other regions or private networks through Globalping or your own proxy.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path class="arrow-head" d="M1 1.5 L8.5 5 L1 8.5"/>
@@ -54,12 +54,12 @@
   <text class="body" x="424" y="206">Every minute: check, save, alert</text>
   <text class="mono" x="424" y="240">cron * * * * *</text>
 
-  <!-- KV storage -->
+  <!-- Durable Object -->
   <path class="flow" d="M600 270 V322"/>
   <text class="label" x="612" y="301">saves</text>
   <rect class="panel" x="480" y="326" width="240" height="96" rx="10"/>
-  <text class="h" x="504" y="362">KV storage</text>
-  <text class="body" x="504" y="392">Status, incidents, latency</text>
+  <text class="h" x="504" y="362">Durable Object</text>
+  <text class="body" x="504" y="392">Incidents, latency, pings</text>
   <path class="flow" d="M600 422 V470"/>
   <text class="label" x="612" y="451">reads</text>
 

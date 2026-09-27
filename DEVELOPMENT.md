@@ -19,34 +19,27 @@ cd apps/status-page && vp exec playwright test
 
 ## Layout
 
-| Path                | Holds                                                       |
-| ------------------- | ----------------------------------------------------------- |
-| `services/worker`   | The monitor Worker: checks, state, alerts, heartbeat pings. |
-| `apps/status-page`  | The status page Worker, a TanStack Start app.               |
-| `packages/config`   | The user's config: monitors, alerts, page settings.         |
-| `packages/shared`   | Types and helpers both Workers use.                         |
-| `.github/workflows` | CI and the deploy workflow.                                 |
+| Path                | Holds                                                         |
+| ------------------- | ------------------------------------------------------------- |
+| `services/worker`   | The monitor Worker: checks, the hub, alerts, heartbeat pings. |
+| `apps/status-page`  | The status page Worker, a TanStack Start app.                 |
+| `packages/config`   | The user's config: monitors, alerts, page settings.           |
+| `packages/shared`   | Types and helpers both Workers use.                           |
+| `.github/workflows` | CI and the deploy workflow.                                   |
 
-Both Workers share one KV namespace through the `FLAREWATCH_STATE` binding. The monitor Worker writes `state`, the status page reads it, and maintenance windows live under `maintenances`.
+The monitor Worker keeps incidents, latency, heartbeat pings and maintenance windows in the hub, a SQLite Durable Object in `services/worker/src/hub`. The status page reads and edits it through its `MONITOR_WORKER` service binding. KV (`FLAREWATCH_STATE`) holds sign-in sessions. The hub also reads a 1.x deployment's data from KV, once, on its first start.
 
 ## Run it locally
 
-Start the monitor Worker and trigger a run:
-
-```bash
-vp run dev-worker
-curl http://localhost:8787/__scheduled
-```
-
-It saves state where the status page can read it. Then run the status page in the Workers runtime:
+Run both Workers in one process, the status page first:
 
 ```bash
 vp run status-page-build
 cp apps/status-page/.dev.vars.example apps/status-page/.dev.vars
-vp exec --filter status-page -- wrangler dev --local --config dist/server/wrangler.json --port 3000 --persist-to .wrangler/state
+vp exec --filter status-page -- wrangler dev --local --config dist/server/wrangler.json --config ../../services/worker/wrangler-dev.toml --port 3000 --persist-to .wrangler/state
 ```
 
-Open <http://localhost:3000>. For UI work alone, `vp run dev-status-page` is faster, but it shows no data until the monitor Worker has run.
+Open <http://localhost:3000>. The first page load starts a check run, and data shows a few seconds later. For UI work alone, `vp run dev-status-page` is faster, but without the monitor Worker it shows no data.
 
 ## Lint rules
 

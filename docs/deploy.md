@@ -55,7 +55,7 @@ The repo ships demo monitors, so a first deploy shows a working page. Replace th
 
 ## 5. Push to main
 
-The workflow runs the checks and tests. It then creates or reuses a KV namespace called `flarewatch-state` and deploys the monitor Worker, then the status page. The run summary shows the page URL, usually `https://flarewatch.<your-subdomain>.workers.dev`.
+The workflow runs the checks and tests. It then creates or reuses a KV namespace called `flarewatch-state` for sign-in sessions and deploys the monitor Worker, then the status page. The run summary shows the page URL, usually `https://flarewatch.<your-subdomain>.workers.dev`.
 
 Secrets are uploaded right after each deploy, so sign-in can take a few seconds to work on the very first one.
 
@@ -67,16 +67,17 @@ Uncomment the route in `apps/status-page/wrangler.jsonc` and set your domain. Th
 
 A personal or small-team page costs nothing. These are the free tier limits that matter:
 
-| Limit                       | What uses it                                              |
-| --------------------------- | --------------------------------------------------------- |
-| 100,000 Worker requests/day | Page views, API calls and heartbeat pings.                |
-| 100,000 KV reads/day        | Page views and checks.                                    |
-| 1,000 KV writes/day         | Saving state, each heartbeat ping, and maintenance edits. |
-| 5 cron triggers per account | FlareWatch uses one.                                      |
+| Limit                               | What uses it                                                |
+| ----------------------------------- | ----------------------------------------------------------- |
+| 100,000 Worker requests/day         | Page views, API calls and heartbeat pings.                  |
+| 100,000 Durable Object requests/day | Check runs (1,440 a day), page views, API calls and pings.  |
+| 100,000 rows written/day            | Check runs (about 4,300 a day), incidents, pings and edits. |
+| 1,000 KV writes/day                 | Sign-ins.                                                   |
+| 5 cron triggers per account         | FlareWatch uses one.                                        |
 
-State is saved when something changes, and otherwise every 3 minutes. That's about 500 writes a day. Change the interval with `kvWriteCooldownMinutes` in `worker.ts`. A monitor that keeps flapping or a job that pings every minute can use up the rest.
+Every check run is saved in the hub, the monitor Worker's Durable Object, so the charts get a sample every minute. The status page reuses what it read from the hub for 20 seconds, so a busy page doesn't cost a hub request per view. Page traffic is the limit you're most likely to reach.
 
-See Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [KV limits](https://developers.cloudflare.com/kv/platform/limits/).
+See Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
 
 ## Uninstall
 
@@ -86,4 +87,8 @@ vp exec --filter status-page -- wrangler delete flarewatch
 vp exec --filter worker -- wrangler kv namespace delete --namespace-id "<flarewatch-state-id>"
 ```
 
-Deleting the namespace deletes all uptime history. `wrangler kv namespace list` shows its ID.
+`wrangler kv namespace list` shows its ID. Uptime history lives in the monitor Worker's Durable Object. Afterwards, check the Durable Objects page in the Cloudflare dashboard and delete the namespace there if it's still listed.
+
+## Upgrading from 1.x
+
+Remove `kvWriteCooldownMinutes` from `worker.ts` if you set it, then push. On its first run, the new version copies your uptime history, heartbeat runs and maintenance windows from KV into the hub. It leaves the KV data as it was, so you can still go back to 1.x.

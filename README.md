@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/how-it-works.svg" alt="How FlareWatch works. Inside your Cloudflare account, a monitor Worker runs every minute. It checks your sites and APIs, saves the results to KV storage, and sends alerts when something goes down or comes back up. Your scheduled jobs ping the status page Worker when they finish. The status page Worker reads KV storage and serves the status page. Visitors see what you publish, and you sign in to see everything. Checks can also run from other regions or private networks through Globalping or your own proxy." />
+  <img src="docs/assets/how-it-works.svg" alt="How FlareWatch works. Inside your Cloudflare account, a monitor Worker runs every minute. It checks your sites and APIs, saves the results in a Durable Object, and sends alerts when something goes down or comes back up. Your scheduled jobs ping the status page Worker when they finish. The status page Worker reads the Durable Object through the monitor Worker and serves the status page. Visitors see what you publish, and you sign in to see everything. Checks can also run from other regions or private networks through Globalping or your own proxy." />
 </p>
 
 ## What you get
@@ -43,7 +43,7 @@ A monitor is one line:
 
 ## Cost
 
-Nothing, for a personal or small-team page. FlareWatch uses two Workers, one KV namespace and one cron trigger, all within Cloudflare's free tier. The limit you're most likely to reach is 1,000 KV writes a day. The [deploy guide](docs/deploy.md#cost) says what uses them.
+Nothing, for a personal or small-team page. FlareWatch uses two Workers, a Durable Object, one KV namespace and one cron trigger, all within Cloudflare's free tier. The limit you're most likely to reach is 100,000 requests a day from page traffic. The [deploy guide](docs/deploy.md#cost) says what uses them.
 
 ## Compared to others
 

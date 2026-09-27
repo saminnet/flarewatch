@@ -68,3 +68,9 @@ _Avoid_: Maintenance event, scheduled maintenance
 **Incident**:
 A stretch of downtime FlareWatch recorded for a monitor.
 _Avoid_: Outage, event
+
+## Storage
+
+**Hub**:
+The Durable Object in the monitor Worker that stores incidents, latency samples, heartbeat pings and maintenance windows. The status page reads it through the monitor Worker.
+_Avoid_: State, KV state, database
