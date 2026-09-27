@@ -1,12 +1,7 @@
-import type { HeartbeatMonitor, HeartbeatRun, WorkerConfig } from '@flarewatch/shared';
-import {
-  createLogger,
-  HEARTBEAT_RUN_HISTORY,
-  heartbeatKvKey,
-  parseHeartbeatSignal,
-  timingSafeEqual,
-} from '@flarewatch/shared';
-import { getStateKv, type Env } from './env';
+import type { HeartbeatMonitor, WorkerConfig } from '@flarewatch/shared';
+import { createLogger, timingSafeEqual } from '@flarewatch/shared';
+import { getHub, type Env } from './env';
+import type { PingKind } from './hub/heartbeat';
 import { stripControlChars } from './notifications/templates/format';
 
 const log = createLogger('Ping');
@@ -74,65 +69,6 @@ async function readBodyCapped(request: Request): Promise<string | null> {
   }
 }
 
-type PingKind = 'success' | 'start' | 'fail';
-
-/** Appends a run, replacing the last entry when a retry of the same outcome lands within 30 s. */
-function appendRun(runs: HeartbeatRun[] | undefined, run: HeartbeatRun): HeartbeatRun[] {
-  const next = [...(runs ?? [])];
-  const last = next[next.length - 1];
-  if (last && last.outcome === run.outcome && Math.abs(run.at - last.at) < 30) {
-    next[next.length - 1] = run;
-  } else {
-    next.push(run);
-  }
-  return next.slice(-HEARTBEAT_RUN_HISTORY);
-}
-
-async function recordSignal(
-  kv: KVNamespace,
-  id: string,
-  kind: PingKind,
-  periodSeconds: number,
-  graceSeconds: number,
-  message?: string,
-): Promise<void> {
-  const key = heartbeatKvKey(id);
-  const stored = await kv.get(key, { type: 'json' });
-  const signal = parseHeartbeatSignal(stored ?? {});
-  if (!signal) {
-    // Keep the corrupt blob: the checker's next read reports it as a down incident.
-    throw new Error(`Stored heartbeat signal for ${id} failed validation`);
-  }
-  const now = Math.floor(Date.now() / 1000);
-  const makeRun = (outcome: HeartbeatRun['outcome']): HeartbeatRun => ({
-    at: now,
-    outcome,
-    ...(signal.lastStart !== undefined && { startedAt: signal.lastStart }),
-  });
-
-  if (kind === 'success') {
-    const previousSuccess = signal.lastSuccess;
-    const outcome =
-      previousSuccess !== undefined && now > previousSuccess + periodSeconds + graceSeconds
-        ? 'late'
-        : 'ok';
-    signal.runs = appendRun(signal.runs, makeRun(outcome));
-    signal.lastSuccess = now;
-    delete signal.lastFail;
-    delete signal.lastStart;
-    delete signal.message;
-  } else if (kind === 'start') {
-    signal.lastStart = now;
-  } else {
-    signal.runs = appendRun(signal.runs, makeRun('fail'));
-    signal.lastFail = now;
-    delete signal.lastStart;
-    signal.message = message ?? '';
-  }
-
-  await kv.put(key, JSON.stringify(signal));
-}
-
 const EXIT_STATUS = /^\d{1,3}$/;
 
 export async function handlePing(
@@ -197,14 +133,7 @@ export async function handlePing(
     }
   }
 
-  await recordSignal(
-    getStateKv(env),
-    id,
-    kind,
-    monitor.periodSeconds,
-    monitor.graceSeconds,
-    message,
-  );
+  await getHub(env).ping(monitor, kind, Math.floor(Date.now() / 1000), message);
   log.info('Ping recorded', { monitor: id, signal: kind });
 
   return new Response(method === 'HEAD' ? null : 'OK', {

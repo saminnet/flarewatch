@@ -115,18 +115,11 @@ describe('MonitorHub heartbeat state', () => {
 
   it('records one miss per skipped period while the job stays overdue', () => {
     const { hub } = createHub();
-    const deadline = T0;
-    const overdue = (): CheckRecord => ({
-      monitor: job,
-      check: {
-        location: 'HEARTBEAT',
-        result: down('No heartbeat'),
-        heartbeat: { status: 'down', lastSuccess: T0 - 4200, deadline },
-      },
-    });
+    hub.ping(job, 'success', T0 - 4200);
+    const deadline = T0 - 4200 + 3600 + 600;
 
-    hub.record(T0 + 60, [overdue()]);
-    hub.record(T0 + 2 * 3600 + 60, [overdue()]);
+    hub.record(T0 + 60, [{ monitor: job }]);
+    hub.record(T0 + 2 * 3600 + 60, [{ monitor: job }]);
 
     expect(hub.view().monitors.backup?.heartbeat?.misses).toEqual([
       deadline,
@@ -135,12 +128,10 @@ describe('MonitorHub heartbeat state', () => {
     ]);
   });
 
-  it('shows a pending job without a start time or incident', () => {
+  it('shows a job that never pinged as pending, without a start time or incident', () => {
     const { hub } = createHub();
 
-    const updates = hub.record(T0, [
-      { monitor: job, check: { location: 'HEARTBEAT', heartbeat: { status: 'pending' } } },
-    ]);
+    const updates = hub.record(T0, [{ monitor: job }]);
 
     expect(updates).toEqual([]);
     expect(hub.view().monitors.backup).toEqual({
@@ -148,6 +139,28 @@ describe('MonitorHub heartbeat state', () => {
       incidents: [],
       heartbeat: { status: 'pending' },
     });
+  });
+
+  it('keeps a ping and changes the status at the next check run', () => {
+    const { hub } = createHub();
+    hub.ping(job, 'fail', T0, 'disk full');
+    hub.record(T0 + 1, [{ monitor: job }]);
+    expect(hub.view().monitors.backup?.status).toBe('down');
+
+    hub.ping(job, 'success', T0 + 30);
+    expect(hub.view().monitors.backup).toMatchObject({
+      status: 'down',
+      heartbeat: {
+        status: 'down',
+        lastSuccess: T0 + 30,
+        runs: [{ outcome: 'fail' }, { outcome: 'ok' }],
+      },
+    });
+
+    const [update] = hub.record(T0 + 60, [{ monitor: job }]);
+    expect(update).toMatchObject({ changeType: 'up', incidentStartTime: T0 + 1 });
+    expect(hub.view().monitors.backup?.status).toBe('up');
+    expect(hub.view().monitors.backup?.heartbeat).not.toHaveProperty('message');
   });
 });
 

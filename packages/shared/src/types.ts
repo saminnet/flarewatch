@@ -326,16 +326,7 @@ export type CheckResult = CheckSuccess | CheckFailure;
 export interface CheckResultWithLocation {
   location: string;
   result: CheckResult;
-  heartbeat?: HeartbeatState;
 }
-
-export interface PendingHeartbeatCheckResult {
-  location: string;
-  result?: undefined;
-  heartbeat: HeartbeatState;
-}
-
-export type MonitorCheckResult = CheckResultWithLocation | PendingHeartbeatCheckResult;
 
 export interface CheckContext {
   /**
@@ -343,10 +334,6 @@ export interface CheckContext {
    * does not depend on the worker's Env type.
    */
   env: { FLAREWATCH_PROXY_TOKEN?: string };
-  /** Heartbeat signal storage, resolved once by the scheduler via getStateKv. */
-  stateKv?: KvStore;
-  /** Unix timestamp (seconds) for this check run; pull checkers ignore it. */
-  now: number;
 }
 
 export interface MonitorChecker {

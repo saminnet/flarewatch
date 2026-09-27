@@ -43,7 +43,7 @@ function createEnv(maintenances: Maintenance[] = []) {
 /** Records an earlier failed run, so the next run sees an open incident from incidentStartTime. */
 function openIncident(
   env: ReturnType<typeof createEnv>,
-  monitor: Monitor,
+  monitor: MonitorTarget,
   incidentStartTime: number,
 ) {
   env.hub.record(incidentStartTime, [

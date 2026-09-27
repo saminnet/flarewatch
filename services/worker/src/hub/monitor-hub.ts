@@ -1,25 +1,30 @@
 import { DurableObject } from 'cloudflare:workers';
 import * as z from 'zod/mini';
 import {
-  HEARTBEAT_RUN_HISTORY,
+  parseHeartbeatSignal,
   parseHeartbeatState,
   type CheckResult,
+  type CheckResultWithLocation,
+  type HeartbeatMonitor,
   type HeartbeatState,
   type Incident,
   type LatencySample,
-  type Monitor,
-  type MonitorCheckResult,
+  type MonitorTarget,
   type MonitorView,
   type StatusView,
 } from '@flarewatch/shared';
 import type { Env } from '../env';
+import { applyPing, evaluateHeartbeat, withMisses, type PingKind } from './heartbeat';
 import { migrate } from './schema';
 import { durableObjectSql, type Sql } from './sql';
 
 const INCIDENT_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
 
-export type CheckRecord = { monitor: Monitor; check: MonitorCheckResult };
+/** A check monitor's result, or a heartbeat monitor, which the hub evaluates from its pings. */
+export type CheckRecord =
+  | { monitor: MonitorTarget; check: CheckResultWithLocation }
+  | { monitor: HeartbeatMonitor };
 
 export interface IncidentUpdate {
   monitorId: string;
@@ -59,43 +64,8 @@ function toIncident(row: IncidentRow): Incident {
   };
 }
 
-/**
- * While a job stays overdue, one miss is appended per elapsed period, so a
- * long outage shows every skipped run.
- */
-function withMisses(
-  monitor: Monitor,
-  heartbeat: HeartbeatState,
-  previous: HeartbeatState | null,
-  now: number,
-): HeartbeatState {
-  const previousMisses = previous?.misses;
-  const next: HeartbeatState = previousMisses?.length
-    ? { ...heartbeat, misses: previousMisses }
-    : heartbeat;
-  if (
-    monitor.method !== 'HEARTBEAT' ||
-    next.status !== 'down' ||
-    next.lastFail !== undefined ||
-    next.deadline === undefined
-  ) {
-    return next;
-  }
-
-  const period = monitor.periodSeconds;
-  const lastMiss = previousMisses?.[previousMisses.length - 1];
-  const firstMiss = Math.max(next.deadline, lastMiss === undefined ? -Infinity : lastMiss + period);
-  const count = Math.floor((now - firstMiss) / period) + 1;
-  if (count <= 0) return next;
-  const skipped = Math.max(0, count - HEARTBEAT_RUN_HISTORY);
-  const appended = Array.from(
-    { length: count - skipped },
-    (_, i) => firstMiss + (skipped + i) * period,
-  );
-  return {
-    ...next,
-    misses: [...(previousMisses ?? []), ...appended].slice(-HEARTBEAT_RUN_HISTORY),
-  };
+function readHeartbeat(row: MonitorRow | undefined): HeartbeatState | null {
+  return row?.heartbeat ? parseHeartbeatState(parseJson(row.heartbeat)) : null;
 }
 
 /**
@@ -129,25 +99,29 @@ export class MonitorHub extends DurableObject<Env> {
       const samples: Record<string, [number, string]> = {};
       const updates: IncidentUpdate[] = [];
 
-      for (const { monitor, check } of records) {
+      for (const record of records) {
+        const { monitor } = record;
         const row = rows.get(monitor.id);
+        let result: CheckResult | undefined;
 
-        if (check.heartbeat) {
-          const previous = row?.heartbeat ? parseHeartbeatState(parseJson(row.heartbeat)) : null;
-          const heartbeat = JSON.stringify(withMisses(monitor, check.heartbeat, previous, now));
-          if (heartbeat !== row?.heartbeat) {
-            this.sql.exec(
-              `INSERT INTO monitors (id, heartbeat) VALUES (?, ?)
-               ON CONFLICT (id) DO UPDATE SET heartbeat = excluded.heartbeat`,
-              monitor.id,
-              heartbeat,
-            );
-          }
+        if ('check' in record) {
+          result = record.check.result;
+          samples[monitor.id] = [result.latency ?? 0, record.check.location];
+        } else {
+          const stored = readHeartbeat(row);
+          const evaluation = evaluateHeartbeat(
+            record.monitor,
+            parseHeartbeatSignal(stored ?? {}) ?? {},
+            now,
+          );
+          result = evaluation.result;
+          const heartbeat = JSON.stringify(
+            withMisses(record.monitor, evaluation.heartbeat, stored?.misses, now),
+          );
+          if (heartbeat !== row?.heartbeat) this.writeHeartbeat(monitor.id, heartbeat);
         }
 
-        const result = check.result;
         if (!result) continue;
-
         if (!row?.started_at) {
           this.sql.exec(
             `INSERT INTO monitors (id, started_at) VALUES (?, ?)
@@ -157,9 +131,6 @@ export class MonitorHub extends DurableObject<Env> {
           );
         }
         updates.push(this.applyResult(monitor.id, result, open.get(monitor.id), now));
-        if (monitor.method !== 'HEARTBEAT') {
-          samples[monitor.id] = [result.latency ?? 0, check.location];
-        }
       }
 
       if (Object.keys(samples).length > 0) {
@@ -178,6 +149,40 @@ export class MonitorHub extends DurableObject<Env> {
       );
       return updates;
     });
+  }
+
+  /** Records a job's ping. Its status changes at the next check run. */
+  ping(monitor: HeartbeatMonitor, kind: PingKind, now: number, message?: string): void {
+    this.sql.transaction(() => {
+      const [row] = this.sql.exec<MonitorRow>(
+        'SELECT id, started_at, heartbeat FROM monitors WHERE id = ?',
+        monitor.id,
+      );
+      const stored = readHeartbeat(row);
+      const signal = applyPing(
+        monitor,
+        parseHeartbeatSignal(stored ?? {}) ?? {},
+        kind,
+        now,
+        message,
+      );
+      const heartbeat: HeartbeatState = {
+        ...signal,
+        status: stored?.status ?? 'pending',
+        ...(stored?.deadline !== undefined && { deadline: stored.deadline }),
+        ...(stored?.misses && { misses: stored.misses }),
+      };
+      this.writeHeartbeat(monitor.id, JSON.stringify(heartbeat));
+    });
+  }
+
+  private writeHeartbeat(monitorId: string, heartbeat: string): void {
+    this.sql.exec(
+      `INSERT INTO monitors (id, heartbeat) VALUES (?, ?)
+       ON CONFLICT (id) DO UPDATE SET heartbeat = excluded.heartbeat`,
+      monitorId,
+      heartbeat,
+    );
   }
 
   private applyResult(
@@ -258,7 +263,7 @@ export class MonitorHub extends DurableObject<Env> {
     const monitors: Record<string, MonitorView> = {};
     for (const row of this.sql.exec<MonitorRow>('SELECT id, started_at, heartbeat FROM monitors')) {
       const list = incidents.get(row.id) ?? [];
-      const heartbeat = row.heartbeat ? parseHeartbeatState(parseJson(row.heartbeat)) : null;
+      const heartbeat = readHeartbeat(row);
       const sample = latest[row.id];
       const down = list[list.length - 1]?.end === undefined && list.length > 0;
       monitors[row.id] = {

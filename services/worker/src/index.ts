@@ -3,8 +3,8 @@ import {
   createLogger,
   failure,
   type Maintenance,
-  type Monitor,
-  type MonitorCheckResult,
+  type CheckResultWithLocation,
+  type MonitorTarget,
   readMaintenancesFromStorage,
   type WorkerConfig,
 } from '@flarewatch/shared';
@@ -120,7 +120,10 @@ function shouldNotify(
 }
 
 export interface WorkerDeps {
-  readonly checkMonitor: (target: Monitor, ctx: CheckContext) => Promise<MonitorCheckResult>;
+  readonly checkMonitor: (
+    target: MonitorTarget,
+    ctx: CheckContext,
+  ) => Promise<CheckResultWithLocation>;
   readonly createNotifier: typeof createNotifier;
   readonly formatNotificationMessage: typeof formatNotificationMessage;
   readonly getEdgeLocation: () => Promise<string>;
@@ -142,27 +145,23 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
 
   const config = deps.staticConfig;
   const hub = getHub(env);
-  const stateKv = getStateKv(env);
-  const maintenances = await loadMaintenances(stateKv);
+  const maintenances = await loadMaintenances(getStateKv(env));
 
   const currentTime = Math.floor(Date.now() / 1000);
   const notifier = deps.createNotifier(config.notification?.webhook);
 
-  const checkResults = await Promise.allSettled(
-    config.monitors.map((monitor) => {
+  const records = await Promise.all(
+    config.monitors.map(async (monitor): Promise<CheckRecord> => {
+      if (monitor.method === 'HEARTBEAT') return { monitor };
       log.info('Checking monitor', { name: monitor.name });
-      return deps.checkMonitor(monitor, { env, now: currentTime, stateKv });
+      try {
+        return { monitor, check: await deps.checkMonitor(monitor, { env }) };
+      } catch (error) {
+        log.error('Check failed', { monitor: monitor.id, error: String(error) });
+        return { monitor, check: { location, result: failure(`Check failed: ${String(error)}`) } };
+      }
     }),
   );
-  const records = checkResults.map((settled, index): CheckRecord => {
-    const monitor = config.monitors[index]!;
-    if (settled.status === 'fulfilled') return { monitor, check: settled.value };
-    log.error('Check failed', { monitor: monitor.id, error: String(settled.reason) });
-    return {
-      monitor,
-      check: { location, result: failure(`Check failed: ${String(settled.reason)}`) },
-    };
-  });
 
   const updates = await hub.record(currentTime, records);
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));

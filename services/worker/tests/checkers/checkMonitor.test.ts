@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
-import type { CheckContext, Fetcher, HeartbeatMonitor, MonitorTarget } from '@flarewatch/shared';
+import type { CheckContext, Fetcher, MonitorTarget } from '@flarewatch/shared';
 import { checkMonitor } from '../../src/checkers';
 import type { CheckDeps } from '../../src/checkers/deps';
 
@@ -17,8 +17,7 @@ const deps: CheckDeps = {
   fetcher: fetchMock,
 };
 
-const NOW = 1736942400;
-const ctx: CheckContext = { env: {}, now: NOW };
+const ctx: CheckContext = { env: {} };
 
 function createTarget(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   return {
@@ -215,43 +214,5 @@ describe('checkMonitor', () => {
     expect(getEdgeLocationMock).toHaveBeenCalledTimes(1);
     expect(httpCheckMock).toHaveBeenCalledTimes(1);
     expect(tcpCheckMock).not.toHaveBeenCalled();
-  });
-
-  describe('HEARTBEAT', () => {
-    const heartbeat: HeartbeatMonitor = {
-      id: 'backup',
-      name: 'Backup',
-      method: 'HEARTBEAT',
-      periodSeconds: 60,
-      graceSeconds: 10,
-    };
-
-    function withSignal(signal: unknown): CheckContext {
-      return { ...ctx, stateKv: { get: vi.fn().mockResolvedValue(signal), put: vi.fn() } };
-    }
-
-    it('dispatches before pull-monitor routing', async () => {
-      const result = await checkMonitor(heartbeat, withSignal(null), deps);
-
-      expect(result).toStrictEqual({ location: 'HEARTBEAT', heartbeat: { status: 'pending' } });
-      expect(httpCheckMock).not.toHaveBeenCalled();
-      expect(tcpCheckMock).not.toHaveBeenCalled();
-      expect(globalPingCheckMock).not.toHaveBeenCalled();
-      expect(getEdgeLocationMock).not.toHaveBeenCalled();
-    });
-
-    it('derives the status despite a foreign status key on a valid signal', async () => {
-      const result = await checkMonitor(
-        heartbeat,
-        withSignal({ status: 'down', lastSuccess: NOW }),
-        deps,
-      );
-
-      expect(result.heartbeat).toStrictEqual({
-        status: 'up',
-        lastSuccess: NOW,
-        deadline: NOW + 70,
-      });
-    });
   });
 });

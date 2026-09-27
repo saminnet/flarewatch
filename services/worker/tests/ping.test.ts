@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
-  heartbeatKvKey,
+  parseHeartbeatSignal,
   type HeartbeatMonitor,
+  type HeartbeatRun,
   type HeartbeatSignal,
   type Monitor,
   type WorkerConfig,
@@ -11,6 +12,7 @@ import Worker, { runChecks } from '../src/index';
 import { deriveHeartbeatToken } from '../src/ping';
 import { createHub, hubNamespace } from './helpers/hub';
 import { asKv, createKv } from './helpers/kv';
+import type { PingKind } from '../src/hub/heartbeat';
 import { createWorkerDeps } from './helpers/worker-deps';
 
 const workerConfigMock: WorkerConfig = { monitors: [] };
@@ -37,7 +39,12 @@ function token(id: string = heartbeat.id): Promise<string> {
 }
 
 function createEnv(extra: Partial<Env> = {}): Env {
-  return { FLAREWATCH_STATE: asKv(kv), HEARTBEAT_SECRET: SECRET, ...extra };
+  return {
+    FLAREWATCH_STATE: asKv(createKv()),
+    MONITOR_HUB: hubNamespace(hub),
+    HEARTBEAT_SECRET: SECRET,
+    ...extra,
+  };
 }
 
 function pingRequest(path: string, init: { method?: string; body?: string } = {}): Request {
@@ -47,7 +54,7 @@ function pingRequest(path: string, init: { method?: string; body?: string } = {}
   });
 }
 
-let kv = createKv();
+let hub = createHub().hub;
 
 async function ping(
   path: string,
@@ -63,13 +70,19 @@ async function ping(
 }
 
 function signal(): HeartbeatSignal {
-  const value = kv.values.get(heartbeatKvKey(heartbeat.id));
-  if (typeof value !== 'string') throw new Error('Signal was not saved');
-  return JSON.parse(value) as HeartbeatSignal;
+  const signal = parseHeartbeatSignal(hub.view().monitors[heartbeat.id]?.heartbeat);
+  if (!signal) throw new Error('Signal was not saved');
+  return signal;
 }
 
-function seedSignal(value: HeartbeatSignal): void {
-  kv.values.set(heartbeatKvKey(heartbeat.id), structuredClone(value));
+function lastRun(): HeartbeatRun | undefined {
+  const runs = signal().runs ?? [];
+  return runs[runs.length - 1];
+}
+
+/** An earlier ping, recorded straight into the hub. */
+function seed(kind: PingKind, at: number, message?: string): void {
+  hub.ping(heartbeat, kind, at, message);
 }
 
 describe('heartbeat tokens', () => {
@@ -89,7 +102,7 @@ describe('ping routes', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(NOW * 1000));
     workerConfigMock.monitors = [heartbeat, pullMonitor];
-    kv = createKv();
+    hub = createHub().hub;
   });
 
   afterEach(() => {
@@ -97,12 +110,18 @@ describe('ping routes', () => {
   });
 
   it.each(['GET', 'POST', 'HEAD'])('records a success ping via %s', async (method) => {
-    seedSignal({ lastFail: NOW - 10, message: 'boom' });
+    seed('fail', NOW - 60, 'boom');
 
     const response = await ping(`/ping/${heartbeat.id}/${await token()}`, { method });
 
     expect(response.status).toBe(200);
-    expect(signal()).toEqual({ lastSuccess: NOW, runs: [{ at: NOW, outcome: 'ok' }] });
+    expect(signal()).toEqual({
+      lastSuccess: NOW,
+      runs: [
+        { at: NOW - 60, outcome: 'fail' },
+        { at: NOW, outcome: 'ok' },
+      ],
+    });
     if (method === 'HEAD') {
       await expect(response.text()).resolves.toBe('');
     } else {
@@ -110,31 +129,23 @@ describe('ping routes', () => {
     }
   });
 
-  it('rejects a ping on a corrupt signal, keeps it', async () => {
-    kv.values.set(heartbeatKvKey(heartbeat.id), { lastSuccess: 'garbage' });
-
-    await expect(
-      ping(`/ping/${heartbeat.id}/${await token()}/fail`, { method: 'POST', body: 'boom' }),
-    ).rejects.toThrow('failed validation');
-    expect(kv.values.get(heartbeatKvKey(heartbeat.id))).toEqual({ lastSuccess: 'garbage' });
-  });
-
   it('records a late success only past period plus grace', async () => {
-    seedSignal({ lastSuccess: NOW - 3659 });
+    seed('success', NOW - 3659);
 
     await ping(`/ping/${heartbeat.id}/${await token()}`);
 
     // One second past the period but inside the 60 s grace window.
-    expect(signal().runs).toEqual([{ at: NOW, outcome: 'ok' }]);
+    expect(lastRun()).toEqual({ at: NOW, outcome: 'ok' });
 
-    seedSignal({ lastSuccess: NOW - 4000 });
+    hub = createHub().hub;
+    seed('success', NOW - 4000);
     await ping(`/ping/${heartbeat.id}/${await token()}`);
 
-    expect(signal().runs).toEqual([{ at: NOW, outcome: 'late' }]);
+    expect(lastRun()).toEqual({ at: NOW, outcome: 'late' });
   });
 
   it('replaces a retry within 30 s, appends after a period', async () => {
-    seedSignal({ lastSuccess: NOW - 3600, runs: [{ at: NOW - 10, outcome: 'ok' }] });
+    seed('success', NOW - 10);
 
     await ping(`/ping/${heartbeat.id}/${await token()}`);
 
@@ -151,18 +162,19 @@ describe('ping routes', () => {
   });
 
   it('pairs startedAt with the finishing run and consumes it afterwards', async () => {
-    seedSignal({ lastSuccess: NOW - 60, lastStart: NOW });
+    seed('success', NOW - 60);
+    seed('start', NOW);
 
     vi.setSystemTime(new Date((NOW + 120) * 1000));
     await ping(`/ping/${heartbeat.id}/${await token()}`);
 
-    expect(signal().runs).toEqual([{ at: NOW + 120, outcome: 'ok', startedAt: NOW }]);
+    expect(lastRun()).toEqual({ at: NOW + 120, outcome: 'ok', startedAt: NOW });
     expect(signal().lastStart).toBeUndefined();
 
     vi.setSystemTime(new Date((NOW + 240) * 1000));
     await ping(`/ping/${heartbeat.id}/${await token()}`);
 
-    expect(signal().runs?.[1]).toEqual({ at: NOW + 240, outcome: 'ok' });
+    expect(lastRun()).toEqual({ at: NOW + 240, outcome: 'ok' });
   });
 
   it('keeps a same-second success and fail as two runs', async () => {
@@ -207,27 +219,28 @@ describe('ping routes', () => {
   });
 
   it('caps the run history at 90 entries', async () => {
-    const runs = Array.from({ length: 90 }, (_, i) => ({
-      at: NOW - 3600 + i,
-      outcome: 'ok' as const,
-    }));
-    seedSignal({ lastSuccess: NOW - 3600, runs });
+    // 31 s apart, so no seeded ping counts as a retry of the one before.
+    for (let i = 0; i < 90; i++) seed('success', NOW - 90 * 31 + i * 31);
 
     await ping(`/ping/${heartbeat.id}/${await token()}`);
 
     const history = signal().runs ?? [];
     expect(history).toHaveLength(90);
-    expect(history[0]).toEqual({ at: NOW - 3599, outcome: 'ok' });
+    expect(history[0]).toEqual({ at: NOW - 89 * 31, outcome: 'ok' });
     expect(history[89]).toEqual({ at: NOW, outcome: 'ok' });
   });
 
   it('records a start ping without touching lastSuccess', async () => {
-    seedSignal({ lastSuccess: NOW - 100 });
+    seed('success', NOW - 100);
 
     const response = await ping(`/ping/${heartbeat.id}/${await token()}/start`, { method: 'POST' });
 
     expect(response.status).toBe(200);
-    expect(signal()).toEqual({ lastSuccess: NOW - 100, lastStart: NOW });
+    expect(signal()).toEqual({
+      lastSuccess: NOW - 100,
+      lastStart: NOW,
+      runs: [{ at: NOW - 100, outcome: 'ok' }],
+    });
   });
 
   it('records a fail ping with the body as message', async () => {
@@ -262,7 +275,7 @@ describe('ping routes', () => {
       body: 'x'.repeat(1025),
     });
     expect(oversized.status).toBe(413);
-    expect(kv.values.has(heartbeatKvKey(heartbeat.id))).toBe(false);
+    expect(hub.view().monitors[heartbeat.id]).toBeUndefined();
 
     const exact = await ping(`/ping/${heartbeat.id}/${tok}/fail`, {
       method: 'POST',
@@ -277,7 +290,7 @@ describe('ping routes', () => {
     expect(ok.status).toBe(200);
     expect(signal()).toEqual({ lastSuccess: NOW, runs: [{ at: NOW, outcome: 'ok' }] });
 
-    seedSignal({});
+    hub = createHub().hub;
     const failed = await ping(`/ping/${heartbeat.id}/${await token()}/3`, { method: 'POST' });
     expect(failed.status).toBe(200);
     expect(signal()).toEqual({
@@ -332,7 +345,7 @@ describe('ping routes', () => {
       ping(`/ping/${pullMonitor.id}/${await token(pullMonitor.id)}`),
     ).resolves.toHaveProperty('status', 404);
     await expect(
-      ping(`/ping/${heartbeat.id}/${tok}`, undefined, { FLAREWATCH_STATE: asKv(kv) }),
+      ping(`/ping/${heartbeat.id}/${tok}`, undefined, { MONITOR_HUB: hubNamespace(hub) }),
     ).resolves.toHaveProperty('status', 404);
   });
 
@@ -346,7 +359,7 @@ describe('ping routes', () => {
 
     expect(limited.status).toBe(429);
     expect(limiter.limit).toHaveBeenCalledWith({ key: heartbeat.id });
-    expect(kv.values.has(heartbeatKvKey(heartbeat.id))).toBe(false);
+    expect(hub.view().monitors[heartbeat.id]).toBeUndefined();
   });
 
   it('passes the rate limiter when it allows the ping', async () => {
@@ -392,7 +405,7 @@ describe('ping routes', () => {
     await expect(ping('/ping-url/ghost')).resolves.toHaveProperty('status', 404);
     await expect(ping(`/ping-url/${pullMonitor.id}`)).resolves.toHaveProperty('status', 404);
     await expect(
-      ping(`/ping-url/${heartbeat.id}`, undefined, { FLAREWATCH_STATE: asKv(kv) }),
+      ping(`/ping-url/${heartbeat.id}`, undefined, { MONITOR_HUB: hubNamespace(hub) }),
     ).resolves.toHaveProperty('status', 500);
   });
 });
@@ -402,7 +415,7 @@ describe('ping to scheduled check end to end', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(NOW * 1000));
     workerConfigMock.monitors = [heartbeat];
-    kv = createKv();
+    hub = createHub().hub;
   });
 
   afterEach(() => {
@@ -413,11 +426,7 @@ describe('ping to scheduled check end to end', () => {
     const response = await ping(`/ping/${heartbeat.id}/${await token()}`);
     expect(response.status).toBe(200);
 
-    const { hub } = createHub();
-    await runChecks(
-      createEnv({ MONITOR_HUB: hubNamespace(hub) }),
-      createWorkerDeps(workerConfigMock),
-    );
+    await runChecks(createEnv(), createWorkerDeps(workerConfigMock));
 
     expect(hub.view().monitors[heartbeat.id]?.heartbeat).toMatchObject({
       status: 'up',
