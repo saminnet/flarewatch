@@ -1,47 +1,7 @@
-# Monitoring Worker (`services/worker`)
+# Monitor Worker (`services/worker`)
 
-The FlareWatch monitoring worker is a Cloudflare Worker. It runs scheduled checks and writes the latest state to Cloudflare KV.
+The monitor Worker. A cron trigger runs it every minute. It checks each monitor, saves the state to the `FLAREWATCH_STATE` KV namespace, and sends alerts. It also records heartbeat pings that the status page forwards to it.
 
-## What it does
-
-- Runs on a 1-minute cron schedule configured in `wrangler.toml`.
-- Reads monitors from `packages/config/src/worker.ts`.
-- Writes the current state to KV key `state`.
-- Reads maintenance windows from KV key `maintenances`.
-- Supports an internal-only `/trigger` call through a service binding. There is no public endpoint.
-
-## Required binding
-
-- `FLAREWATCH_STATE` (Cloudflare KV binding)
-
-## Optional secrets
-
-- `FLAREWATCH_PROXY_TOKEN` - bearer token used when a monitor uses a check proxy.
-
-## Proxy checks
-
-Monitors can set `checkProxy` to send checks through a proxy endpoint. By default, a proxy failure marks the monitor check as failed. Set `checkProxyFallback: true` on that monitor to try the direct Worker check after the proxy fails.
-
-A monitor whose target is in the same zone as this Worker needs a check proxy. Cloudflare routes a Worker's fetch to its own zone straight to the origin and skips the Worker that serves the site, so a direct check returns a 503 even when the site is up. Targets in other zones, including other Cloudflare-hosted sites, work with direct checks.
-
-## Local development
-
-```bash
-vp run dev-worker
-```
-
-This runs `wrangler dev` with:
-
-- `--test-scheduled`, so you can trigger a run at `http://localhost:8787/__scheduled`
-- `--persist-to ../../apps/status-page/.wrangler/state`, so the status page can read the same local KV state
-
-Trigger a run:
-
-```bash
-curl http://localhost:8787/__scheduled
-```
-
-## Build and deploy
-
-- `vp run worker-build` validates the Worker bundle with `wrangler deploy --dry-run`.
-- `vp exec --filter worker -- wrangler deploy --config wrangler.toml` deploys the worker with Wrangler.
+- Monitors and heartbeats: [docs/monitors.md](../../docs/monitors.md)
+- Alerts: [docs/alerts.md](../../docs/alerts.md)
+- Running it locally: [DEVELOPMENT.md](../../DEVELOPMENT.md#run-it-locally)

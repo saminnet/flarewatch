@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">How FlareWatch works</title>
+  <desc id="desc">Everything runs in your Cloudflare account. The monitor Worker runs every minute. It checks your sites and APIs, saves the results to KV storage, and sends alerts when something goes down or comes back up. Scheduled jobs such as backups ping the status page Worker when they finish. The status page Worker reads KV storage and serves the status page. Visitors see what you publish; you sign in to see everything. Optionally, checks can run from other regions or private networks through Globalping or your own proxy.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="arrow-head" d="M1 1.5 L8.5 5 L1 8.5"/>
+    </marker>
+    <style>
+      svg {
+        --bg: #ffffff; --area: #f6f7f8; --panel: #ffffff; --border: #d8dee4; --rule: #eaeef2;
+        --text: #1f2328; --muted: #59636e; --accent: #e8710a;
+        --up: #1a7f37; --up-soft: #dafbe1; --up-edge: #aceebb; --warn: #bf8700; --down: #cf222e;
+      }
+      @media (prefers-color-scheme: dark) {
+        svg {
+          --bg: #0d1117; --area: #151b23; --panel: #0d1117; --border: #3d444d; --rule: #262c36;
+          --text: #f0f6fc; --muted: #9198a1; --accent: #f0883e;
+          --up: #3fb950; --up-soft: #0f2a1a; --up-edge: #1f5130; --warn: #d29922; --down: #f85149;
+        }
+      }
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; fill: var(--text); }
+      .bg { fill: var(--bg); stroke: var(--rule); }
+      .area { fill: var(--area); stroke: var(--border); stroke-dasharray: 6 5; }
+      .panel { fill: var(--panel); stroke: var(--border); }
+      .optional-box { stroke-dasharray: 5 4; }
+      .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 1.4px; fill: var(--muted); }
+      .h { font-size: 18px; font-weight: 600; }
+      .body { font-size: 15px; fill: var(--muted); }
+      .small { font-size: 14px; fill: var(--muted); }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; fill: var(--muted); }
+      .label { font-size: 14px; font-weight: 500; fill: var(--muted); }
+      .flow { fill: none; stroke: var(--muted); stroke-width: 1.5; marker-end: url(#arrow); }
+      .optional { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4; }
+      .arrow-head { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+      .accent { fill: var(--accent); }
+      .rule { stroke: var(--rule); }
+      .up { fill: var(--up); } .warn { fill: var(--warn); } .down { fill: var(--down); }
+      .pill { fill: var(--up-soft); stroke: var(--up-edge); }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0.5" y="0.5" width="1199" height="679" rx="16"/>
+  <rect class="accent" x="40" y="42" width="10" height="10" rx="2"/>
+  <text class="eyebrow" x="60" y="52">HOW FLAREWATCH WORKS</text>
+
+  <!-- Your Cloudflare account -->
+  <rect class="area" x="360" y="84" width="480" height="532" rx="14"/>
+  <text class="eyebrow" x="384" y="116">YOUR CLOUDFLARE ACCOUNT</text>
+  <text class="small" x="816" y="116" text-anchor="end">Free tier</text>
+
+  <!-- Monitor Worker -->
+  <rect class="panel" x="400" y="140" width="400" height="130" rx="10"/>
+  <text class="h" x="424" y="178">Monitor Worker</text>
+  <text class="body" x="424" y="206">Every minute: check, save, alert</text>
+  <text class="mono" x="424" y="240">cron * * * * *</text>
+
+  <!-- KV storage -->
+  <path class="flow" d="M600 270 V322"/>
+  <text class="label" x="612" y="301">saves</text>
+  <rect class="panel" x="480" y="326" width="240" height="96" rx="10"/>
+  <text class="h" x="504" y="362">KV storage</text>
+  <text class="body" x="504" y="392">Status, incidents, latency</text>
+  <path class="flow" d="M600 422 V470"/>
+  <text class="label" x="612" y="451">reads</text>
+
+  <!-- Status page Worker -->
+  <rect class="panel" x="400" y="474" width="400" height="118" rx="10"/>
+  <text class="h" x="424" y="512">Status page Worker</text>
+  <text class="body" x="424" y="540">Page, JSON API, badges</text>
+  <text class="small" x="424" y="568">Takes pings from your jobs</text>
+
+  <!-- Your sites and APIs -->
+  <rect class="panel" x="40" y="140" width="260" height="130" rx="10"/>
+  <text class="h" x="62" y="178">Your sites and APIs</text>
+  <text class="body" x="62" y="206">Websites, APIs, servers</text>
+  <text class="small" x="62" y="240">HTTP · TCP · SSL expiry</text>
+  <path class="flow" d="M400 205 H304"/>
+  <text class="label" x="352" y="195" text-anchor="middle">checks</text>
+
+  <!-- Optional check locations -->
+  <path class="optional" d="M170 270 V318" />
+  <rect class="panel optional-box" x="40" y="318" width="260" height="110" rx="10"/>
+  <text class="eyebrow" x="62" y="346">OPTIONAL</text>
+  <text class="body" x="62" y="374">Check from other regions</text>
+  <text class="body" x="62" y="396">or private networks</text>
+  <text class="small" x="62" y="418">Globalping or your own proxy</text>
+
+  <!-- Your scheduled jobs -->
+  <rect class="panel" x="40" y="468" width="260" height="130" rx="10"/>
+  <text class="h" x="62" y="506">Your scheduled jobs</text>
+  <text class="body" x="62" y="534">Backups, cron, CI</text>
+  <text class="small" x="62" y="568">Ping when they finish</text>
+  <path class="flow" d="M300 533 H396"/>
+  <text class="label" x="348" y="523" text-anchor="middle">pings</text>
+
+  <!-- Alerts -->
+  <path class="flow" d="M800 205 H896"/>
+  <text class="label" x="848" y="195" text-anchor="middle">alerts</text>
+  <rect class="panel" x="900" y="140" width="260" height="130" rx="10"/>
+  <text class="h" x="922" y="178">Alerts</text>
+  <circle class="down" cx="927" cy="202" r="4.5"/>
+  <text class="body" x="940" y="207">API is down</text>
+  <circle class="up" cx="927" cy="228" r="4.5"/>
+  <text class="body" x="940" y="233">API is back up</text>
+  <text class="small" x="922" y="256">Slack, Discord, email and more</text>
+
+  <!-- Status page preview -->
+  <path class="flow" d="M800 533 H896"/>
+  <text class="label" x="848" y="523" text-anchor="middle">serves</text>
+  <rect class="panel" x="900" y="340" width="260" height="258" rx="10"/>
+  <text class="mono" x="922" y="370">status.example.com</text>
+  <path class="rule" d="M900 384 H1160"/>
+  <rect class="pill" x="920" y="398" width="220" height="36" rx="8"/>
+  <circle class="up" cx="938" cy="416" r="5"/>
+  <text x="952" y="421" style="font-size:14px;font-weight:600;">All systems operational</text>
+
+  <text x="922" y="462" style="font-size:13px;font-weight:500;">Website</text>
+  <text class="small" x="1138" y="462" text-anchor="end">99.9%</text>
+  <g transform="translate(922 470)">
+    <rect class="up" x="0" width="5" height="18" rx="1.5"/><rect class="up" x="7" width="5" height="18" rx="1.5"/><rect class="up" x="14" width="5" height="18" rx="1.5"/><rect class="up" x="21" width="5" height="18" rx="1.5"/><rect class="up" x="28" width="5" height="18" rx="1.5"/><rect class="up" x="35" width="5" height="18" rx="1.5"/><rect class="up" x="42" width="5" height="18" rx="1.5"/><rect class="up" x="49" width="5" height="18" rx="1.5"/><rect class="up" x="56" width="5" height="18" rx="1.5"/><rect class="up" x="63" width="5" height="18" rx="1.5"/>
+    <rect class="up" x="70" width="5" height="18" rx="1.5"/><rect class="up" x="77" width="5" height="18" rx="1.5"/><rect class="up" x="84" width="5" height="18" rx="1.5"/><rect class="up" x="91" width="5" height="18" rx="1.5"/><rect class="up" x="98" width="5" height="18" rx="1.5"/><rect class="up" x="105" width="5" height="18" rx="1.5"/><rect class="up" x="112" width="5" height="18" rx="1.5"/><rect class="up" x="119" width="5" height="18" rx="1.5"/><rect class="up" x="126" width="5" height="18" rx="1.5"/><rect class="up" x="133" width="5" height="18" rx="1.5"/>
+    <rect class="up" x="140" width="5" height="18" rx="1.5"/><rect class="warn" x="147" width="5" height="18" rx="1.5"/><rect class="up" x="154" width="5" height="18" rx="1.5"/><rect class="up" x="161" width="5" height="18" rx="1.5"/><rect class="up" x="168" width="5" height="18" rx="1.5"/><rect class="up" x="175" width="5" height="18" rx="1.5"/><rect class="up" x="182" width="5" height="18" rx="1.5"/><rect class="up" x="189" width="5" height="18" rx="1.5"/><rect class="up" x="196" width="5" height="18" rx="1.5"/><rect class="up" x="203" width="5" height="18" rx="1.5"/>
+  </g>
+
+  <text x="922" y="514" style="font-size:13px;font-weight:500;">API</text>
+  <text class="small" x="1138" y="514" text-anchor="end">99.7%</text>
+  <g transform="translate(922 522)">
+    <rect class="up" x="0" width="5" height="18" rx="1.5"/><rect class="up" x="7" width="5" height="18" rx="1.5"/><rect class="up" x="14" width="5" height="18" rx="1.5"/><rect class="up" x="21" width="5" height="18" rx="1.5"/><rect class="up" x="28" width="5" height="18" rx="1.5"/><rect class="up" x="35" width="5" height="18" rx="1.5"/><rect class="up" x="42" width="5" height="18" rx="1.5"/><rect class="up" x="49" width="5" height="18" rx="1.5"/><rect class="warn" x="56" width="5" height="18" rx="1.5"/><rect class="up" x="63" width="5" height="18" rx="1.5"/>
+    <rect class="up" x="70" width="5" height="18" rx="1.5"/><rect class="up" x="77" width="5" height="18" rx="1.5"/><rect class="up" x="84" width="5" height="18" rx="1.5"/><rect class="up" x="91" width="5" height="18" rx="1.5"/><rect class="up" x="98" width="5" height="18" rx="1.5"/><rect class="up" x="105" width="5" height="18" rx="1.5"/><rect class="up" x="112" width="5" height="18" rx="1.5"/><rect class="up" x="119" width="5" height="18" rx="1.5"/><rect class="up" x="126" width="5" height="18" rx="1.5"/><rect class="up" x="133" width="5" height="18" rx="1.5"/>
+    <rect class="up" x="140" width="5" height="18" rx="1.5"/><rect class="up" x="147" width="5" height="18" rx="1.5"/><rect class="up" x="154" width="5" height="18" rx="1.5"/><rect class="up" x="161" width="5" height="18" rx="1.5"/><rect class="up" x="168" width="5" height="18" rx="1.5"/><rect class="down" x="175" width="5" height="18" rx="1.5"/><rect class="up" x="182" width="5" height="18" rx="1.5"/><rect class="up" x="189" width="5" height="18" rx="1.5"/><rect class="up" x="196" width="5" height="18" rx="1.5"/><rect class="up" x="203" width="5" height="18" rx="1.5"/>
+  </g>
+
+  <path class="rule" d="M920 556 H1140"/>
+  <text class="small" x="922" y="580">Sign in to see everything</text>
+
+  <text class="small" x="40" y="652">Monitors and page settings live in packages/config. Push to main and GitHub Actions deploys both Workers.</text>
+</svg>

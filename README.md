@@ -1,408 +1,63 @@
 <p align="center">
-  <img src="apps/status-page/public/favicon.svg" width="72" alt="FlareWatch" />
+  <img src="apps/status-page/public/favicon.svg" width="64" alt="" />
 </p>
 
-# FlareWatch
+<h1 align="center">FlareWatch</h1>
 
 <p align="center">
-  <a href="https://github.com/saminnet/flarewatch/actions/workflows/deploy.yml"><img alt="Deploy workflow" src="https://github.com/saminnet/flarewatch/actions/workflows/deploy.yml/badge.svg" /></a>
-  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green.svg" />
-  <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020" />
-  <img alt="Deploy: Wrangler" src="https://img.shields.io/badge/deploy-Wrangler-F38020" />
+  A self-hosted uptime monitor and status page that runs free on Cloudflare Workers.<br />
+  Fork it, edit one config file, and push. There's no server to look after.
 </p>
 
 <p align="center">
-  <a href="https://demo.flarewatch.app"><strong>Live demo</strong></a> | <a href="#deploy-in-10-minutes">Deploy in ~10 minutes</a> | <a href="#features">Features</a> | <a href="#what-does-it-cost">Cost</a>
+  <a href="https://demo.flarewatch.app">Live demo</a> ·
+  <a href="docs/deploy.md">Deploy</a> ·
+  <a href="#docs">Docs</a>
 </p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/status-page-dark.png" />
-  <img src="docs/assets/status-page.png" alt="FlareWatch status page showing service health, latency, uptime, and incidents" />
-</picture>
+<p align="center">
+  <img src="docs/assets/how-it-works.svg" alt="How FlareWatch works. Inside your Cloudflare account, a monitor Worker runs every minute. It checks your sites and APIs, saves the results to KV storage, and sends alerts when something goes down or comes back up. Your scheduled jobs ping the status page Worker when they finish. The status page Worker reads KV storage and serves the status page. Visitors see what you publish, and you sign in to see everything. Checks can also run from other regions or private networks through Globalping or your own proxy." />
+</p>
 
-**Free uptime monitoring on Cloudflare. No server, no Docker, no monthly bill.**
+## What you get
 
-FlareWatch is a serverless status page and uptime monitor that runs entirely on
-Cloudflare's free tier and deploys into your own Cloudflare account. Fork it,
-add two GitHub secrets, edit your config, and push to `main`. Your checks run
-every minute from Cloudflare's edge, and your public status page is served by
-Cloudflare Workers.
+- Checks every minute for websites, APIs and TCP ports, and a warning before an SSL certificate expires.
+- Heartbeats for backups, cron jobs and CI. They ping when they finish, and you hear about it when one doesn't.
+- Alerts to Slack, Discord, Telegram, ntfy, email and [more](docs/alerts.md).
+- A status page with uptime, response times and incident history.
+- A sign-in for you, to see private monitors and plan maintenance. The whole page can be private too.
+- Badges, embeds and a JSON API.
 
-Live demo: <https://demo.flarewatch.app>
+## Deploy
 
-## Why FlareWatch
+1. Fork this repo.
+2. Add two repository secrets, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. The [deploy guide](docs/deploy.md) lists the token permissions.
+3. List your monitors in `packages/config/src/worker.ts`.
+4. Push to `main`. GitHub Actions tests and deploys both Workers, then prints your status page URL.
 
-- Runs in your Cloudflare account, not on a hosted SaaS you have to trust.
-- Uses Workers, KV, and Cron Triggers; no VM, container, database, or 24/7 host.
-- Checks every minute from the edge. Upptime is limited by GitHub Actions cron
-  timing, and Uptime Kuma/Gatus still need somewhere always on to run.
-- Set up in minutes: fork, two secrets, config, push.
-
-## Features
-
-- 1-minute scheduled checks with Cloudflare Cron Triggers.
-- HTTP checks with status code, response keyword, headers, body, and timeout
-  validation.
-- TCP port checks from Workers and ICMP/TCP ping checks from proxy or
-  Globalping-backed locations.
-- SSL certificate expiry monitoring on proxy/Globalping-backed HTTPS checks,
-  with configurable warning thresholds.
-- Multi-region checks through Globalping integration.
-- Slack, Discord, Telegram, ntfy, Teams, Google Chat, Matrix, Pushover, Gotify,
-  Zulip, Resend email, and custom webhook notifications. Mattermost and
-  Rocket.Chat use the Slack template.
-- Incident history, latency history, uptime percentages, and uptime calendar.
-- Scheduled maintenance windows you add and edit on the Events page after signing in.
-- Embeddable SVG badges and per-monitor status widgets.
-- Public JSON APIs for status and maintenance data.
-- Light/dark mode, theme tokens, custom CSS, and optional custom domains.
-- Optional proxy support for private networks and custom check locations:
-  <https://github.com/saminnet/flarewatch-proxy>.
-
-<img src="docs/assets/events.png" alt="FlareWatch events page with incident history and maintenance windows" />
-
-## ELI5
-
-- You define monitors in `packages/config`.
-- A Cloudflare Worker runs every minute, checks them, and stores results in
-  Cloudflare KV.
-- The status page, also a Cloudflare Worker, reads KV and renders a public
-  dashboard.
-- Optional: route checks through Globalping or a check proxy for private
-  networks, TCP/ICMP checks, SSL metadata, or custom locations.
-
-```mermaid
-flowchart LR
-  Config["Config<br/>packages/config"] --> Worker["Monitoring Worker<br/>services/worker<br/>runs every minute"]
-  Worker --> KV["Cloudflare KV<br/>FLAREWATCH_STATE"]
-  KV --> Page["Status Page<br/>apps/status-page"]
-
-  Worker -. optional .-> Proxy["Check Proxy<br/>external repo"]
-  Proxy -. checks .-> Target["Your service<br/>public or private"]
-  Worker -. checks .-> Target
-```
-
-## What does it cost?
-
-Expected cost for a typical personal or small-team status page: **$0/month**.
-
-| Piece         | Cloudflare free tier                      | FlareWatch use                                                | Honest limit                                                                                     |
-| ------------- | ----------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Workers       | 100,000 requests/day                      | Two Workers: monitor runner and status page                   | Heavy public traffic can exhaust the daily request limit.                                        |
-| Cron Triggers | 5 triggers/account                        | One trigger: `* * * * *`                                      | FlareWatch uses one of the five free triggers.                                                   |
-| Workers KV    | 100,000 reads/day, 1,000 writes/day, 1 GB | Shared `flarewatch-state` namespace for status and admin data | State writes are cooled down to 3 minutes by default; very flappy setups can exceed free writes. |
-
-Optional services can have their own limits: GitHub Actions runs your deploy
-workflow, Globalping may require its own token, and a private proxy is something
-you host separately if you need private-network checks.
-
-Cloudflare references: [Workers limits](https://developers.cloudflare.com/workers/platform/limits/),
-[KV limits](https://developers.cloudflare.com/kv/platform/limits/), and
-[Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
-
-## Deploy in ~10 minutes
-
-This is the canonical self-host path:
-
-`fork -> add 2 GitHub secrets -> edit config -> push to main`
-
-### 1. Fork the repo
-
-Fork <https://github.com/saminnet/flarewatch> into your own GitHub account or
-organization. Keep GitHub Actions enabled on the fork.
-
-### 2. Create a Cloudflare API token
-
-In Cloudflare:
-
-1. Open the dashboard and select the account where FlareWatch should live.
-2. Go to **My Profile -> API Tokens -> Create Token -> Custom token**.
-3. Add these permission groups:
-
-| Resource | Permission group   | Level |
-| -------- | ------------------ | ----- |
-| Account  | Workers Scripts    | Edit  |
-| Account  | Workers KV Storage | Edit  |
-| Account  | Account Settings   | Read  |
-| User     | User Details       | Read  |
-| User     | Memberships        | Read  |
-
-Scope account resources to the single Cloudflare account you will deploy into.
-For the default `workers.dev` URL, no zone permission is required. If you later
-uncomment a custom-domain route in `apps/status-page/wrangler.jsonc`, add
-`Zone -> Workers Routes -> Edit` for that zone.
-
-The Cloudflare **Edit Cloudflare Workers** template is also fine if you scope it
-to your account. It includes the required Workers/KV/account permissions and a
-few extra Workers-related permissions.
-
-Create the token and copy it once. Do not commit it.
-
-### 3. Find your Cloudflare account ID
-
-In Cloudflare, go to **Workers & Pages**. The **Account details** panel shows
-your Account ID. Cloudflare also exposes it from the Account home row menu as
-**Copy account ID**.
-
-### 4. Add the two GitHub secrets
-
-In your fork, go to **Settings -> Secrets and variables -> Actions -> New
-repository secret** and add:
-
-- `CLOUDFLARE_ACCOUNT_ID` - the account ID from Cloudflare.
-- `CLOUDFLARE_API_TOKEN` - the token you created above.
-
-Optional secrets:
-
-- `FLAREWATCH_ADMIN_BASIC_AUTH` - your operator sign-in at `/login`. It also protects `/api/admin/*`.
-- `FLAREWATCH_PROXY_TOKEN` - bearer token for a check proxy.
-
-Generate auth secret payloads from a username and password:
-
-```bash
-vp run auth:secret -- <username> 'replace-with-strong-password'
-```
-
-Run it once per secret and paste the full JSON output into the matching GitHub
-secret value. Do not manually construct or edit the JSON fields.
-
-### 5. Edit your config
-
-Edit these files in your fork:
-
-- `packages/config/src/worker.ts` - monitors, timeouts, notifications, proxy,
-  Globalping, SSL expiry thresholds.
-- `packages/config/src/public.ts` - page title, links, groups, CORS, theming.
-
-The repo ships with safe demo monitors so a fresh deploy shows a working status
-page immediately. Replace them before relying on FlareWatch for real alerting.
-
-### 6. Push to `main`
-
-Push your config changes to `main`. The `CI and Deploy` workflow will:
-
-1. Run `vp check`, unit tests, browser tests, and builds.
-2. Create or adopt the `flarewatch-state` KV namespace.
-3. Inject that KV namespace ID into both Wrangler configs.
-4. Deploy `flarewatch-worker`.
-5. Build and deploy the `flarewatch` status page Worker.
-
-When it finishes, open the workflow run summary in GitHub Actions. The
-`Deploy to Cloudflare` job writes the final status page URL there. By default it
-looks like:
-
-```text
-https://flarewatch.<your-workers-dev-subdomain>.workers.dev
-```
-
-## FlareWatch vs alternatives
-
-| Project     | Difference                                                                      |
-| ----------- | ------------------------------------------------------------------------------- |
-| Uptime Kuma | Full-featured and popular, but it needs an always-on host.                      |
-| Upptime     | GitHub Actions based, unmaintained, and generally limited to ~5-min cron.       |
-| Gatus       | Great YAML/GitOps monitor, but it still needs a host to run continuously.       |
-| FlareWatch  | Runs on Cloudflare's free serverless primitives in your own Cloudflare account. |
-
-## How it works
-
-- `services/worker` runs scheduled checks and writes `state` to the
-  `FLAREWATCH_STATE` KV namespace.
-- `apps/status-page` reads that same KV namespace and serves the UI plus
-  `/api/*` endpoints.
-- The deploy workflow creates/adopts one shared KV namespace named
-  `flarewatch-state` and injects its ID into both Wrangler configs.
-- Optional: set a `CONFIG_KV` binding with runtime config JSON. It can be the
-  config object itself or an envelope like `{ "config": { ... } }`; extra
-  envelope fields are ignored. If unset, FlareWatch uses the static config in
-  `packages/config`.
-- Optional: use the external check proxy for private networks and custom check
-  locations. By default, proxy failures mark the check as failed. Set
-  `checkProxyFallback: true` on a monitor to fall back to a direct check after
-  the proxy fails.
-- A monitor for a site in the same zone as the monitoring Worker also needs the
-  check proxy. Cloudflare sends a Worker's same-zone fetches straight to the
-  origin, so a direct check fails with a 503 even when the site is up.
-
-## Example monitor
+A monitor is one line:
 
 ```ts
-// packages/config/src/worker.ts
-export const workerConfig = {
-  monitors: [{ id: 'api', name: 'API', method: 'GET', target: 'https://example.com/health' }],
-};
+{ id: 'api', name: 'API', method: 'GET', target: 'https://example.com/health' }
 ```
 
-```ts
-// packages/config/src/public.ts
-export const pageConfig = {
-  title: 'My Status Page',
-  group: { Services: ['api'] },
-};
-```
+## Cost
 
-### Private monitors
+Nothing, for a personal or small-team page. FlareWatch uses two Workers, one KV namespace and one cron trigger, all within Cloudflare's free tier. The limit you're most likely to reach is 1,000 KV writes a day. The [deploy guide](docs/deploy.md#cost) says what uses them.
 
-Set `private: true` on a monitor to keep it off the status page: private
-monitors are checked, stored, and alerted like any other, but they never appear
-on the public page or the public API. Once you sign in, the same pages show
-them with a "private" badge, and you can attach them to maintenance windows on
-the Events page. The Visitor view switch in your account menu shows the page as
-visitors see it.
+## Compared to others
 
-### Private-only status page
-
-Set `visibility: 'private'` in `pageConfig` to keep the whole page to yourself.
-Visitors get the sign-in page and nothing else: the dashboard, Events, monitor
-pages, embeds, badges and the JSON API are all closed to them. Job pings keep
-working. You need `FLAREWATCH_ADMIN_BASIC_AUTH` set to sign in.
-
-This replaces `FLAREWATCH_STATUS_PAGE_BASIC_AUTH`. If that secret is still set
-on the status page Worker, the page stays private-only. Once you have set
-`visibility`, delete the old secret:
-
-```bash
-vp exec --filter status-page -- wrangler secret delete FLAREWATCH_STATUS_PAGE_BASIC_AUTH
-```
-
-## Notifications
-
-Set `notification.webhook` in `packages/config/src/worker.ts`. Each entry needs
-a `url` and a `template`. Down and up events are rendered for you, so no
-message text goes into the config.
-
-| Template                   | Configure the URL as                                                                                                                                                                              | Secrets and settings                                                                   |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `slack`                    | Incoming webhook URL, e.g. `https://hooks.slack.com/services/...`                                                                                                                                 | none                                                                                   |
-| `discord`                  | Discord webhook URL                                                                                                                                                                               | none                                                                                   |
-| `telegram`                 | `https://api.telegram.org/bot<token>/sendMessage`                                                                                                                                                 | bot token in the URL                                                                   |
-| `ntfy`                     | Topic URL, e.g. `https://ntfy.sh/my-status`                                                                                                                                                       | optional access token                                                                  |
-| `teams`                    | Incoming webhook URL of a Teams channel                                                                                                                                                           | none                                                                                   |
-| `googlechat`               | Incoming webhook URL of a Google Chat space                                                                                                                                                       | none                                                                                   |
-| `matrix`                   | Homeserver URL ending in `/send/m.room.message/`, with the room id and access token, e.g. `https://matrix.example.com/_matrix/client/v3/rooms/<roomId>/send/m.room.message/?access_token=<token>` | access token in the URL                                                                |
-| `pushover`                 | `https://api.pushover.net/1/messages.json`                                                                                                                                                        | `options.token`, `options.user`                                                        |
-| `gotify`                   | `https://<gotify-host>/message?token=<app-token>`                                                                                                                                                 | app token in the URL                                                                   |
-| `zulip`                    | `https://<bot-email>:<bot-api-key>@<zulip-host>/api/v1/messages`                                                                                                                                  | bot credentials in the URL, `options.to` and `options.topic` for the stream            |
-| `resend`                   | `https://api.resend.com/emails`                                                                                                                                                                   | API key in `headers` as `Authorization: Bearer <key>`, `options.from` and `options.to` |
-| `mattermost`, `rocketchat` | Incoming webhook URL of your instance                                                                                                                                                             | optional token in the URL                                                              |
-
-Signal, WhatsApp, and SMS are reachable through a custom payload: point the
-webhook at a gateway such as CallMeBot or Twilio and put a `$MSG` placeholder
-in `payload`.
-
-Resend delivery is best effort: FlareWatch tries once and does not retry.
-
-```ts
-// packages/config/src/worker.ts
-export const workerConfig = {
-  monitors: [/* ... */],
-  notification: {
-    webhook: [
-      { url: 'https://hooks.slack.com/services/...', template: 'slack' },
-      {
-        url: 'https://api.pushover.net/1/messages.json',
-        template: 'pushover',
-        options: { token: 'app-token', user: 'user-key' },
-      },
-    ],
-  },
-};
-```
-
-## Heartbeat monitors
-
-Heartbeat monitors watch jobs that report in instead of being polled: cron
-scripts, systemd timers, CI pipelines. The monitor goes down when the expected
-ping does not arrive, or when the job reports a failure.
-
-```ts
-// packages/config/src/worker.ts
-export const workerConfig = {
-  monitors: [
-    {
-      id: 'nightly-backup',
-      name: 'Nightly backup',
-      method: 'HEARTBEAT',
-      periodSeconds: 86400, // how often the job should report
-      graceSeconds: 3600, // extra time before a missing ping counts as down
-    },
-  ],
-};
-```
-
-Each monitor has a ping URL at `/ping/<id>/<token>`. The token is derived from
-the `HEARTBEAT_SECRET` secret. Set it once per deployment:
-
-```bash
-vp exec --filter worker -- wrangler secret put HEARTBEAT_SECRET
-```
-
-Compute the token for a monitor id with the same recipe the monitoring Worker
-uses:
-
-```bash
-printf 'v1:%s' "nightly-backup" \
-  | openssl dgst -sha256 -hmac "$HEARTBEAT_SECRET" -binary \
-  | openssl base64 -A | tr '+/' '-_' | tr -d '=' | cut -c1-32
-```
-
-The routes, all on your status page domain:
-
-| Route                                  | Reports                                             |
-| -------------------------------------- | --------------------------------------------------- |
-| `GET\|POST\|HEAD /ping/<id>/<token>`   | Job finished                                        |
-| `GET\|POST /ping/<id>/<token>/start`   | Job started                                         |
-| `POST /ping/<id>/<token>/fail`         | Job failed; the request body is the failure message |
-| `GET\|POST /ping/<id>/<token>/<0-255>` | Job exited with this code; 0 counts as success      |
-
-Ping only when the job succeeds with `&&` gating:
-
-```bash
-./backup.sh && curl -fsS "https://status.example.com/ping/nightly-backup/<token>"
-```
-
-Or send the exit status, so a failure reaches FlareWatch right away:
-
-```bash
-./backup.sh; curl -fsS "https://status.example.com/ping/nightly-backup/<token>/$?"
-```
-
-A systemd unit that reports start and finish:
-
-```ini
-[Service]
-Type=oneshot
-ExecStartPre=/usr/bin/curl -fsS https://status.example.com/ping/nightly-backup/<token>/start
-ExecStart=/usr/local/bin/backup.sh
-ExecStopPost=/usr/bin/curl -fsS "https://status.example.com/ping/nightly-backup/<token>/${EXIT_STATUS}"
-```
-
-If no ping arrives within `periodSeconds + graceSeconds`, or a ping reports a
-failure, the monitor goes down and notifications fire as for any other
-monitor.
-
-Each ping writes one KV record per monitor. The free plan allows 1,000 KV
-writes per day and one write per second per key, so daily and hourly jobs are
-fine; per-minute jobs are not. Pings are rate limited to 30 per minute per
-monitor. That stops a looping script from hammering one key. It won't save your
-daily budget, though: a monitor pinging at the limit uses up 1,000 writes in
-about half an hour.
+- [Uptime Kuma](https://github.com/louislam/uptime-kuma) and [Gatus](https://github.com/TwiN/gatus) do more, but they need a server that's always on.
+- [Upptime](https://github.com/upptime/upptime) needs no server either. It runs on GitHub Actions, which schedule checks every 5 minutes at best.
+- FlareWatch needs no server, checks every minute, and costs nothing on the free tier.
 
 ## Docs
 
-- Development uses Vite+: `vp install`, `vp check`, `vp run test`,
-  `vp run build`, and `vp config` for local hooks.
-- [DEVELOPMENT.md](DEVELOPMENT.md) - local dev commands and repo structure
-- [apps/status-page/README.md](apps/status-page/README.md) - status page
-  Worker, APIs, auth, local testing
-- [services/worker/README.md](services/worker/README.md) - monitoring Worker,
-  cron, KV state
-- [flarewatch-proxy repo](https://github.com/saminnet/flarewatch-proxy) -
-  optional check proxy
-- [CONTRIBUTING.md](CONTRIBUTING.md) - how to contribute
-- [SECURITY.md](SECURITY.md) - security policy
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) - community guidelines
+- [Deploy](docs/deploy.md): API token, secrets, custom domain, cost, uninstall
+- [Monitors](docs/monitors.md): websites, TCP ports, heartbeats, private monitors, proxies
+- [Alerts](docs/alerts.md): every channel and its setup
+- [Status page](docs/status-page.md): sign-in, maintenance, private pages, API, embeds
+- [Theming](docs/theming.md): colours and corner radius
+- [Development](DEVELOPMENT.md): working on FlareWatch itself
 
-## License
-
-MIT. See [LICENSE](LICENSE).
+MIT licensed. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

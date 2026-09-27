@@ -15,11 +15,11 @@ _Avoid_: Public user, guest, customer
 ## Pages
 
 **Status page**:
-The site the status-page worker serves: the dashboard, events and monitor pages. Operators and visitors see the same routes; operators see more.
+The site the status-page worker serves: the dashboard, History and monitor pages. Operators and visitors see the same routes; operators see more.
 _Avoid_: Public page, frontend
 
 **Signed-in mode**:
-The status page as the operator sees it: all monitors, operator details on each card, and maintenance editing on Events.
+The status page as the operator sees it: all monitors, operator details on each card, and maintenance editing on History.
 _Avoid_: Admin page, admin panel, dashboard mode
 
 **Visitor view**:
@@ -27,7 +27,7 @@ A switch that shows a signed-in operator the status page exactly as a visitor se
 _Avoid_: Preview, public preview
 
 **Private-only**:
-A deployment where visitors get the sign-in page and nothing else. Set in config, not at runtime.
+A deployment where visitors get the sign-in page and nothing else. Set in config (`statusPage.visibility: 'private'`), not at runtime.
 _Avoid_: Private mode, locked mode
 
 ## Monitors
@@ -55,10 +55,14 @@ _Avoid_: Public monitor
 A monitor only the operator sees. It is still checked, and it never appears in visitor responses: pages, API, badges or embeds.
 _Avoid_: Hidden monitor, internal monitor
 
-## Events
+## History
+
+**History**:
+The page that lists incidents and maintenance windows by month, at `/history`.
+_Avoid_: Events page, timeline
 
 **Maintenance window**:
-A planned period, with start, end and affected monitors, that the operator adds on the Events page. The only thing editable at runtime.
+A planned period, with start, end and affected monitors, that the operator adds on History. The only thing editable at runtime.
 _Avoid_: Maintenance event, scheduled maintenance
 
 **Incident**:

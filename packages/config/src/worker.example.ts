@@ -54,7 +54,7 @@ export const workerConfig: WorkerConfig = {
     //   checkProxy: 'globalping://YOUR_GLOBALPING_TOKEN?magic=fra&ipVersion=4',
     // },
 
-    // TCP port check (requires a check proxy)
+    // TCP port check (runs from the Worker; a proxy is only needed for private networks)
     // {
     //   id: 'database',
     //   name: 'Database',
@@ -75,7 +75,7 @@ export const workerConfig: WorkerConfig = {
     // },
 
     // Private monitor (checked and alerted like any other, but hidden from
-    // the public page and public API; visible only under /admin)
+    // the public page and public API; visible once you sign in)
     // {
     //   id: 'private-database',
     //   name: 'Database (private)',
