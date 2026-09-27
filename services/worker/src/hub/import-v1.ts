@@ -7,15 +7,18 @@ import {
   type Maintenance,
   type MonitorState,
 } from '@flarewatch/shared';
+import { capSegments } from './incident-segments';
 import type { Sql } from './sql';
 
 // FlareWatch 1.x kept monitor state in KV. This module copies it into the hub
-// once and leaves the KV keys untouched, so redeploying 1.x still works. Delete
-// it, and the FLAREWATCH_STATE read, once upgrades no longer come from 1.x.
+// once and leaves the 1.x keys untouched, so redeploying 1.x still works. It
+// adds MARKER_KEY, which the release that deletes this module checks before it
+// deploys, so a fork that skips 2.x cannot strand its 1.x history.
 
 const log = createLogger('ImportV1');
 
 const DONE_KEY = 'v1_import';
+const MARKER_KEY = 'imported_to_hub';
 const STATE_KEY = 'state';
 const MAINTENANCES_KEY = 'maintenances';
 const SIGNAL_PREFIX = 'hb:v1:';
@@ -29,12 +32,16 @@ type V1Data = {
 async function readV1(kv: KVNamespace): Promise<V1Data> {
   const stored = await kv.get(STATE_KEY, 'json');
   const maintenances = parseMaintenances(await kv.get(MAINTENANCES_KEY, 'json'));
-  const { keys } = await kv.list({ prefix: SIGNAL_PREFIX });
   const signals = new Map<string, HeartbeatSignal>();
-  for (const { name } of keys) {
-    const signal = parseHeartbeatSignal(await kv.get(name, 'json'));
-    if (signal) signals.set(name.slice(SIGNAL_PREFIX.length), signal);
-  }
+  let cursor: string | null = null;
+  do {
+    const page: KVNamespaceListResult<unknown> = await kv.list({ prefix: SIGNAL_PREFIX, cursor });
+    for (const { name } of page.keys) {
+      const signal = parseHeartbeatSignal(await kv.get(name, 'json'));
+      if (signal) signals.set(name.slice(SIGNAL_PREFIX.length), signal);
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor !== null);
   return { state: isMonitorState(stored) ? stored : null, signals, maintenances };
 }
 
@@ -64,8 +71,8 @@ function write(sql: Sql, { state, signals, maintenances }: V1Data): void {
         sql.exec(
           'INSERT INTO incidents (monitor_id, starts, errors, end_at) VALUES (?, ?, ?, ?)',
           id,
-          JSON.stringify(incident.start),
-          JSON.stringify(incident.error),
+          JSON.stringify(capSegments(incident.start)),
+          JSON.stringify(capSegments(incident.error)),
           incident.end ?? null,
         );
       }
@@ -116,8 +123,10 @@ export async function importV1(sql: Sql, kv: KVNamespace | undefined): Promise<v
   if (kv) {
     try {
       v1 = await readV1(kv);
+      // Before the hub records the import, so a failed write means another try.
+      await kv.put(MARKER_KEY, String(Math.floor(Date.now() / 1000)));
     } catch (error) {
-      log.error('Reading 1.x state failed, retrying on next start', { error: String(error) });
+      log.error('Importing 1.x state failed, retrying on next start', { error: String(error) });
       return;
     }
   }

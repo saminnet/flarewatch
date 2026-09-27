@@ -61,6 +61,35 @@ describe('1.x import', () => {
     });
   });
 
+  it('imports every job when the pings span more than one page of KV keys', async () => {
+    const jobs = Array.from({ length: 1001 }, (_, i) => `job${String(i).padStart(4, '0')}`);
+    const { hub } = await importedHub(
+      jobs.map((id): [string, unknown] => [`hb:v1:${id}`, JSON.stringify({ lastSuccess: T0 })]),
+    );
+
+    expect(Object.keys(hub.view().monitors)).toHaveLength(1001);
+  });
+
+  it('caps an incident with more segments than the hub keeps', async () => {
+    const start = Array.from({ length: 1000 }, (_, i) => T0 - 1000 + i);
+    const error = start.map((at) => `err-${at}`);
+    const { hub } = await importedHub([
+      [
+        'state',
+        JSON.stringify({
+          ...oldState,
+          startedAt: { flappy: T0 - 1000 },
+          incident: { flappy: [{ start, error }] },
+        }),
+      ],
+    ]);
+
+    const [incident] = hub.view().monitors.flappy?.incidents ?? [];
+    expect(incident?.start).toHaveLength(100);
+    expect(incident?.error).toHaveLength(100);
+    expect(incident?.start[0]).toBe(T0 - 1000);
+  });
+
   it('copies the maintenance windows and drops invalid ones', async () => {
     const valid = {
       id: 'm1',
@@ -83,6 +112,28 @@ describe('1.x import', () => {
     expect(again.kv.get).not.toHaveBeenCalled();
     expect(again.hub.view().monitors.legacy?.incidents).toHaveLength(1);
     expect(again.hub.view().monitors.late).toBeUndefined();
+  });
+
+  it('marks KV as imported and leaves the 1.x keys as they were', async () => {
+    const { kv } = await importedHub([['state', JSON.stringify(oldState)]]);
+
+    expect(Number(kv.values.get('imported_to_hub'))).toBeGreaterThan(0);
+    expect(kv.values.get('state')).toBe(JSON.stringify(oldState));
+  });
+
+  it('retries on the next start when the marker cannot be written', async () => {
+    const db = new DatabaseSync(':memory:');
+    const kv = createKv([['state', JSON.stringify(oldState)]]);
+    kv.put.mockRejectedValueOnce(new Error('KV unavailable'));
+    const first = createHub({ FLAREWATCH_STATE: asKv(kv) }, db);
+    await first.ready();
+    expect(first.hub.view().monitors).toEqual({});
+
+    const second = createHub({ FLAREWATCH_STATE: asKv(kv) }, db);
+    await second.ready();
+
+    expect(second.hub.view().monitors.legacy?.incidents).toHaveLength(1);
+    expect(kv.values.has('imported_to_hub')).toBe(true);
   });
 
   it('retries on the next start when KV cannot be read', async () => {

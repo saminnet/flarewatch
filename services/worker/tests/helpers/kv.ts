@@ -17,9 +17,18 @@ export function createKv(initial: Array<[string, unknown]> = []) {
   const put = vi.fn(async (key: string, value: string) => {
     values.set(key, value);
   });
-  const list = vi.fn(async ({ prefix = '' }: { prefix?: string } = {}) => ({
-    keys: [...values.keys()].filter((name) => name.startsWith(prefix)).map((name) => ({ name })),
-  }));
+  // Pages of 1,000 keys with a cursor, like KV.
+  const list = vi.fn(
+    async ({ prefix = '', cursor = '0' }: { prefix?: string; cursor?: string } = {}) => {
+      const names = [...values.keys()].filter((name) => name.startsWith(prefix)).sort();
+      const from = Number(cursor);
+      const keys = names.slice(from, from + 1000).map((name) => ({ name }));
+      const complete = from + 1000 >= names.length;
+      return complete
+        ? { keys, list_complete: true }
+        : { keys, list_complete: false, cursor: String(from + 1000) };
+    },
+  );
 
   return { get, put, list, values };
 }
