@@ -1,6 +1,7 @@
 import * as z from 'zod/mini';
 import {
   NOTIFICATION_TEMPLATES,
+  type AccessConfig,
   type HeartbeatSignal,
   type HeartbeatState,
   type LatencySample,
@@ -217,6 +218,59 @@ const runtimeConfigSchema: z.ZodMiniType<SchemaOutput<RuntimeConfig>> = z.object
   notification: z.optional(notificationSchema),
 });
 
+const PROVIDER_ID = /^[A-Za-z0-9_-]{1,32}$/;
+const ACCESS_RULE = /^(\*@[^@\s]+|[^@\s*]+@[^@\s]+|group:\S+|github:[A-Za-z0-9-]+)$/;
+
+const providerId = z
+  .string()
+  .check(z.regex(PROVIDER_ID, { error: 'provider id must match ^[A-Za-z0-9_-]{1,32}$' }));
+const accessRules = z.array(
+  z.string().check(
+    z.regex(ACCESS_RULE, {
+      error: 'access rules are an email, *@domain, group:<name> or github:<login>',
+    }),
+  ),
+);
+
+const accessConfigSchema: z.ZodMiniType<SchemaOutput<AccessConfig>> = z
+  .object({
+    providers: z.optional(
+      z.array(
+        z.union([
+          z.object({
+            id: providerId,
+            name: nonEmptyString('provider name'),
+            type: z.literal('github'),
+            clientId: nonEmptyString('clientId'),
+          }),
+          z.object({
+            id: providerId,
+            name: nonEmptyString('provider name'),
+            type: z.optional(z.literal('oidc')),
+            issuer: z
+              .string()
+              .check(z.refine(isValidHttpUrl, { error: 'issuer must be an http(s) URL' })),
+            clientId: nonEmptyString('clientId'),
+          }),
+        ]),
+      ),
+    ),
+    operators: z.optional(accessRules),
+    members: z.optional(accessRules),
+    audiences: z.optional(
+      z.record(z.string(), z.object({ members: accessRules, groups: z.array(z.string()) })),
+    ),
+  })
+  .check(
+    z.refine(
+      (access) => {
+        const ids = (access.providers ?? []).map((provider) => provider.id.toLowerCase());
+        return new Set(ids).size === ids.length;
+      },
+      { error: 'provider ids must be unique' },
+    ),
+  );
+
 const heartbeatRunSchema = z.object({
   at: z.number(),
   outcome: z.enum(['ok', 'late', 'fail', 'miss']),
@@ -305,6 +359,23 @@ export function configIssues(value: unknown): string[] {
   });
 }
 
+/** Why an access config is invalid, one line per problem. Empty when it is valid. */
+export function accessConfigIssues(value: unknown, pageGroups: string[]): string[] {
+  const result = accessConfigSchema.safeParse(value);
+  if (!result.success) {
+    return result.error.issues.map(
+      ({ path, message }) => `${['access', ...path.map(String)].join('.')}: ${message}`,
+    );
+  }
+  if (!isAccessConfig(value)) return [];
+  // An audience whose groups are not on the page would sign in to an empty page.
+  return Object.entries(value.audiences ?? {}).flatMap(([name, audience]) =>
+    audience.groups
+      .filter((group) => !pageGroups.includes(group))
+      .map((group) => `access.audiences.${name}: no page group is named "${group}"`),
+  );
+}
+
 /** Returns only the known signal fields, so a foreign key in storage cannot override derived state. */
 export function parseHeartbeatSignal(value: unknown): HeartbeatSignal | null {
   const result = heartbeatSignalSchema.safeParse(value);
@@ -317,6 +388,7 @@ export function parseHeartbeatState(value: unknown): HeartbeatState | null {
 }
 
 export const isHubView = asTypeGuard<HubView>(hubViewSchema);
+const isAccessConfig = asTypeGuard<AccessConfig>(accessConfigSchema);
 export const isLatencySamples = asTypeGuard<LatencySample[]>(z.array(latencySampleSchema));
 
 export function parseMaintenances(value: unknown): Maintenance[] {

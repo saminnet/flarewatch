@@ -67,6 +67,9 @@ describe('auth middleware private-only pages', () => {
     await expect(outcome('/_serverFn/abc')).resolves.toBe('next');
     await expect(outcome('/ping/backup/t0k3n')).resolves.toBe('next');
     await expect(outcome('/api/admin/session')).resolves.toBe('next');
+    await expect(outcome('/auth/pocket-id')).resolves.toBe('next');
+    await expect(outcome('/auth/callback?code=x&state=y')).resolves.toBe('next');
+    await expect(outcome('/authors')).resolves.toBe('302 https://status.test/login');
   });
 
   it('lets the signed-in operator through', async () => {

@@ -173,6 +173,8 @@ jobs:
         env:
           FLAREWATCH_PROXY_TOKEN: ${{ secrets.FLAREWATCH_PROXY_TOKEN }}
           FLAREWATCH_ADMIN_BASIC_AUTH: ${{ secrets.FLAREWATCH_ADMIN_BASIC_AUTH }}
+          FLAREWATCH_AUTH_SECRET: ${{ secrets.FLAREWATCH_AUTH_SECRET }}
+          FLAREWATCH_OIDC_SECRETS: ${{ secrets.FLAREWATCH_OIDC_SECRETS }}
           HEARTBEAT_SECRET: ${{ secrets.HEARTBEAT_SECRET }}
         shell: bash
         run: |
@@ -205,6 +207,8 @@ jobs:
           vp exec --filter status-page -- wrangler deploy --config dist/server/wrangler.json 2>&1 | tee "$STATUS_DEPLOY_LOG"
           STATUS_OUTPUT="$(cat "$STATUS_DEPLOY_LOG")"
           put_secret status-page dist/server/wrangler.json FLAREWATCH_ADMIN_BASIC_AUTH "$FLAREWATCH_ADMIN_BASIC_AUTH"
+          put_secret status-page dist/server/wrangler.json FLAREWATCH_AUTH_SECRET "$FLAREWATCH_AUTH_SECRET"
+          put_secret status-page dist/server/wrangler.json FLAREWATCH_OIDC_SECRETS "$FLAREWATCH_OIDC_SECRETS"
 
           STATUS_PAGE_URL="$(printf '%s\n' "$STATUS_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.workers\.dev[^[:space:]]*' | tail -n 1 || true)"
           if [ -z "$STATUS_PAGE_URL" ]; then

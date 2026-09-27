@@ -13,7 +13,9 @@ function jsonError(status: number, message: string): Response {
 
 /** On a private-only page, what a visitor may still reach. Data server fns check for themselves. */
 function isOpenToVisitors(pathname: string): boolean {
-  return pathname === '/login' || pathname.startsWith('/_serverFn/');
+  return (
+    pathname === '/login' || pathname.startsWith('/auth/') || pathname.startsWith('/_serverFn/')
+  );
 }
 
 function isWriteMethod(method: string): boolean {

@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
-import { endSession, resolveViewer, startSession } from '@/lib/operator.server';
+import type { AccessConfig } from '@flarewatch/shared';
+import type { Identity } from '@/lib/auth/access';
+import {
+  endSession,
+  resolvePrincipal,
+  resolveViewer,
+  sessionName,
+  startSession,
+} from '@/lib/operator.server';
 import { isSessionExpiredError, SessionExpiredError } from '@/lib/query/auth.mutations';
 import { memoryKv } from '../helpers/kv';
 
@@ -89,7 +97,7 @@ describe('resolveViewer', () => {
 describe('sessions', () => {
   it('signs the operator in until the session ends', async () => {
     const kv = memoryKv();
-    const sessionId = await startSession(kv, '127.0.0.1');
+    const sessionId = await startSession(kv, '127.0.0.1', { kind: 'password' });
     const cookie = `flarewatch_admin_session=${encodeURIComponent(sessionId)}`;
 
     await expect(resolveViewer(envWith(kv), requestWithCookie(cookie))).resolves.toBe('operator');
@@ -111,5 +119,55 @@ describe('session expiry errors', () => {
     expect(isSessionExpiredError(Object.assign(new Error('Forbidden'), { status: 403 }))).toBe(
       false,
     );
+  });
+});
+
+describe('provider sessions', () => {
+  const access: AccessConfig = {
+    providers: [{ id: 'pocket-id', name: 'Pocket ID', issuer: 'https://id.test', clientId: 'fw' }],
+    members: ['kim@example.com'],
+  };
+  const kim: Identity = {
+    kind: 'provider',
+    provider: 'pocket-id',
+    name: 'Kim',
+    email: 'kim@example.com',
+    emailVerified: true,
+    groups: [],
+  };
+  const providerEnv = (kv: KVNamespace): Cloudflare.Env => ({ FLAREWATCH_STATE: kv });
+
+  it('takes the role from the current config, so dropping someone ends their access', async () => {
+    const kv = memoryKv();
+    const cookie = `flarewatch_admin_session=${await startSession(kv, null, kim)}`;
+
+    await expect(
+      resolvePrincipal(providerEnv(kv), requestWithCookie(cookie), access),
+    ).resolves.toEqual({ role: 'member', groups: 'all' });
+    await expect(
+      resolvePrincipal(providerEnv(kv), requestWithCookie(cookie), { ...access, members: [] }),
+    ).resolves.toBeNull();
+    await expect(sessionName(providerEnv(kv), requestWithCookie(cookie))).resolves.toBe('Kim');
+  });
+
+  it('treats a session whose identity is malformed as a visitor', async () => {
+    const kv = memoryKv({
+      'admin_session:abc': JSON.stringify({
+        createdAt: 1,
+        ip: null,
+        identity: {
+          kind: 'provider',
+          provider: 'pocket-id',
+          name: 'Kim',
+          email: 'kim@example.com',
+          emailVerified: 'yes',
+          groups: [],
+        },
+      }),
+    });
+
+    await expect(
+      resolvePrincipal(providerEnv(kv), requestWithCookie('flarewatch_admin_session=abc'), access),
+    ).resolves.toBeNull();
   });
 });

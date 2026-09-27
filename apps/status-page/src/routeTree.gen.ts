@@ -16,6 +16,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiBadgeRouteImport } from './routes/api/badge'
 import { Route as ApiDataRouteImport } from './routes/api/data'
 import { Route as ApiMaintenancesRouteImport } from './routes/api/maintenances'
+import { Route as AuthProviderRouteImport } from './routes/auth.$provider'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as EmbedMonitorIdRouteImport } from './routes/embed.$monitorId'
 import { Route as MonitorsMonitorIdRouteImport } from './routes/monitors.$monitorId'
 import { Route as PingSplatRouteImport } from './routes/ping.$'
@@ -57,6 +59,16 @@ const ApiMaintenancesRoute = ApiMaintenancesRouteImport.update({
   path: '/api/maintenances',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthProviderRoute = AuthProviderRouteImport.update({
+  id: '/auth/$provider',
+  path: '/auth/$provider',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EmbedMonitorIdRoute = EmbedMonitorIdRouteImport.update({
   id: '/embed/$monitorId',
   path: '/embed/$monitorId',
@@ -91,6 +103,8 @@ export interface FileRoutesByFullPath {
   '/api/badge': typeof ApiBadgeRoute
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
+  '/auth/$provider': typeof AuthProviderRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
@@ -105,6 +119,8 @@ export interface FileRoutesByTo {
   '/api/badge': typeof ApiBadgeRoute
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
+  '/auth/$provider': typeof AuthProviderRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
@@ -120,6 +136,8 @@ export interface FileRoutesById {
   '/api/badge': typeof ApiBadgeRoute
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
+  '/auth/$provider': typeof AuthProviderRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
@@ -136,6 +154,8 @@ export interface FileRouteTypes {
     | '/api/badge'
     | '/api/data'
     | '/api/maintenances'
+    | '/auth/$provider'
+    | '/auth/callback'
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
@@ -150,6 +170,8 @@ export interface FileRouteTypes {
     | '/api/badge'
     | '/api/data'
     | '/api/maintenances'
+    | '/auth/$provider'
+    | '/auth/callback'
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
@@ -164,6 +186,8 @@ export interface FileRouteTypes {
     | '/api/badge'
     | '/api/data'
     | '/api/maintenances'
+    | '/auth/$provider'
+    | '/auth/callback'
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
@@ -179,6 +203,8 @@ export interface RootRouteChildren {
   ApiBadgeRoute: typeof ApiBadgeRoute
   ApiDataRoute: typeof ApiDataRoute
   ApiMaintenancesRoute: typeof ApiMaintenancesRoute
+  AuthProviderRoute: typeof AuthProviderRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   EmbedMonitorIdRoute: typeof EmbedMonitorIdRoute
   MonitorsMonitorIdRoute: typeof MonitorsMonitorIdRoute
   PingSplatRoute: typeof PingSplatRoute
@@ -237,6 +263,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMaintenancesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/$provider': {
+      id: '/auth/$provider'
+      path: '/auth/$provider'
+      fullPath: '/auth/$provider'
+      preLoaderRoute: typeof AuthProviderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/embed/$monitorId': {
       id: '/embed/$monitorId'
       path: '/embed/$monitorId'
@@ -283,6 +323,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBadgeRoute: ApiBadgeRoute,
   ApiDataRoute: ApiDataRoute,
   ApiMaintenancesRoute: ApiMaintenancesRoute,
+  AuthProviderRoute: AuthProviderRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   EmbedMonitorIdRoute: EmbedMonitorIdRoute,
   MonitorsMonitorIdRoute: MonitorsMonitorIdRoute,
   PingSplatRoute: PingSplatRoute,

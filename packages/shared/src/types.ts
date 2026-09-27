@@ -15,6 +15,34 @@ export type PageConfig = {
 
 export type PageConfigGroup = { [key: string]: string[] };
 
+/** A sign-in provider. OpenID Connect by default; GitHub has its own flow. */
+export type AuthProvider =
+  | {
+      /** Letters, digits, `-` and `_`. Names the secret FLAREWATCH_OIDC_<ID>_SECRET. */
+      id: string;
+      name: string;
+      type?: 'oidc';
+      /** The issuer URL; its /.well-known/openid-configuration is read at sign-in. */
+      issuer: string;
+      clientId: string;
+    }
+  | { id: string; name: string; type: 'github'; clientId: string };
+
+/**
+ * Who may sign in and what they see. A rule is an email (`me@example.com`), a
+ * domain (`*@example.com`), a group claim (`group:admins`) or a GitHub login
+ * (`github:octocat`).
+ */
+export type AccessConfig = {
+  providers?: AuthProvider[];
+  /** Everything, including maintenance editing and ping URLs. */
+  operators?: string[];
+  /** Every monitor, private ones included, read only. */
+  members?: string[];
+  /** Published monitors plus the monitors in these page groups. */
+  audiences?: Record<string, { members: string[]; groups: string[] }>;
+};
+
 type PageConfigLink = {
   link: string;
   label: string;
