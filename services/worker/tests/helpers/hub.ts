@@ -27,14 +27,20 @@ function createStorage(db: DatabaseSync) {
 }
 
 export function createHub(env: Env = {}, db = new DatabaseSync(':memory:')) {
+  let ready: Promise<unknown> = Promise.resolve();
   const ctx = {
     storage: createStorage(db),
-    blockConcurrencyWhile: async <T>(fn: () => Promise<T>) => fn(),
+    blockConcurrencyWhile: <T>(fn: () => Promise<T>) => {
+      const result = fn();
+      ready = result;
+      return result;
+    },
   };
   // SAFETY: the hub touches only ctx.storage.sql.exec, ctx.storage.transactionSync
   // and ctx.blockConcurrencyWhile, which the fake implements.
   const hub = new MonitorHub(ctx as typeof ctx & DurableObjectState, env);
-  return { hub, db };
+  // The runtime holds requests until blockConcurrencyWhile settles; tests await this instead.
+  return { hub, db, ready: () => ready };
 }
 
 /** Rows inserted, updated or deleted on db since it opened. */
