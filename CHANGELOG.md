@@ -2,20 +2,35 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
-## Unreleased
+## 2.0.0 - Unreleased
 
 ### Breaking changes
 
+- Monitor state lives in a Durable Object instead of KV, and every check run is saved, so latency charts get a sample every minute. The first start after the upgrade copies your 1.x history across, leaves the 1.x keys in KV in place, and adds an `imported_to_hub` key to show the copy happened. Remove `kvWriteCooldownMinutes` from `worker.ts`, or the build fails.
+- A check that crashes now opens an incident instead of only counting as down.
 - `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` is gone. Set `visibility: 'private'` in the page config instead. Visitors then get the sign-in page, and the dashboard, History, monitor pages, badges, embeds and the JSON API are closed to them. While the old secret is still set on the Worker, the page stays private-only, so upgrading never opens a private page.
-- The Events page is now History, at `/history`. Old `/events` links return 404.
-- Config lives only in `packages/config`. The `CONFIG_KV` binding, which loaded config from KV, is no longer read, and neither is `STATE_KV` as a second name for `FLAREWATCH_STATE`. CI now checks the config, so an invalid one fails before it deploys.
 - The `/admin` page is gone. Sign in at `/login` (`/admin` redirects there). Once signed in, the same pages show private monitors, and you add and edit maintenance windows on History.
-- Monitor state lives in a Durable Object instead of KV, and every check run is saved, so latency charts get a sample every minute. The first start after the upgrade copies your 1.x history across and leaves the KV data in place. `kvWriteCooldownMinutes` is gone: remove it from `worker.ts`, or the build fails. A check that crashes now opens an incident instead of only counting as down.
+- The Events page is now History, at `/history`. Old `/events` links return 404.
+- Config lives only in `packages/config`. The `CONFIG_KV` binding is no longer read, and neither is `STATE_KV` as a second name for `FLAREWATCH_STATE`. CI checks the config, so an invalid one fails before it deploys.
+- Everyone signed in with the password signs in once more after the upgrade. A password session now ends when `FLAREWATCH_ADMIN_BASIC_AUTH` changes.
+- Password sign-in needs the `LOGIN_RATE_LIMIT` binding from `wrangler.jsonc`, and refuses to run without it.
+- A monitor name links to its target without the credentials or query string. Set `link` to a full URL if you need them.
+- `responseKeyword` and `responseForbiddenKeyword` look at the first 1 MiB of a response only.
 
 ### Added
 
+- Heartbeat monitors for jobs that report in, like backups, cron scripts and CI pipelines. One goes down when a ping is late or the job reports a failure.
+- Private monitors, checked and alerted as usual but shown only to people signed in.
+- A page per monitor, with its 90-day history, a 12-hour latency chart and its incidents.
 - Sign in with any OpenID Connect provider or GitHub, set in `packages/config/src/access.ts`. Besides operators, you can let in members, who see private monitors but change nothing, and audiences, who see certain page groups.
 - Sign-in attempts are limited per IP by a rate-limit binding, so failed logins no longer use KV writes.
+
+### Fixed
+
+- Slack, Discord, Zulip and Google Chat alerts no longer let text from a monitored site ping everyone or add links.
+- A failing check proxy shows as `Proxy HTTP <status>` on the page. Its response body goes to the Worker log, since a proxy can echo the token it was sent.
+- Webhook errors in the Worker log no longer quote the webhook URL.
+- An oversized answer from a monitored site, GlobalPing or a check proxy fails that one check instead of the whole run.
 
 ## 1.1.0 - 2026-08-31
 

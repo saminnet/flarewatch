@@ -39,7 +39,7 @@ export const accessConfig: AccessConfig = {
 - **Members** see every monitor, private ones too, but can't change anything or copy ping URLs.
 - **Audiences** see the public monitors plus the monitors in the page groups you list. That's how a client sees their own private monitors and nobody else's.
 
-A rule is an email, a whole domain (`*@example.com`), a group from the provider (`group:admins`) or a GitHub login (`github:octocat`). An email only counts once the provider has verified it. The rules are checked on every request, so removing someone from the list locks them out straight away. Anyone the rules don't cover is turned away at sign-in.
+A rule is an email, a whole domain (`*@example.com`), a group from the provider (`group:admins`) or a GitHub login (`github:octocat`). An email only counts once the provider has verified it, and an email rule matches that address from any provider you list. So list only providers you trust to verify addresses. The rules are checked on every request, so removing someone from the list locks them out straight away. Anyone the rules don't cover is turned away at sign-in.
 
 To set up a provider:
 
@@ -53,7 +53,7 @@ Pocket ID sends your groups when the client asks for them, so `group:` rules fol
 
 Sign in and open History to plan a maintenance window: a title, a start, an optional end, and the monitors it covers. The dashboard shows active and upcoming windows, and covered monitors don't alert while a window is active.
 
-Scripts can manage windows through `/api/admin/maintenances` (`GET`, `POST`, `PUT`, `DELETE`) with the same username and password in a Basic `Authorization` header.
+Scripts can manage windows through `/api/admin/maintenances` (`GET`, `POST`, `PUT`, `DELETE`) with the same username and password in a Basic `Authorization` header. Each such call counts against the sign-in limit of 5 per minute per IP, like password attempts and provider sign-ins.
 
 ## Private page
 

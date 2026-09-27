@@ -93,4 +93,6 @@ vp exec --filter worker -- wrangler kv namespace delete --namespace-id "<flarewa
 
 ## Upgrading from 1.x
 
-Remove `kvWriteCooldownMinutes` from `worker.ts` if you set it, then push. On its first run, the new version copies your uptime history, heartbeat runs and maintenance windows from KV into the hub. It leaves the KV data as it was, so you can still go back to 1.x.
+Remove `kvWriteCooldownMinutes` from `worker.ts` if you set it, then push. On its first run, the new version copies your uptime history, heartbeat runs and maintenance windows from KV into the hub. It leaves the 1.x data in KV as it was, so you can still go back to 1.x, and adds one key, `imported_to_hub`, with the time of the copy.
+
+A later major version will drop this copy step. Its deploy checks for `imported_to_hub` first, so if you're on 1.x, deploy a 2.x release before you jump further ahead.
