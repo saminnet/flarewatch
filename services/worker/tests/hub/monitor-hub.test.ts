@@ -64,6 +64,20 @@ describe('MonitorHub incidents', () => {
     });
   });
 
+  it('keeps the first and the latest segments of an incident whose error keeps changing', () => {
+    const { hub } = createHub();
+    for (let i = 0; i < 1000; i++) hub.record(T0 + i * 60, [check('api', down(`err-${i}`))]);
+
+    const [incident] = hub.view().monitors.api?.incidents ?? [];
+    expect(incident?.start).toHaveLength(100);
+    expect(incident?.error).toHaveLength(100);
+    expect(incident?.start[0]).toBe(T0);
+    expect(incident?.error[0]).toBe('err-0');
+    expect(incident?.start.slice(-1)).toEqual([T0 + 999 * 60]);
+    expect(incident?.error.slice(-1)).toEqual(['err-999']);
+    expect(incident?.error[1]).toBe('err-901');
+  });
+
   it('keeps an open incident and drops closed ones 90 days after they end', () => {
     const { hub } = createHub();
     hub.record(T0, [check('old', down()), check('open', down())]);
@@ -190,6 +204,31 @@ describe('MonitorHub storage', () => {
 
     expect(reopened.view().monitors.api?.status).toBe('down');
     expect(reopened.view().lastUpdate).toBe(T0);
+  });
+
+  it('answers repeated reads without a query until the next write', () => {
+    const { hub, queries } = createHub();
+    hub.record(T0, [check('api', up(10))]);
+    hub.view();
+    hub.latency('api');
+
+    const before = queries();
+    hub.view();
+    hub.latency('api');
+    hub.latency('db');
+    expect(queries()).toBe(before);
+
+    hub.record(T0 + 60, [check('api', up(20))]);
+    expect(hub.latency('api').map(({ ping }) => ping)).toEqual([10, 20]);
+    expect(hub.view().maintenances).toEqual([]);
+    hub.putMaintenance({
+      id: 'm',
+      body: 'm',
+      start: '2025-01-15T12:00:00Z',
+      createdAt: 0,
+      updatedAt: 0,
+    });
+    expect(hub.view().maintenances.map(({ id }) => id)).toEqual(['m']);
   });
 
   it('reports nothing before the first check run', () => {

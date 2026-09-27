@@ -3,10 +3,11 @@ import type { Env } from '../../src/env';
 import { MonitorHub } from '../../src/hub/monitor-hub';
 
 /** Durable Object storage over an in-memory node:sqlite database. */
-function createStorage(db: DatabaseSync) {
+function createStorage(db: DatabaseSync, onQuery: () => void) {
   return {
     sql: {
       exec: (query: string, ...bindings: SQLInputValue[]) => {
+        onQuery();
         const rows = db.prepare(query).all(...bindings);
         return { toArray: () => rows };
       },
@@ -28,8 +29,9 @@ function createStorage(db: DatabaseSync) {
 
 export function createHub(env: Env = {}, db = new DatabaseSync(':memory:')) {
   let ready: Promise<unknown> = Promise.resolve();
+  let queries = 0;
   const ctx = {
-    storage: createStorage(db),
+    storage: createStorage(db, () => queries++),
     blockConcurrencyWhile: <T>(fn: () => Promise<T>) => {
       const result = fn();
       ready = result;
@@ -40,7 +42,7 @@ export function createHub(env: Env = {}, db = new DatabaseSync(':memory:')) {
   // and ctx.blockConcurrencyWhile, which the fake implements.
   const hub = new MonitorHub(ctx as typeof ctx & DurableObjectState, env);
   // The runtime holds requests until blockConcurrencyWhile settles; tests await this instead.
-  return { hub, db, ready: () => ready };
+  return { hub, db, ready: () => ready, queries: () => queries };
 }
 
 /** Rows inserted, updated or deleted on db since it opened. */
