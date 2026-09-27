@@ -10,12 +10,11 @@ import {
   type Monitor,
   type MonitorCheckResult,
   readMaintenancesFromStorage,
-  type RuntimeConfig,
   type WorkerConfig,
 } from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
 
-import { getStateKv, loadEffectiveConfig, type Env } from './env';
+import { getStateKv, type Env } from './env';
 import { handlePing, handlePingUrl } from './ping';
 import { getEdgeLocation } from './utils/location';
 import { checkMonitor } from './checkers';
@@ -56,7 +55,7 @@ function shouldSkipNotification(
   monitorId: string,
   currentTime: number,
   maintenances: Maintenance[],
-  config: RuntimeConfig,
+  config: WorkerConfig,
 ): boolean {
   const skipList = config.notification?.skipNotificationIds ?? [];
   return skipList.includes(monitorId) || isInMaintenance(monitorId, currentTime, maintenances);
@@ -98,7 +97,7 @@ function shouldNotify(
   currentTime: number,
   statusChanged: boolean,
   isUp: boolean,
-  config: RuntimeConfig,
+  config: WorkerConfig,
   ignoreGracePeriod: boolean,
 ): boolean {
   if (ignoreGracePeriod) return statusChanged;
@@ -166,7 +165,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const location = await deps.getEdgeLocation();
   log.info('Starting checks', { location });
 
-  const config = await loadEffectiveConfig(env, deps.staticConfig);
+  const config = deps.staticConfig;
 
   const stateKv = getStateKv(env);
   const storedState = await stateKv.get(KV_KEYS.STATE, {
@@ -297,7 +296,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
 
     if (update.statusChanged) {
       await safeCallback(
-        deps.staticConfig.callbacks?.onStatusChange,
+        config.callbacks?.onStatusChange,
         'Callback',
         env,
         monitor,
@@ -310,7 +309,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
 
     if (!update.isUp) {
       await safeCallback(
-        deps.staticConfig.callbacks?.onIncident,
+        config.callbacks?.onIncident,
         'Incident callback',
         env,
         monitor,
@@ -358,10 +357,10 @@ const Worker = {
     // Ping routes and /ping-url are only reachable through the MONITOR_WORKER
     // service binding; the worker has no public ingress (workers_dev = false).
     if (url.pathname.startsWith('/ping/')) {
-      return handlePing(request, env, () => loadEffectiveConfig(env, deps.staticConfig));
+      return handlePing(request, env, deps.staticConfig);
     }
     if (url.pathname.startsWith('/ping-url/')) {
-      return handlePingUrl(request, env, await loadEffectiveConfig(env, deps.staticConfig));
+      return handlePingUrl(request, env, deps.staticConfig);
     }
 
     return new Response('Not Found', { status: 404 });

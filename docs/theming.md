@@ -54,4 +54,4 @@ A maintenance window with its own severity colour uses that colour instead of th
 
 Stick to colour and length values like `oklch(...)`, `#rrggbb` or `1rem`. New selectors, Tailwind classes, layout rules, fonts (`@import`, `@font-face`) and `url()` may render today but can break on any upgrade.
 
-If `themeVars` contains `</style`, `<script` or `javascript:`, the page drops all of it and uses the defaults. That check lives in `sanitizeThemeVars()` in [`runtime-contract.ts`](../packages/shared/src/runtime-contract.ts), next to the list of supported tokens.
+If `themeVars` contains `</style`, `<script` or `javascript:`, the page drops all of it and uses the defaults. That check lives in `sanitizeThemeVars()` in [`theme.ts`](../packages/shared/src/theme.ts), next to the list of supported tokens.

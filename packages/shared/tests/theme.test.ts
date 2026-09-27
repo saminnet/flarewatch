@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { SUPPORTED_THEME_TOKENS, sanitizeThemeVars } from '../src/runtime-contract';
+import { SUPPORTED_THEME_TOKENS, sanitizeThemeVars } from '../src/theme';
 
 const STATUS_STATES = ['operational', 'degraded', 'down', 'maintenance', 'unknown'] as const;
 const STATUS_TOKEN_SUFFIXES = ['', '-bg', '-border'] as const;

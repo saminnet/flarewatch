@@ -64,17 +64,16 @@ function logAndFallback<T>(promise: Promise<T>, message: string, fallback: T): P
 
 /** The visitor snapshot. KV failures degrade to empty data instead of an error page. */
 export async function readVisitorSnapshot(): Promise<Snapshot> {
-  const [config, state, maintenances] = await Promise.all([
-    getConfig(),
+  const [state, maintenances] = await Promise.all([
     logAndFallback(readMonitorState(), 'Error fetching monitor state:', null),
     logAndFallback(readMaintenances(), 'Error fetching maintenances:', []),
   ]);
-  return visitorSnapshot(config, state, maintenances);
+  return visitorSnapshot(getConfig(), state, maintenances);
 }
 
 /** A private-only page serves the visitor snapshot only to the operator's Visitor view. */
 export const getVisitorSnapshot = createServerFn({ method: 'GET' }).handler(async () => {
-  if (isPrivateOnly(await getConfig(), await resolveRuntimeEnv())) await requireOperator();
+  if (isPrivateOnly(getConfig(), await resolveRuntimeEnv())) await requireOperator();
   return readVisitorSnapshot();
 });
 
@@ -82,11 +81,7 @@ export const getVisitorSnapshot = createServerFn({ method: 'GET' }).handler(asyn
 export const getOperatorSnapshot = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Snapshot> => {
     await requireOperator();
-    const [config, state, maintenances] = await Promise.all([
-      getConfig(),
-      readMonitorState(),
-      readMaintenances(),
-    ]);
-    return operatorSnapshot(config, state, maintenances);
+    const [state, maintenances] = await Promise.all([readMonitorState(), readMaintenances()]);
+    return operatorSnapshot(getConfig(), state, maintenances);
   },
 );

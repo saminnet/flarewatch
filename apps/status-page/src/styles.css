@@ -75,7 +75,7 @@ code {
   --chart-fill-top: 0.18;
   --chart-fill-bottom: 0.02;
 
-  /* Status tokens — public runtime contract (see runtime-contract.ts). */
+  /* Status tokens, supported for themeVars (see packages/shared/src/theme.ts). */
   --status-operational: oklch(0.696 0.17 162.48);
   --status-operational-bg: oklch(0.979 0.021 166.113);
   --status-operational-border: oklch(0.905 0.093 164.15);
@@ -128,7 +128,7 @@ code {
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* Status tokens — public runtime contract (see runtime-contract.ts). */
+  /* Status tokens, supported for themeVars (see packages/shared/src/theme.ts). */
   --status-operational: oklch(0.696 0.17 162.48);
   --status-operational-bg: oklch(0.262 0.051 172.552 / 30%);
   --status-operational-border: oklch(0.378 0.077 168.94);

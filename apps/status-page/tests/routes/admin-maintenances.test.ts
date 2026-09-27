@@ -65,7 +65,7 @@ describe('POST /api/admin/maintenances', () => {
   it('rejects invalid dates with 400 without writing', async () => {
     const put = vi.fn(async () => {});
     const kv = { get: vi.fn(async () => null), put };
-    globalThis.__env__ = { STATE_KV: kv as typeof kv & KVNamespace };
+    globalThis.__env__ = { FLAREWATCH_STATE: kv as typeof kv & KVNamespace };
 
     for (const start of ['not-a-date', null]) {
       const response = await getPostHandler()({

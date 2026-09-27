@@ -90,7 +90,7 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
   if (
     !isOpenToVisitors(pathname) &&
     (await resolveViewer(env, request)) === 'visitor' &&
-    isPrivateOnly(await getConfig(), env)
+    isPrivateOnly(getConfig(), env)
   ) {
     return pathname.startsWith('/api/')
       ? jsonError(404, 'Not found')

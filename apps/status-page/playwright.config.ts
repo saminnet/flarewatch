@@ -2,11 +2,16 @@ import { defineConfig, devices } from '@playwright/test';
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3100);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
-// A second local instance seeded with statusPage.visibility 'private'.
+// A second local instance, built with statusPage.visibility 'private'.
 const privatePort = port + 1;
 const privateBaseURL = `http://127.0.0.1:${privatePort}`;
-const wranglerDev = (listenPort: number, stateDir: string) =>
-  `vp exec wrangler dev --local --config dist/server/e2e-wrangler.json --env-file .wrangler/e2e.dev.vars --port ${listenPort} --persist-to ${stateDir}`;
+// Build with the test config, copy the build aside, seed it, and serve it.
+const e2eServer = (variant: 'public' | 'private', listenPort: number) =>
+  [
+    `FLAREWATCH_E2E=${variant} vp build`,
+    `FLAREWATCH_E2E=${variant} node --experimental-strip-types scripts/seed-e2e-kv.ts`,
+    `vp exec wrangler dev --local --config .wrangler/e2e/${variant}/build/server/e2e-wrangler.json --env-file .wrangler/e2e.dev.vars --port ${listenPort} --persist-to .wrangler/e2e/${variant}/state`,
+  ].join(' && ');
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -20,25 +25,18 @@ export default defineConfig({
     baseURL,
     trace: process.env.CI ? 'retain-on-failure' : 'on-first-retry',
   },
-  // Playwright starts these in order, so the private instance reuses the first build.
+  // Playwright starts these in order, so the two builds never write dist at the same time.
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : [
         {
-          command: [
-            'vp build',
-            'node --experimental-strip-types scripts/seed-e2e-kv.ts',
-            wranglerDev(port, '.wrangler/e2e-state'),
-          ].join(' && '),
+          command: e2eServer('public', port),
           url: baseURL,
           reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
           timeout: 180_000,
         },
         {
-          command: [
-            'E2E_VISIBILITY=private node --experimental-strip-types scripts/seed-e2e-kv.ts',
-            wranglerDev(privatePort, '.wrangler/e2e-private-state'),
-          ].join(' && '),
+          command: e2eServer('private', privatePort),
           url: `${privateBaseURL}/login`,
           reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
           timeout: 180_000,

@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 function envWith(kv: KVNamespace): Cloudflare.Env {
-  return { FLAREWATCH_ADMIN_BASIC_AUTH: 'configured', STATE_KV: kv };
+  return { FLAREWATCH_ADMIN_BASIC_AUTH: 'configured', FLAREWATCH_STATE: kv };
 }
 
 function requestWithCookie(cookie?: string): Request {
@@ -74,7 +74,7 @@ describe('resolveViewer', () => {
 
   it('opens up only in dev when sign-in is not configured', async () => {
     const kv = memoryKv({ 'admin_session:abc': VALID_SESSION });
-    const env: Cloudflare.Env = { STATE_KV: kv };
+    const env: Cloudflare.Env = { FLAREWATCH_STATE: kv };
 
     vi.stubEnv('DEV', true);
     await expect(resolveViewer(env, requestWithCookie())).resolves.toBe('operator');

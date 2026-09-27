@@ -1,11 +1,8 @@
 import { isNonEmptyString } from './utils';
 
-/** Bump on incompatible contract changes. */
-export const CONTRACT_VERSION = 1;
-
 /**
  * Themeable CSS custom properties (set as `--<token>`).
- * Base tokens mirror :root; status tokens are reserved for status-color runtime parity.
+ * Base tokens mirror :root; status tokens color every up, down, degraded, maintenance and no-data state.
  */
 export const SUPPORTED_THEME_TOKENS = [
   'accent',

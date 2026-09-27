@@ -8,6 +8,7 @@ All notable changes to FlareWatch will be documented in this file.
 
 - `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` is gone. Set `visibility: 'private'` in the page config instead. Visitors then get the sign-in page, and the dashboard, History, monitor pages, badges, embeds and the JSON API are closed to them. While the old secret is still set on the Worker, the page stays private-only, so upgrading never opens a private page.
 - The Events page is now History, at `/history`. Old `/events` links return 404.
+- Config lives only in `packages/config`. The `CONFIG_KV` binding, which loaded config from KV, is no longer read, and neither is `STATE_KV` as a second name for `FLAREWATCH_STATE`. CI now checks the config, so an invalid one fails before it deploys.
 - The `/admin` page is gone. Sign in at `/login` (`/admin` redirects there). Once signed in, the same pages show private monitors, and you add and edit maintenance windows on History.
 
 ## 1.1.0 - 2026-08-31

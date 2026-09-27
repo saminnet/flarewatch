@@ -77,7 +77,7 @@ describe('POST /api/admin/session login rate limit', () => {
       hash: btoa(String.fromCharCode(...new Uint8Array(bits))),
     });
     const kv = memoryKv();
-    globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: secret, STATE_KV: kv };
+    globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: secret, FLAREWATCH_STATE: kv };
 
     for (let attempt = 0; attempt < AUTH.LOGIN_RATE_LIMIT_MAX_ATTEMPTS; attempt++) {
       const response = await getPostHandler()({ request: loginRequest('wrong') });

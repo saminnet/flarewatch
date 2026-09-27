@@ -22,7 +22,7 @@ export const getSessionServerFn = createServerFn({ method: 'GET' }).handler(
       viewer,
       name: viewer === 'operator' && secret ? (parseAuthSecret(secret)?.username ?? null) : null,
       canSignIn: isSignInConfigured(env),
-      privateOnly: isPrivateOnly(await getConfig(), env),
+      privateOnly: isPrivateOnly(getConfig(), env),
     };
   },
 );

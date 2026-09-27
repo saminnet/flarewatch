@@ -1,12 +1,7 @@
 // Pins the accepted and rejected shapes inherited from the pre-Zod guards; webhook payload and
 // monitor method validation are intentionally stricter.
 import { describe, expect, it } from 'vite-plus/test';
-import {
-  isValidMaintenance,
-  isValidRuntimeConfig,
-  parseMaintenances,
-  parseRuntimeConfig,
-} from '../src/config';
+import { configIssues, isValidMaintenance, parseMaintenances } from '../src/config';
 
 const monitor = { id: 'm1', name: 'M1', method: 'GET', target: 'https://example.com' };
 
@@ -145,7 +140,7 @@ const maintenanceCases: Array<[string, unknown, boolean]> = [
 
 describe('config guard parity', () => {
   it.each(runtimeConfigCases)('runtime config: %s', (_name, value, expected) => {
-    expect(isValidRuntimeConfig(value)).toBe(expected);
+    expect(configIssues(value).length === 0).toBe(expected);
   });
 
   it.each(maintenanceCases)('maintenance: %s', (_name, value, expected) => {
@@ -155,10 +150,5 @@ describe('config guard parity', () => {
   it('parseMaintenances keeps the valid entries and drops the rest', () => {
     expect(parseMaintenances([maintenanceBase, { id: '' }, 5])).toEqual([maintenanceBase]);
     expect(parseMaintenances('nope')).toEqual([]);
-  });
-
-  it('parseRuntimeConfig returns the original object, extra keys intact', () => {
-    const config = { monitors: [], extra: 'kept' };
-    expect(parseRuntimeConfig(config)).toBe(config);
   });
 });

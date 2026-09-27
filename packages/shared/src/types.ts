@@ -184,18 +184,12 @@ export type RuntimeConfig = {
   kvWriteCooldownMinutes?: number;
 };
 
-export type RuntimeConfigEnvelope = JsonObject & {
-  config: RuntimeConfig;
-  _deployment?: unknown;
-};
-
 export interface KvStore {
   get(key: string, options?: { type?: 'json' | 'text' }): Promise<unknown>;
   put(key: string, value: string): Promise<void>;
 }
 
 export const KV_KEYS = {
-  CONFIG: 'config',
   STATE: 'state',
   MAINTENANCES: 'maintenances',
 } as const;

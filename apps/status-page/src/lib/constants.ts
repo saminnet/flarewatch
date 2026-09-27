@@ -75,7 +75,7 @@ export const AUTH = {
 export const DEFAULT_POWERED_BY_URL = 'https://github.com/saminnet/flarewatch';
 
 // Shared status color mappings (background fills for calendar cells, legend dots, etc.).
-// Colors resolve from the `--status-*` runtime contract tokens; "unknown" uses the
+// Colors resolve from the `--status-*` theme tokens; "unknown" uses the
 // subtle `-bg` token so empty/no-data fills stay muted.
 export const STATUS_COLORS = {
   up: 'bg-status-operational',

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import { SUPPORTED_THEME_TOKENS } from '@flarewatch/shared';
 
 /**
- * The default stylesheet must define every status token from the runtime contract,
+ * The default stylesheet must define every supported status token,
  * in both light (:root) and dark (.dark), and register a Tailwind color alias so
  * `bg-/text-/border-status-*` utilities resolve. This is the runtime side of the
  * theme contract self-hosters can hand-edit.

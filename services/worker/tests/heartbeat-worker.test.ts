@@ -305,15 +305,6 @@ describe('heartbeat scheduled checks', () => {
     expect(state.lastUpdate).toBe(NOW + 131);
   });
 
-  it('reads the signal through STATE_KV alone', async () => {
-    const kv = createHeartbeatKv();
-    kv.setSignal({ lastSuccess: NOW });
-
-    await scheduledRun({ STATE_KV: asKv(kv) });
-
-    expect(kv.state().heartbeat?.[heartbeat.id]).toMatchObject({ status: 'up' });
-  });
-
   it('stays late exactly at the deadline', async () => {
     const kv = createHeartbeatKv();
     kv.setSignal({ lastSuccess: NOW });

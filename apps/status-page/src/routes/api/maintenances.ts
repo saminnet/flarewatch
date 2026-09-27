@@ -7,7 +7,7 @@ export const Route = createFileRoute('/api/maintenances')({
   server: {
     handlers: {
       GET: async ({ request }: { request: Request }) => {
-        const config = await getConfig();
+        const config = getConfig();
         const corsHeaders = getCorsHeaders(request, config.statusPage?.apiCorsOrigins);
         try {
           const { maintenances } = await readVisitorSnapshot();
@@ -22,7 +22,7 @@ export const Route = createFileRoute('/api/maintenances')({
       },
 
       OPTIONS: async ({ request }: { request: Request }) => {
-        const config = await getConfig();
+        const config = getConfig();
         const corsHeaders = getCorsHeaders(request, config.statusPage?.apiCorsOrigins);
         return new Response(null, {
           status: 204,

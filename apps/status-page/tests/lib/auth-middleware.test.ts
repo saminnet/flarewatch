@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { pageConfig } from '@flarewatch/config';
 import { authMiddlewareServer } from '@/server/auth-middleware';
 import { buildAuthSecret } from '../helpers/auth-secret';
-import { memoryKv } from '../helpers/kv';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -26,15 +26,19 @@ function sessionKv(validId: string) {
 }
 
 describe('auth middleware private-only pages', () => {
-  function configKv(statusPage: Record<string, string>) {
-    return memoryKv({ config: JSON.stringify({ monitors: [], statusPage }) });
-  }
+  const { visibility } = pageConfig;
+  afterEach(() => {
+    pageConfig.visibility = visibility;
+  });
 
-  function privateEnv(extra: Partial<Cloudflare.Env> = {}) {
+  function privateEnv(
+    extra: Partial<Cloudflare.Env> = {},
+    pageVisibility: 'public' | 'private' = 'private',
+  ) {
+    pageConfig.visibility = pageVisibility;
     vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: 'configured',
-      STATE_KV: sessionKv('abc'),
-      CONFIG_KV: configKv({ visibility: 'private' }),
+      FLAREWATCH_STATE: sessionKv('abc'),
       ...extra,
     });
   }
@@ -73,17 +77,14 @@ describe('auth middleware private-only pages', () => {
   });
 
   it('leaves a public page open', async () => {
-    privateEnv({ CONFIG_KV: configKv({ visibility: 'public' }) });
+    privateEnv({}, 'public');
 
     await expect(outcome('/')).resolves.toBe('next');
     await expect(outcome('/api/data')).resolves.toBe('next');
   });
 
   it('keeps a page closed while the old site Basic Auth secret is still set', async () => {
-    privateEnv({
-      CONFIG_KV: configKv({ visibility: 'public' }),
-      FLAREWATCH_STATUS_PAGE_BASIC_AUTH: 'admin:secret',
-    });
+    privateEnv({ FLAREWATCH_STATUS_PAGE_BASIC_AUTH: 'admin:secret' }, 'public');
 
     await expect(outcome('/')).resolves.toBe('302 https://status.test/login');
   });
@@ -107,7 +108,7 @@ describe('auth middleware admin sessions', () => {
     const validId = 'session=abc+123';
     vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: 'admin:secret',
-      STATE_KV: sessionKv(validId),
+      FLAREWATCH_STATE: sessionKv(validId),
     });
 
     const noCookie = callAdminApi({});
@@ -167,7 +168,7 @@ describe('auth middleware admin access', () => {
   it('rejects cross-origin admin writes even with a valid session', async () => {
     vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: 'configured',
-      STATE_KV: sessionKv('abc'),
+      FLAREWATCH_STATE: sessionKv('abc'),
     });
     const cookie = 'flarewatch_admin_session=abc';
 
@@ -204,7 +205,7 @@ describe('auth middleware caching', () => {
   it('keeps pages rendered for the operator out of shared caches', async () => {
     vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: 'configured',
-      STATE_KV: sessionKv('abc'),
+      FLAREWATCH_STATE: sessionKv('abc'),
     });
 
     await expect(renderPage('flarewatch_admin_session=abc')).resolves.toBe('private, no-store');

@@ -97,11 +97,7 @@ function mockDown(): void {
   });
 }
 
-async function runScheduled(env: {
-  CONFIG_KV?: KVNamespace;
-  STATE_KV?: KVNamespace;
-  FLAREWATCH_STATE?: KVNamespace;
-}): Promise<void> {
+async function runScheduled(env: { FLAREWATCH_STATE?: KVNamespace }): Promise<void> {
   await runChecks(env, {
     checkMonitor: checkMonitorMock,
     createNotifier: createNotifierMock,
@@ -121,16 +117,14 @@ describe('scheduled handler', () => {
       'fetch',
       vi.fn(async () => new Response('colo=AMS\n')),
     );
-    const configKv = createKv([[KV_KEYS.CONFIG, { monitors: [] }]]);
     const stateKv = createKv();
 
     await Worker.scheduled(
       {} as ScheduledEvent,
-      { CONFIG_KV: asKv(configKv), STATE_KV: asKv(stateKv) },
+      { FLAREWATCH_STATE: asKv(stateKv) },
       {} as ExecutionContext,
     );
 
-    expect(configKv.get).toHaveBeenCalledWith(KV_KEYS.CONFIG, { type: 'json' });
     expect(stateKv.put).toHaveBeenCalledWith(KV_KEYS.STATE, expect.any(String));
   });
 });
@@ -165,7 +159,7 @@ describe('worker', () => {
       mockDown();
       const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).toHaveBeenCalledTimes(1);
       expect(notifierSendMock.mock.calls[0]?.[0]).toMatchObject({
@@ -181,7 +175,7 @@ describe('worker', () => {
       mockDown();
       const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).not.toHaveBeenCalled();
     });
@@ -191,7 +185,7 @@ describe('worker', () => {
       setNotifications({ gracePeriod: 1 });
       const stateKv = createKv([[KV_KEYS.STATE, createDownState(monitor, NOW_SECONDS - 90)]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).toHaveBeenCalledTimes(1);
       expect(notifierSendMock.mock.calls[0]?.[0]).toMatchObject({
@@ -206,7 +200,7 @@ describe('worker', () => {
       mockDown();
       const stateKv = createKv([[KV_KEYS.STATE, createDownState(monitor, NOW_SECONDS - 90)]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).toHaveBeenCalledTimes(1);
       expect(notifierSendMock.mock.calls[0]?.[0]).toMatchObject({
@@ -220,7 +214,7 @@ describe('worker', () => {
       setNotifications({ gracePeriod: 1 });
       const stateKv = createKv([[KV_KEYS.STATE, createDownState(monitor, NOW_SECONDS - 20)]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).not.toHaveBeenCalled();
     });
@@ -234,7 +228,7 @@ describe('worker', () => {
         [KV_KEYS.MAINTENANCES, [createMaintenance({ monitors: [monitor.id] })]],
       ]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).not.toHaveBeenCalled();
     });
@@ -258,7 +252,7 @@ describe('worker', () => {
         ],
       ]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).toHaveBeenCalledTimes(1);
       expect(notifierSendMock.mock.calls[0]?.[0]).toMatchObject({
@@ -274,7 +268,7 @@ describe('worker', () => {
         [KV_KEYS.MAINTENANCES, [createMaintenance({ monitors: [] })]],
       ]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).not.toHaveBeenCalled();
     });
@@ -301,7 +295,7 @@ describe('worker', () => {
         ],
       ]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).toHaveBeenCalledTimes(1);
     });
@@ -311,18 +305,18 @@ describe('worker', () => {
       const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
       mockDown();
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
       expect(notifierSendMock).toHaveBeenCalledTimes(1);
 
       checkMonitorMock.mockResolvedValue({
         location: 'SFO',
         result: { ok: false, error: 'DNS failure' },
       });
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
       expect(notifierSendMock).toHaveBeenCalledTimes(1);
 
       mockUp();
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
       expect(notifierSendMock).toHaveBeenCalledTimes(2);
       expect(notifierSendMock.mock.calls[1]?.[0]).toMatchObject({ isUp: true });
     });
@@ -332,7 +326,7 @@ describe('worker', () => {
       mockDown();
       const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(notifierSendMock).not.toHaveBeenCalled();
     });
@@ -343,7 +337,7 @@ describe('worker', () => {
       mockDown();
       const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(stateKv.put).toHaveBeenCalledTimes(1);
       const saved = JSON.parse(stateKv.put.mock.calls[0]?.[1] ?? '') as MonitorState;
@@ -357,7 +351,7 @@ describe('worker', () => {
       mockUp();
       const stateKv = createKv([[KV_KEYS.STATE, { corrupt: true }]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(stateKv.put).toHaveBeenCalledTimes(1);
       const saved = JSON.parse(stateKv.put.mock.calls[0]?.[1] ?? '') as MonitorState;
@@ -374,7 +368,7 @@ describe('worker', () => {
       };
       const stateKv = createKv([[KV_KEYS.STATE, createState()]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(stateKv.put).toHaveBeenCalledTimes(1);
       const saved = JSON.parse(stateKv.put.mock.calls[0]?.[1] ?? '') as MonitorState;
@@ -384,7 +378,7 @@ describe('worker', () => {
     it('saves state when the write cooldown has elapsed', async () => {
       const stateKv = createKv([[KV_KEYS.STATE, createState({ lastUpdate: NOW_SECONDS - 180 })]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(stateKv.put).toHaveBeenCalledTimes(1);
     });
@@ -392,70 +386,14 @@ describe('worker', () => {
     it('skips saving without change before cooldown', async () => {
       const stateKv = createKv([[KV_KEYS.STATE, createState({ lastUpdate: NOW_SECONDS - 60 })]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(stateKv.put).not.toHaveBeenCalled();
     });
   });
 
-  describe('configuration', () => {
-    it('uses a valid runtime config from CONFIG_KV', async () => {
-      const staticMonitor = createMonitor('static');
-      const runtimeMonitor = createMonitor('runtime');
-      workerConfigMock.monitors = [staticMonitor];
-      const configKv = createKv([[KV_KEYS.CONFIG, { monitors: [runtimeMonitor] }]]);
-      const stateKv = createKv();
-
-      await runScheduled({ CONFIG_KV: asKv(configKv), STATE_KV: asKv(stateKv) });
-
-      expect(checkMonitorMock).toHaveBeenCalledTimes(1);
-      expect(checkMonitorMock).toHaveBeenCalledWith(runtimeMonitor, expect.any(Object));
-      expect(checkMonitorMock).not.toHaveBeenCalledWith(staticMonitor, expect.any(Object));
-    });
-
-    it('falls back to static config when CONFIG_KV contains invalid config', async () => {
-      const staticMonitor = createMonitor('static');
-      workerConfigMock.monitors = [staticMonitor];
-      const configKv = createKv([[KV_KEYS.CONFIG, { monitors: 'invalid' }]]);
-      const stateKv = createKv();
-
-      await runScheduled({ CONFIG_KV: asKv(configKv), STATE_KV: asKv(stateKv) });
-
-      expect(checkMonitorMock).toHaveBeenCalledTimes(1);
-      expect(checkMonitorMock).toHaveBeenCalledWith(staticMonitor, expect.any(Object));
-    });
-  });
-
-  describe('state KV selection', () => {
-    it('prefers STATE_KV over FLAREWATCH_STATE', async () => {
-      const stateKv = createKv();
-      const fallbackKv = createKv();
-
-      await runScheduled({
-        STATE_KV: asKv(stateKv),
-        FLAREWATCH_STATE: asKv(fallbackKv),
-      });
-
-      expect(stateKv.get).toHaveBeenCalled();
-      expect(stateKv.put).toHaveBeenCalled();
-      expect(fallbackKv.get).not.toHaveBeenCalled();
-      expect(fallbackKv.put).not.toHaveBeenCalled();
-    });
-
-    it('uses FLAREWATCH_STATE when STATE_KV is not bound', async () => {
-      const fallbackKv = createKv();
-
-      await runScheduled({ FLAREWATCH_STATE: asKv(fallbackKv) });
-
-      expect(fallbackKv.get).toHaveBeenCalled();
-      expect(fallbackKv.put).toHaveBeenCalled();
-    });
-
-    it('throws when neither state KV binding is available', async () => {
-      await expect(runScheduled({})).rejects.toThrow(
-        'STATE_KV (or FLAREWATCH_STATE) binding not found',
-      );
-    });
+  it('throws when the FLAREWATCH_STATE binding is missing', async () => {
+    await expect(runScheduled({})).rejects.toThrow('FLAREWATCH_STATE binding not found');
   });
 
   describe('check execution', () => {
@@ -471,7 +409,7 @@ describe('worker', () => {
       });
       const stateKv = createKv();
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(checkMonitorMock).toHaveBeenCalledTimes(2);
       expect(stateKv.put).toHaveBeenCalledTimes(1);
@@ -500,7 +438,7 @@ describe('worker', () => {
       });
       const stateKv = createKv();
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(stateKv.put).toHaveBeenCalledTimes(1);
       const savedState = JSON.parse(stateKv.put.mock.calls[0]?.[1] as string) as MonitorState;
@@ -521,7 +459,7 @@ describe('worker', () => {
       });
       const stateKv = createKv([[KV_KEYS.STATE, createDownState(publicMonitor, NOW_SECONDS - 60)]]);
 
-      await runScheduled({ STATE_KV: asKv(stateKv) });
+      await runScheduled({ FLAREWATCH_STATE: asKv(stateKv) });
 
       expect(stateKv.put).toHaveBeenCalledTimes(1);
       const savedState = JSON.parse(stateKv.put.mock.calls[0]?.[1] as string) as MonitorState;

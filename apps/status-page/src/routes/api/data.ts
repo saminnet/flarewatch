@@ -8,7 +8,7 @@ export const Route = createFileRoute('/api/data')({
   server: {
     handlers: {
       GET: async ({ request }: { request: Request }) => {
-        const config = await getConfig();
+        const config = getConfig();
         const corsHeaders = getCorsHeaders(request, config.statusPage?.apiCorsOrigins);
         try {
           const { monitors, state } = await readVisitorSnapshot();
@@ -33,7 +33,7 @@ export const Route = createFileRoute('/api/data')({
       },
 
       OPTIONS: async ({ request }: { request: Request }) => {
-        const config = await getConfig();
+        const config = getConfig();
         const corsHeaders = getCorsHeaders(request, config.statusPage?.apiCorsOrigins);
         return new Response(null, {
           status: 204,

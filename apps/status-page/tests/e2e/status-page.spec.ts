@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
 import { expect, test, type APIResponse, type Page } from '@playwright/test';
 import { isJsonObject } from '@flarewatch/shared';
 
@@ -510,6 +512,22 @@ async function signIn(page: Page): Promise<void> {
     }
   }, adminCredentials);
 }
+
+test('the browser bundle carries no monitor config', () => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'reads the local e2e build');
+  const assets = path.join(process.cwd(), '.wrangler/e2e/public/build/client/assets');
+  const scripts = readdirSync(assets).filter((file) => file.endsWith('.js'));
+  expect(scripts.length).toBeGreaterThan(0);
+
+  const markers = [privateMonitor.id, privateMonitor.name, 'internal.example.com'];
+  for (const file of scripts) {
+    const js = readFileSync(path.join(assets, file), 'utf8');
+    expect(
+      markers.filter((marker) => js.includes(marker)),
+      file,
+    ).toEqual([]);
+  }
+});
 
 test('private monitor never appears to visitors but shows to the operator with a badge', async ({
   page,

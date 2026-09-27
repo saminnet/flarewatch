@@ -337,19 +337,6 @@ describe('ping routes', () => {
     ).resolves.toHaveProperty('status', 404);
   });
 
-  it('never reads CONFIG_KV before the token is verified', async () => {
-    const configKv = createKv();
-    const get = vi.spyOn(configKv, 'get');
-
-    const response = await ping(`/ping/${heartbeat.id}/${'A'.repeat(32)}`, undefined, {
-      ...createEnv(),
-      CONFIG_KV: asKv(configKv),
-    });
-
-    expect(response.status).toBe(404);
-    expect(get).not.toHaveBeenCalled();
-  });
-
   it('returns 429 when the rate limit binding rejects, keyed by monitor id', async () => {
     const limiter = { limit: vi.fn(async () => ({ success: false })) };
 

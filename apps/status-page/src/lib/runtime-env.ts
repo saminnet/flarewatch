@@ -28,7 +28,6 @@ export async function resolveRuntimeEnv(): Promise<Cloudflare.Env> {
 
 export async function requireStateKv(): Promise<KVNamespace> {
   const env = await resolveRuntimeEnv();
-  const kv = env.STATE_KV ?? env.FLAREWATCH_STATE;
-  if (!kv) throw new Error('STATE_KV (or FLAREWATCH_STATE) binding not found');
-  return kv;
+  if (!env.FLAREWATCH_STATE) throw new Error('FLAREWATCH_STATE binding not found');
+  return env.FLAREWATCH_STATE;
 }

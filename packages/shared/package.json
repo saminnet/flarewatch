@@ -7,7 +7,6 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./runtime-contract": "./src/runtime-contract.ts",
     "./utils": "./src/utils.ts"
   },
   "scripts": {

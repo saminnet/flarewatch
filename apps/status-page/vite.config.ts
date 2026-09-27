@@ -8,6 +8,10 @@ import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
 
+// Browser-test builds swap in test monitors; FLAREWATCH_E2E=private also makes the page private.
+const e2e = process.env.FLAREWATCH_E2E;
+const e2eConfig = path.resolve(import.meta.dirname, 'tests/e2e/config');
+
 const config = defineConfig({
   plugins: [
     devtools(),
@@ -26,9 +30,15 @@ const config = defineConfig({
     include: ['react', 'react-dom', '@tanstack/react-query'],
   },
   resolve: {
-    alias: {
-      '@': path.resolve(import.meta.dirname, './src'),
-    },
+    alias: [
+      { find: '@', replacement: path.resolve(import.meta.dirname, './src') },
+      ...(e2e
+        ? [{ find: /^@flarewatch\/config\/worker$/, replacement: `${e2eConfig}/worker.ts` }]
+        : []),
+      ...(e2e === 'private'
+        ? [{ find: /^@flarewatch\/config$/, replacement: `${e2eConfig}/private.ts` }]
+        : []),
+    ],
     dedupe: ['react', 'react-dom'],
   },
   environments: {

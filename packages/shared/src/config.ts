@@ -1,15 +1,12 @@
 import * as z from 'zod/mini';
 import {
-  KV_KEYS,
   NOTIFICATION_TEMPLATES,
   type HeartbeatSignal,
-  type KvStore,
   type Maintenance,
   type MonitorState,
   type NotificationConfig,
   type PageConfig,
   type RuntimeConfig,
-  type RuntimeConfigEnvelope,
   type Webhook,
 } from './types';
 import { isJsonObject, isNonEmptyString } from './utils';
@@ -78,37 +75,6 @@ function isAllowedPayload(payloadType: string | undefined, payload: unknown): bo
 
 function asTypeGuard<T>(schema: z.ZodMiniType<SchemaOutput<T>>): (value: unknown) => value is T {
   return (value): value is T => schema.safeParse(value).success;
-}
-
-/** Like {@link asTypeGuard}, but names each rejected monitor so a discarded config is traceable. */
-function warningTypeGuard<T>(
-  schema: z.ZodMiniType<SchemaOutput<T>>,
-): (value: unknown) => value is T {
-  return (value): value is T => {
-    const result = schema.safeParse(value);
-    if (!result.success) warnRejectedMonitors(value, result.error.issues);
-    return result.success;
-  };
-}
-
-function warnRejectedMonitors(
-  value: unknown,
-  issues: readonly { path: PropertyKey[]; message: string }[],
-): void {
-  const config = isJsonObject(value) && isJsonObject(value.config) ? value.config : value;
-  const monitors = isJsonObject(config) && Array.isArray(config.monitors) ? config.monitors : [];
-  const warned = new Set<number>();
-
-  for (const issue of issues) {
-    const at = issue.path.indexOf('monitors');
-    const index = issue.path[at + 1];
-    if (at === -1 || typeof index !== 'number' || warned.has(index)) continue;
-
-    warned.add(index);
-    const monitor: unknown = monitors[index];
-    const id = isJsonObject(monitor) && isNonEmptyString(monitor.id) ? monitor.id : '<no id>';
-    console.warn(`[Config] Rejected monitor "${id}": ${issue.message}`);
-  }
 }
 
 type Prev = [never, 0, 1, 2, 3];
@@ -248,10 +214,6 @@ const runtimeConfigSchema: z.ZodMiniType<SchemaOutput<RuntimeConfig>> = z.object
   notification: z.optional(notificationSchema),
 });
 
-const envelopeSchema: z.ZodMiniType<SchemaOutput<RuntimeConfigEnvelope>> = z.object({
-  config: runtimeConfigSchema,
-});
-
 const heartbeatRunSchema = z.object({
   at: z.number(),
   outcome: z.enum(['ok', 'late', 'fail', 'miss']),
@@ -314,8 +276,22 @@ const monitorStateSchema: z.ZodMiniType<SchemaOutput<MonitorState>> = z.object({
 
 export const isValidMaintenance = asTypeGuard<Maintenance>(maintenanceSchema);
 export const isMonitorState = asTypeGuard<MonitorState>(monitorStateSchema);
-export const isValidRuntimeConfig = warningTypeGuard<RuntimeConfig>(runtimeConfigSchema);
-export const isStoredConfigEnvelope = warningTypeGuard<RuntimeConfigEnvelope>(envelopeSchema);
+
+/** Why a config is invalid, one line per problem. Empty when the config is valid. */
+export function configIssues(value: unknown): string[] {
+  const result = runtimeConfigSchema.safeParse(value);
+  if (result.success) return [];
+
+  const monitors = isJsonObject(value) && Array.isArray(value.monitors) ? value.monitors : [];
+  return result.error.issues.map(({ path, message }) => {
+    const [first, index] = path;
+    const monitor: unknown = first === 'monitors' ? monitors[Number(index)] : undefined;
+    if (monitor === undefined) return `${path.map(String).join('.') || 'config'}: ${message}`;
+    const id =
+      isJsonObject(monitor) && isNonEmptyString(monitor.id) ? monitor.id : `#${String(index)}`;
+    return `monitor "${id}": ${message}`;
+  });
+}
 
 /** Returns only the known signal fields, so a foreign key in storage cannot override derived state. */
 export function parseHeartbeatSignal(value: unknown): HeartbeatSignal | null {
@@ -325,26 +301,4 @@ export function parseHeartbeatSignal(value: unknown): HeartbeatSignal | null {
 
 export function parseMaintenances(value: unknown): Maintenance[] {
   return Array.isArray(value) ? value.filter(isValidMaintenance) : [];
-}
-
-export function parseRuntimeConfig(value: unknown): RuntimeConfig | null {
-  if (isStoredConfigEnvelope(value)) return value.config;
-  if (isValidRuntimeConfig(value)) return value;
-  return null;
-}
-
-export async function loadRuntimeConfig(kv: KvStore): Promise<RuntimeConfig | null> {
-  try {
-    const data = await kv.get(KV_KEYS.CONFIG, { type: 'json' });
-    if (!data) return null;
-
-    const config = parseRuntimeConfig(data);
-    if (config) return config;
-
-    console.error('[Config] Invalid runtime config format');
-    return null;
-  } catch (error) {
-    console.error('[Config] Failed to load runtime config:', error);
-    return null;
-  }
 }

@@ -1,32 +1,20 @@
 import { execFileSync } from 'node:child_process';
-import { rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type {
-  HeartbeatMonitor,
-  HeartbeatRun,
-  HeartbeatState,
-  Maintenance,
-  MonitorState,
-  MonitorTarget,
-} from '@flarewatch/shared';
+import type { HeartbeatRun, HeartbeatState, Maintenance, MonitorState } from '@flarewatch/shared';
 import { formatUtcShort, isJsonObject } from '@flarewatch/shared/utils';
-import { pageConfig } from '@flarewatch/config';
-import { workerConfig } from '@flarewatch/config/worker';
+import { privateMonitor } from '../tests/e2e/config/worker.ts';
 
-// E2E_VISIBILITY=private seeds a second, private-only instance with its own state.
-const privateOnly = process.env.E2E_VISIBILITY === 'private';
+// Copies the FLAREWATCH_E2E build out of dist, so the public and private instances each keep theirs.
+const variant = process.env.FLAREWATCH_E2E === 'private' ? 'private' : 'public';
 const appDir = process.cwd();
-const persistDir = path.join(
-  appDir,
-  privateOnly ? '.wrangler/e2e-private-state' : '.wrangler/e2e-state',
-);
-const fixtureDir = path.join(
-  appDir,
-  privateOnly ? '.wrangler/e2e-private-fixtures' : '.wrangler/e2e-fixtures',
-);
+const variantDir = path.join(appDir, '.wrangler/e2e', variant);
+const buildDir = path.join(variantDir, 'build');
+const persistDir = path.join(variantDir, 'state');
+const fixtureDir = path.join(variantDir, 'fixtures');
 const envFilePath = path.join(appDir, '.wrangler/e2e.dev.vars');
-const configPath = path.join(appDir, 'dist/server/wrangler.json');
-const e2eConfigPath = path.join(appDir, 'dist/server/e2e-wrangler.json');
+const configPath = path.join(buildDir, 'server/wrangler.json');
+const e2eConfigPath = path.join(buildDir, 'server/e2e-wrangler.json');
 
 // Public deterministic credentials for the local Playwright instance only; never a production secret.
 const E2E_ADMIN_AUTH_SECRET = JSON.stringify({
@@ -69,26 +57,18 @@ function wranglerKvPut(key: string, fixturePath: string): void {
   );
 }
 
-rmSync(persistDir, { recursive: true, force: true });
-rmSync(fixtureDir, { recursive: true, force: true });
+rmSync(variantDir, { recursive: true, force: true });
+cpSync(path.join(appDir, 'dist'), buildDir, { recursive: true });
 mkdirSync(fixtureDir, { recursive: true });
-mkdirSync(path.dirname(e2eConfigPath), { recursive: true });
 
 const parsedWranglerConfig: unknown = JSON.parse(readFileSync(configPath, 'utf8'));
 if (!isJsonObject(parsedWranglerConfig)) {
   throw new Error(`Expected an object in ${configPath}`);
 }
 const existingVars = isJsonObject(parsedWranglerConfig.vars) ? parsedWranglerConfig.vars : {};
-const namespaces = Array.isArray(parsedWranglerConfig.kv_namespaces)
-  ? parsedWranglerConfig.kv_namespaces.filter(isJsonObject)
-  : [];
-const stateNamespace = namespaces.find((namespace) => namespace.binding === 'FLAREWATCH_STATE');
 const wranglerConfig = {
   ...parsedWranglerConfig,
   vars: { ...existingVars, FLAREWATCH_ADMIN_BASIC_AUTH: E2E_ADMIN_AUTH_SECRET },
-  ...(stateNamespace && {
-    kv_namespaces: [...namespaces, { binding: 'CONFIG_KV', id: stateNamespace.id }],
-  }),
 };
 
 writeFileSync(e2eConfigPath, `${JSON.stringify(wranglerConfig, null, 2)}\n`);
@@ -97,42 +77,6 @@ writeFileSync(envFilePath, `FLAREWATCH_ADMIN_BASIC_AUTH='${E2E_ADMIN_AUTH_SECRET
 const nowSec = Math.floor(Date.now() / 1000);
 const startedAt = nowSec - 90 * DAY_SECONDS;
 const incidentStart = nowSec - 90 * MINUTE_SECONDS;
-
-const privateMonitor: MonitorTarget = {
-  id: 'demo_private_internal',
-  name: 'Internal Billing API',
-  method: 'GET',
-  target: 'https://internal.example.com/health',
-  link: false,
-  private: true,
-};
-
-const heartbeat = (
-  id: string,
-  name: string,
-  periodSeconds: number,
-  graceSeconds: number,
-  options: { private?: boolean } = {},
-): HeartbeatMonitor => ({
-  id,
-  name,
-  method: 'HEARTBEAT',
-  periodSeconds,
-  graceSeconds,
-  ...options,
-});
-
-const heartbeatMonitors: HeartbeatMonitor[] = [
-  heartbeat('demo_nightly_backup', 'Nightly Backup', DAY_SECONDS, 30 * MINUTE_SECONDS),
-  heartbeat('demo_hourly_report', 'Hourly Report', HOUR_SECONDS, 5 * MINUTE_SECONDS),
-  heartbeat('demo_weekly_prune', 'Weekly Prune', 7 * DAY_SECONDS, HOUR_SECONDS),
-  heartbeat('demo_index_rebuild', 'Index Rebuild', HOUR_SECONDS, 10 * MINUTE_SECONDS),
-  heartbeat('demo_log_shipper', 'Log Shipper', HOUR_SECONDS, 5 * MINUTE_SECONDS),
-  heartbeat('demo_nightly_compactor', 'Nightly Compactor', DAY_SECONDS, 30 * MINUTE_SECONDS),
-  heartbeat('demo_private_backup', 'Internal Vault Backup', DAY_SECONDS, 30 * MINUTE_SECONDS, {
-    private: true,
-  }),
-];
 
 const backupSuccess = nowSec - 3 * HOUR_SECONDS;
 const reportSuccess = nowSec - HOUR_SECONDS - 2 * MINUTE_SECONDS;
@@ -347,12 +291,5 @@ const maintenances: Maintenance[] = [
   },
 ];
 
-wranglerKvPut(
-  'config',
-  writeFixture('config.json', {
-    monitors: [...workerConfig.monitors, privateMonitor, ...heartbeatMonitors],
-    ...(privateOnly && { statusPage: { ...pageConfig, visibility: 'private' } }),
-  }),
-);
 wranglerKvPut('state', writeFixture('state.json', state));
 wranglerKvPut('maintenances', writeFixture('maintenances.json', maintenances));

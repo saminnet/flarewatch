@@ -1,15 +1,4 @@
-import {
-  createLogger,
-  loadRuntimeConfig,
-  type RuntimeConfig,
-  type WorkerConfig,
-} from '@flarewatch/shared';
-
-const log = createLogger('Worker');
-
 export interface Env {
-  CONFIG_KV?: KVNamespace;
-  STATE_KV?: KVNamespace;
   FLAREWATCH_STATE?: KVNamespace;
   /** Sent as `Authorization: Bearer <token>` on every external proxy check. */
   FLAREWATCH_PROXY_TOKEN?: string;
@@ -25,31 +14,6 @@ export interface Env {
 }
 
 export function getStateKv(env: Env): KVNamespace {
-  const kv = env.STATE_KV ?? env.FLAREWATCH_STATE;
-  if (!kv) {
-    throw new Error('STATE_KV (or FLAREWATCH_STATE) binding not found');
-  }
-  return kv;
-}
-
-export async function loadEffectiveConfig(
-  env: Env,
-  staticConfig: WorkerConfig,
-): Promise<RuntimeConfig> {
-  if (env.CONFIG_KV) {
-    const runtimeConfig = await loadRuntimeConfig(env.CONFIG_KV);
-    if (runtimeConfig) {
-      return runtimeConfig;
-    }
-    log.error('Invalid runtime config in CONFIG_KV, falling back to static config');
-  }
-
-  const config: RuntimeConfig = { monitors: staticConfig.monitors };
-  if (staticConfig.notification) {
-    config.notification = staticConfig.notification;
-  }
-  if (staticConfig.kvWriteCooldownMinutes !== undefined) {
-    config.kvWriteCooldownMinutes = staticConfig.kvWriteCooldownMinutes;
-  }
-  return config;
+  if (!env.FLAREWATCH_STATE) throw new Error('FLAREWATCH_STATE binding not found');
+  return env.FLAREWATCH_STATE;
 }

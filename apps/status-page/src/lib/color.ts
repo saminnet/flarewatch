@@ -12,7 +12,7 @@ const UNKNOWN: StatusColor = {
   border: 'border-status-unknown',
 };
 
-/** Status classes resolve from the `--status-*` runtime contract tokens. */
+/** Status classes resolve from the `--status-*` theme tokens. */
 export function getStatusColor(percent: number | string | null): StatusColor {
   if (percent === null) return UNKNOWN;
 

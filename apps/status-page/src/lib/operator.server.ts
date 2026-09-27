@@ -16,10 +16,6 @@ export function isSignInConfigured(env: Cloudflare.Env): boolean {
   return Boolean(env.FLAREWATCH_ADMIN_BASIC_AUTH);
 }
 
-function stateKv(env: Cloudflare.Env): KVNamespace | undefined {
-  return env.STATE_KV ?? env.FLAREWATCH_STATE;
-}
-
 function sessionKey(sessionId: string): string {
   return `${AUTH.SESSION_KEY_PREFIX}${sessionId}`;
 }
@@ -47,7 +43,7 @@ function isSessionData(value: unknown): value is SessionData {
 
 async function readViewer(env: Cloudflare.Env, request: Request): Promise<Viewer> {
   if (!isSignInConfigured(env)) return import.meta.env.DEV ? 'operator' : 'visitor';
-  const kv = stateKv(env);
+  const kv = env.FLAREWATCH_STATE;
   const sessionId = sessionIdFrom(request);
   if (!kv || !sessionId) return 'visitor';
   try {

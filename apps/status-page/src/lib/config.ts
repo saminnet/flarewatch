@@ -1,55 +1,11 @@
 import { createServerFn } from '@tanstack/react-start';
-import { loadRuntimeConfig, type PageConfig, type RuntimeConfig } from '@flarewatch/shared';
+import type { PageConfig, RuntimeConfig } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
-import { resolveRuntimeEnv } from './runtime-env';
 
-// Valid 30s per warm isolate; isolates share no cache state and may be recycled.
-const CACHE_TTL_MS = 30_000;
-let cachedConfig: RuntimeConfig | null = null;
-let cacheTime = 0;
-
-function buildFallbackConfig(): RuntimeConfig {
-  return {
-    monitors: workerConfig.monitors,
-    statusPage: pageConfig,
-    ...(workerConfig.notification !== undefined && { notification: workerConfig.notification }),
-    ...(workerConfig.kvWriteCooldownMinutes !== undefined && {
-      kvWriteCooldownMinutes: workerConfig.kvWriteCooldownMinutes,
-    }),
-  };
-}
-
-function normalizeConfig(config: RuntimeConfig): RuntimeConfig {
-  if (config.statusPage) return config;
-  return { ...config, statusPage: pageConfig };
-}
-
-function cacheAndReturn(config: RuntimeConfig, now: number): RuntimeConfig {
-  cachedConfig = config;
-  cacheTime = now;
-  return config;
-}
-
-export async function getConfig(): Promise<RuntimeConfig> {
-  const isDev = import.meta.env.DEV;
-  const now = Date.now();
-
-  if (!isDev && cachedConfig && now - cacheTime < CACHE_TTL_MS) {
-    return cachedConfig;
-  }
-
-  const env = await resolveRuntimeEnv();
-  const kv = env.CONFIG_KV;
-
-  if (kv) {
-    const runtime = await loadRuntimeConfig(kv);
-    if (runtime) {
-      return cacheAndReturn(normalizeConfig(runtime), now);
-    }
-  }
-
-  return cacheAndReturn(buildFallbackConfig(), now);
+// Built on call, not at module scope, so the client bundle can drop the monitor config.
+export function getConfig(): RuntimeConfig {
+  return { monitors: workerConfig.monitors, statusPage: pageConfig };
 }
 
 /**
@@ -70,8 +26,7 @@ export type PageBranding = Pick<
 
 export const getConfigServerFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<{ statusPage: PageBranding }> => {
-    const { title, favicon, logo, links, poweredByUrl, themeVars } =
-      (await getConfig()).statusPage ?? {};
+    const { title, favicon, logo, links, poweredByUrl, themeVars } = getConfig().statusPage ?? {};
     return { statusPage: { title, favicon, logo, links, poweredByUrl, themeVars } };
   },
 );

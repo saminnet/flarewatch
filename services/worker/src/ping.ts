@@ -1,4 +1,4 @@
-import type { HeartbeatMonitor, HeartbeatRun, RuntimeConfig } from '@flarewatch/shared';
+import type { HeartbeatMonitor, HeartbeatRun, WorkerConfig } from '@flarewatch/shared';
 import {
   createLogger,
   HEARTBEAT_RUN_HISTORY,
@@ -48,7 +48,7 @@ export async function deriveHeartbeatToken(secret: string, id: string): Promise<
   return base64Url(mac).slice(0, TOKEN_LENGTH);
 }
 
-function findHeartbeatMonitor(config: RuntimeConfig, id: string): HeartbeatMonitor | undefined {
+function findHeartbeatMonitor(config: WorkerConfig, id: string): HeartbeatMonitor | undefined {
   return config.monitors.find(
     (monitor): monitor is HeartbeatMonitor => monitor.id === id && monitor.method === 'HEARTBEAT',
   );
@@ -138,7 +138,7 @@ const EXIT_STATUS = /^\d{1,3}$/;
 export async function handlePing(
   request: Request,
   env: Env,
-  loadConfig: () => Promise<RuntimeConfig>,
+  config: WorkerConfig,
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
   const segments = pathname.slice(PING_PREFIX.length).split('/');
@@ -147,13 +147,13 @@ export async function handlePing(
   const token = segments[1] ?? '';
   const action = segments[2] ?? '';
 
-  // Fixed work before any config or KV lookup: derive the expected token for
+  // Fixed work before any monitor or KV lookup: derive the expected token for
   // the id and compare in constant time, so responses never reveal whether an
   // id or token exists.
   const secret = env.HEARTBEAT_SECRET;
   const expected = secret ? await deriveHeartbeatToken(secret, id) : null;
   if (!expected || !token || !timingSafeEqual(expected, token)) return notFound();
-  const monitor = findHeartbeatMonitor(await loadConfig(), id);
+  const monitor = findHeartbeatMonitor(config, id);
   if (!monitor) return notFound();
 
   const method = request.method;
@@ -217,7 +217,7 @@ export async function handlePing(
 export async function handlePingUrl(
   request: Request,
   env: Env,
-  config: RuntimeConfig,
+  config: WorkerConfig,
 ): Promise<Response> {
   const url = new URL(request.url);
   const id = url.pathname.slice(PING_URL_PREFIX.length);
