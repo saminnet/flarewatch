@@ -404,7 +404,10 @@ function MonitorSummary({
   );
 
   return (
-    <div className="flex items-start gap-2.5">
+    <div
+      className="flex items-start gap-2.5"
+      style={{ viewTransitionName: `monitor-${monitor.id.replace(/[^\w-]/g, '_')}` }}
+    >
       {!detail && (
         <Link
           to="/monitors/$monitorId"

@@ -19,6 +19,8 @@ export function getRouter() {
     defaultPendingMinMs: 200,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
+    // Page changes morph; filter and month changes on the same page stay instant.
+    defaultViewTransition: { types: ({ pathChanged }) => (pathChanged ? ['page'] : false) },
   });
 
   setupRouterSsrQueryIntegration({ queryClient, router });

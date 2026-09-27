@@ -200,8 +200,17 @@ test('a row opens the monitor page with its history and chart', async ({ page })
   await expect(page.getByRole('heading', { name: 'Response times (ms)' })).toBeVisible();
   await expect(page.getByTestId('latency-chart')).toBeVisible();
 
-  await page.getByRole('link', { name: 'Incidents and maintenance' }).click();
+  await expect(page.getByText('No incidents or maintenance in the last 90 days.')).toBeVisible();
+  await page.getByRole('link', { name: 'Full history' }).click();
   await expect(page).toHaveURL(/\/events\?.*monitor=demo_cloudflare_docs/);
+
+  // Each page lists the monitor's own incidents and maintenance windows.
+  await page.goto('/monitors/demo_cloudflare_status');
+  const events = page.getByRole('region', { name: 'Events' });
+  await expect(events.getByText('Synthetic E2E outage')).toBeVisible();
+  await expect(events.getByText('E2E active maintenance')).toHaveCount(0);
+  await page.goto('/monitors/demo_cloudflare_trace');
+  await expect(events.getByText('E2E active maintenance')).toBeVisible();
   expect(clientErrors).toEqual([]);
 });
 

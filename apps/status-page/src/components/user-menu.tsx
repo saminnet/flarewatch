@@ -55,6 +55,7 @@ export function UserMenu({ session, visitorView }: UserMenuProps) {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem
+          closeOnClick
           checked={visitorView}
           onCheckedChange={(checked) =>
             void navigate({
