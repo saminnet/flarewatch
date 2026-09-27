@@ -1,7 +1,7 @@
 import type { RequestServerOptions, RequestServerResult } from '@tanstack/react-start';
 import { verifyBasicAuthHeader } from '@/lib/auth-secret';
 import { resolveRuntimeEnv } from '@/lib/runtime-env';
-import { resolveViewer } from '@/lib/operator.server';
+import { isSignInConfigured, overSignInLimit, resolveViewer } from '@/lib/operator.server';
 import { getConfig, isPrivateOnly } from '@/lib/config';
 
 function jsonError(status: number, message: string): Response {
@@ -55,8 +55,7 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
   const env = await resolveRuntimeEnv();
 
   if (pathname.startsWith('/api/admin')) {
-    const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
-    if (!adminCreds) {
+    if (!isSignInConfigured(env)) {
       if (import.meta.env.DEV) {
         return next();
       }
@@ -82,8 +81,11 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
 
     // Scripts authenticate with the Basic header. Checked only here: PBKDF2
     // verification is too costly to run on every page request.
-    if (await verifyBasicAuthHeader(adminCreds, request.headers.get('Authorization'))) {
-      return next();
+    const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
+    const authorization = request.headers.get('Authorization');
+    if (adminCreds && authorization) {
+      if (await overSignInLimit(env, request)) return jsonError(429, 'Too many attempts');
+      if (await verifyBasicAuthHeader(adminCreds, authorization)) return next();
     }
 
     return jsonError(401, 'Not authenticated');

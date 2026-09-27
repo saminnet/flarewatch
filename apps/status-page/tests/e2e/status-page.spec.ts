@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIResponse, type Page } from '@playwright/test';
 import { isJsonObject } from '@flarewatch/shared';
+import { workerConfig } from './config/worker';
 
 type SeededMonitor = {
   id: string;
@@ -521,9 +522,11 @@ test('the browser bundle carries no monitor or access config', () => {
 
   // Access rules and client ids stay on the server; provider names reach the sign-in page at run time.
   const markers = [
-    privateMonitor.id,
-    privateMonitor.name,
-    'internal.example.com',
+    ...workerConfig.monitors.flatMap((monitor) => [
+      monitor.id,
+      monitor.name,
+      ...('target' in monitor ? [monitor.target] : []),
+    ]),
     'operator@e2e.test',
     'partner@e2e.test',
     'flarewatch-e2e',

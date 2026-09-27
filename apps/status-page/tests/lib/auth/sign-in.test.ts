@@ -46,9 +46,14 @@ function fakeProvider(email: string) {
   };
 }
 
-async function signIn(email: string, next = '/history') {
+async function signIn(email: string, next = '/history', allowed = true) {
   const kv = memoryKv();
-  const env: Cloudflare.Env = { FLAREWATCH_AUTH_SECRET: 'test-secret', FLAREWATCH_STATE: kv };
+  const limiter = { limit: async () => ({ success: allowed }) };
+  const env: Cloudflare.Env = {
+    FLAREWATCH_AUTH_SECRET: 'test-secret',
+    FLAREWATCH_STATE: kv,
+    LOGIN_RATE_LIMIT: limiter as typeof limiter & RateLimit,
+  };
   const provider = fakeProvider(email);
   const start = await startSignIn(
     new Request(`https://status.test/auth/pocket-id?next=${encodeURIComponent(next)}`),
@@ -103,6 +108,15 @@ describe('provider sign-in', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('Location')).toBe('https://status.test/login?error=denied');
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it('writes no session once the IP is over the sign-in limit', async () => {
+    const { kv, state, callback } = await signIn('owner@example.com', '/history', false);
+
+    const response = await callback(`code=c1&state=${state}`);
+
+    expect(response.headers.get('Location')).toBe('https://status.test/login?error=limited');
     expect(kv.put).not.toHaveBeenCalled();
   });
 

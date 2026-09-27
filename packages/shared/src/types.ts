@@ -18,7 +18,7 @@ export type PageConfigGroup = { [key: string]: string[] };
 /** A sign-in provider. OpenID Connect by default; GitHub has its own flow. */
 export type AuthProvider =
   | {
-      /** Letters, digits, `-` and `_`. Names the secret FLAREWATCH_OIDC_<ID>_SECRET. */
+      /** Letters, digits, `-` and `_`. Keys the client secret in FLAREWATCH_OIDC_SECRETS. */
       id: string;
       name: string;
       type?: 'oidc';
@@ -83,10 +83,8 @@ export type PullMonitor = {
   target: string;
   tooltip?: string;
   /**
-   * Controls the clickable link on the monitor name.
-   * - undefined: auto-link to `target` if HTTP/HTTPS (default)
-   * - string: use this URL instead (e.g., a status page)
-   * - false: disable the link (for internal services)
+   * Clickable link on the monitor name: auto-links to `target` if HTTP/HTTPS
+   * (default), a URL string overrides it, `false` disables it.
    */
   link?: string | false;
   hideLatencyChart?: boolean;

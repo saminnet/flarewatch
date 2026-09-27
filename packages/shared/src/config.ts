@@ -13,7 +13,7 @@ import {
   type HubView,
   type Webhook,
 } from './types';
-import { isJsonObject, isNonEmptyString } from './utils';
+import { isJsonObject, isNonEmptyString, isSecureUrl } from './utils';
 
 const PULL_METHODS = [
   'GET',
@@ -247,9 +247,11 @@ const accessConfigSchema: z.ZodMiniType<SchemaOutput<AccessConfig>> = z
             id: providerId,
             name: nonEmptyString('provider name'),
             type: z.optional(z.literal('oidc')),
-            issuer: z
-              .string()
-              .check(z.refine(isValidHttpUrl, { error: 'issuer must be an http(s) URL' })),
+            issuer: z.string().check(
+              z.refine(isSecureUrl, {
+                error: 'issuer must be an https URL (http only on localhost)',
+              }),
+            ),
             clientId: nonEmptyString('clientId'),
           }),
         ]),
@@ -343,7 +345,6 @@ const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
 export const isValidMaintenance = asTypeGuard<Maintenance>(maintenanceSchema);
 export const isMonitorState = asTypeGuard<MonitorState>(monitorStateSchema);
 
-/** Why a config is invalid, one line per problem. Empty when the config is valid. */
 export function configIssues(value: unknown): string[] {
   const result = runtimeConfigSchema.safeParse(value);
   if (result.success) return [];
@@ -359,7 +360,6 @@ export function configIssues(value: unknown): string[] {
   });
 }
 
-/** Why an access config is invalid, one line per problem. Empty when it is valid. */
 export function accessConfigIssues(value: unknown, pageGroups: string[]): string[] {
   const result = accessConfigSchema.safeParse(value);
   if (!result.success) {

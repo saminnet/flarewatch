@@ -3,6 +3,7 @@ import type { AccessConfig } from '@flarewatch/shared';
 import type { Identity } from '@/lib/auth/access';
 import {
   endSession,
+  passwordIdentity,
   resolvePrincipal,
   resolveViewer,
   sessionName,
@@ -23,7 +24,11 @@ function requestWithCookie(cookie?: string): Request {
   return new Request('https://status.test/', cookie ? { headers: { Cookie: cookie } } : {});
 }
 
-const VALID_SESSION = JSON.stringify({ createdAt: 123, ip: '127.0.0.1' });
+const VALID_SESSION = JSON.stringify({
+  createdAt: 123,
+  ip: '127.0.0.1',
+  identity: await passwordIdentity('configured'),
+});
 
 describe('resolveViewer', () => {
   it('recognizes the operator from a URL-encoded session cookie among other cookies', async () => {
@@ -52,6 +57,8 @@ describe('resolveViewer', () => {
       '{"ip":"127.0.0.1"}',
       '{"createdAt":"123","ip":null}',
       '{"createdAt":123,"ip":5}',
+      // A 1.x session, from before sessions recorded who signed in.
+      '{"createdAt":123,"ip":"127.0.0.1"}',
     ];
     for (const record of records) {
       const kv = memoryKv({ 'admin_session:abc': record });
@@ -97,7 +104,7 @@ describe('resolveViewer', () => {
 describe('sessions', () => {
   it('signs the operator in until the session ends', async () => {
     const kv = memoryKv();
-    const sessionId = await startSession(kv, '127.0.0.1', { kind: 'password' });
+    const sessionId = await startSession(kv, '127.0.0.1', await passwordIdentity('configured'));
     const cookie = `flarewatch_admin_session=${encodeURIComponent(sessionId)}`;
 
     await expect(resolveViewer(envWith(kv), requestWithCookie(cookie))).resolves.toBe('operator');
@@ -105,8 +112,36 @@ describe('sessions', () => {
       expirationTtl: 60 * 60 * 24 * 14,
     });
 
-    await endSession(kv, requestWithCookie(cookie));
+    await endSession(envWith(kv), requestWithCookie(cookie));
     await expect(resolveViewer(envWith(kv), requestWithCookie(cookie))).resolves.toBe('visitor');
+  });
+
+  it('ends password sessions when the admin secret changes or goes away', async () => {
+    const kv = memoryKv();
+    const sessionId = await startSession(kv, null, await passwordIdentity('old secret'));
+    const request = () => requestWithCookie(`flarewatch_admin_session=${sessionId}`);
+    const access: AccessConfig = {
+      providers: [
+        { id: 'pocket-id', name: 'Pocket ID', issuer: 'https://id.test', clientId: 'fw' },
+      ],
+    };
+
+    await expect(resolveViewer(envWith(kv), request())).resolves.toBe('visitor');
+    await expect(resolvePrincipal({ FLAREWATCH_STATE: kv }, request(), access)).resolves.toBeNull();
+    await expect(
+      resolvePrincipal(
+        { FLAREWATCH_ADMIN_BASIC_AUTH: 'old secret', FLAREWATCH_STATE: kv },
+        request(),
+      ),
+    ).resolves.toEqual({ role: 'operator' });
+  });
+
+  it('spends no KV delete on signing out a session that does not exist', async () => {
+    const kv = memoryKv();
+
+    await endSession(envWith(kv), requestWithCookie('flarewatch_admin_session=forged'));
+
+    expect(kv.delete).not.toHaveBeenCalled();
   });
 });
 

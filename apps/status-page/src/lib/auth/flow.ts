@@ -11,7 +11,6 @@ export type SignInFlow = {
   state: string;
   nonce: string;
   verifier: string;
-  /** A path on this site to open after sign-in. */
   returnTo: string;
   /** Unix timestamp (seconds) */
   expiresAt: number;
@@ -36,7 +35,6 @@ export function randomToken(): string {
   return base64Url(crypto.getRandomValues(new Uint8Array(32)));
 }
 
-/** The PKCE S256 challenge for a verifier. */
 export async function codeChallenge(verifier: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', encoder.encode(verifier));
   return base64Url(new Uint8Array(digest));
@@ -90,10 +88,14 @@ export async function openFlow(
   return isSignInFlow(flow) && flow.expiresAt > nowSeconds ? flow : null;
 }
 
-/** Only a path on this site, so the sign-in cannot send someone elsewhere. */
+/**
+ * Only a path on this site, so the sign-in cannot send someone elsewhere.
+ * Parsed the way a browser would: it drops tabs and newlines and reads a
+ * backslash as a slash, which can turn a path into another host.
+ */
 export function safeReturnTo(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) {
-    return '/';
-  }
-  return value;
+  const base = 'https://flarewatch.invalid';
+  if (!value?.startsWith('/') || !URL.canParse(value, base)) return '/';
+  const url = new URL(value, base);
+  return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : '/';
 }

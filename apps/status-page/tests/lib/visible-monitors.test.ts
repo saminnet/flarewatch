@@ -55,6 +55,21 @@ describe('canReadLatency', () => {
     expect(canReadLatency(config, 'backup', { role: 'operator' })).toBe(false);
     expect(canReadLatency(config, 'ghost', { role: 'operator' })).toBe(false);
   });
+
+  it('serves nothing for a monitor whose chart is hidden', () => {
+    const hidden: RuntimeConfig = {
+      monitors: [
+        {
+          id: 'api',
+          name: 'API',
+          method: 'GET',
+          target: 'https://api.example.com',
+          hideLatencyChart: true,
+        },
+      ],
+    };
+    expect(canReadLatency(hidden, 'api', { role: 'operator' })).toBe(false);
+  });
 });
 
 describe('memberSnapshot', () => {

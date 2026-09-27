@@ -24,7 +24,9 @@ function person(overrides: Partial<Extract<Identity, { kind: 'provider' }>> = {}
 
 describe('principalFor', () => {
   it('makes the password sign-in the operator', () => {
-    expect(principalFor({}, { kind: 'password' })).toEqual({ role: 'operator' });
+    expect(principalFor({}, { kind: 'password', secret: 'fingerprint' })).toEqual({
+      role: 'operator',
+    });
   });
 
   it('matches emails without regard to case, and groups exactly', () => {

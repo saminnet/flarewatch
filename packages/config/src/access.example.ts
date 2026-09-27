@@ -1,7 +1,7 @@
 /**
  * Example sign-in configuration. Copy what you need into access.ts.
- * Each provider's client secret is a Worker secret on the status page,
- * FLAREWATCH_OIDC_<ID>_SECRET, never a value here. The password sign-in
+ * Client secrets never go here: they live in the FLAREWATCH_OIDC_SECRETS
+ * secret, as JSON keyed by provider id. The password sign-in
  * (FLAREWATCH_ADMIN_BASIC_AUTH) keeps working next to these.
  */
 
@@ -13,7 +13,7 @@ export const accessConfig: AccessConfig = {
     // Callback URL to register: https://<your status page>/auth/callback
     { id: 'pocket-id', name: 'Pocket ID', issuer: 'https://id.example.com', clientId: '...' },
     { id: 'google', name: 'Google', issuer: 'https://accounts.google.com', clientId: '...' },
-    // GitHub OAuth app. Secret: FLAREWATCH_OIDC_GITHUB_SECRET.
+    // GitHub OAuth app. Its secret goes under "github" in FLAREWATCH_OIDC_SECRETS.
     { id: 'github', name: 'GitHub', type: 'github', clientId: '...' },
   ],
 

@@ -5,6 +5,8 @@ import {
   clientIp,
   endSession,
   isSignInConfigured,
+  overSignInLimit,
+  passwordIdentity,
   sessionCookie,
   startSession,
 } from '@/lib/operator.server';
@@ -39,11 +41,7 @@ export const Route = createFileRoute('/api/admin/session')({
         const password = typeof body.password === 'string' ? body.password : '';
 
         try {
-          const ip = clientIp(request);
-
-          // A rate-limit binding, not a stored counter: failed attempts write nothing.
-          const limiter = env.LOGIN_RATE_LIMIT;
-          if (limiter && ip && !(await limiter.limit({ key: ip })).success) {
+          if (await overSignInLimit(env, request)) {
             return jsonResponse({ error: 'Too many attempts. Try again later.' }, 429);
           }
 
@@ -52,7 +50,11 @@ export const Route = createFileRoute('/api/admin/session')({
           }
 
           const kv = await requireStateKv();
-          const sessionId = await startSession(kv, ip, { kind: 'password' });
+          const sessionId = await startSession(
+            kv,
+            clientIp(request),
+            await passwordIdentity(adminCreds),
+          );
 
           return jsonResponse({ ok: true }, 200, {
             'Set-Cookie': sessionCookie(request, sessionId),
@@ -63,13 +65,14 @@ export const Route = createFileRoute('/api/admin/session')({
       },
 
       DELETE: async ({ request }: { request: Request }) => {
-        if (!isSignInConfigured(await resolveRuntimeEnv())) {
+        const env = await resolveRuntimeEnv();
+        if (!isSignInConfigured(env)) {
           return jsonResponse({ error: 'Admin access not configured' }, 404);
         }
 
         try {
-          const kv = await requireStateKv();
-          await endSession(kv, request);
+          await requireStateKv();
+          await endSession(env, request);
           return new Response(null, {
             status: 204,
             headers: { 'Set-Cookie': clearedSessionCookie(request) },

@@ -35,8 +35,19 @@ describe('accessConfigIssues', () => {
       ),
     ).toEqual([
       'access.providers.0.id: provider id must match ^[A-Za-z0-9_-]{1,32}$',
-      'access.providers.0.issuer: issuer must be an http(s) URL',
+      'access.providers.0.issuer: issuer must be an https URL (http only on localhost)',
       'access.operators.0: access rules are an email, *@domain, group:<name> or github:<login>',
+    ]);
+  });
+
+  it('takes a plain-http issuer only on this machine', () => {
+    const issues = (issuer: string) =>
+      accessConfigIssues({ providers: [{ id: 'id', name: 'ID', issuer, clientId: 'a' }] }, []);
+
+    expect(issues('http://127.0.0.1:3102')).toEqual([]);
+    expect(issues('http://localhost:9000')).toEqual([]);
+    expect(issues('http://id.example.com')).toEqual([
+      'access.providers.0.issuer: issuer must be an https URL (http only on localhost)',
     ]);
   });
 

@@ -1,12 +1,16 @@
-import { createServerFn } from '@tanstack/react-start';
+import { createServerFn, createServerOnlyFn } from '@tanstack/react-start';
 import type { PageConfig, RuntimeConfig } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
 
-// Built on call, not at module scope, so the client bundle can drop the monitor config.
-export function getConfig(): RuntimeConfig {
-  return { monitors: workerConfig.monitors, statusPage: pageConfig };
-}
+/**
+ * Server-only, so the client build drops the config import: a worker.ts that
+ * builds monitors with helper calls would otherwise ship whole to the browser.
+ */
+export const getConfig = createServerOnlyFn((): RuntimeConfig => ({
+  monitors: workerConfig.monitors,
+  statusPage: pageConfig,
+}));
 
 /**
  * Visitors get only the sign-in page. A site Basic Auth secret left over from

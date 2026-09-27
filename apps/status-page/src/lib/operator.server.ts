@@ -5,14 +5,12 @@ import { principalFor, type Identity, type Principal } from './auth/access';
 import { AUTH } from './constants';
 import { resolveRuntimeEnv } from './runtime-env';
 
-/** Whose page to render. A member sees more than a visitor and edits nothing. */
 export type Viewer = 'operator' | 'member' | 'visitor';
 
 type SessionData = {
   createdAt: number;
   ip: string | null;
-  /** Absent on password sessions from before provider sign-in. */
-  identity?: Identity;
+  identity: Identity;
 };
 
 const identities = new WeakMap<Request, Promise<Identity | null>>();
@@ -28,7 +26,6 @@ function sessionKey(sessionId: string): string {
   return `${AUTH.SESSION_KEY_PREFIX}${sessionId}`;
 }
 
-/** A cookie's raw value, or null when the request does not carry it. */
 export function readCookie(request: Request, name: string): string | null {
   for (const part of (request.headers.get('Cookie') ?? '').split(';')) {
     const [rawKey, ...rawValueParts] = part.split('=');
@@ -47,9 +44,17 @@ function sessionIdFrom(request: Request): string | null {
   }
 }
 
+/** The password sign-in, tied to the admin secret it was checked against. */
+export async function passwordIdentity(
+  adminSecret: string,
+): Promise<Extract<Identity, { kind: 'password' }>> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(adminSecret));
+  return { kind: 'password', secret: btoa(String.fromCharCode(...new Uint8Array(digest))) };
+}
+
 function isIdentity(value: unknown): value is Identity {
   if (!isJsonObject(value)) return false;
-  if (value.kind === 'password') return true;
+  if (value.kind === 'password') return typeof value.secret === 'string';
   return (
     value.kind === 'provider' &&
     isNonEmptyString(value.provider) &&
@@ -67,7 +72,7 @@ function isSessionData(value: unknown): value is SessionData {
   return (
     typeof value.createdAt === 'number' &&
     (value.ip === null || typeof value.ip === 'string') &&
-    (value.identity === undefined || isIdentity(value.identity))
+    isIdentity(value.identity)
   );
 }
 
@@ -78,7 +83,12 @@ async function readIdentity(env: Cloudflare.Env, request: Request): Promise<Iden
   try {
     const raw = await kv.get(sessionKey(sessionId));
     const session: unknown = raw ? JSON.parse(raw) : null;
-    return isSessionData(session) ? (session.identity ?? { kind: 'password' }) : null;
+    if (!isSessionData(session)) return null;
+    const { identity } = session;
+    if (identity.kind !== 'password') return identity;
+    const adminSecret = env.FLAREWATCH_ADMIN_BASIC_AUTH;
+    const current = adminSecret ? await passwordIdentity(adminSecret) : null;
+    return current?.secret === identity.secret ? identity : null;
   } catch {
     return null;
   }
@@ -126,14 +136,12 @@ export async function requireOperator(): Promise<void> {
   if ((await getViewer()) !== 'operator') throw new Error('Not authenticated');
 }
 
-/** The signed-in member, for their snapshot. */
 export async function requireMember(): Promise<Extract<Principal, { role: 'member' }>> {
   const principal = await getPrincipal();
   if (principal?.role !== 'member') throw new Error('Not authenticated');
   return principal;
 }
 
-/** The name the account menu shows, from the session. */
 export async function sessionName(env: Cloudflare.Env, request: Request): Promise<string | null> {
   const identity = await resolveIdentity(env, request);
   return identity?.kind === 'provider' ? identity.name : null;
@@ -162,12 +170,21 @@ export function sessionCookie(request: Request, sessionId: string): string {
   return parts.join('; ');
 }
 
+/** Set by Cloudflare's edge on every request from the internet; the client cannot choose it. */
 export function clientIp(request: Request): string | null {
-  const cfIp = request.headers.get('CF-Connecting-IP');
-  if (cfIp) return cfIp;
-  const forwardedFor = request.headers.get('X-Forwarded-For');
-  if (!forwardedFor) return null;
-  return forwardedFor.split(',')[0]?.trim() ?? null;
+  return request.headers.get('CF-Connecting-IP');
+}
+
+/**
+ * Password attempts per IP, on the LOGIN_RATE_LIMIT binding: failed attempts
+ * write nothing. Throws without the binding, so guessing is never unlimited.
+ */
+export async function overSignInLimit(env: Cloudflare.Env, request: Request): Promise<boolean> {
+  const limiter = env.LOGIN_RATE_LIMIT;
+  if (!limiter) throw new Error('LOGIN_RATE_LIMIT binding not found');
+  // Without an IP, every such request shares one bucket instead of skipping the limit.
+  const key = clientIp(request) ?? 'unknown';
+  return !(await limiter.limit({ key })).success;
 }
 
 export async function startSession(
@@ -183,7 +200,10 @@ export async function startSession(
   return sessionId;
 }
 
-export async function endSession(kv: KVNamespace, request: Request): Promise<void> {
+/** Deletes only a live session: a made-up cookie must not spend the daily KV delete quota. */
+export async function endSession(env: Cloudflare.Env, request: Request): Promise<void> {
   const sessionId = sessionIdFrom(request);
-  if (sessionId) await kv.delete(sessionKey(sessionId));
+  if (sessionId && (await resolveIdentity(env, request))) {
+    await env.FLAREWATCH_STATE?.delete(sessionKey(sessionId));
+  }
 }

@@ -1,8 +1,11 @@
 import type { AccessConfig } from '@flarewatch/shared';
 
-/** Who signed in, as their provider vouched for them. */
 export type Identity =
-  | { kind: 'password' }
+  | {
+      kind: 'password';
+      /** A hash of the admin secret it signed in with, so a new password ends the session. */
+      secret: string;
+    }
   | {
       kind: 'provider';
       provider: string;

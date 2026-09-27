@@ -10,7 +10,13 @@ import {
   sealFlow,
 } from './flow';
 import { authorizationUrl, identify, SignInError, type Fetch } from './providers';
-import { clientIp, readCookie, sessionCookie, startSession } from '../operator.server';
+import {
+  clientIp,
+  overSignInLimit,
+  readCookie,
+  sessionCookie,
+  startSession,
+} from '../operator.server';
 
 const FLOW_COOKIE = 'flarewatch_sign_in';
 const CALLBACK_PATH = '/auth/callback';
@@ -94,7 +100,6 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 }
 
-/** GET /auth/callback: checks the provider's answer and starts a session. */
 export async function finishSignIn(
   request: Request,
   { env, access = accessConfig, fetch: fetchFn = fetch }: SignInDeps,
@@ -132,6 +137,8 @@ export async function finishSignIn(
   }
 
   if (!principalFor(access, identity)) return toLogin(request, 'denied');
+  // Each sign-in writes a session to KV, whose free allowance is 1,000 writes a day.
+  if (await overSignInLimit(env, request)) return toLogin(request, 'limited');
   const kv = env.FLAREWATCH_STATE;
   if (!kv) return new Response('FLAREWATCH_STATE binding not found', { status: 500 });
 

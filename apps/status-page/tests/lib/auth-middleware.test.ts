@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { pageConfig } from '@flarewatch/config';
+import { accessConfig } from '@flarewatch/config/access';
+import { passwordIdentity } from '@/lib/operator.server';
 import { authMiddlewareServer } from '@/server/auth-middleware';
 import { buildAuthSecret } from '../helpers/auth-secret';
 
@@ -14,11 +16,15 @@ function call(pathname: string, init?: RequestInit) {
   return { next, response: authMiddlewareServer({ request, pathname, next } as never) };
 }
 
-function sessionKv(validId: string) {
+function sessionKv(validId: string, secret = 'configured') {
   return {
     get: async (key: string) =>
       key === `admin_session:${validId}`
-        ? JSON.stringify({ createdAt: 123, ip: '127.0.0.1' })
+        ? JSON.stringify({
+            createdAt: 123,
+            ip: '127.0.0.1',
+            identity: await passwordIdentity(secret),
+          })
         : null,
     put: async () => {},
     delete: async () => {},
@@ -111,7 +117,7 @@ describe('auth middleware admin sessions', () => {
     const validId = 'session=abc+123';
     vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: 'admin:secret',
-      FLAREWATCH_STATE: sessionKv(validId),
+      FLAREWATCH_STATE: sessionKv(validId, 'admin:secret'),
     });
 
     const noCookie = callAdminApi({});
@@ -136,6 +142,7 @@ describe('auth middleware admin access', () => {
   it('accepts the admin Basic header on admin APIs for scripts', async () => {
     vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: await buildAuthSecret('ops', 's3cret'),
+      LOGIN_RATE_LIMIT: { limit: async () => ({ success: true }) },
     });
 
     const good = call('/api/admin/maintenances', {
@@ -148,6 +155,61 @@ describe('auth middleware admin access', () => {
     });
     expect(((await bad.response) as Response).status).toBe(401);
     expect(bad.next).not.toHaveBeenCalled();
+  });
+
+  it('counts every Basic header attempt against the sign-in rate limit', async () => {
+    vi.stubGlobal('__env__', {
+      FLAREWATCH_ADMIN_BASIC_AUTH: await buildAuthSecret('ops', 's3cret'),
+      LOGIN_RATE_LIMIT: { limit: async () => ({ success: false }) },
+    });
+
+    const limited = call('/api/admin/maintenances', {
+      headers: { Authorization: basic('ops', 's3cret'), 'CF-Connecting-IP': '203.0.113.9' },
+    });
+    expect(((await limited.response) as Response).status).toBe(429);
+    expect(limited.next).not.toHaveBeenCalled();
+  });
+
+  describe('with provider sign-in only', () => {
+    afterEach(() => {
+      delete accessConfig.providers;
+      delete accessConfig.operators;
+    });
+
+    it('lets the operator reach admin APIs and anyone sign out', async () => {
+      accessConfig.providers = [
+        { id: 'pocket-id', name: 'Pocket ID', issuer: 'https://id.test', clientId: 'fw' },
+      ];
+      accessConfig.operators = ['op@example.com'];
+      const identity = {
+        kind: 'provider',
+        provider: 'pocket-id',
+        name: 'Op',
+        email: 'op@example.com',
+        emailVerified: true,
+        groups: [],
+      };
+      vi.stubGlobal('__env__', {
+        FLAREWATCH_STATE: {
+          get: async (key: string) =>
+            key === 'admin_session:abc'
+              ? JSON.stringify({ createdAt: 1, ip: null, identity })
+              : null,
+        },
+      });
+      vi.stubEnv('DEV', false);
+
+      const edit = call('/api/admin/maintenances', {
+        headers: { Cookie: 'flarewatch_admin_session=abc' },
+      });
+      await expect(((await edit.response) as Response).text()).resolves.toBe('next');
+
+      const signOut = call('/api/admin/session', { method: 'DELETE' });
+      await expect(((await signOut.response) as Response).text()).resolves.toBe('next');
+
+      const stranger = call('/api/admin/maintenances');
+      expect(((await stranger.response) as Response).status).toBe(401);
+    });
   });
 
   it('blocks admin APIs in production when sign-in is not configured', async () => {

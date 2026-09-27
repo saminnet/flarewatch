@@ -133,6 +133,39 @@ describe('OpenID Connect sign-in', () => {
     await expect(identify(provider, input, fetchFn)).rejects.toBeInstanceOf(SignInError);
   });
 
+  it('refuses a token endpoint without TLS, which the unsigned ID token relies on', async () => {
+    const provider = oidcProvider();
+    const plain = `http://${new URL(provider.issuer).host}/token`;
+    const fetchFn = vi.fn<Fetch>(async (url) =>
+      url === plain
+        ? Response.json({ id_token: idToken(good(provider.issuer)) })
+        : Response.json({
+            issuer: provider.issuer,
+            authorization_endpoint: `${provider.issuer}/authorize`,
+            token_endpoint: plain,
+          }),
+    );
+    await expect(identify(provider, input, fetchFn)).rejects.toBeInstanceOf(SignInError);
+  });
+
+  it('refuses an authorization endpoint without TLS', async () => {
+    const provider = oidcProvider();
+    const fetchFn = vi.fn<Fetch>(async () =>
+      Response.json({
+        issuer: provider.issuer,
+        authorization_endpoint: `http://${new URL(provider.issuer).host}/authorize`,
+        token_endpoint: `${provider.issuer}/token`,
+      }),
+    );
+    await expect(
+      authorizationUrl(
+        provider,
+        { redirectUri: 'https://s/cb', state: 's', nonce: 'n', challenge: 'c' },
+        fetchFn,
+      ),
+    ).rejects.toBeInstanceOf(SignInError);
+  });
+
   it('refuses a discovery document for another issuer', async () => {
     const provider = oidcProvider();
     // Everything else about this sign-in is valid for the other issuer.

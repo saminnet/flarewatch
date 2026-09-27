@@ -77,6 +77,10 @@ const wranglerConfig = {
     FLAREWATCH_ADMIN_BASIC_AUTH: E2E_ADMIN_AUTH_SECRET,
     FLAREWATCH_AUTH_SECRET: 'e2e-sign-in-cookie-secret',
   },
+  // The suite signs in more often than the 5 a minute real visitors get.
+  ratelimits: [
+    { name: 'LOGIN_RATE_LIMIT', namespace_id: '1002', simple: { limit: 1000, period: 60 } },
+  ],
 };
 
 writeFileSync(e2eConfigPath, `${JSON.stringify(wranglerConfig, null, 2)}\n`);

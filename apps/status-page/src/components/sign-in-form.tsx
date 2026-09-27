@@ -14,6 +14,7 @@ const PROVIDER_ERRORS = new Map([
   ['expired', 'That sign-in took too long or was started in another browser. Try again.'],
   ['denied', 'This account is not allowed to sign in here.'],
   ['provider', 'The sign-in provider did not finish the sign-in. Try again.'],
+  ['limited', 'Too many sign-ins from here. Try again in a minute.'],
 ]);
 
 interface SignInFormProps {

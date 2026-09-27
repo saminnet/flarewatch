@@ -94,6 +94,23 @@ const state: StatusView = {
 };
 
 describe('publicView', () => {
+  it('links to a target without its credentials or query string', () => {
+    const view = publicView(
+      {
+        monitors: [
+          {
+            id: 'api',
+            name: 'API',
+            method: 'GET',
+            target: 'https://ops:hunter2@api.example.com/health?token=abc#top',
+          },
+        ],
+      },
+      null,
+    );
+    expect(view.monitors[0]?.link).toBe('https://api.example.com/health');
+  });
+
   it('projects public monitors and filters monitor-indexed config and state', () => {
     expect(publicView(config, state)).toEqual({
       monitors: [

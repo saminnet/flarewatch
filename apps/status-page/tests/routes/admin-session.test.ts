@@ -98,6 +98,40 @@ describe('POST /api/admin/session login rate limit', () => {
     expect(kv.put).not.toHaveBeenCalled();
   });
 
+  it('refuses to check a password when the rate-limit binding is missing', async () => {
+    const kv = memoryKv();
+    globalThis.__env__ = {
+      FLAREWATCH_ADMIN_BASIC_AUTH: await adminSecret('e2e-password'),
+      FLAREWATCH_STATE: kv,
+    };
+
+    const response = await getPostHandler()({ request: loginRequest('e2e-password') });
+
+    expect(response.status).toBe(500);
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it('never keys the limit on a header the client chooses', async () => {
+    const { limit, binding } = limiter(true);
+    globalThis.__env__ = {
+      FLAREWATCH_ADMIN_BASIC_AUTH: await adminSecret('e2e-password'),
+      FLAREWATCH_STATE: memoryKv(),
+      LOGIN_RATE_LIMIT: binding,
+    };
+
+    for (const forwarded of ['198.51.100.1', '198.51.100.2']) {
+      await getPostHandler()({
+        request: new Request('https://flarewatch.test/api/admin/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': forwarded },
+          body: JSON.stringify({ username: 'e2e-admin', password: 'wrong' }),
+        }),
+      });
+    }
+
+    expect(limit.mock.calls.map(([options]) => options.key)).toEqual(['unknown', 'unknown']);
+  });
+
   it('writes nothing for a wrong password and a session for the right one', async () => {
     const kv = memoryKv();
     globalThis.__env__ = {

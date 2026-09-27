@@ -13,14 +13,12 @@ export type PublicMonitor = Pick<Monitor, 'id' | 'name' | 'tooltip' | 'method'> 
   hideLatencyChart?: boolean;
   link?: string;
   isProxy?: boolean;
-  /** Heartbeat monitors only: the cadence and grace window of the job. */
   periodSeconds?: number;
   graceSeconds?: number;
 };
 
 export type AdminMonitor = PublicMonitor & { private?: boolean };
 
-/** Everything one audience may see on the status page. */
 export type Snapshot = {
   monitors: AdminMonitor[];
   groups: PageConfigGroup;
@@ -58,7 +56,9 @@ function deriveMonitorLink(monitor: Monitor): string | undefined {
 
   try {
     const url = new URL(monitor.target);
-    if (url.protocol === 'http:' || url.protocol === 'https:') return url.href;
+    // Credentials and query tokens in a check target are not for visitors.
+    if (url.protocol === 'http:' || url.protocol === 'https:')
+      return `${url.origin}${url.pathname}`;
   } catch {}
 
   return undefined;
@@ -200,7 +200,6 @@ export function memberSnapshot(
   };
 }
 
-/** Whether someone may read a monitor's latency: it is visible to them and has a chart. */
 export function canReadLatency(
   config: RuntimeConfig,
   monitorId: string,
@@ -210,6 +209,7 @@ export function canReadLatency(
   return (
     monitor !== undefined &&
     monitor.method !== 'HEARTBEAT' &&
+    !monitor.hideLatencyChart &&
     visibleMonitorIds(config, principal).has(monitorId)
   );
 }

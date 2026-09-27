@@ -31,7 +31,15 @@ describe('sign-in flow cookie', () => {
 describe('safeReturnTo', () => {
   it('keeps paths on this site and sends everything else home', () => {
     expect(safeReturnTo('/monitors/api?view=visitor')).toBe('/monitors/api?view=visitor');
-    for (const value of [null, '', 'https://evil.example', '//evil.example', '/\\evil.example']) {
+    for (const value of [
+      null,
+      '',
+      'https://evil.example',
+      '//evil.example',
+      '/\\evil.example',
+      '/\t/evil.example',
+      '/\r\n/evil.example',
+    ]) {
       expect(safeReturnTo(value)).toBe('/');
     }
   });

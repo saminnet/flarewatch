@@ -1,6 +1,7 @@
 import {
   isJsonObject,
   isNonEmptyString,
+  isSecureUrl,
   type AuthProvider,
   type JsonObject,
 } from '@flarewatch/shared';
@@ -58,7 +59,10 @@ async function fetchDiscovery(issuer: string, fetchFn: Fetch): Promise<Discovery
     typeof body.issuer !== 'string' ||
     trimSlash(body.issuer) !== trimSlash(issuer) ||
     !isNonEmptyString(authorize) ||
-    !isNonEmptyString(token)
+    !isNonEmptyString(token) ||
+    // The ID token is trusted for coming over TLS from the token endpoint.
+    !isSecureUrl(token) ||
+    !isSecureUrl(authorize)
   ) {
     throw new SignInError('The provider discovery document does not match its issuer');
   }
@@ -83,7 +87,6 @@ function discover(issuer: string, fetchFn: Fetch): Promise<Discovery> {
 
 type AuthorizeInput = { redirectUri: string; state: string; nonce: string; challenge: string };
 
-/** Where to send the browser to sign in with this provider. */
 export async function authorizationUrl(
   provider: AuthProvider,
   input: AuthorizeInput,
@@ -231,7 +234,6 @@ async function identifyGithub(
   };
 }
 
-/** Swaps the callback code for who signed in. */
 export function identify(
   provider: AuthProvider,
   input: CallbackInput,
