@@ -26,7 +26,6 @@ const VB = 100;
 const PADDING_TOP_PX = 5;
 const X_AXIS_HEIGHT_PX = 20;
 
-// Fraction (0..1) of the plot box -> CSS percentage for an HTML overlay.
 const pct = (frac: number) => `${frac * 100}%`;
 
 // Anchor labels near the edges inward so they don't overflow the plot box.
@@ -36,7 +35,7 @@ function xLabelTransform(frac: number): string {
   return 'translateX(-50%)';
 }
 
-// Nearest data point to a time value via binary search (data is time-ordered).
+// Assumes data is sorted by timeMs (binary search).
 function nearestIndex(data: ChartPoint[], t: number): number {
   let lo = 0;
   let hi = data.length - 1;

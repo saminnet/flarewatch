@@ -22,7 +22,7 @@ class TcpChecker implements MonitorChecker {
     try {
       const { hostname, port } = parseTcpTarget(target.target);
 
-      // Dynamic import to avoid bundling issues
+      // Avoids a cloudflare:sockets bundling issue.
       const { connect } = await import(/* webpackIgnore: true */ 'cloudflare:sockets');
 
       const socket = connect({

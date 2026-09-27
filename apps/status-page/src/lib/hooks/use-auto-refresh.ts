@@ -34,7 +34,6 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
   const displayTime = isHydrated ? currentTime : lastUpdate;
   const displayOpenTime = isHydrated ? openTime : lastUpdate;
 
-  // Calculate refresh state
   const dataAge = displayTime - lastUpdate;
   const isStale = dataAge > STALE_THRESHOLD_SECONDS;
   const pageOpenedLongEnough = currentTime - displayOpenTime > AUTO_REFRESH_MIN_OPEN_SECONDS;
@@ -43,7 +42,6 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
     ? Math.max(0, AUTO_REFRESH_MIN_OPEN_SECONDS - (currentTime - displayOpenTime))
     : null;
 
-  // Auto-refresh if data is stale (>5 minutes old)
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isWindowVisible) return;
@@ -57,8 +55,7 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
 
       const openTime = openTimeRef.current;
 
-      // Revalidate loader data instead of doing a full page reload.
-      // Use a cooldown to avoid hammering KV if the worker isn't updating.
+      // Revalidates instead of reloading; the cooldown avoids hammering KV if the worker stalls.
       if (
         now - lastUpdate > STALE_THRESHOLD_SECONDS &&
         now - openTime > AUTO_REFRESH_MIN_OPEN_SECONDS

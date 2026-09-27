@@ -11,7 +11,6 @@ export function useContainerWidth<T extends HTMLElement = HTMLDivElement>() {
   useIsomorphicLayoutEffect(() => {
     if (!ref.current) return;
 
-    // Measure immediately on mount for synchronous layout
     setWidth(Math.floor(ref.current.getBoundingClientRect().width));
 
     const observer = new ResizeObserver((entries) => {

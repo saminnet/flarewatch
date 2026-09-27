@@ -2,13 +2,9 @@ import type { WorkerConfig } from '@flarewatch/shared';
 
 export const workerConfig: WorkerConfig = {
   /**
-   * Demo monitors (safe defaults)
-   *
-   * These exist so a fresh fork/template deploy shows a working status page
-   * without requiring any secrets.
-   *
-   * Replace these with your own services before relying on FlareWatch for real
-   * alerting/monitoring.
+   * Safe-default demo monitors, so a fresh fork/template deploy shows a
+   * working status page without any secrets. Replace with your own services
+   * before relying on FlareWatch for real monitoring.
    */
   monitors: [
     {

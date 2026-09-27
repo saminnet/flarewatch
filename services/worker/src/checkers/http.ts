@@ -56,7 +56,7 @@ export class HttpChecker implements MonitorChecker {
       try {
         await response.body?.cancel();
       } catch {
-        // Ignore cancellation errors
+        // ignore: cancellation failing here is harmless
       }
 
       if (validationError) {

@@ -5,11 +5,7 @@ export const PING_RESPONSE_HEADERS = {
   'Referrer-Policy': 'no-referrer',
 } satisfies Record<string, string>;
 
-/**
- * Forward a ping request to the monitoring worker over the MONITOR_WORKER
- * service binding. Method, path, and body pass through verbatim; headers are
- * dropped so cookies and auth headers never reach the monitoring worker.
- */
+/** Forwards to the monitoring worker; headers are dropped so cookies and auth never reach it. */
 export async function forwardPing(request: Request): Promise<Response> {
   const env = await resolveRuntimeEnv();
   const monitorWorker = env.MONITOR_WORKER;

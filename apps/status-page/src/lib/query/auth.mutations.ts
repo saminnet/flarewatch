@@ -73,7 +73,6 @@ export function isSessionExpiredError(error: unknown): boolean {
   return error instanceof Error && 'status' in error && error.status === 401;
 }
 
-/** The message to show when an operator-only request fails. */
 export function mutationErrorMessage(error: Error): string {
   return isSessionExpiredError(error)
     ? 'Your session has expired. Sign in again to save changes.'

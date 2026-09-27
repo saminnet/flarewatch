@@ -80,7 +80,7 @@ function logAndFallback<T>(promise: Promise<T>, message: string, fallback: T): P
   });
 }
 
-/** The visitor snapshot. A hub failure degrades to empty data instead of an error page. */
+/** A hub failure degrades to empty data instead of an error page. */
 export async function readVisitorSnapshot(): Promise<Snapshot> {
   const view = await logAndFallback(readHubView(false), 'Error fetching monitor state:', null);
   return visitorSnapshot(getConfig(), view, view?.maintenances ?? []);
@@ -103,7 +103,6 @@ export const getOperatorSnapshot = createServerFn({ method: 'GET' }).handler(
   },
 );
 
-/** The monitors a signed-in member may see, read only. */
 export const getMemberSnapshot = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Snapshot> => {
     const principal = await requireMember();

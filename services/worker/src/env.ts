@@ -10,10 +10,7 @@ export interface Env {
   HEARTBEAT_SECRET?: string;
   /** Workers rate-limiting binding, 30 requests per 60s per monitor. */
   HEARTBEAT_RATE_LIMIT?: RateLimit;
-  /**
-   * Public status page origin used to build ping URLs for /ping-url.
-   * Falls back to the origin of the requesting status page.
-   */
+  /** Public status page origin for /ping-url; falls back to the requester's origin. */
   PUBLIC_ORIGIN?: string;
 }
 

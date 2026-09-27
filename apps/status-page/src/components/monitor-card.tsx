@@ -471,7 +471,6 @@ export function MonitorRow({ monitor, state, operator }: MonitorViewProps) {
   );
 }
 
-/** Everything about one monitor, for its own page. */
 export function MonitorDetail({
   monitor,
   state,

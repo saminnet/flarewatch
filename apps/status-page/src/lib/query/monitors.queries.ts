@@ -17,7 +17,7 @@ export const configQuery = () =>
   queryOptions({
     queryFn: () => getConfigServerFn(),
     queryKey: qk.config,
-    staleTime: QUERY_STALE_TIME.MONITORS, // 5 minutes - config rarely changes
+    staleTime: QUERY_STALE_TIME.MONITORS,
   });
 
 const SNAPSHOTS = {

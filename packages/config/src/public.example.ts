@@ -1,7 +1,6 @@
 /**
- * Example Public Configuration
- * Copy this to public.ts and customize for your needs.
- * Safe to import in browser bundles (status page UI).
+ * Copy this to public.ts and customize. Safe to import in browser bundles
+ * (status page UI).
  */
 
 import type { PageConfig } from '@flarewatch/shared';
@@ -13,8 +12,8 @@ export const pageConfig: PageConfig = {
   // Optional: 'private' shows visitors only the sign-in page (needs a password or a provider to sign in).
   // visibility: 'private',
 
-  // Optional: restrict CORS for public API endpoints (e.g. GET /api/data)
-  // If omitted, the API is accessible from any origin (CORS: "*").
+  // Optional: restrict CORS for public API endpoints (e.g. GET /api/data);
+  // omitted allows any origin (CORS: "*").
   // apiCorsOrigins: ['https://status.example.com'],
 
   // Footer links (optional)
@@ -23,8 +22,7 @@ export const pageConfig: PageConfig = {
     { label: 'Cloudflare', link: 'https://www.cloudflare.com/' },
   ],
 
-  // Group monitors by category (optional)
-  // If not specified, all monitors are shown in a flat list
+  // Optional: group monitors by category; omitted shows a flat list.
   group: {
     Demo: ['demo_example', 'demo_cloudflare_trace', 'demo_cloudflare_status'],
   },

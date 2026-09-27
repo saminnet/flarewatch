@@ -11,9 +11,7 @@ export type Session = {
   /** Who is signed in; null for visitors and in dev without sign-in. */
   name: string | null;
   canSignIn: boolean;
-  /** Password sign-in is set up. */
   passwordSignIn: boolean;
-  /** The providers someone can sign in with. */
   providers: { id: string; name: string }[];
   /** Visitors see only the sign-in page. */
   privateOnly: boolean;

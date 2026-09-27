@@ -7,12 +7,7 @@ interface UseNowOptions {
   enabled?: boolean;
 }
 
-/**
- * SSR-safe hook for current time that avoids hydration mismatches.
- *
- * Returns `serverTime` until hydration completes, then switches to
- * live `Date.now()` with automatic refresh.
- */
+/** Returns `serverTime` until hydration completes to avoid an SSR mismatch, then live time. */
 export function useNow({ serverTime, interval = 60_000, enabled = true }: UseNowOptions): number {
   const isHydrated = useHydrated();
   const [clientTime, setClientTime] = useState(serverTime);

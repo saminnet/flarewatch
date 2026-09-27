@@ -21,7 +21,6 @@ async function fromMonitorWorker(path: string): Promise<unknown> {
   return response.json();
 }
 
-/** Every monitor the hub has seen and every maintenance window, from the monitoring worker. */
 export async function fetchHubView(): Promise<HubView> {
   const view = await fromMonitorWorker('/view');
   if (!isHubView(view)) throw new Error('Monitor worker sent an invalid view');
@@ -36,7 +35,6 @@ export async function saveMaintenance(maintenance: Maintenance): Promise<void> {
   if (!response.ok) throw new Error(`Saving maintenance answered ${response.status}`);
 }
 
-/** False when no window has this id. */
 export async function deleteMaintenance(id: string): Promise<boolean> {
   const response = await callMonitorWorker(`/maintenances/${encodeURIComponent(id)}`, {
     method: 'DELETE',
@@ -46,7 +44,7 @@ export async function deleteMaintenance(id: string): Promise<boolean> {
   return true;
 }
 
-/** One monitor's latency samples for the last 12 hours, oldest first. */
+/** The last 12 hours, oldest first. */
 export async function fetchLatency(monitorId: string): Promise<LatencySample[]> {
   const samples = await fromMonitorWorker(`/latency/${encodeURIComponent(monitorId)}`);
   if (!isLatencySamples(samples)) throw new Error('Monitor worker sent invalid latency');

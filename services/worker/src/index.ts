@@ -44,15 +44,7 @@ async function safeCallback<T extends unknown[]>(
   }
 }
 
-/**
- * Determine if notification should be sent based on grace period.
- *
- * Grace period logic:
- * - No grace period configured: notify immediately on any status change
- * - With grace period: wait until grace period elapses before notifying
- * - For UP transitions: only notify if the DOWN would have been notified
- * - For DOWN: notify when grace period threshold is crossed
- */
+/** A grace period delays notification until it elapses; an UP notifies only if the DOWN before it would have. */
 function shouldNotify(
   incidentStartTime: number,
   currentTime: number,
@@ -109,7 +101,6 @@ const defaultWorkerDeps: WorkerDeps = {
   staticConfig: workerConfig,
 };
 
-/** Used by both the scheduled handler and the /trigger endpoint. */
 export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps): Promise<void> {
   const location = await deps.getEdgeLocation();
   log.info('Starting checks', { location });
@@ -208,8 +199,7 @@ const Worker = {
   ): Promise<Response> {
     const url = new URL(request.url);
 
-    // Trigger check (internal binding only). If you route this worker publicly,
-    // add a secret check here.
+    // Internal binding only; add a secret check if this worker is ever routed publicly.
     if (url.pathname === '/trigger' && request.method === 'POST') {
       ctx.waitUntil(runChecks(env, deps));
       return Response.json({ success: true, message: 'Check triggered' }, { status: 202 });

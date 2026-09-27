@@ -1,14 +1,13 @@
 /**
- * Example Worker Configuration
- * Copy this to worker.ts and customize for your needs.
+ * Copy this to worker.ts and customize.
  */
 
 import type { WorkerConfig } from '@flarewatch/shared';
 
 export const workerConfig: WorkerConfig = {
   monitors: [
-    // Monitor name links: HTTP/HTTPS targets auto-link by default.
-    // Use `link: false` to disable, or `link: 'url'` to override.
+    // Monitor name links: HTTP/HTTPS targets auto-link by default. Use
+    // `link: false` to disable, or `link: 'url'` to override.
 
     // Safe demo monitors (no secrets required)
     {
@@ -27,7 +26,7 @@ export const workerConfig: WorkerConfig = {
       method: 'GET',
       target: 'https://cloudflare.com/cdn-cgi/trace',
       expectedCodes: [200],
-      responseKeyword: 'colo=', // Response must contain this
+      responseKeyword: 'colo=',
       timeout: 10000,
     },
 
@@ -134,7 +133,7 @@ export const workerConfig: WorkerConfig = {
   //   //   payload: { message: '$MSG', channel: '#alerts' },
   //   // },
   //
-  //   timeZone: 'UTC', // For timestamp formatting
+  //   timeZone: 'UTC',
   //   gracePeriod: 3, // Minutes before sending notification (avoid flapping)
   // },
 
