@@ -61,28 +61,28 @@ export function UptimeCalendar({ monitors, state, selectedMonth }: UptimeCalenda
     setSelectedDay(data);
   }
 
-  const monthCards = calendarGrids.map((grid, i) => (
-    <CalendarMonth
-      key={grid.yearMonth}
-      grid={grid}
-      dataMap={dataMap}
-      monthIndex={i}
-      monthUptime={monthUptimes.get(grid.yearMonth) ?? null}
-      onDayClick={handleDayClick}
-    />
-  ));
-
   return (
     <>
       <Card className="py-0 gap-0 mb-6">
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between mb-4">
             <div className="text-sm font-semibold text-foreground">Uptime History</div>
-            <span className="text-xs text-muted-foreground">{dateRangeLabel}</span>
+            <span className="hidden text-xs text-muted-foreground sm:inline">{dateRangeLabel}</span>
           </div>
 
-          <div className="hidden sm:grid sm:grid-cols-3 gap-4">{monthCards}</div>
-          <div className="flex sm:hidden flex-col-reverse gap-4">{monthCards}</div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {calendarGrids.map((grid, i) => (
+              <CalendarMonth
+                key={grid.yearMonth}
+                className={grid === lastGrid ? undefined : 'hidden sm:block'}
+                grid={grid}
+                dataMap={dataMap}
+                monthIndex={i}
+                monthUptime={monthUptimes.get(grid.yearMonth) ?? null}
+                onDayClick={handleDayClick}
+              />
+            ))}
+          </div>
 
           <CalendarLegend />
         </div>

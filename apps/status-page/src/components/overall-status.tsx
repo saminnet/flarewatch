@@ -2,7 +2,7 @@ import { IconCircleCheck, IconAlertTriangle, IconCircleX, IconRefresh } from '@t
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { MonitorState } from '@flarewatch/shared';
+import { formatUtcShort, type MonitorState } from '@flarewatch/shared';
 import { getOverallStatus } from '@/lib/uptime';
 import { useAutoRefresh } from '@/lib/hooks/use-auto-refresh';
 import { cn } from '@/lib/utils';
@@ -52,21 +52,16 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
   const secondsAgo = currentTime - state.lastUpdate;
   const late = state.overallLate ?? 0;
 
-  function formatLastUpdated(): string {
-    return new Date(state.lastUpdate * 1000)
-      .toISOString()
-      .replace('T', ' ')
-      .replace(/\.\d{3}Z$/, ' UTC');
-  }
-
-  function getStatusTitle(): string {
-    if (status !== 'degraded') return config.title;
+  function getStatusTitle(): [title: string, count?: string] {
+    if (status !== 'degraded') return [config.title];
 
     if (state.overallDown === 0) {
-      return `Some jobs are running late (${late} out of ${jobCount})`;
+      return ['Some jobs are running late', `(${late} out of ${jobCount})`];
     }
-    return `Some systems are down (${state.overallDown} out of ${monitorCount})`;
+    return ['Some systems are down', `(${state.overallDown} out of ${monitorCount})`];
   }
+
+  const [title, count] = getStatusTitle();
 
   function getRefreshMessage(): string {
     if (refreshCountdown !== null && refreshCountdown > 0) {
@@ -87,8 +82,14 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
 
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <h2 className="text-base sm:text-lg font-semibold text-foreground">
-              {getStatusTitle()}
+            <h2 className="text-base sm:text-lg font-semibold text-balance text-foreground">
+              {title}
+              {count && (
+                <span className="whitespace-nowrap font-normal text-muted-foreground">
+                  {' '}
+                  {count}
+                </span>
+              )}
             </h2>
             <Badge variant={config.badgeVariant} className="shrink-0">
               {late > 0
@@ -101,7 +102,7 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
             <p className="text-xs text-muted-foreground">
               {isInitialState
                 ? 'Running first check...'
-                : `Last updated ${formatLastUpdated()} (${secondsAgo}s ago)`}
+                : `Last updated ${formatUtcShort(state.lastUpdate)} (${secondsAgo}s ago)`}
             </p>
 
             {!isInitialState && isStale && (

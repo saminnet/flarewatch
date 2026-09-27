@@ -221,6 +221,10 @@ code {
     @apply font-sans;
     scrollbar-gutter: stable;
   }
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
 }
 
 /* Entrance animation for monitor cards */
@@ -255,12 +259,12 @@ code {
   animation: calendar-cell-in 0.3s ease-out both;
 }
 
-/* Respect reduced motion preferences */
 ::view-transition-group(*) {
   animation-duration: 250ms;
   animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* Respect reduced motion preferences */
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
   .animate-calendar-cell {

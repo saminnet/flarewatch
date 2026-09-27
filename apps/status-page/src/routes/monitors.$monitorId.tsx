@@ -3,8 +3,8 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { IconArrowLeft } from '@tabler/icons-react';
 import type { MonitorState } from '@flarewatch/shared';
 import { MonitorDetail } from '@/components/monitor-card';
-import { IncidentCard } from '@/components/events/incident-card';
-import { MaintenanceEventCard } from '@/components/events/maintenance-event-card';
+import { IncidentCard } from '@/components/history/incident-card';
+import { MaintenanceEventCard } from '@/components/history/maintenance-event-card';
 import { PAGE_CONTAINER_CLASSES, TIME_MS, UPTIME_DAYS } from '@/lib/constants';
 import { useAudience } from '@/lib/hooks/use-audience';
 import { useNow } from '@/lib/hooks/use-now';
@@ -51,7 +51,7 @@ function MonitorPage() {
         <p className="text-sm text-muted-foreground">No monitoring data available yet.</p>
       )}
 
-      <MonitorEvents monitorId={monitor.id} snapshot={snapshot} state={state} nowMs={nowMs} />
+      <MonitorHistory monitorId={monitor.id} snapshot={snapshot} state={state} nowMs={nowMs} />
     </div>
   );
 }
@@ -59,7 +59,7 @@ function MonitorPage() {
 const RECENT_EVENTS_LIMIT = 5;
 
 /** This monitor's maintenance windows and incidents, newest first after anything ongoing. */
-function MonitorEvents({
+function MonitorHistory({
   monitorId,
   snapshot,
   state,
@@ -84,13 +84,13 @@ function MonitorEvents({
   const events = [...pinned, ...timeline];
 
   return (
-    <section className="mt-6" aria-labelledby="monitor-events">
+    <section className="mt-6" aria-labelledby="monitor-history">
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 id="monitor-events" className="text-base font-semibold text-foreground">
-          Events
+        <h2 id="monitor-history" className="text-base font-semibold text-foreground">
+          History
         </h2>
         <Link
-          to="/events"
+          to="/history"
           search={(prev) => ({ ...prev, monitor: monitorId })}
           className="text-sm text-muted-foreground hover:text-foreground"
         >

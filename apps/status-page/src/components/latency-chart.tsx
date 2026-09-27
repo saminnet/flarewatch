@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { area, line, curveMonotoneX } from 'd3-shape';
-import type { MonitorState } from '@flarewatch/shared';
+import { formatUtcShort, type MonitorState } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { linearScale, niceLinearTicks } from '@/lib/chart-scale';
@@ -72,9 +72,7 @@ function ChartTooltip({ point, xFrac }: { point: ChartPoint; xFrac: number }) {
     >
       <div className="font-medium text-popover-foreground">{point.ping}ms</div>
       <div className="text-muted-foreground">{coloLabel || point.loc}</div>
-      <div className="text-muted-foreground">
-        {formatUtc(new Date(point.timeMs), 'MMM d, HH:mm')}
-      </div>
+      <div className="text-muted-foreground">{formatUtcShort(point.timeMs / 1000)}</div>
     </div>
   );
 }

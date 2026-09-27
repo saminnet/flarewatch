@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { IconArrowLeft, IconLock } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -83,11 +84,9 @@ export function SignInForm({ privateOnly }: { privateOnly: boolean }) {
 
         {!privateOnly && (
           <div className="mt-6 text-center">
-            <Link to="/">
-              <Button variant="ghost" size="sm">
-                <IconArrowLeft className="mr-2 h-4 w-4" />
-                Go back
-              </Button>
+            <Link to="/" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+              <IconArrowLeft />
+              Go back
             </Link>
           </div>
         )}

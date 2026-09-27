@@ -138,6 +138,12 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
 
   await expect(page).toHaveTitle(/FlareWatch/);
   await expect(page.getByRole('banner').getByRole('link', { name: /FlareWatch/ })).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+  await expect(nav.getByRole('link')).toHaveText(['History']);
+  await expect(nav.getByRole('link', { name: 'History' })).not.toHaveAttribute('aria-current');
+  await expect(
+    page.getByRole('contentinfo').getByRole('link', { name: 'GitHub', exact: true }),
+  ).toHaveAttribute('href', 'https://github.com/saminnet/flarewatch');
   await expect(
     page.getByRole('heading', { name: /Some systems are down \(3 out of 12\)/i }),
   ).toBeVisible();
@@ -202,15 +208,15 @@ test('a row opens the monitor page with its history and chart', async ({ page })
 
   await expect(page.getByText('No incidents or maintenance in the last 90 days.')).toBeVisible();
   await page.getByRole('link', { name: 'Full history' }).click();
-  await expect(page).toHaveURL(/\/events\?.*monitor=demo_cloudflare_docs/);
+  await expect(page).toHaveURL(/\/history\?.*monitor=demo_cloudflare_docs/);
 
   // Each page lists the monitor's own incidents and maintenance windows.
   await page.goto('/monitors/demo_cloudflare_status');
-  const events = page.getByRole('region', { name: 'Events' });
-  await expect(events.getByText('Synthetic E2E outage')).toBeVisible();
-  await expect(events.getByText('E2E active maintenance')).toHaveCount(0);
+  const history = page.getByRole('region', { name: 'History' });
+  await expect(history.getByText('Synthetic E2E outage')).toBeVisible();
+  await expect(history.getByText('E2E active maintenance')).toHaveCount(0);
   await page.goto('/monitors/demo_cloudflare_trace');
-  await expect(events.getByText('E2E active maintenance')).toBeVisible();
+  await expect(history.getByText('E2E active maintenance')).toBeVisible();
   expect(clientErrors).toEqual([]);
 });
 
@@ -523,10 +529,10 @@ test('private monitor never appears to visitors but shows to the operator with a
   await expect(page.getByText(/out of 13/)).toHaveCount(0);
   await expect(page.getByText('Internal Billing')).toHaveCount(0);
 
-  const eventsHtml = await (await request.get('/events')).text();
-  expect(eventsHtml).not.toContain(privateId);
-  expect(eventsHtml).not.toContain(privateName);
-  expect(eventsHtml).not.toContain(privateMonitor.maintenance);
+  const historyHtml = await (await request.get('/history')).text();
+  expect(historyHtml).not.toContain(privateId);
+  expect(historyHtml).not.toContain(privateName);
+  expect(historyHtml).not.toContain(privateMonitor.maintenance);
 
   const data = await readOkJson(await request.get('/api/data'), isPublicData);
   const dataBody = JSON.stringify(data);
@@ -595,7 +601,7 @@ test('private monitor never appears to visitors but shows to the operator with a
   ).toBeVisible();
   await expect(page.getByText('Reported', { exact: true })).toBeVisible();
 
-  await page.goto('/events');
+  await page.goto('/history');
   await expect(page.getByText(privateMonitor.maintenance)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add maintenance window' })).toBeVisible();
   expect(clientErrors).toEqual([]);
@@ -628,9 +634,9 @@ test('visitor view shows the operator the page as visitors see it', async ({ pag
   await expect(page.getByRole('heading', { level: 1, name: 'Nightly Backup' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Copy ping URL/ })).toHaveCount(0);
 
-  await page.getByRole('banner').getByRole('link', { name: 'Events' }).click();
-  await expect(page).toHaveURL(/\/events\?.*view=visitor/);
-  await expect(page.getByRole('heading', { name: 'Events', exact: true })).toBeVisible();
+  await page.getByRole('banner').getByRole('link', { name: 'History' }).click();
+  await expect(page).toHaveURL(/\/history\?.*view=visitor/);
+  await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add maintenance window' })).toHaveCount(0);
   await expect(page.getByText(privateMonitor.maintenance)).toHaveCount(0);
 
@@ -641,11 +647,16 @@ test('visitor view shows the operator the page as visitors see it', async ({ pag
   expect(clientErrors).toEqual([]);
 });
 
-test('events route renders seeded incidents and maintenance', async ({ page }) => {
+test('history route renders seeded incidents and maintenance', async ({ page }) => {
   const clientErrors = collectClientErrors(page);
-  await page.goto('/events');
+  await page.goto('/history');
 
-  await expect(page.getByRole('heading', { name: 'Events', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('link', { name: 'History' }),
+  ).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('Incidents and scheduled maintenance')).toBeVisible();
   await expect(page.getByText('Active & Upcoming Maintenance')).toBeVisible();
   await expect(page.getByText('E2E active maintenance')).toBeVisible();
@@ -659,7 +670,7 @@ test('events route renders seeded incidents and maintenance', async ({ page }) =
   expect(clientErrors).toEqual([]);
 });
 
-test('events route filters by type, monitor, and invalid month fallback', async ({ page }) => {
+test('history route filters by type, monitor, and invalid month fallback', async ({ page }) => {
   const seeded = await readOkJson(
     await page.request.get('/api/maintenances'),
     isSeededMaintenanceList,
@@ -668,26 +679,26 @@ test('events route filters by type, monitor, and invalid month fallback', async 
   if (!upcoming) throw new Error('seeded upcoming maintenance is missing');
   const upcomingMonth = upcoming.start.slice(0, 7);
 
-  await page.goto('/events?type=incident');
+  await page.goto('/history?type=incident');
   await expect(page).toHaveURL(/type=incident/);
   await expect(page.getByText('Synthetic E2E outage')).toBeVisible();
   await expect(page.getByText('E2E active maintenance')).not.toBeVisible();
 
-  await page.goto('/events?type=maintenance');
+  await page.goto('/history?type=maintenance');
   await expect(page).toHaveURL(/type=maintenance/);
   await expect(page.getByText('E2E active maintenance')).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).not.toBeVisible();
 
-  await page.goto(`/events?type=maintenance&month=${upcomingMonth}`);
+  await page.goto(`/history?type=maintenance&month=${upcomingMonth}`);
   await expect(page.getByText('E2E upcoming maintenance')).toBeVisible();
 
-  await page.goto(`/events?monitor=demo_example&month=${upcomingMonth}`);
+  await page.goto(`/history?monitor=demo_example&month=${upcomingMonth}`);
   await expect(page).toHaveURL(/monitor=demo_example/);
   await expect(page.getByText('E2E upcoming maintenance')).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).not.toBeVisible();
 
-  await page.goto('/events?month=not-a-month');
-  await expect(page.getByRole('heading', { name: 'Events', exact: true })).toBeVisible();
+  await page.goto('/history?month=not-a-month');
+  await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
   await expect(page.getByText('Incidents and scheduled maintenance')).toBeVisible();
   await expect(page).not.toHaveURL(/not-a-month/);
 });
@@ -721,7 +732,7 @@ test.describe.serial('operator maintenance lifecycle', () => {
     'mutating E2E tests require the local seeded Wrangler server',
   );
 
-  test('signs in, manages maintenance on Events, and signs out', async ({ page }) => {
+  test('signs in, manages maintenance on History, and signs out', async ({ page }) => {
     const clientErrors = collectClientErrors(page);
     await page.goto('/admin');
     await expect(page).toHaveURL(/\/login$/);
@@ -744,7 +755,7 @@ test.describe.serial('operator maintenance lifecycle', () => {
     await expect(page.getByRole('button', { name: /Account menu/ })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Sign in' })).toHaveCount(0);
 
-    await page.getByRole('banner').getByRole('link', { name: 'Events' }).click();
+    await page.getByRole('banner').getByRole('link', { name: 'History' }).click();
     await page.getByRole('button', { name: 'Add maintenance window' }).click();
     const addDialog = page.getByRole('dialog', { name: 'Add maintenance window' });
     await addDialog.getByLabel('Title').fill('E2E lifecycle maintenance');

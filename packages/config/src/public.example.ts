@@ -17,7 +17,7 @@ export const pageConfig: PageConfig = {
   // If omitted, the API is accessible from any origin (CORS: "*").
   // apiCorsOrigins: ['https://status.example.com'],
 
-  // Header links (optional)
+  // Footer links (optional)
   links: [
     { label: 'GitHub', link: 'https://github.com/your-org/your-repo' },
     { label: 'Cloudflare', link: 'https://www.cloudflare.com/' },

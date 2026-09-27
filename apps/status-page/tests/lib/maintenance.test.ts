@@ -75,7 +75,11 @@ describe('maintenance helpers', () => {
   it('formats time ranges and relative durations', () => {
     expect(
       formatDateRange(new Date('2026-06-09T12:30:00.000Z'), new Date('2026-06-09T13:45:00.000Z')),
-    ).toBe('Jun 9, 12:30 - Jun 9, 13:45');
+    ).toBe('Jun 9, 12:30–13:45 UTC');
+    expect(
+      formatDateRange(new Date('2026-06-09T23:30:00.000Z'), new Date('2026-06-10T01:00:00.000Z')),
+    ).toBe('Jun 9, 23:30 – Jun 10, 01:00 UTC');
+    expect(formatDateRange(new Date('2026-06-09T12:30:00.000Z'), null)).toBe('Jun 9, 12:30 UTC');
     expect(formatTimeUntil(new Date('2026-06-09T13:30:00.000Z'), new Date(now))).toBe('1h 30m');
   });
 

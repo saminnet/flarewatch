@@ -35,7 +35,7 @@ export function MaintenanceCard({
       <div className={cn('flex-1 min-w-0', isActive ? 'px-3 py-2' : 'px-3 py-2.5')}>
         <div className="flex items-center gap-2 flex-wrap">
           <Icon className={cn('size-4 shrink-0', colors.icon)} />
-          <h4 className="font-medium text-foreground">
+          <h4 className="text-sm font-medium text-foreground">
             {maintenance.title ?? 'Scheduled Maintenance'}
           </h4>
           {isActive ? (

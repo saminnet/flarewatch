@@ -1,6 +1,6 @@
-import type { Maintenance } from '@flarewatch/shared';
+import { formatUtcShort, type Maintenance } from '@flarewatch/shared';
 import { TIME_MS, UPCOMING_MAINTENANCE_DAYS } from './constants';
-import { formatUtc, formatDuration } from './date';
+import { formatUtc, formatDuration, getDateKey } from './date';
 
 function isMaintenanceActive(maintenance: Maintenance, now = Date.now()): boolean {
   const startMs = new Date(maintenance.start).getTime();
@@ -77,11 +77,11 @@ export function formatTimeUntil(date: Date, now = new Date()): string {
 }
 
 export function formatDateRange(start: Date, end: Date | null): string {
-  const pattern = 'MMM d, HH:mm';
-  const startStr = formatUtc(start, pattern);
-  if (!end) return startStr;
-  const endStr = formatUtc(end, pattern);
-  return `${startStr} - ${endStr}`;
+  if (!end) return formatUtcShort(start.getTime() / 1000);
+  if (getDateKey(start) === getDateKey(end)) {
+    return `${formatUtc(start, 'MMM d, HH:mm')}–${formatUtc(end, "HH:mm 'UTC'")}`;
+  }
+  return `${formatUtc(start, 'MMM d, HH:mm')} – ${formatUtcShort(end.getTime() / 1000)}`;
 }
 
 type MaintenanceColors = {

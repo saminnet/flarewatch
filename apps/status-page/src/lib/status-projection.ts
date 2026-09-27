@@ -1,5 +1,5 @@
 import type { Maintenance, MonitorState } from '@flarewatch/shared';
-import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/events/types';
+import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/history/types';
 import type { PublicMonitor } from '@/lib/public-view';
 import { getMaintenanceStatus } from '@/lib/maintenance';
 import { getLatestLatency, getMonitorError, isMonitorUp } from '@/lib/uptime';

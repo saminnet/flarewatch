@@ -40,7 +40,7 @@ export function MaintenanceEventCard({
 
   return (
     <Alert className={colors.bg}>
-      <AlertTitle className="flex items-center gap-2">
+      <AlertTitle className="flex flex-wrap items-center gap-2">
         <IconTool className={cn('h-4 w-4', colors.icon)} />
         {title}
         <Badge variant="outline" className="text-xs">

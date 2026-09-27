@@ -14,8 +14,8 @@ import {
 } from '@/components/ui/select';
 import { EmptyState } from '@/components/ui/empty-state';
 import { UptimeCalendar } from '@/components/uptime-calendar/uptime-calendar';
-import { IncidentCard } from '@/components/events/incident-card';
-import { MaintenanceEventCard } from '@/components/events/maintenance-event-card';
+import { IncidentCard } from '@/components/history/incident-card';
+import { MaintenanceEventCard } from '@/components/history/maintenance-event-card';
 import { MaintenanceFormDialog } from '@/components/maintenance/maintenance-form-dialog';
 import { DeleteMaintenanceDialog } from '@/components/maintenance/delete-maintenance-dialog';
 import { snapshotQuery } from '@/lib/query/monitors.queries';
@@ -25,7 +25,7 @@ import { shiftYearMonth, getUtcMonthBounds } from '@/lib/date';
 import { projectTimeline } from '@/lib/status-projection';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 
-const eventsRoute = getRouteApi('/events');
+const historyRoute = getRouteApi('/history');
 
 function getCurrentMonth(): string {
   return new Date().toISOString().slice(0, 7);
@@ -36,7 +36,7 @@ type DialogTarget = { open: boolean; maintenance?: Maintenance; key: number };
 
 const CLOSED: DialogTarget = { open: false, key: 0 };
 
-export function EventsPage() {
+export function HistoryPage() {
   const audience = useAudience();
   const operator = audience === 'operator';
   const {
@@ -50,14 +50,14 @@ export function EventsPage() {
     key: prev.key + 1,
   });
   const closeDialog = (prev: DialogTarget) => ({ ...prev, open: false });
-  const { loaderNowMs } = eventsRoute.useLoaderData();
+  const { loaderNowMs } = historyRoute.useLoaderData();
   const nowMs = useNow({ serverTime: loaderNowMs });
   const {
     month: selectedMonth,
     monitor: selectedMonitor,
     type: eventType,
-  } = eventsRoute.useSearch();
-  const navigate = eventsRoute.useNavigate();
+  } = historyRoute.useSearch();
+  const navigate = historyRoute.useNavigate();
   const resolvedMonth = selectedMonth ?? getCurrentMonth();
 
   const { monthStart, monthEnd } = getUtcMonthBounds(resolvedMonth);
@@ -90,7 +90,7 @@ export function EventsPage() {
   ];
 
   const typeOptions = [
-    { value: 'all', label: 'All events' },
+    { value: 'all', label: 'All types' },
     { value: 'incident', label: 'Incidents' },
     { value: 'maintenance', label: 'Maintenance windows' },
   ];
@@ -99,7 +99,7 @@ export function EventsPage() {
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Events</h1>
+          <h1 className="text-2xl font-bold text-foreground">History</h1>
           <p className="mt-1 text-sm text-muted-foreground">Incidents and scheduled maintenance</p>
         </div>
         {operator && (
@@ -191,7 +191,7 @@ export function EventsPage() {
           icon={IconCalendar}
           iconClassName="text-status-operational"
           iconContainerClassName="bg-status-operational-bg"
-          title="No events this month"
+          title="Nothing this month"
           description="No incidents or maintenance scheduled for this period."
         />
       ) : (

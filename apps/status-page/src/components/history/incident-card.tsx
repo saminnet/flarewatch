@@ -16,7 +16,7 @@ export function IncidentCard({ event }: IncidentCardProps) {
 
   return (
     <Alert className="bg-status-down-bg">
-      <AlertTitle className="flex items-center gap-2">
+      <AlertTitle className="flex flex-wrap items-center gap-2">
         <IconAlertTriangle className="h-4 w-4 text-status-down" />
         {event.monitorName}
         <Badge variant="outline" className="text-xs">

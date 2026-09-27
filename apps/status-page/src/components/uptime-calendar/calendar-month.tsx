@@ -1,11 +1,13 @@
 import { getDateKey, type CalendarMonthGrid } from '@/lib/date';
 import type { AggregatedDayData } from '@/lib/uptime';
+import { cn } from '@/lib/utils';
 import { CalendarDayCell } from './calendar-day-cell';
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 interface CalendarMonthProps {
+  className?: string;
   grid: CalendarMonthGrid;
   dataMap: Map<string, AggregatedDayData>;
   monthIndex: number;
@@ -14,6 +16,7 @@ interface CalendarMonthProps {
 }
 
 export function CalendarMonth({
+  className,
   grid,
   dataMap,
   monthIndex,
@@ -21,7 +24,7 @@ export function CalendarMonth({
   onDayClick,
 }: CalendarMonthProps) {
   return (
-    <div className="rounded-lg border border-border bg-card p-2.5">
+    <div className={cn('rounded-lg border border-border bg-card p-2.5', className)}>
       <div className="flex items-baseline justify-between mb-1.5">
         <div className="text-xs font-semibold tracking-tight text-foreground">{grid.label}</div>
         {monthUptime != null && (
@@ -48,7 +51,7 @@ export function CalendarMonth({
                 key={day ? day.date.toISOString() : `pad-${weekIndex}-${dayIndex}`}
                 day={day}
                 data={day ? dataMap.get(getDateKey(day.date)) : undefined}
-                animationDelay={(monthIndex * 42 + weekIndex * 7 + dayIndex) * 8}
+                animationDelay={monthIndex * 60 + (weekIndex * 7 + dayIndex) * 4}
                 onClick={onDayClick}
               />
             ))}
