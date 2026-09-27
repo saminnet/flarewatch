@@ -31,6 +31,9 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
   ['extra top-level keys ignored', { monitors: [], somethingElse: 42 }, true],
   ['statusPage title must be a string', { monitors: [], statusPage: { title: 5 } }, false],
   ['statusPage other fields ignored', { monitors: [], statusPage: { links: 'nope' } }, true],
+  ['statusPage private visibility', { monitors: [], statusPage: { visibility: 'private' } }, true],
+  // A typo must not silently leave a private page public.
+  ['statusPage unknown visibility', { monitors: [], statusPage: { visibility: 'Private' } }, false],
   [
     'notification timeZone must be a string',
     { monitors: [], notification: { timeZone: 5 } },

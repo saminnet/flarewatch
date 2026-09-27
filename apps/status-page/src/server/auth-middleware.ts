@@ -2,26 +2,18 @@ import type { RequestServerOptions, RequestServerResult } from '@tanstack/react-
 import { verifyBasicAuthHeader } from '@/lib/auth-secret';
 import { resolveRuntimeEnv } from '@/lib/runtime-env';
 import { resolveViewer } from '@/lib/operator.server';
+import { getConfig, isPrivateOnly } from '@/lib/config';
 
-function unauthorized(realm: string): Response {
-  return new Response('Not authenticated', {
-    status: 401,
-    headers: { 'WWW-Authenticate': `Basic realm="${realm}"` },
-  });
-}
-
-function unauthorizedAdmin(): Response {
-  return new Response(JSON.stringify({ error: 'Not authenticated' }), {
-    status: 401,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-function forbidden(message: string): Response {
+function jsonError(status: number, message: string): Response {
   return new Response(JSON.stringify({ error: message }), {
-    status: 403,
+    status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+/** On a private-only page, what a visitor may still reach. Data server fns check for themselves. */
+function isOpenToVisitors(pathname: string): boolean {
+  return pathname === '/login' || pathname.startsWith('/_serverFn/');
 }
 
 function isWriteMethod(method: string): boolean {
@@ -75,7 +67,7 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
       isWriteMethod(request.method) &&
       hasInvalidOrigin(request)
     ) {
-      return forbidden('Invalid origin');
+      return jsonError(403, 'Invalid origin');
     }
 
     if (pathname === '/api/admin/session') {
@@ -92,12 +84,18 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
       return next();
     }
 
-    return unauthorizedAdmin();
+    return jsonError(401, 'Not authenticated');
   }
 
-  const siteCreds = env.FLAREWATCH_STATUS_PAGE_BASIC_AUTH;
-  if (siteCreds && !(await verifyBasicAuthHeader(siteCreds, request.headers.get('Authorization'))))
-    return unauthorized('FlareWatch');
+  if (
+    !isOpenToVisitors(pathname) &&
+    (await resolveViewer(env, request)) === 'visitor' &&
+    isPrivateOnly(await getConfig(), env)
+  ) {
+    return pathname.startsWith('/api/')
+      ? jsonError(404, 'Not found')
+      : Response.redirect(new URL('/login', request.url), 302);
+  }
 
   return next();
 }

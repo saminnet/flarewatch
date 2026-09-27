@@ -8,7 +8,7 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 import { useSignIn } from '@/lib/query/auth.mutations';
 
-export function SignInForm() {
+export function SignInForm({ privateOnly }: { privateOnly: boolean }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function SignInForm() {
         <div className="mb-4 text-center">
           <h1 className="text-2xl font-bold text-foreground">Sign in</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            For the operator of this status page.
+            {privateOnly ? 'This status page is private.' : 'For the operator of this status page.'}
           </p>
         </div>
 
@@ -81,14 +81,16 @@ export function SignInForm() {
           </form>
         </div>
 
-        <div className="mt-6 text-center">
-          <Link to="/">
-            <Button variant="ghost" size="sm">
-              <IconArrowLeft className="mr-2 h-4 w-4" />
-              Go back
-            </Button>
-          </Link>
-        </div>
+        {!privateOnly && (
+          <div className="mt-6 text-center">
+            <Link to="/">
+              <Button variant="ghost" size="sm">
+                <IconArrowLeft className="mr-2 h-4 w-4" />
+                Go back
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

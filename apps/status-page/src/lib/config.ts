@@ -1,8 +1,7 @@
 import { createServerFn } from '@tanstack/react-start';
-import { loadRuntimeConfig, type RuntimeConfig } from '@flarewatch/shared';
+import { loadRuntimeConfig, type PageConfig, type RuntimeConfig } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
-import { publicView } from './public-view';
 import { resolveRuntimeEnv } from './runtime-env';
 
 // Valid 30s per warm isolate; isolates share no cache state and may be recycled.
@@ -53,13 +52,26 @@ export async function getConfig(): Promise<RuntimeConfig> {
   return cacheAndReturn(buildFallbackConfig(), now);
 }
 
-// Narrow type: the full RuntimeConfig breaks createServerFn's inference.
-type StatusPageConfig = {
-  statusPage: RuntimeConfig['statusPage'];
-};
+/**
+ * Visitors get only the sign-in page. A site Basic Auth secret left over from
+ * before private-only existed keeps the page closed instead of opening it.
+ */
+export function isPrivateOnly(config: RuntimeConfig, env: Cloudflare.Env): boolean {
+  return (
+    config.statusPage?.visibility === 'private' || Boolean(env.FLAREWATCH_STATUS_PAGE_BASIC_AUTH)
+  );
+}
+
+/** What the page shell renders; safe to send to anyone, including visitors of a private page. */
+export type PageBranding = Pick<
+  PageConfig,
+  'title' | 'favicon' | 'logo' | 'links' | 'poweredByUrl' | 'themeVars'
+>;
 
 export const getConfigServerFn = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<StatusPageConfig> => ({
-    statusPage: publicView(await getConfig(), null).statusPage,
-  }),
+  async (): Promise<{ statusPage: PageBranding }> => {
+    const { title, favicon, logo, links, poweredByUrl, themeVars } =
+      (await getConfig()).statusPage ?? {};
+    return { statusPage: { title, favicon, logo, links, poweredByUrl, themeVars } };
+  },
 );

@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { parseAuthSecret } from './auth-secret';
+import { getConfig, isPrivateOnly } from './config';
 import { resolveRuntimeEnv } from './runtime-env';
 import { getViewer, isSignInConfigured, type Viewer } from './operator.server';
 
@@ -8,6 +9,8 @@ export type Session = {
   /** The operator's username; null for visitors and in dev without sign-in. */
   name: string | null;
   canSignIn: boolean;
+  /** Visitors see only the sign-in page. */
+  privateOnly: boolean;
 };
 
 export const getSessionServerFn = createServerFn({ method: 'GET' }).handler(
@@ -19,6 +22,7 @@ export const getSessionServerFn = createServerFn({ method: 'GET' }).handler(
       viewer,
       name: viewer === 'operator' && secret ? (parseAuthSecret(secret)?.username ?? null) : null,
       canSignIn: isSignInConfigured(env),
+      privateOnly: isPrivateOnly(await getConfig(), env),
     };
   },
 );

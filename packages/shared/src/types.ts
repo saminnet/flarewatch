@@ -9,6 +9,8 @@ export type PageConfig = {
   theme?: string;
   customCss?: string;
   themeVars?: string;
+  /** 'private' shows visitors only the sign-in page. Defaults to 'public'. */
+  visibility?: 'public' | 'private';
 };
 
 export type PageConfigGroup = { [key: string]: string[] };

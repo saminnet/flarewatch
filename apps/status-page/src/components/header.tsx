@@ -34,89 +34,91 @@ export function Header({ config, session, visitorView }: HeaderProps) {
           </span>
         </Link>
 
-        <nav className="flex items-center gap-1" aria-label="Main navigation">
-          <Link to="/">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center gap-1.5"
-              aria-label="Dashboard"
-            >
-              <IconFlame className="h-4 w-4" />
-              <span className="hidden sm:inline">Dashboard</span>
-            </Button>
-          </Link>
+        {session.privateOnly && session.viewer === 'visitor' ? null : (
+          <nav className="flex items-center gap-1" aria-label="Main navigation">
+            <Link to="/">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-1.5"
+                aria-label="Dashboard"
+              >
+                <IconFlame className="h-4 w-4" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </Button>
+            </Link>
 
-          <Link to="/events">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center gap-1.5"
-              aria-label="Events"
-            >
-              <IconHistory className="h-4 w-4" />
-              <span className="hidden sm:inline">Events</span>
-            </Button>
-          </Link>
+            <Link to="/events">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-1.5"
+                aria-label="Events"
+              >
+                <IconHistory className="h-4 w-4" />
+                <span className="hidden sm:inline">Events</span>
+              </Button>
+            </Link>
 
-          {hasExternalLinks && (
-            <>
-              <div className="hidden sm:flex items-center gap-1">
-                {config?.links?.map((link) => (
-                  <a
-                    key={`${link.label}:${link.link}`}
-                    href={link.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Button
-                      variant={link.highlight ? 'default' : 'ghost'}
-                      size="sm"
-                      className="flex items-center gap-1.5"
-                      aria-label={link.label + ' (opens in new tab)'}
+            {hasExternalLinks && (
+              <>
+                <div className="hidden sm:flex items-center gap-1">
+                  {config?.links?.map((link) => (
+                    <a
+                      key={`${link.label}:${link.link}`}
+                      href={link.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
-                      <span>{link.label}</span>
-                      <IconExternalLink className="h-4 w-4" />
-                    </Button>
-                  </a>
-                ))}
-              </div>
-
-              <div className="flex sm:hidden">
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    className="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-muted"
-                    aria-label="More links"
-                  >
-                    <IconMenu2 className="h-5 w-5" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={8}>
-                    {config?.links?.map((link) => (
-                      <DropdownMenuItem
-                        key={`${link.label}:${link.link}`}
-                        render={
-                          <a
-                            href={link.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={link.label}
-                          />
-                        }
+                      <Button
+                        variant={link.highlight ? 'default' : 'ghost'}
+                        size="sm"
+                        className="flex items-center gap-1.5"
+                        aria-label={link.label + ' (opens in new tab)'}
                       >
                         <span>{link.label}</span>
-                        <IconExternalLink className="h-4 w-4 ml-auto" />
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </>
-          )}
+                        <IconExternalLink className="h-4 w-4" />
+                      </Button>
+                    </a>
+                  ))}
+                </div>
 
-          {session.viewer === 'operator' && (
-            <UserMenu session={session} visitorView={visitorView} />
-          )}
-        </nav>
+                <div className="flex sm:hidden">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      className="inline-flex items-center justify-center rounded-md p-2 text-foreground hover:bg-muted"
+                      aria-label="More links"
+                    >
+                      <IconMenu2 className="h-5 w-5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" sideOffset={8}>
+                      {config?.links?.map((link) => (
+                        <DropdownMenuItem
+                          key={`${link.label}:${link.link}`}
+                          render={
+                            <a
+                              href={link.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={link.label}
+                            />
+                          }
+                        >
+                          <span>{link.label}</span>
+                          <IconExternalLink className="h-4 w-4 ml-auto" />
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </>
+            )}
+
+            {session.viewer === 'operator' && (
+              <UserMenu session={session} visitorView={visitorView} />
+            )}
+          </nav>
+        )}
       </div>
     </header>
   );

@@ -2,6 +2,13 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## Unreleased
+
+### Breaking changes
+
+- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` is gone. Set `visibility: 'private'` in the page config instead. Visitors then get the sign-in page, and the dashboard, Events, monitor pages, badges, embeds and the JSON API are closed to them. While the old secret is still set on the Worker, the page stays private-only, so upgrading never opens a private page.
+- The `/admin` page is gone. Sign in at `/login` (`/admin` redirects there). Once signed in, the same pages show private monitors, and you add and edit maintenance windows on Events.
+
 ## 1.1.0 - 2026-08-31
 
 - GlobalPing TCP_PING monitors on port 443 no longer fail with a missing port error.

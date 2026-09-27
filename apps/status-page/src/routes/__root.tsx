@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { createRootRouteWithContext, retainSearchParams } from '@tanstack/react-router';
+import { createRootRouteWithContext, redirect, retainSearchParams } from '@tanstack/react-router';
 import { createMiddleware } from '@tanstack/react-start';
 import { RootComponent } from '@/components/routes/root-component';
 import { getThemePreferenceServerFn } from '@/lib/theme-server';
@@ -28,9 +28,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   search: {
     middlewares: [retainSearchParams<RootSearch>(['view'])],
   },
-  beforeLoad: async ({ context }) => ({
-    session: await context.queryClient.ensureQueryData(sessionQuery()),
-  }),
+  beforeLoad: async ({ context, location }) => {
+    const session = await context.queryClient.ensureQueryData(sessionQuery());
+    // The server enforces this too; here it covers client-side navigation after sign-out.
+    if (session.privateOnly && session.viewer === 'visitor' && location.pathname !== '/login') {
+      throw redirect({ to: '/login' });
+    }
+    return { session };
+  },
   loader: async ({ context }) => {
     const [theme, config] = await Promise.all([
       getThemePreferenceServerFn(),

@@ -10,11 +10,20 @@ import type {
   MonitorTarget,
 } from '@flarewatch/shared';
 import { formatUtcShort, isJsonObject } from '@flarewatch/shared/utils';
+import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
 
+// E2E_VISIBILITY=private seeds a second, private-only instance with its own state.
+const privateOnly = process.env.E2E_VISIBILITY === 'private';
 const appDir = process.cwd();
-const persistDir = path.join(appDir, '.wrangler/e2e-state');
-const fixtureDir = path.join(appDir, '.wrangler/e2e-fixtures');
+const persistDir = path.join(
+  appDir,
+  privateOnly ? '.wrangler/e2e-private-state' : '.wrangler/e2e-state',
+);
+const fixtureDir = path.join(
+  appDir,
+  privateOnly ? '.wrangler/e2e-private-fixtures' : '.wrangler/e2e-fixtures',
+);
 const envFilePath = path.join(appDir, '.wrangler/e2e.dev.vars');
 const configPath = path.join(appDir, 'dist/server/wrangler.json');
 const e2eConfigPath = path.join(appDir, 'dist/server/e2e-wrangler.json');
@@ -342,6 +351,7 @@ wranglerKvPut(
   'config',
   writeFixture('config.json', {
     monitors: [...workerConfig.monitors, privateMonitor, ...heartbeatMonitors],
+    ...(privateOnly && { statusPage: { ...pageConfig, visibility: 'private' } }),
   }),
 );
 wranglerKvPut('state', writeFixture('state.json', state));

@@ -155,7 +155,6 @@ repository secret** and add:
 Optional secrets:
 
 - `FLAREWATCH_ADMIN_BASIC_AUTH` - your operator sign-in at `/login`. It also protects `/api/admin/*`.
-- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` - protects the whole site.
 - `FLAREWATCH_PROXY_TOKEN` - bearer token for a check proxy.
 
 Generate auth secret payloads from a username and password:
@@ -250,6 +249,21 @@ on the public page or the public API. Once you sign in, the same pages show
 them with a "private" badge, and you can attach them to maintenance windows on
 the Events page. The Visitor view switch in your account menu shows the page as
 visitors see it.
+
+### Private-only status page
+
+Set `visibility: 'private'` in `pageConfig` to keep the whole page to yourself.
+Visitors get the sign-in page and nothing else: the dashboard, Events, monitor
+pages, embeds, badges and the JSON API are all closed to them. Job pings keep
+working. You need `FLAREWATCH_ADMIN_BASIC_AUTH` set to sign in.
+
+This replaces `FLAREWATCH_STATUS_PAGE_BASIC_AUTH`. If that secret is still set
+on the status page Worker, the page stays private-only. Once you have set
+`visibility`, delete the old secret:
+
+```bash
+vp exec --filter status-page -- wrangler secret delete FLAREWATCH_STATUS_PAGE_BASIC_AUTH
+```
 
 ## Notifications
 

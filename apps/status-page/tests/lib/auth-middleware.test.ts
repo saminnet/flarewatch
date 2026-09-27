@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { authMiddlewareServer } from '@/server/auth-middleware';
 import { buildAuthSecret } from '../helpers/auth-secret';
+import { memoryKv } from '../helpers/kv';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -24,27 +25,67 @@ function sessionKv(validId: string) {
   };
 }
 
-describe('auth middleware ping exemption', () => {
-  it('does not gate ping routes with site Basic Auth', async () => {
-    vi.stubGlobal('__env__', { FLAREWATCH_STATUS_PAGE_BASIC_AUTH: 'admin:secret' });
+describe('auth middleware private-only pages', () => {
+  function configKv(statusPage: Record<string, string>) {
+    return memoryKv({ config: JSON.stringify({ monitors: [], statusPage }) });
+  }
 
-    const { next, response } = call('/ping/backup/t0k3n');
+  function privateEnv(extra: Partial<Cloudflare.Env> = {}) {
+    vi.stubGlobal('__env__', {
+      FLAREWATCH_ADMIN_BASIC_AUTH: 'configured',
+      STATE_KV: sessionKv('abc'),
+      CONFIG_KV: configKv({ visibility: 'private' }),
+      ...extra,
+    });
+  }
 
-    const result = await response;
-    expect(result).toBeInstanceOf(Response);
-    await expect((result as Response).text()).resolves.toBe('next');
-    expect(next).toHaveBeenCalledTimes(1);
+  async function outcome(pathname: string, cookie?: string): Promise<string> {
+    const { next, response } = call(pathname, cookie ? { headers: { Cookie: cookie } } : {});
+    const result = (await response) as Response;
+    if (next.mock.calls.length > 0) return 'next';
+    return `${result.status} ${result.headers.get('Location') ?? ''}`.trim();
+  }
+
+  it('sends visitors to the sign-in page and hides the public API', async () => {
+    privateEnv();
+
+    await expect(outcome('/')).resolves.toBe('302 https://status.test/login');
+    await expect(outcome('/monitors/demo_example')).resolves.toBe('302 https://status.test/login');
+    await expect(outcome('/embed/demo_example')).resolves.toBe('302 https://status.test/login');
+    await expect(outcome('/api/data')).resolves.toBe('404');
+    await expect(outcome('/api/badge')).resolves.toBe('404');
   });
 
-  it('still gates other routes with site Basic Auth', async () => {
-    vi.stubGlobal('__env__', { FLAREWATCH_STATUS_PAGE_BASIC_AUTH: 'admin:secret' });
+  it('keeps sign-in, server functions and pings reachable for visitors', async () => {
+    privateEnv();
 
-    const { next, response } = call('/');
+    await expect(outcome('/login')).resolves.toBe('next');
+    await expect(outcome('/_serverFn/abc')).resolves.toBe('next');
+    await expect(outcome('/ping/backup/t0k3n')).resolves.toBe('next');
+    await expect(outcome('/api/admin/session')).resolves.toBe('next');
+  });
 
-    const result = await response;
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(401);
-    expect(next).not.toHaveBeenCalled();
+  it('lets the signed-in operator through', async () => {
+    privateEnv();
+
+    await expect(outcome('/', 'flarewatch_admin_session=abc')).resolves.toBe('next');
+    await expect(outcome('/api/data', 'flarewatch_admin_session=abc')).resolves.toBe('next');
+  });
+
+  it('leaves a public page open', async () => {
+    privateEnv({ CONFIG_KV: configKv({ visibility: 'public' }) });
+
+    await expect(outcome('/')).resolves.toBe('next');
+    await expect(outcome('/api/data')).resolves.toBe('next');
+  });
+
+  it('keeps a page closed while the old site Basic Auth secret is still set', async () => {
+    privateEnv({
+      CONFIG_KV: configKv({ visibility: 'public' }),
+      FLAREWATCH_STATUS_PAGE_BASIC_AUTH: 'admin:secret',
+    });
+
+    await expect(outcome('/')).resolves.toBe('302 https://status.test/login');
   });
 });
 

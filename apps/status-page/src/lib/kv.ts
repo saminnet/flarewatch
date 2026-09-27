@@ -7,7 +7,7 @@ import {
   readMaintenancesFromStorage,
 } from '@flarewatch/shared';
 import { INITIAL_TRIGGER_RETRY_MS } from '@/lib/constants';
-import { getConfig } from '@/lib/config';
+import { getConfig, isPrivateOnly } from '@/lib/config';
 import { requireOperator } from '@/lib/operator.server';
 import { resolveMonitorState } from '@/lib/monitor-state';
 import { operatorSnapshot, visitorSnapshot, type Snapshot } from '@/lib/public-view';
@@ -72,7 +72,11 @@ export async function readVisitorSnapshot(): Promise<Snapshot> {
   return visitorSnapshot(config, state, maintenances);
 }
 
-export const getVisitorSnapshot = createServerFn({ method: 'GET' }).handler(readVisitorSnapshot);
+/** A private-only page serves the visitor snapshot only to the operator's Visitor view. */
+export const getVisitorSnapshot = createServerFn({ method: 'GET' }).handler(async () => {
+  if (isPrivateOnly(await getConfig(), await resolveRuntimeEnv())) await requireOperator();
+  return readVisitorSnapshot();
+});
 
 /** Includes private monitors, their raw failure messages, and every maintenance window. */
 export const getOperatorSnapshot = createServerFn({ method: 'GET' }).handler(

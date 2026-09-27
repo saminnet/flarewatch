@@ -213,6 +213,7 @@ const monitorListSchema = z.array(monitorSchema).check((ctx) => {
 
 const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.object({
   title: z.optional(z.string()),
+  visibility: z.optional(z.enum(['public', 'private'])),
 });
 
 const webhookMethod = z.pipe(
