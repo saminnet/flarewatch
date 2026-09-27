@@ -3,3 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2025-11-17"
 kv_namespaces = [{ binding = "FLAREWATCH_STATE", id = "FLAREWATCH_STATE" }]
 compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "MONITOR_HUB"
+class_name = "MonitorHub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MonitorHub"]

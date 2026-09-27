@@ -10,6 +10,7 @@ All notable changes to FlareWatch will be documented in this file.
 - The Events page is now History, at `/history`. Old `/events` links return 404.
 - Config lives only in `packages/config`. The `CONFIG_KV` binding, which loaded config from KV, is no longer read, and neither is `STATE_KV` as a second name for `FLAREWATCH_STATE`. CI now checks the config, so an invalid one fails before it deploys.
 - The `/admin` page is gone. Sign in at `/login` (`/admin` redirects there). Once signed in, the same pages show private monitors, and you add and edit maintenance windows on History.
+- Monitor state lives in a Durable Object instead of KV, and every check run is saved, so latency charts get a sample every minute. `kvWriteCooldownMinutes` is gone: remove it from `worker.ts`, or the build fails. A check that crashes now opens an incident instead of only counting as down.
 
 ## 1.1.0 - 2026-08-31
 

@@ -1,0 +1,185 @@
+import { describe, expect, it } from 'vite-plus/test';
+import type { CheckResult, HeartbeatMonitor, MonitorTarget } from '@flarewatch/shared';
+import type { CheckRecord } from '../../src/hub/monitor-hub';
+import { createHub, rowsWritten } from '../helpers/hub';
+
+const T0 = Date.parse('2025-01-15T12:00:00Z') / 1000;
+const DAY = 24 * 60 * 60;
+
+function monitor(id: string): MonitorTarget {
+  return { id, name: id, method: 'GET', target: `https://${id}.example.com` };
+}
+
+function check(id: string, result: CheckResult, location = 'HEL'): CheckRecord {
+  return { monitor: monitor(id), check: { location, result } };
+}
+
+const up = (latency = 10): CheckResult => ({ ok: true, latency });
+const down = (error = 'Unavailable'): CheckResult => ({ ok: false, error });
+
+describe('MonitorHub incidents', () => {
+  it('opens an incident on the first failure and reports it as a down change', () => {
+    const { hub } = createHub();
+
+    const [update] = hub.record(T0, [check('api', down())]);
+
+    expect(update).toEqual({
+      monitorId: 'api',
+      statusChanged: true,
+      changeType: 'down',
+      isUp: false,
+      incidentStartTime: T0,
+      error: 'Unavailable',
+    });
+    expect(hub.view().monitors.api).toMatchObject({
+      status: 'down',
+      startedAt: T0,
+      incidents: [{ start: [T0], error: ['Unavailable'] }],
+    });
+  });
+
+  it('adds a segment only when the error changes, then closes on recovery', () => {
+    const { hub } = createHub();
+    hub.record(T0, [check('api', down('Timeout'))]);
+
+    const [same] = hub.record(T0 + 60, [check('api', down('Timeout'))]);
+    const [changed] = hub.record(T0 + 120, [check('api', down('HTTP 502'))]);
+    const [recovered] = hub.record(T0 + 180, [check('api', up())]);
+
+    expect(same).toMatchObject({ statusChanged: false, changeType: 'none', incidentStartTime: T0 });
+    expect(changed).toMatchObject({
+      statusChanged: true,
+      changeType: 'error',
+      incidentStartTime: T0,
+    });
+    expect(recovered).toMatchObject({
+      statusChanged: true,
+      changeType: 'up',
+      incidentStartTime: T0,
+    });
+    expect(hub.view().monitors.api).toMatchObject({
+      status: 'up',
+      incidents: [{ start: [T0, T0 + 120], end: T0 + 180, error: ['Timeout', 'HTTP 502'] }],
+    });
+  });
+
+  it('keeps an open incident and drops closed ones 90 days after they end', () => {
+    const { hub } = createHub();
+    hub.record(T0, [check('old', down()), check('open', down())]);
+    hub.record(T0 + 60, [check('old', up())]);
+
+    hub.record(T0 + 60 + 90 * DAY + 1, [check('old', up()), check('open', down())]);
+
+    const { monitors } = hub.view();
+    expect(monitors.old?.incidents).toEqual([]);
+    expect(monitors.open?.incidents).toHaveLength(1);
+  });
+});
+
+describe('MonitorHub latency', () => {
+  it('keeps one sample per check run for 12 hours', () => {
+    const { hub } = createHub();
+    hub.record(T0, [check('api', up(30))]);
+    hub.record(T0 + 60, [check('api', up(40), 'AMS')]);
+    hub.record(T0 + 12 * 60 * 60 + 30, [check('api', up(50))]);
+
+    expect(hub.latency('api')).toEqual([
+      { ping: 40, loc: 'AMS', time: T0 + 60 },
+      { ping: 50, loc: 'HEL', time: T0 + 12 * 60 * 60 + 30 },
+    ]);
+    expect(hub.view().monitors.api?.latest).toEqual({
+      ping: 50,
+      loc: 'HEL',
+      time: T0 + 12 * 60 * 60 + 30,
+    });
+  });
+
+  it('returns only the asked monitor and handles ids that look like JSON paths', () => {
+    const { hub } = createHub();
+    hub.record(T0, [check('a.b', up(1)), check('$[0]', up(2)), check('x"y', up(3))]);
+
+    expect(hub.latency('a.b')).toEqual([{ ping: 1, loc: 'HEL', time: T0 }]);
+    expect(hub.latency('$[0]')).toEqual([{ ping: 2, loc: 'HEL', time: T0 }]);
+    expect(hub.latency('x"y')).toEqual([{ ping: 3, loc: 'HEL', time: T0 }]);
+  });
+});
+
+describe('MonitorHub heartbeat state', () => {
+  const job: HeartbeatMonitor = {
+    id: 'backup',
+    name: 'Backup',
+    method: 'HEARTBEAT',
+    periodSeconds: 3600,
+    graceSeconds: 600,
+  };
+
+  it('records one miss per skipped period while the job stays overdue', () => {
+    const { hub } = createHub();
+    const deadline = T0;
+    const overdue = (): CheckRecord => ({
+      monitor: job,
+      check: {
+        location: 'HEARTBEAT',
+        result: down('No heartbeat'),
+        heartbeat: { status: 'down', lastSuccess: T0 - 4200, deadline },
+      },
+    });
+
+    hub.record(T0 + 60, [overdue()]);
+    hub.record(T0 + 2 * 3600 + 60, [overdue()]);
+
+    expect(hub.view().monitors.backup?.heartbeat?.misses).toEqual([
+      deadline,
+      deadline + 3600,
+      deadline + 7200,
+    ]);
+  });
+
+  it('shows a pending job without a start time or incident', () => {
+    const { hub } = createHub();
+
+    const updates = hub.record(T0, [
+      { monitor: job, check: { location: 'HEARTBEAT', heartbeat: { status: 'pending' } } },
+    ]);
+
+    expect(updates).toEqual([]);
+    expect(hub.view().monitors.backup).toEqual({
+      status: 'pending',
+      incidents: [],
+      heartbeat: { status: 'pending' },
+    });
+  });
+});
+
+describe('MonitorHub storage', () => {
+  it('writes a handful of rows per steady check run, whatever the monitor count', () => {
+    const { hub, db } = createHub();
+    const run = (now: number) =>
+      hub.record(
+        now,
+        Array.from({ length: 50 }, (_, i) => check(`m${i}`, up(i))),
+      );
+    for (let i = 0; i < 12 * 60 + 5; i++) run(T0 + i * 60);
+
+    const before = rowsWritten(db);
+    run(T0 + (12 * 60 + 5) * 60);
+
+    // sample insert, expired sample delete, last-update meta: 4,320 rows a day.
+    expect(rowsWritten(db) - before).toBeLessThanOrEqual(3);
+  });
+
+  it('keeps its data when a second instance opens the same storage', () => {
+    const { hub, db } = createHub();
+    hub.record(T0, [check('api', down())]);
+
+    const { hub: reopened } = createHub({}, db);
+
+    expect(reopened.view().monitors.api?.status).toBe('down');
+    expect(reopened.view().lastUpdate).toBe(T0);
+  });
+
+  it('reports nothing before the first check run', () => {
+    const { hub } = createHub();
+    expect(hub.view()).toEqual({ lastUpdate: 0, monitors: {} });
+  });
+});

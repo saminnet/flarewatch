@@ -1,11 +1,7 @@
 import {
   type CheckContext,
   createLogger,
-  HEARTBEAT_RUN_HISTORY,
-  type HeartbeatState,
-  isMonitorState,
-  isPublicMonitor,
-  KV_KEYS,
+  failure,
   type Maintenance,
   type Monitor,
   type MonitorCheckResult,
@@ -14,7 +10,7 @@ import {
 } from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
 
-import { getStateKv, type Env } from './env';
+import { getHub, getStateKv, type Env } from './env';
 import { handlePing, handlePingUrl } from './ping';
 import { getEdgeLocation } from './utils/location';
 import { checkMonitor } from './checkers';
@@ -23,18 +19,12 @@ import {
   formatNotificationMessage,
   type NotificationContext,
 } from './notifications/webhook';
-import {
-  createInitialState,
-  resetCounters,
-  processCheckResult,
-  updateLatency,
-  updateSSLCertificate,
-  cleanupOldIncidents,
-} from './state/incidents';
+import type { CheckRecord } from './hub/monitor-hub';
+
+// Durable Object classes must be exports of the Worker's main module.
+export { MonitorHub } from './hub/monitor-hub';
 
 const log = createLogger('Worker');
-
-const DEFAULT_COOLDOWN_MINUTES = 3;
 
 const GRACE_PERIOD_BUFFER_SECONDS = 30;
 
@@ -129,21 +119,6 @@ function shouldNotify(
   return false;
 }
 
-function heartbeatStateChanged(
-  previous: HeartbeatState | undefined,
-  next: HeartbeatState,
-): boolean {
-  return (
-    previous?.status !== next.status ||
-    previous.lastSuccess !== next.lastSuccess ||
-    previous.lastFail !== next.lastFail ||
-    previous.lastStart !== next.lastStart ||
-    previous.message !== next.message ||
-    previous.deadline !== next.deadline ||
-    previous.misses?.[previous.misses.length - 1] !== next.misses?.[next.misses.length - 1]
-  );
-}
-
 export interface WorkerDeps {
   readonly checkMonitor: (target: Monitor, ctx: CheckContext) => Promise<MonitorCheckResult>;
   readonly createNotifier: typeof createNotifier;
@@ -166,15 +141,8 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   log.info('Starting checks', { location });
 
   const config = deps.staticConfig;
-
+  const hub = getHub(env);
   const stateKv = getStateKv(env);
-  const storedState = await stateKv.get(KV_KEYS.STATE, {
-    type: 'json',
-  });
-  const state = isMonitorState(storedState) ? storedState : createInitialState();
-  state.heartbeat ??= {};
-  resetCounters(state);
-
   const maintenances = await loadMaintenances(stateKv);
 
   const currentTime = Math.floor(Date.now() / 1000);
@@ -186,83 +154,22 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
       return deps.checkMonitor(monitor, { env, now: currentTime, stateKv });
     }),
   );
-
-  let stateChanged = false;
-
-  for (const [index, settled] of checkResults.entries()) {
+  const records = checkResults.map((settled, index): CheckRecord => {
     const monitor = config.monitors[index]!;
-    if (settled.status === 'rejected') {
-      log.error('Check failed', { monitor: monitor.id, error: String(settled.reason) });
-      if (isPublicMonitor(monitor)) state.overallDown++;
-      continue;
-    }
+    if (settled.status === 'fulfilled') return { monitor, check: settled.value };
+    log.error('Check failed', { monitor: monitor.id, error: String(settled.reason) });
+    return {
+      monitor,
+      check: { location, result: failure(`Check failed: ${String(settled.reason)}`) },
+    };
+  });
 
-    const { location: checkLocation, result: checkResult, heartbeat } = settled.value;
+  const updates = await hub.record(currentTime, records);
+  const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
-    if (heartbeat) {
-      const previous = state.heartbeat[monitor.id];
-
-      // Deadline misses live in the state blob, never in the ping signal: the
-      // checker must not read-modify-write hb:v1:<id>, where a concurrent ping
-      // would be erased. While a job stays overdue, one miss is appended per
-      // elapsed period so a long outage shows every skipped run.
-      const previousMisses = previous?.misses;
-      if (previousMisses?.length) heartbeat.misses = previousMisses;
-      if (
-        monitor.method === 'HEARTBEAT' &&
-        heartbeat.status === 'down' &&
-        heartbeat.lastFail === undefined &&
-        heartbeat.deadline !== undefined
-      ) {
-        const period = monitor.periodSeconds;
-        const lastMiss = previousMisses?.[previousMisses.length - 1];
-        const firstMiss = Math.max(
-          heartbeat.deadline,
-          lastMiss === undefined ? -Infinity : lastMiss + period,
-        );
-        const count = Math.floor((currentTime - firstMiss) / period) + 1;
-        if (count > 0) {
-          const skipped = Math.max(0, count - HEARTBEAT_RUN_HISTORY);
-          const appended = Array.from(
-            { length: count - skipped },
-            (_, i) => firstMiss + (skipped + i) * period,
-          );
-          heartbeat.misses = [...(previousMisses ?? []), ...appended].slice(-HEARTBEAT_RUN_HISTORY);
-        }
-      }
-
-      stateChanged ||= heartbeatStateChanged(previous, heartbeat);
-      state.heartbeat[monitor.id] = heartbeat;
-      if (heartbeat.status === 'late' && isPublicMonitor(monitor)) {
-        state.overallLate = (state.overallLate ?? 0) + 1;
-      }
-
-      // Pending and running produce no check result, so count them here: up,
-      // unless a restart happens inside an overdue incident that is still open.
-      if (
-        isPublicMonitor(monitor) &&
-        (heartbeat.status === 'pending' || heartbeat.status === 'running')
-      ) {
-        const incidents = state.incident[monitor.id];
-        const last = incidents?.[incidents.length - 1];
-        if (last && last.end === undefined) state.overallDown++;
-        else state.overallUp++;
-      }
-    }
-
-    if (!checkResult) continue;
-
-    const update = processCheckResult(state, monitor, checkResult, currentTime);
-    stateChanged ||= update.statusChanged;
-
-    if (monitor.method !== 'HEARTBEAT') {
-      updateLatency(state, monitor.id, checkLocation, checkResult.latency ?? 0, currentTime);
-      if (checkResult.ok && checkResult.ssl) {
-        updateSSLCertificate(state, monitor.id, checkResult.ssl, currentTime);
-      }
-    }
-
-    cleanupOldIncidents(state, monitor.id, currentTime);
+  for (const update of updates) {
+    const monitor = monitors.get(update.monitorId);
+    if (!monitor) continue;
 
     if (notifier && !shouldSkipNotification(monitor.id, currentTime, maintenances, config)) {
       const skipErrorChanges = Boolean(config.notification?.skipErrorChangeNotification);
@@ -320,22 +227,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
     }
   }
 
-  const cooldownSeconds = (config.kvWriteCooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES) * 60;
-  const timeSinceUpdate = currentTime - state.lastUpdate;
-
-  if (stateChanged || timeSinceUpdate >= cooldownSeconds - 10) {
-    log.info('Saving state', { changed: stateChanged });
-    state.lastUpdate = currentTime;
-    await stateKv.put(KV_KEYS.STATE, JSON.stringify(state));
-  } else {
-    log.debug('Skipping state save', { cooldownRemaining: cooldownSeconds - timeSinceUpdate });
-  }
-
-  log.info('Complete', {
-    up: state.overallUp,
-    down: state.overallDown,
-    late: state.overallLate ?? 0,
-  });
+  log.info('Complete', { monitors: records.length });
 }
 
 const Worker = {

@@ -101,7 +101,6 @@ export function isPublicMonitor(monitor: Pick<MonitorTarget, 'private'>): boolea
 }
 
 export type WorkerConfig = {
-  kvWriteCooldownMinutes?: number;
   monitors: Monitor[];
   notification?: NotificationConfig;
   callbacks?: {
@@ -181,7 +180,6 @@ export type RuntimeConfig = {
   monitors: Monitor[];
   statusPage?: PageConfig;
   notification?: NotificationConfig;
-  kvWriteCooldownMinutes?: number;
 };
 
 export interface KvStore {
@@ -220,6 +218,39 @@ export type HeartbeatState = HeartbeatSignal & {
   deadline?: number;
   /** Deadline timestamps the cron detected as missed, oldest first, capped at HEARTBEAT_RUN_HISTORY. */
   misses?: number[];
+};
+
+/** A stretch of downtime. Each error change inside it starts a new segment. */
+export type Incident = {
+  /** Unix timestamps (seconds). One per error segment. */
+  start: number[];
+  /** Unix timestamp (seconds). Undefined while the incident is open. */
+  end?: number;
+  error: string[];
+};
+
+export type LatencySample = {
+  loc: string;
+  ping: number;
+  /** Unix timestamp (seconds) */
+  time: number;
+};
+
+/** One monitor as the hub knows it. Down means an open incident. */
+export type MonitorView = {
+  status: HeartbeatStatus;
+  /** Unix timestamp (seconds) of the first check result. */
+  startedAt?: number;
+  /** Oldest first, kept 90 days after they end. */
+  incidents: Incident[];
+  latest?: LatencySample;
+  heartbeat?: HeartbeatState;
+};
+
+export type StatusView = {
+  /** Unix timestamp (seconds) of the last check run; 0 before the first. */
+  lastUpdate: number;
+  monitors: Record<string, MonitorView>;
 };
 
 export function heartbeatKvKey(id: string): string {

@@ -1,16 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   heartbeatKvKey,
-  KV_KEYS,
   type HeartbeatMonitor,
   type HeartbeatSignal,
   type Monitor,
-  type MonitorState,
   type WorkerConfig,
 } from '@flarewatch/shared';
 import type { Env } from '../src/env';
 import Worker, { runChecks } from '../src/index';
 import { deriveHeartbeatToken } from '../src/ping';
+import { createHub, hubNamespace } from './helpers/hub';
 import { asKv, createKv } from './helpers/kv';
 import { createWorkerDeps } from './helpers/worker-deps';
 
@@ -414,10 +413,15 @@ describe('ping to scheduled check end to end', () => {
     const response = await ping(`/ping/${heartbeat.id}/${await token()}`);
     expect(response.status).toBe(200);
 
-    await runChecks(createEnv(), createWorkerDeps(workerConfigMock));
+    const { hub } = createHub();
+    await runChecks(
+      createEnv({ MONITOR_HUB: hubNamespace(hub) }),
+      createWorkerDeps(workerConfigMock),
+    );
 
-    const state = JSON.parse(kv.values.get(KV_KEYS.STATE) as string) as MonitorState;
-    expect(state.heartbeat?.[heartbeat.id]?.status).toBe('up');
-    expect(state.heartbeat?.[heartbeat.id]?.lastSuccess).toBe(NOW);
+    expect(hub.view().monitors[heartbeat.id]?.heartbeat).toMatchObject({
+      status: 'up',
+      lastSuccess: NOW,
+    });
   });
 });

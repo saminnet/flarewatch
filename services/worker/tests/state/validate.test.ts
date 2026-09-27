@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vite-plus/test';
-import { createInitialState } from '../../src/state/incidents';
-import { isMonitorState } from '@flarewatch/shared';
+import { isMonitorState, type MonitorState } from '@flarewatch/shared';
+
+function createInitialState(): MonitorState {
+  return { lastUpdate: 0, overallUp: 0, overallDown: 0, startedAt: {}, incident: {}, latency: {} };
+}
 
 describe('isMonitorState', () => {
-  it('accepts createInitialState()', () => {
+  it('accepts an empty state', () => {
     expect(isMonitorState(createInitialState())).toBe(true);
   });
 

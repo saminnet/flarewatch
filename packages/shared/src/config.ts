@@ -2,6 +2,7 @@ import * as z from 'zod/mini';
 import {
   NOTIFICATION_TEMPLATES,
   type HeartbeatSignal,
+  type HeartbeatState,
   type Maintenance,
   type MonitorState,
   type NotificationConfig,
@@ -296,6 +297,11 @@ export function configIssues(value: unknown): string[] {
 /** Returns only the known signal fields, so a foreign key in storage cannot override derived state. */
 export function parseHeartbeatSignal(value: unknown): HeartbeatSignal | null {
   const result = heartbeatSignalSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
+export function parseHeartbeatState(value: unknown): HeartbeatState | null {
+  const result = heartbeatStateSchema.safeParse(value);
   return result.success ? result.data : null;
 }
 

@@ -3,17 +3,16 @@ import {
   HEARTBEAT_RUN_HISTORY,
   formatUtcShort,
   heartbeatKvKey,
-  KV_KEYS,
   type HeartbeatMonitor,
   type HeartbeatSignal,
   type Fetcher,
-  type MonitorState,
+  type MonitorView,
   type WorkerConfig,
 } from '@flarewatch/shared';
 import type { Env } from '../src/env';
 import { runChecks } from '../src/index';
 import { WebhookNotifier } from '../src/notifications/webhook';
-import oldState from './fixtures/state-v1.json';
+import { createHub, hubNamespace } from './helpers/hub';
 import { asKv, createKv } from './helpers/kv';
 import { createWorkerDeps } from './helpers/worker-deps';
 
@@ -29,10 +28,12 @@ const heartbeat: HeartbeatMonitor = {
   graceSeconds: 10,
 };
 
-function createHeartbeatKv(initial: Array<[string, unknown]> = []) {
-  const kv = createKv(initial);
+function createHeartbeatKv() {
+  const kv = createKv();
+  const { hub } = createHub();
   return {
     ...kv,
+    hub,
     setSignal(signal: HeartbeatSignal): void {
       kv.values.set(heartbeatKvKey(heartbeat.id), structuredClone(signal));
     },
@@ -43,10 +44,8 @@ function createHeartbeatKv(initial: Array<[string, unknown]> = []) {
         typeof value === 'string' ? value : JSON.stringify(value),
       ) as HeartbeatSignal;
     },
-    state(): MonitorState {
-      const value = kv.values.get(KV_KEYS.STATE);
-      if (typeof value !== 'string') throw new Error('State was not saved');
-      return JSON.parse(value) as MonitorState;
+    monitor(): MonitorView | undefined {
+      return hub.view().monitors[heartbeat.id];
     },
   };
 }
@@ -61,7 +60,7 @@ function scheduledRun(env: Env): Promise<void> {
 }
 
 function runScheduled(kv: ReturnType<typeof createHeartbeatKv>): Promise<void> {
-  return scheduledRun({ FLAREWATCH_STATE: asKv(kv) });
+  return scheduledRun({ FLAREWATCH_STATE: asKv(kv), MONITOR_HUB: hubNamespace(kv.hub) });
 }
 
 function setNow(timestamp: number): void {
@@ -80,7 +79,6 @@ describe('heartbeat scheduled checks', () => {
       gracePeriod: 60,
     };
     delete workerConfigMock.callbacks;
-    delete workerConfigMock.kvWriteCooldownMinutes;
   });
 
   afterEach(() => {
@@ -92,24 +90,24 @@ describe('heartbeat scheduled checks', () => {
     kv.setSignal({ lastSuccess: NOW });
 
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]?.status).toBe('up');
+    expect(kv.monitor()?.heartbeat?.status).toBe('up');
     expect(notifierSendMock).not.toHaveBeenCalled();
 
     setNow(NOW + 71);
     await runScheduled(kv);
-    const downState = kv.state();
-    expect(downState.heartbeat?.[heartbeat.id]?.status).toBe('down');
-    expect(downState.incident[heartbeat.id]).toHaveLength(1);
-    expect(downState.incident[heartbeat.id]?.[0]?.error).toEqual([
+    const downState = kv.monitor();
+    expect(downState?.heartbeat?.status).toBe('down');
+    expect(downState?.incidents).toHaveLength(1);
+    expect(downState?.incidents?.[0]?.error).toEqual([
       `No heartbeat since ${formatUtcShort(NOW)} (expected by ${formatUtcShort(NOW + 70)})`,
     ]);
     expect(notifierSendMock).toHaveBeenCalledTimes(1);
 
     kv.setSignal({ lastSuccess: NOW + 71 });
     await runScheduled(kv);
-    const recoveredState = kv.state();
-    expect(recoveredState.heartbeat?.[heartbeat.id]?.status).toBe('up');
-    expect(recoveredState.incident[heartbeat.id]?.[0]?.end).toBe(NOW + 71);
+    const recoveredState = kv.monitor();
+    expect(recoveredState?.heartbeat?.status).toBe('up');
+    expect(recoveredState?.incidents?.[0]?.end).toBe(NOW + 71);
     expect(notifierSendMock).toHaveBeenCalledTimes(2);
     expect(notifierSendMock.mock.calls.map(([ctx]) => ctx.isUp)).toEqual([false, true]);
   });
@@ -119,92 +117,88 @@ describe('heartbeat scheduled checks', () => {
     kv.setSignal({ lastFail: NOW, message: 'restic check failed' });
 
     await runScheduled(kv);
-    expect(kv.state().incident[heartbeat.id]?.[0]?.error).toEqual(['Job reported failure']);
+    expect(kv.monitor()?.incidents?.[0]?.error).toEqual(['Job reported failure']);
     expect(notifierSendMock).toHaveBeenCalledTimes(1);
 
     setNow(NOW + 1);
     kv.setSignal({ lastSuccess: NOW + 1 });
     await runScheduled(kv);
 
-    expect(kv.state().incident[heartbeat.id]?.[0]?.end).toBe(NOW + 1);
+    expect(kv.monitor()?.incidents?.[0]?.end).toBe(NOW + 1);
     expect(notifierSendMock).toHaveBeenCalledTimes(2);
   });
 
-  it('turns a corrupt signal into a down incident and counts it down', async () => {
+  it('turns a corrupt signal into a down incident', async () => {
     const kv = createHeartbeatKv();
     kv.values.set(heartbeatKvKey(heartbeat.id), { lastSuccess: 'yesterday' });
 
     await runScheduled(kv);
 
-    const state = kv.state();
-    expect(state.heartbeat?.[heartbeat.id]).toEqual({ status: 'down' });
-    expect(state.incident[heartbeat.id]?.[0]?.error).toEqual([
+    const state = kv.monitor();
+    expect(state?.heartbeat).toEqual({ status: 'down' });
+    expect(state?.incidents?.[0]?.error).toEqual([
       `Invalid heartbeat signal stored for ${heartbeat.id}`,
     ]);
-    expect(state.overallDown).toBe(1);
+    expect(state?.status).toBe('down');
     expect(notifierSendMock).toHaveBeenCalledTimes(1);
   });
 
-  it('persists pending without check-result effects and counts it as up', async () => {
+  it('stores pending without an incident, a start time or latency', async () => {
     const kv = createHeartbeatKv();
 
     await runScheduled(kv);
 
-    const state = kv.state();
-    expect(state.heartbeat?.[heartbeat.id]?.status).toBe('pending');
-    expect(state.incident[heartbeat.id]).toBeUndefined();
-    expect(state.latency[heartbeat.id]).toBeUndefined();
-    expect(state.startedAt[heartbeat.id]).toBeUndefined();
-    expect(state.overallUp).toBe(1);
-    expect(state.overallDown).toBe(0);
+    const state = kv.monitor();
+    expect(state?.heartbeat?.status).toBe('pending');
+    expect(state).toEqual({ status: 'pending', incidents: [], heartbeat: { status: 'pending' } });
     expect(notifierSendMock).not.toHaveBeenCalled();
   });
 
-  it('counts every heartbeat phase so up plus down covers the public monitor', async () => {
+  it('takes its status from each heartbeat phase', async () => {
     const kv = createHeartbeatKv();
 
     await runScheduled(kv);
-    expect(kv.state()).toMatchObject({ overallUp: 1, overallDown: 0 });
+    expect(kv.monitor()?.status).toBe('pending');
 
     setNow(NOW + 1);
     kv.setSignal({ lastSuccess: NOW - 120, lastStart: NOW - 5 });
     await runScheduled(kv);
-    expect(kv.state()).toMatchObject({ overallUp: 1, overallDown: 0 });
+    expect(kv.monitor()?.status).toBe('running');
 
     setNow(NOW + 2);
     kv.setSignal({ lastSuccess: NOW - 65 });
     await runScheduled(kv);
-    expect(kv.state()).toMatchObject({ overallUp: 1, overallDown: 0, overallLate: 1 });
+    expect(kv.monitor()?.status).toBe('late');
 
     setNow(NOW + 3);
     kv.setSignal({ lastFail: NOW, message: 'boom' });
     await runScheduled(kv);
-    expect(kv.state()).toMatchObject({ overallUp: 0, overallDown: 1, overallLate: 0 });
+    expect(kv.monitor()?.status).toBe('down');
   });
 
-  it('counts a restart inside an open overdue incident as down', async () => {
+  it('stays down when the job restarts inside an open overdue incident', async () => {
     const kv = createHeartbeatKv();
     kv.setSignal({ lastSuccess: NOW - 200 });
 
     await runScheduled(kv);
-    expect(kv.state()).toMatchObject({ overallUp: 0, overallDown: 1 });
+    expect(kv.monitor()?.status).toBe('down');
 
     setNow(NOW + 1);
     kv.setSignal({ lastSuccess: NOW - 200, lastStart: NOW - 5 });
     await runScheduled(kv);
-    expect(kv.state()).toMatchObject({ overallUp: 0, overallDown: 1 });
+    expect(kv.monitor()).toMatchObject({ status: 'down', heartbeat: { status: 'running' } });
   });
 
-  it('counts late without opening an incident', async () => {
+  it('marks late without opening an incident', async () => {
     const kv = createHeartbeatKv();
     kv.setSignal({ lastSuccess: NOW - 65 });
 
     await runScheduled(kv);
 
-    const state = kv.state();
-    expect(state.heartbeat?.[heartbeat.id]?.status).toBe('late');
-    expect(state.overallLate).toBe(1);
-    expect(state.incident[heartbeat.id]).toEqual([]);
+    const state = kv.monitor();
+    expect(state?.heartbeat?.status).toBe('late');
+    expect(state?.status).toBe('late');
+    expect(state?.incidents).toEqual([]);
     expect(notifierSendMock).not.toHaveBeenCalled();
   });
 
@@ -213,18 +207,18 @@ describe('heartbeat scheduled checks', () => {
     kv.setSignal({ lastSuccess: NOW - 120, lastStart: NOW - 5 });
 
     await runScheduled(kv);
-    const runningState = kv.state();
-    expect(runningState.heartbeat?.[heartbeat.id]).toMatchObject({
+    const runningState = kv.monitor();
+    expect(runningState?.heartbeat).toMatchObject({
       status: 'running',
       deadline: NOW + 5,
     });
-    expect(runningState.incident[heartbeat.id]).toBeUndefined();
-    expect(runningState.overallUp).toBe(1);
+    expect(runningState?.incidents).toEqual([]);
+    expect(runningState?.status).toBe('running');
 
     setNow(NOW + 6);
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]?.status).toBe('down');
-    expect(kv.state().incident[heartbeat.id]).toHaveLength(1);
+    expect(kv.monitor()?.heartbeat?.status).toBe('down');
+    expect(kv.monitor()?.incidents).toHaveLength(1);
   });
 
   it('records one miss per skipped period across overdue ticks', async () => {
@@ -232,24 +226,24 @@ describe('heartbeat scheduled checks', () => {
     kv.setSignal({ lastSuccess: NOW });
 
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]?.misses).toBeUndefined();
+    expect(kv.monitor()?.heartbeat?.misses).toBeUndefined();
     expect(kv.signal().runs).toBeUndefined();
 
     setNow(NOW + 71);
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]?.misses).toEqual([NOW + 70]);
+    expect(kv.monitor()?.heartbeat?.misses).toEqual([NOW + 70]);
 
     setNow(NOW + 75);
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]?.misses).toEqual([NOW + 70]);
+    expect(kv.monitor()?.heartbeat?.misses).toEqual([NOW + 70]);
 
     setNow(NOW + 131);
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]?.misses).toEqual([NOW + 70, NOW + 130]);
+    expect(kv.monitor()?.heartbeat?.misses).toEqual([NOW + 70, NOW + 130]);
 
     setNow(NOW + 312);
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]?.misses).toEqual([
+    expect(kv.monitor()?.heartbeat?.misses).toEqual([
       NOW + 70,
       NOW + 130,
       NOW + 190,
@@ -264,45 +258,41 @@ describe('heartbeat scheduled checks', () => {
 
     setNow(NOW + 70 + 100 * 60 + 1);
     await runScheduled(kv);
-    const misses = kv.state().heartbeat?.[heartbeat.id]?.misses;
+    const misses = kv.monitor()?.heartbeat?.misses;
     expect(misses).toHaveLength(HEARTBEAT_RUN_HISTORY);
     expect(misses?.[misses.length - 1]).toBe(NOW + 70 + 100 * 60);
   });
 
   it('saves the state when a full miss history rolls forward', async () => {
     const kv = createHeartbeatKv();
-    workerConfigMock.kvWriteCooldownMinutes = 60;
     kv.setSignal({ lastSuccess: NOW });
     setNow(NOW + 70 + (HEARTBEAT_RUN_HISTORY - 1) * 60 + 1);
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]?.misses).toHaveLength(HEARTBEAT_RUN_HISTORY);
+    expect(kv.monitor()?.heartbeat?.misses).toHaveLength(HEARTBEAT_RUN_HISTORY);
 
     setNow(NOW + 70 + HEARTBEAT_RUN_HISTORY * 60 + 1);
     await runScheduled(kv);
-    const state = kv.state();
-    expect(state.lastUpdate).toBe(NOW + 70 + HEARTBEAT_RUN_HISTORY * 60 + 1);
-    expect(state.heartbeat?.[heartbeat.id]?.misses?.slice(-1)[0]).toBe(
-      NOW + 70 + HEARTBEAT_RUN_HISTORY * 60,
-    );
+    const state = kv.monitor();
+    expect(kv.hub.view().lastUpdate).toBe(NOW + 70 + HEARTBEAT_RUN_HISTORY * 60 + 1);
+    expect(state?.heartbeat?.misses?.slice(-1)[0]).toBe(NOW + 70 + HEARTBEAT_RUN_HISTORY * 60);
   });
 
   it('saves state when misses grow without a status change', async () => {
     const kv = createHeartbeatKv();
-    workerConfigMock.kvWriteCooldownMinutes = 60;
     kv.setSignal({ lastSuccess: NOW });
 
     setNow(NOW + 71);
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]).toMatchObject({
+    expect(kv.monitor()?.heartbeat).toMatchObject({
       status: 'down',
       misses: [NOW + 70],
     });
 
     setNow(NOW + 131);
     await runScheduled(kv);
-    const state = kv.state();
-    expect(state.heartbeat?.[heartbeat.id]?.misses).toEqual([NOW + 70, NOW + 130]);
-    expect(state.lastUpdate).toBe(NOW + 131);
+    const state = kv.monitor();
+    expect(state?.heartbeat?.misses).toEqual([NOW + 70, NOW + 130]);
+    expect(kv.hub.view().lastUpdate).toBe(NOW + 131);
   });
 
   it('stays late exactly at the deadline', async () => {
@@ -312,9 +302,9 @@ describe('heartbeat scheduled checks', () => {
     setNow(NOW + 70);
     await runScheduled(kv);
 
-    const state = kv.state();
-    expect(state.heartbeat?.[heartbeat.id]).toMatchObject({ status: 'late', deadline: NOW + 70 });
-    expect(state.incident[heartbeat.id]).toEqual([]);
+    const state = kv.monitor();
+    expect(state?.heartbeat).toMatchObject({ status: 'late', deadline: NOW + 70 });
+    expect(state?.incidents).toEqual([]);
     expect(notifierSendMock).not.toHaveBeenCalled();
   });
 
@@ -324,7 +314,7 @@ describe('heartbeat scheduled checks', () => {
 
     setNow(NOW + 71);
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]).toMatchObject({
+    expect(kv.monitor()?.heartbeat).toMatchObject({
       status: 'down',
       misses: [NOW + 70],
     });
@@ -347,29 +337,16 @@ describe('heartbeat scheduled checks', () => {
       lastSuccess: NOW + 75,
       runs: [{ at: NOW + 75, outcome: 'ok' }],
     });
-    expect(kv.state().heartbeat?.[heartbeat.id]).toMatchObject({
+    expect(kv.monitor()?.heartbeat).toMatchObject({
       status: 'down',
       misses: [NOW + 70],
     });
 
     setNow(NOW + 76);
     await runScheduled(kv);
-    expect(kv.state().heartbeat?.[heartbeat.id]).toMatchObject({
+    expect(kv.monitor()?.heartbeat).toMatchObject({
       status: 'up',
       misses: [NOW + 70],
     });
-  });
-
-  it('migrates an old state blob without losing its incidents', async () => {
-    const kv = createHeartbeatKv([[KV_KEYS.STATE, oldState]]);
-
-    await runScheduled(kv);
-
-    const state = kv.state();
-    expect(state.incident.legacy).toEqual(oldState.incident.legacy);
-    expect(state.startedAt.legacy).toBe(oldState.startedAt.legacy);
-    expect(state.latency.legacy).toEqual(oldState.latency.legacy);
-    expect(state.sslCertificates?.legacy).toEqual(oldState.sslCertificates.legacy);
-    expect(state.heartbeat?.[heartbeat.id]?.status).toBe('pending');
   });
 });
