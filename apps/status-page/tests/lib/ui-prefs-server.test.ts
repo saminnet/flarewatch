@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { parseUiPrefsCookie, validateUiPrefs } from '@/lib/ui-prefs-server';
 
-const DEFAULT_PREFS = { collapsedMonitors: [], collapsedGroups: [] };
+const DEFAULT_PREFS = { collapsedGroups: [] };
 
 describe('parseUiPrefsCookie', () => {
   it('returns defaults for absent or malformed cookies', () => {
@@ -11,18 +11,24 @@ describe('parseUiPrefsCookie', () => {
     expect(parseUiPrefsCookie('[]')).toStrictEqual(DEFAULT_PREFS);
   });
 
-  it('falls back per key for invalid arrays', () => {
+  it('falls back for an invalid array', () => {
+    expect(parseUiPrefsCookie(JSON.stringify({ collapsedGroups: 'nope' }))).toStrictEqual(
+      DEFAULT_PREFS,
+    );
+  });
+
+  it('ignores the collapsed monitors older versions stored', () => {
     expect(
-      parseUiPrefsCookie(JSON.stringify({ collapsedMonitors: ['a', 1], collapsedGroups: 'nope' })),
-    ).toStrictEqual(DEFAULT_PREFS);
+      parseUiPrefsCookie(JSON.stringify({ collapsedMonitors: ['a'], collapsedGroups: ['APIs'] })),
+    ).toStrictEqual({ collapsedGroups: ['APIs'] });
   });
 
   it('trims entries, drops empties, and dedupes preserving order', () => {
     const prefs = parseUiPrefsCookie(
-      JSON.stringify({ collapsedMonitors: ['  b ', 'a', '', 'b', 'a '], collapsedGroups: [] }),
+      JSON.stringify({ collapsedGroups: ['  b ', 'a', '', 'b', 'a '] }),
     );
 
-    expect(prefs.collapsedMonitors).toStrictEqual(['b', 'a']);
+    expect(prefs.collapsedGroups).toStrictEqual(['b', 'a']);
   });
 });
 
@@ -31,36 +37,24 @@ describe('validateUiPrefs', () => {
     expect(() => validateUiPrefs('nope')).toThrow('Invalid UI prefs');
     expect(() => validateUiPrefs(null)).toThrow('Invalid UI prefs');
     expect(() => validateUiPrefs({})).toThrow('Invalid UI prefs properties');
-    expect(() => validateUiPrefs({ collapsedMonitors: 'a', collapsedGroups: [] })).toThrow(
-      'Invalid UI prefs properties',
-    );
-    expect(() => validateUiPrefs({ collapsedMonitors: ['a'], collapsedGroups: [2] })).toThrow(
-      'Invalid UI prefs properties',
-    );
+    expect(() => validateUiPrefs({ collapsedGroups: [2] })).toThrow('Invalid UI prefs properties');
   });
 
   it('enforces the 200-item cookie bound', () => {
-    const items = Array.from({ length: 201 }, (_, i) => `m${i}`);
+    const items = Array.from({ length: 201 }, (_, i) => `g${i}`);
 
-    expect(() => validateUiPrefs({ collapsedMonitors: items, collapsedGroups: [] })).toThrow(
-      'UI prefs too large',
-    );
+    expect(() => validateUiPrefs({ collapsedGroups: items })).toThrow('UI prefs too large');
   });
 
   it('accepts exactly 200 items', () => {
-    const items = Array.from({ length: 200 }, (_, i) => `m${i}`);
+    const items = Array.from({ length: 200 }, (_, i) => `g${i}`);
 
-    expect(
-      validateUiPrefs({ collapsedMonitors: items, collapsedGroups: [] }).collapsedMonitors,
-    ).toHaveLength(200);
+    expect(validateUiPrefs({ collapsedGroups: items }).collapsedGroups).toHaveLength(200);
   });
 
   it('returns trimmed and deduped arrays', () => {
-    expect(validateUiPrefs({ collapsedMonitors: [' x ', 'x'], collapsedGroups: [] })).toStrictEqual(
-      {
-        collapsedMonitors: ['x'],
-        collapsedGroups: [],
-      },
-    );
+    expect(validateUiPrefs({ collapsedGroups: [' x ', 'x'] })).toStrictEqual({
+      collapsedGroups: ['x'],
+    });
   });
 });

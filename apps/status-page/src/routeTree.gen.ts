@@ -17,6 +17,7 @@ import { Route as ApiBadgeRouteImport } from './routes/api/badge'
 import { Route as ApiDataRouteImport } from './routes/api/data'
 import { Route as ApiMaintenancesRouteImport } from './routes/api/maintenances'
 import { Route as EmbedMonitorIdRouteImport } from './routes/embed.$monitorId'
+import { Route as MonitorsMonitorIdRouteImport } from './routes/monitors.$monitorId'
 import { Route as PingSplatRouteImport } from './routes/ping.$'
 import { Route as ApiAdminMaintenancesRouteImport } from './routes/api/admin/maintenances'
 import { Route as ApiAdminSessionRouteImport } from './routes/api/admin/session'
@@ -61,6 +62,11 @@ const EmbedMonitorIdRoute = EmbedMonitorIdRouteImport.update({
   path: '/embed/$monitorId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MonitorsMonitorIdRoute = MonitorsMonitorIdRouteImport.update({
+  id: '/monitors/$monitorId',
+  path: '/monitors/$monitorId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PingSplatRoute = PingSplatRouteImport.update({
   id: '/ping/$',
   path: '/ping/$',
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
+  '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
   '/api/admin/session': typeof ApiAdminSessionRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
+  '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
   '/api/admin/session': typeof ApiAdminSessionRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/api/data': typeof ApiDataRoute
   '/api/maintenances': typeof ApiMaintenancesRoute
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
+  '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
   '/api/admin/session': typeof ApiAdminSessionRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/api/data'
     | '/api/maintenances'
     | '/embed/$monitorId'
+    | '/monitors/$monitorId'
     | '/ping/$'
     | '/api/admin/maintenances'
     | '/api/admin/session'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/api/data'
     | '/api/maintenances'
     | '/embed/$monitorId'
+    | '/monitors/$monitorId'
     | '/ping/$'
     | '/api/admin/maintenances'
     | '/api/admin/session'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/api/data'
     | '/api/maintenances'
     | '/embed/$monitorId'
+    | '/monitors/$monitorId'
     | '/ping/$'
     | '/api/admin/maintenances'
     | '/api/admin/session'
@@ -168,6 +180,7 @@ export interface RootRouteChildren {
   ApiDataRoute: typeof ApiDataRoute
   ApiMaintenancesRoute: typeof ApiMaintenancesRoute
   EmbedMonitorIdRoute: typeof EmbedMonitorIdRoute
+  MonitorsMonitorIdRoute: typeof MonitorsMonitorIdRoute
   PingSplatRoute: typeof PingSplatRoute
   ApiAdminMaintenancesRoute: typeof ApiAdminMaintenancesRoute
   ApiAdminSessionRoute: typeof ApiAdminSessionRoute
@@ -231,6 +244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmbedMonitorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/monitors/$monitorId': {
+      id: '/monitors/$monitorId'
+      path: '/monitors/$monitorId'
+      fullPath: '/monitors/$monitorId'
+      preLoaderRoute: typeof MonitorsMonitorIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ping/$': {
       id: '/ping/$'
       path: '/ping/$'
@@ -264,6 +284,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDataRoute: ApiDataRoute,
   ApiMaintenancesRoute: ApiMaintenancesRoute,
   EmbedMonitorIdRoute: EmbedMonitorIdRoute,
+  MonitorsMonitorIdRoute: MonitorsMonitorIdRoute,
   PingSplatRoute: PingSplatRoute,
   ApiAdminMaintenancesRoute: ApiAdminMaintenancesRoute,
   ApiAdminSessionRoute: ApiAdminSessionRoute,

@@ -162,47 +162,59 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
   for (const monitor of seededMonitors) {
     expect(getPublicMonitor(data, monitor.id).up).toBe(monitor.status === 'operational');
     await expect(
-      page.getByRole('button', {
-        name: new RegExp(`${monitor.name}, ${monitor.status}.*Click to toggle details`),
-      }),
+      page.getByRole('link', { name: new RegExp(`^${monitor.name}, ${monitor.status}, `) }),
     ).toBeVisible();
     if (monitor.latency) {
       await expect(page.getByText(monitor.latency).filter({ visible: true }).first()).toBeVisible();
     }
     if (monitor.error) await expect(page.getByText(monitor.error)).toBeVisible();
-    if (monitor.href) {
-      await expect(page.getByRole('link', { name: new RegExp(monitor.name) })).toHaveAttribute(
-        'href',
-        monitor.href,
-      );
-    }
   }
 
-  await expect(page.getByRole('heading', { name: 'Response times (ms)' }).first()).toBeVisible();
-  await expect(page.getByTestId('latency-chart').first()).toBeVisible();
+  // Rows stay one line: the history and the chart live on the monitor's page.
+  await expect(page.getByTestId('latency-chart')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Toggle Websites (2 monitors)' }).click();
   await expect(page.getByRole('button', { name: 'Toggle Websites (2 monitors)' })).toHaveAttribute(
     'aria-expanded',
     'false',
   );
-  await expect(page.getByRole('button', { name: /Example Domain, operational/ })).not.toBeVisible();
+  await expect(page.getByRole('link', { name: /Example Domain, operational/ })).not.toBeVisible();
 
   await page.getByRole('button', { name: 'Toggle Websites (2 monitors)' }).click();
-  await expect(page.getByRole('button', { name: /Example Domain, operational/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Example Domain, operational/ })).toBeVisible();
+  expect(clientErrors).toEqual([]);
+});
+
+test('a row opens the monitor page with its history and chart', async ({ page }) => {
+  const clientErrors = collectClientErrors(page);
+  await page.goto('/');
+  await page.getByRole('link', { name: /^Cloudflare Docs, operational, / }).click();
+
+  await expect(page).toHaveURL(/\/monitors\/demo_cloudflare_docs$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Cloudflare Docs' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Open site/ })).toHaveAttribute(
+    'href',
+    'https://developers.cloudflare.com/',
+  );
+  await expect(page.getByRole('heading', { name: 'Last 90 days' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Response times (ms)' })).toBeVisible();
+  await expect(page.getByTestId('latency-chart')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Incidents and maintenance' }).click();
+  await expect(page).toHaveURL(/\/events\?.*monitor=demo_cloudflare_docs/);
   expect(clientErrors).toEqual([]);
 });
 
 test('latency chart is server-rendered, labeled, and supports hover', async ({ page, request }) => {
   // SSR: the chart container and its SVG line/grid are in the raw server HTML, before any JS.
-  const html = await (await request.get('/')).text();
+  const html = await (await request.get('/monitors/demo_example')).text();
   expectNoPrivateMonitorFields(html);
   expect(html).toContain('data-testid="latency-chart"');
   expect(html).toContain('vector-effect="non-scaling-stroke"');
   expect(html).toMatch(/fill="url\(#chart-fill-/);
   expect(html).toContain('stop-opacity="var(--chart-fill-top)"');
 
-  await page.goto('/');
+  await page.goto('/monitors/demo_example');
   const chart = page.getByTestId('latency-chart').first();
   await chart.scrollIntoViewIfNeeded();
   await expect(chart).toBeVisible();
@@ -225,17 +237,15 @@ test('latency chart is server-rendered, labeled, and supports hover', async ({ p
   }).toPass({ timeout: 15_000 });
 });
 
-test('empty chart state renders in the trace card', async ({ page }) => {
-  await page.goto('/');
-  await expect(
-    monitorCard(page, 'Cloudflare Trace').getByText('No response data yet'),
-  ).toBeVisible();
+test('empty chart state renders on the trace page', async ({ page }) => {
+  await page.goto('/monitors/demo_cloudflare_trace');
+  await expect(page.getByText('No response data yet')).toBeVisible();
 });
 
 test.describe('latency chart touch', () => {
   test.use({ hasTouch: true });
   test('tooltip appears on touch press and clears on lift', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/monitors/demo_example');
     const chart = page.getByTestId('latency-chart').first();
     await chart.scrollIntoViewIfNeeded();
     await chart.waitFor({ state: 'visible' });
@@ -352,74 +362,56 @@ const privateHeartbeat = {
 
 const UTC_STAMP = String.raw`\w{3} \d{1,2}, \d{2}:\d{2} UTC`;
 
-function monitorCard(page: Page, name: string) {
+function monitorRow(page: Page, name: string) {
   return page
-    .locator('[data-slot="card"]')
-    .filter({ has: page.getByRole('button', { name: new RegExp(`^${name}, `) }) });
+    .locator('[data-slot="monitor-row"]')
+    .filter({ has: page.getByRole('link', { name: new RegExp(`^${name}, `) }) });
 }
 
 test('heartbeat monitors render every phase on the public page', async ({ page }) => {
   const clientErrors = collectClientErrors(page);
   await page.goto('/');
 
-  const upCard = monitorCard(page, 'Nightly Backup');
   await expect(
-    page.getByRole('button', {
+    page.getByRole('link', {
       name: new RegExp(
-        `Nightly Backup, operational, last run ${UTC_STAMP}, next expected by ${UTC_STAMP}\\. Click to toggle details`,
+        `^Nightly Backup, operational, last run ${UTC_STAMP}, next expected by ${UTC_STAMP}$`,
       ),
     }),
   ).toBeVisible();
-  await expect(upCard).toContainText(new RegExp(`last run ${UTC_STAMP}`));
-  await expect(upCard.getByText('Last 2 runs')).toBeVisible();
-  await expect(upCard.getByText('Every 24h, 30m grace', { exact: true })).toBeVisible();
-  await expect(upCard.getByText('Next due', { exact: true })).toBeVisible();
-  const strip = upCard.getByRole('group', {
-    name: /\d+ runs, \d+ missed, \d+ failed, last run/,
-  });
-  await expect(strip).toBeVisible();
-  await expect(upCard.locator('time').first()).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T/);
-
-  const lateCard = monitorCard(page, 'Hourly Report');
+  await expect(monitorRow(page, 'Nightly Backup')).toContainText(
+    new RegExp(`last run ${UTC_STAMP}`),
+  );
   await expect(
-    page.getByRole('button', { name: /Hourly Report, running late, last run/ }),
+    page.getByRole('link', { name: /Hourly Report, running late, last run/ }),
   ).toBeVisible();
-  await expect(lateCard).toContainText(new RegExp(`Running late, expected by ${UTC_STAMP}`));
-
-  const pendingCard = monitorCard(page, 'Weekly Prune');
+  await expect(monitorRow(page, 'Hourly Report')).toContainText(
+    new RegExp(`Running late, expected by ${UTC_STAMP}`),
+  );
   await expect(
-    page.getByRole('button', { name: /Weekly Prune, waiting for first ping/ }),
+    page.getByRole('link', { name: /Weekly Prune, waiting for first ping/ }),
   ).toBeVisible();
-  await expect(pendingCard).toContainText('Waiting for first ping');
+  await expect(monitorRow(page, 'Weekly Prune')).toContainText('Waiting for first ping');
+  await expect(monitorRow(page, 'Weekly Prune').locator('[data-slot="badge"]')).toHaveText(
+    'Pending',
+  );
+  await expect(monitorRow(page, 'Index Rebuild')).toContainText(
+    new RegExp(`Running since ${UTC_STAMP}`),
+  );
+  await expect(page.getByRole('link', { name: /Log Shipper, overdue/ })).toBeVisible();
+  await expect(monitorRow(page, 'Log Shipper')).toContainText(
+    new RegExp(`Overdue, was expected by ${UTC_STAMP}`),
+  );
+  await expect(monitorRow(page, 'Log Shipper')).not.toContainText(
+    /No heartbeat since .+ \(expected by .+\)/,
+  );
   await expect(
-    pendingCard.getByText('No run recorded yet. The first ping starts the schedule.'),
+    page.getByRole('link', { name: /Nightly Compactor, overdue, last run/ }),
   ).toBeVisible();
-  await expect(pendingCard.locator('[data-slot="badge"]')).toHaveText('Pending');
+  await expect(monitorRow(page, 'Nightly Compactor')).toContainText('Job reported failure');
 
-  const runningCard = monitorCard(page, 'Index Rebuild');
-  await expect(runningCard).toContainText(new RegExp(`Running since ${UTC_STAMP}`));
-
-  const downCard = monitorCard(page, 'Log Shipper');
-  await expect(page.getByRole('button', { name: /Log Shipper, overdue/ })).toBeVisible();
-  await expect(downCard).toContainText(new RegExp(`Overdue, was expected by ${UTC_STAMP}`));
-  await expect(downCard).not.toContainText(/No heartbeat since .+ \(expected by .+\)/);
-  await expect(downCard.getByText('Overdue by', { exact: true })).toBeVisible();
-
-  const failedCard = monitorCard(page, 'Nightly Compactor');
-  await expect(
-    page.getByRole('button', { name: /Nightly Compactor, overdue, last run/ }),
-  ).toBeVisible();
-  await expect(failedCard).toContainText('Job reported failure');
-  await expect(failedCard.getByText('restic check failed')).toHaveCount(0);
-
-  // The compactor fixture carries the full 90-run history with the miss
-  // stored in state.misses, merged into the strip next to the ping runs.
-  await expect(
-    failedCard.getByRole('group', { name: /90 runs, 1 missed, 1 failed, last run/ }),
-  ).toBeVisible();
-
-  // The uptime badge samples cron minutes, so heartbeat cards explain it.
-  const uptimeBadgeTooltip = upCard
+  // The uptime badge samples cron minutes, so heartbeat rows explain it.
+  const uptimeBadgeTooltip = monitorRow(page, 'Nightly Backup')
     .locator('[data-slot="tooltip-trigger"]')
     .filter({ has: page.locator('[data-slot="badge"]') });
   await expect(async () => {
@@ -429,6 +421,33 @@ test('heartbeat monitors render every phase on the public page', async ({ page }
       timeout: 1000,
     });
   }).toPass({ timeout: 15_000 });
+
+  await page.goto('/monitors/demo_nightly_backup');
+  const upCard = page.locator('[data-slot="card"]');
+  await expect(upCard.getByText('Last 2 runs')).toBeVisible();
+  await expect(upCard.getByText('Every 24h, 30m grace', { exact: true })).toBeVisible();
+  await expect(upCard.getByText('Next due', { exact: true })).toBeVisible();
+  await expect(
+    upCard.getByRole('group', { name: /\d+ runs, \d+ missed, \d+ failed, last run/ }),
+  ).toBeVisible();
+  await expect(upCard.locator('time').first()).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T/);
+  await expect(page.getByRole('button', { name: /Copy ping URL/ })).toHaveCount(0);
+
+  await page.goto('/monitors/demo_weekly_prune');
+  await expect(
+    page.getByText('No run recorded yet. The first ping starts the schedule.'),
+  ).toBeVisible();
+
+  await page.goto('/monitors/demo_log_shipper');
+  await expect(page.getByText('Overdue by', { exact: true })).toBeVisible();
+
+  // The compactor fixture carries the full 90-run history with the miss
+  // stored in state.misses, merged into the strip next to the ping runs.
+  await page.goto('/monitors/demo_nightly_compactor');
+  await expect(
+    page.getByRole('group', { name: /90 runs, 1 missed, 1 failed, last run/ }),
+  ).toBeVisible();
+  await expect(page.getByText('restic check failed')).toHaveCount(0);
 
   expect(clientErrors).toEqual([]);
 });
@@ -445,22 +464,22 @@ test('kind filter hides the other kind and lives in the URL', async ({ page }) =
     await filter.getByRole('button', { name: 'Websites' }).click();
     await expect(page).toHaveURL(/kind=web/);
   }).toPass({ timeout: 15_000 });
-  await expect(page.getByRole('button', { name: /Nightly Backup, / })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Nightly Backup, / })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Toggle Scheduled jobs (6 jobs)' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Example Domain, operational/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Example Domain, operational/ })).toBeVisible();
   await expect(
     page.getByRole('heading', { name: /Some systems are down \(3 out of 12\)/i }),
   ).toBeVisible();
 
   await page.goto('/?kind=jobs');
-  await expect(page.getByRole('button', { name: /Example Domain, operational/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Example Domain, operational/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Toggle Websites (2 monitors)' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Toggle APIs (2 monitors)' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Toggle Status Feeds (2 monitors)' })).toHaveCount(
     0,
   );
   await expect(page.getByRole('button', { name: 'Toggle Scheduled jobs (6 jobs)' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Nightly Backup, / })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Nightly Backup, / })).toBeVisible();
   expect(clientErrors).toEqual([]);
 });
 
@@ -520,6 +539,10 @@ test('private monitor never appears to visitors but shows to the operator with a
   expect(maintenancesBody).not.toContain(privateName);
   expect(maintenancesBody).not.toContain(privateMonitor.maintenance);
 
+  const privatePage = await request.get(`/monitors/${privateId}`);
+  expect(privatePage.status()).toBe(404);
+  expect(await privatePage.text()).not.toContain(privateName);
+
   const embedBody = await (await request.get(`/embed/${privateId}`)).text();
   expect(embedBody).not.toContain(privateName);
   expect(embedBody).toContain('not found');
@@ -546,16 +569,18 @@ test('private monitor never appears to visitors but shows to the operator with a
   // The operator reads the unfiltered state, so private cards carry their real
   // status instead of an empty one.
   await expect(page.getByText('Synthetic private outage')).toBeVisible();
-  await expect(
-    page.getByRole('button', {
-      name: new RegExp(`${privateHeartbeat.name}, operational, last run ${UTC_STAMP}`),
-    }),
-  ).toBeVisible();
+  await page
+    .getByRole('link', {
+      name: new RegExp(`^${privateHeartbeat.name}, operational, last run ${UTC_STAMP}`),
+    })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/monitors/${privateHeartbeat.id}$`));
   await expect(
     page.getByRole('button', { name: `Copy ping URL for ${privateHeartbeat.name}` }),
   ).toBeVisible();
 
   // Signed-in mode is the only surface that carries the raw reported reason.
+  await page.goto('/monitors/demo_nightly_compactor');
   await expect(
     page.getByText('restic check failed: pack 3f9a12 missing from repository'),
   ).toBeVisible();
@@ -588,6 +613,10 @@ test('visitor view shows the operator the page as visitors see it', async ({ pag
   ).toBeVisible();
   await expect(page.getByText(privateMonitor.name)).toHaveCount(0);
   await expect(page.getByText(privateMonitor.maintenance)).toHaveCount(0);
+
+  await page.getByRole('link', { name: /^Nightly Backup, / }).click();
+  await expect(page).toHaveURL(/\/monitors\/demo_nightly_backup\?view=visitor/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Nightly Backup' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Copy ping URL/ })).toHaveCount(0);
 
   await page.getByRole('banner').getByRole('link', { name: 'Events' }).click();

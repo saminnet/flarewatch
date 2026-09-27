@@ -4,13 +4,11 @@ import { isJsonObject } from '@flarewatch/shared';
 import { ONE_YEAR_SECONDS, COOKIE_NAMES } from './constants';
 
 export type UiPrefs = {
-  collapsedMonitors: string[];
   collapsedGroups: string[];
 };
 
 const DEFAULT_UI_PREFS: UiPrefs = {
   collapsedGroups: [],
-  collapsedMonitors: [],
 };
 
 function parseStringArray(value: unknown): string[] | null {
@@ -34,11 +32,9 @@ export function parseUiPrefsCookie(cookieValue: string | undefined): UiPrefs {
     const parsed: unknown = JSON.parse(cookieValue);
     if (!isJsonObject(parsed)) return DEFAULT_UI_PREFS;
 
-    const collapsedMonitors = parseStringArray(parsed.collapsedMonitors);
     const collapsedGroups = parseStringArray(parsed.collapsedGroups);
 
     return {
-      collapsedMonitors: collapsedMonitors ?? DEFAULT_UI_PREFS.collapsedMonitors,
       collapsedGroups: collapsedGroups ?? DEFAULT_UI_PREFS.collapsedGroups,
     };
   } catch {
@@ -51,19 +47,18 @@ export function validateUiPrefs(data: unknown): UiPrefs {
     throw new Error('Invalid UI prefs');
   }
 
-  const collapsedMonitors = parseStringArray(data.collapsedMonitors);
   const collapsedGroups = parseStringArray(data.collapsedGroups);
 
-  if (!collapsedMonitors || !collapsedGroups) {
+  if (!collapsedGroups) {
     throw new Error('Invalid UI prefs properties');
   }
 
   // Keep cookies bounded (avoid >4KB)
-  if (collapsedMonitors.length > 200 || collapsedGroups.length > 200) {
+  if (collapsedGroups.length > 200) {
     throw new Error('UI prefs too large');
   }
 
-  return { collapsedGroups, collapsedMonitors };
+  return { collapsedGroups };
 }
 
 export const getUiPrefsServerFn = createServerFn({ method: 'GET' }).handler(async () => {
