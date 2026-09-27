@@ -5,6 +5,8 @@ declare namespace Cloudflare {
     FLAREWATCH_STATUS_PAGE_BASIC_AUTH?: string;
     FLAREWATCH_ADMIN_BASIC_AUTH?: string;
     MONITOR_WORKER?: Fetcher;
+    /** Sign-in attempts per client IP; see wrangler.jsonc. */
+    LOGIN_RATE_LIMIT?: RateLimit;
   }
 }
 

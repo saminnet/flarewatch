@@ -44,26 +44,6 @@ function getClientIp(request: Request): string | null {
   return forwardedFor.split(',')[0]?.trim() ?? null;
 }
 
-async function getLoginFailures(kv: KVNamespace, ip: string): Promise<number> {
-  const raw = await kv.get(`${AUTH.LOGIN_RATE_LIMIT_PREFIX}${ip}`);
-  if (!raw) return 0;
-  const num = Number(raw);
-  return Number.isFinite(num) ? num : 0;
-}
-
-async function incrementLoginFailures(kv: KVNamespace, ip: string): Promise<number> {
-  const current = await getLoginFailures(kv, ip);
-  const next = current + 1;
-  await kv.put(`${AUTH.LOGIN_RATE_LIMIT_PREFIX}${ip}`, String(next), {
-    expirationTtl: AUTH.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
-  });
-  return next;
-}
-
-async function clearLoginFailures(kv: KVNamespace, ip: string): Promise<void> {
-  await kv.delete(`${AUTH.LOGIN_RATE_LIMIT_PREFIX}${ip}`);
-}
-
 export const Route = createFileRoute('/api/admin/session')({
   server: {
     handlers: {
@@ -83,28 +63,19 @@ export const Route = createFileRoute('/api/admin/session')({
         const password = typeof body.password === 'string' ? body.password : '';
 
         try {
-          const kv = await requireStateKv();
           const ip = getClientIp(request);
 
-          if (ip) {
-            const failures = await getLoginFailures(kv, ip);
-            if (failures >= AUTH.LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
-              return jsonResponse({ error: 'Too many attempts. Try again later.' }, 429);
-            }
+          // A rate-limit binding, not a stored counter: failed attempts write nothing.
+          const limiter = env.LOGIN_RATE_LIMIT;
+          if (limiter && ip && !(await limiter.limit({ key: ip })).success) {
+            return jsonResponse({ error: 'Too many attempts. Try again later.' }, 429);
           }
 
-          const credentialsOk = await verifyAuthSecret(adminCreds, username, password);
-          if (!credentialsOk) {
-            if (ip) {
-              await incrementLoginFailures(kv, ip);
-            }
+          if (!(await verifyAuthSecret(adminCreds, username, password))) {
             return jsonResponse({ error: 'Invalid credentials' }, 401);
           }
 
-          if (ip) {
-            await clearLoginFailures(kv, ip);
-          }
-
+          const kv = await requireStateKv();
           const sessionId = await startSession(kv, ip);
 
           return jsonResponse({ ok: true }, 200, {

@@ -1,26 +1,49 @@
 import {
+  isHubView,
   isLatencySamples,
-  isStatusView,
+  type HubView,
   type LatencySample,
-  type StatusView,
+  type Maintenance,
 } from '@flarewatch/shared';
 import { resolveRuntimeEnv } from './runtime-env';
 
-async function fromMonitorWorker(path: string): Promise<unknown> {
+async function callMonitorWorker(path: string, init?: RequestInit): Promise<Response> {
   const { MONITOR_WORKER: monitorWorker } = await resolveRuntimeEnv();
   if (!monitorWorker || typeof monitorWorker.fetch !== 'function') {
     throw new Error('MONITOR_WORKER binding not found');
   }
-  const response = await monitorWorker.fetch(`https://internal${path}`);
+  return monitorWorker.fetch(`https://internal${path}`, init);
+}
+
+async function fromMonitorWorker(path: string): Promise<unknown> {
+  const response = await callMonitorWorker(path);
   if (!response.ok) throw new Error(`Monitor worker ${path} answered ${response.status}`);
   return response.json();
 }
 
-/** Every monitor the hub has seen, from the monitoring worker. */
-export async function fetchStatusView(): Promise<StatusView> {
+/** Every monitor the hub has seen and every maintenance window, from the monitoring worker. */
+export async function fetchHubView(): Promise<HubView> {
   const view = await fromMonitorWorker('/view');
-  if (!isStatusView(view)) throw new Error('Monitor worker sent an invalid view');
+  if (!isHubView(view)) throw new Error('Monitor worker sent an invalid view');
   return view;
+}
+
+export async function saveMaintenance(maintenance: Maintenance): Promise<void> {
+  const response = await callMonitorWorker(`/maintenances/${encodeURIComponent(maintenance.id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(maintenance),
+  });
+  if (!response.ok) throw new Error(`Saving maintenance answered ${response.status}`);
+}
+
+/** False when no window has this id. */
+export async function deleteMaintenance(id: string): Promise<boolean> {
+  const response = await callMonitorWorker(`/maintenances/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error(`Deleting maintenance answered ${response.status}`);
+  return true;
 }
 
 /** One monitor's latency samples for the last 12 hours, oldest first. */

@@ -9,7 +9,7 @@ import {
   type NotificationConfig,
   type PageConfig,
   type RuntimeConfig,
-  type StatusView,
+  type HubView,
   type Webhook,
 } from './types';
 import { isJsonObject, isNonEmptyString } from './utils';
@@ -271,8 +271,9 @@ const monitorStateSchema: z.ZodMiniType<SchemaOutput<MonitorState>> = z.object({
   heartbeat: z.optional(z.record(z.string(), heartbeatStateSchema)),
 });
 
-const statusViewSchema: z.ZodMiniType<SchemaOutput<StatusView>> = z.object({
+const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
   lastUpdate: z.number(),
+  maintenances: z.array(maintenanceSchema),
   monitors: z.record(
     z.string(),
     z.object({
@@ -315,7 +316,7 @@ export function parseHeartbeatState(value: unknown): HeartbeatState | null {
   return result.success ? result.data : null;
 }
 
-export const isStatusView = asTypeGuard<StatusView>(statusViewSchema);
+export const isHubView = asTypeGuard<HubView>(hubViewSchema);
 export const isLatencySamples = asTypeGuard<LatencySample[]>(z.array(latencySampleSchema));
 
 export function parseMaintenances(value: unknown): Maintenance[] {

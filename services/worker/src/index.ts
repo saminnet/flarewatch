@@ -2,15 +2,14 @@ import {
   type CheckContext,
   createLogger,
   failure,
-  type Maintenance,
   type CheckResultWithLocation,
   type MonitorTarget,
-  readMaintenancesFromStorage,
   type WorkerConfig,
 } from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
 
-import { getHub, getStateKv, type Env } from './env';
+import { getHub, type Env } from './env';
+import { handleHubRequest } from './hub/routes';
 import { handlePing, handlePingUrl } from './ping';
 import { getEdgeLocation } from './utils/location';
 import { checkMonitor } from './checkers';
@@ -28,36 +27,8 @@ const log = createLogger('Worker');
 
 const GRACE_PERIOD_BUFFER_SECONDS = 30;
 
-function isInMaintenance(
-  monitorId: string,
-  currentTime: number,
-  maintenances: Maintenance[],
-): boolean {
-  return maintenances.some((m) => {
-    const startTime = new Date(m.start).getTime() / 1000;
-    const endTime = m.end ? new Date(m.end).getTime() / 1000 : Infinity;
-    if (currentTime < startTime || currentTime > endTime) return false;
-    return !m.monitors?.length || m.monitors.includes(monitorId);
-  });
-}
-
-function shouldSkipNotification(
-  monitorId: string,
-  currentTime: number,
-  maintenances: Maintenance[],
-  config: WorkerConfig,
-): boolean {
-  const skipList = config.notification?.skipNotificationIds ?? [];
-  return skipList.includes(monitorId) || isInMaintenance(monitorId, currentTime, maintenances);
-}
-
-async function loadMaintenances(kv: KVNamespace): Promise<Maintenance[]> {
-  try {
-    return readMaintenancesFromStorage(kv);
-  } catch (error) {
-    log.error('Failed to load maintenances from KV', { error: String(error) });
-    return [];
-  }
+function skipsNotification(monitorId: string, config: WorkerConfig): boolean {
+  return (config.notification?.skipNotificationIds ?? []).includes(monitorId);
 }
 
 async function safeCallback<T extends unknown[]>(
@@ -145,7 +116,6 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
 
   const config = deps.staticConfig;
   const hub = getHub(env);
-  const maintenances = await loadMaintenances(getStateKv(env));
 
   const currentTime = Math.floor(Date.now() / 1000);
   const notifier = deps.createNotifier(config.notification?.webhook);
@@ -170,7 +140,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
     const monitor = monitors.get(update.monitorId);
     if (!monitor) continue;
 
-    if (notifier && !shouldSkipNotification(monitor.id, currentTime, maintenances, config)) {
+    if (notifier && !update.inMaintenance && !skipsNotification(monitor.id, config)) {
       const skipErrorChanges = Boolean(config.notification?.skipErrorChangeNotification);
       const statusChangedForNotification =
         update.changeType === 'up' ||
@@ -245,14 +215,8 @@ const Worker = {
       return Response.json({ success: true, message: 'Check triggered' }, { status: 202 });
     }
 
-    // The status page reads the hub through its MONITOR_WORKER binding.
-    if (url.pathname === '/view' && request.method === 'GET') {
-      return Response.json(await getHub(env).view());
-    }
-    if (url.pathname.startsWith('/latency/') && request.method === 'GET') {
-      const id = decodeURIComponent(url.pathname.slice('/latency/'.length));
-      return Response.json(await getHub(env).latency(id));
-    }
+    const hubResponse = await handleHubRequest(request, env);
+    if (hubResponse) return hubResponse;
 
     // Ping routes and /ping-url are only reachable through the MONITOR_WORKER
     // service binding; the worker has no public ingress (workers_dev = false).

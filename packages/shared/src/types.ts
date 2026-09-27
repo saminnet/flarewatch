@@ -182,16 +182,6 @@ export type RuntimeConfig = {
   notification?: NotificationConfig;
 };
 
-export interface KvStore {
-  get(key: string, options?: { type?: 'json' | 'text' }): Promise<unknown>;
-  put(key: string, value: string): Promise<void>;
-}
-
-export const KV_KEYS = {
-  STATE: 'state',
-  MAINTENANCES: 'maintenances',
-} as const;
-
 export type HeartbeatRun = {
   /** Unix timestamp (seconds) */
   at: number;
@@ -253,9 +243,8 @@ export type StatusView = {
   monitors: Record<string, MonitorView>;
 };
 
-export function heartbeatKvKey(id: string): string {
-  return `hb:v1:${id}`;
-}
+/** What the status page reads from the hub in one call. */
+export type HubView = StatusView & { maintenances: Maintenance[] };
 
 export type MonitorState = {
   /** Unix timestamp (seconds) */

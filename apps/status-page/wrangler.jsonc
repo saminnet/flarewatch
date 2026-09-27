@@ -37,6 +37,14 @@
       "service": "flarewatch-worker",
     },
   ],
+  // Five sign-in attempts per minute per IP. The binding keeps no stored count.
+  "ratelimits": [
+    {
+      "name": "LOGIN_RATE_LIMIT",
+      "namespace_id": "1002",
+      "simple": { "limit": 5, "period": 60 },
+    },
+  ],
   /**
    * Smart Placement
    * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

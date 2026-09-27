@@ -66,10 +66,6 @@ export const AUTH = {
   COOKIE_NAME: 'flarewatch_admin_session',
   SESSION_KEY_PREFIX: 'admin_session:',
   SESSION_TTL_SECONDS: 60 * 60 * 24 * 14, // 14 days
-
-  LOGIN_RATE_LIMIT_MAX_ATTEMPTS: 10,
-  LOGIN_RATE_LIMIT_WINDOW_SECONDS: 10 * 60, // 10 minutes
-  LOGIN_RATE_LIMIT_PREFIX: 'admin_login_fail:',
 } as const;
 
 export const DEFAULT_POWERED_BY_URL = 'https://github.com/saminnet/flarewatch';

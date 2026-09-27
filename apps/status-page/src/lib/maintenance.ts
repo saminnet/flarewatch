@@ -1,12 +1,6 @@
-import { formatUtcShort, type Maintenance } from '@flarewatch/shared';
+import { formatUtcShort, isMaintenanceActive, type Maintenance } from '@flarewatch/shared';
 import { TIME_MS, UPCOMING_MAINTENANCE_DAYS } from './constants';
 import { formatUtc, formatDuration, getDateKey } from './date';
-
-function isMaintenanceActive(maintenance: Maintenance, now = Date.now()): boolean {
-  const startMs = new Date(maintenance.start).getTime();
-  const endMs = maintenance.end ? new Date(maintenance.end).getTime() : undefined;
-  return startMs <= now && (endMs === undefined || endMs > now);
-}
 
 function isMaintenanceUpcoming(
   maintenance: Maintenance,

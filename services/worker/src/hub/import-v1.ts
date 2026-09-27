@@ -2,7 +2,9 @@ import {
   createLogger,
   isMonitorState,
   parseHeartbeatSignal,
+  parseMaintenances,
   type HeartbeatSignal,
+  type Maintenance,
   type MonitorState,
 } from '@flarewatch/shared';
 import type { Sql } from './sql';
@@ -15,22 +17,36 @@ const log = createLogger('ImportV1');
 
 const DONE_KEY = 'v1_import';
 const STATE_KEY = 'state';
+const MAINTENANCES_KEY = 'maintenances';
 const SIGNAL_PREFIX = 'hb:v1:';
 
-async function readV1(
-  kv: KVNamespace,
-): Promise<{ state: MonitorState | null; signals: Map<string, HeartbeatSignal> }> {
+type V1Data = {
+  state: MonitorState | null;
+  signals: Map<string, HeartbeatSignal>;
+  maintenances: Maintenance[];
+};
+
+async function readV1(kv: KVNamespace): Promise<V1Data> {
   const stored = await kv.get(STATE_KEY, 'json');
+  const maintenances = parseMaintenances(await kv.get(MAINTENANCES_KEY, 'json'));
   const { keys } = await kv.list({ prefix: SIGNAL_PREFIX });
   const signals = new Map<string, HeartbeatSignal>();
   for (const { name } of keys) {
     const signal = parseHeartbeatSignal(await kv.get(name, 'json'));
     if (signal) signals.set(name.slice(SIGNAL_PREFIX.length), signal);
   }
-  return { state: isMonitorState(stored) ? stored : null, signals };
+  return { state: isMonitorState(stored) ? stored : null, signals, maintenances };
 }
 
-function write(sql: Sql, state: MonitorState | null, signals: Map<string, HeartbeatSignal>): void {
+function write(sql: Sql, { state, signals, maintenances }: V1Data): void {
+  for (const maintenance of maintenances) {
+    sql.exec(
+      'INSERT OR REPLACE INTO maintenances (id, data) VALUES (?, ?)',
+      maintenance.id,
+      JSON.stringify(maintenance),
+    );
+  }
+
   const upsertMonitor = (id: string, column: 'started_at' | 'heartbeat', value: number | string) =>
     sql.exec(
       `INSERT INTO monitors (id, ${column}) VALUES (?, ?)
@@ -96,7 +112,7 @@ function write(sql: Sql, state: MonitorState | null, signals: Map<string, Heartb
 export async function importV1(sql: Sql, kv: KVNamespace | undefined): Promise<void> {
   if (sql.exec('SELECT 1 FROM meta WHERE key = ?', DONE_KEY).length > 0) return;
 
-  let v1: Awaited<ReturnType<typeof readV1>> = { state: null, signals: new Map() };
+  let v1: V1Data = { state: null, signals: new Map(), maintenances: [] };
   if (kv) {
     try {
       v1 = await readV1(kv);
@@ -107,10 +123,13 @@ export async function importV1(sql: Sql, kv: KVNamespace | undefined): Promise<v
   }
 
   sql.transaction(() => {
-    write(sql, v1.state, v1.signals);
+    write(sql, v1);
     sql.exec("INSERT INTO meta (key, value) VALUES (?, '1')", DONE_KEY);
   });
-  if (v1.state || v1.signals.size > 0) {
-    log.info('Imported 1.x state', { heartbeats: v1.signals.size });
+  if (v1.state || v1.signals.size > 0 || v1.maintenances.length > 0) {
+    log.info('Imported 1.x state', {
+      heartbeats: v1.signals.size,
+      maintenances: v1.maintenances.length,
+    });
   }
 }

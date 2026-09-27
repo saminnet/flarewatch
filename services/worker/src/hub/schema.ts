@@ -21,6 +21,7 @@ const MIGRATIONS: string[][] = [
     // monitor: the free plan allows 100,000 rows written a day.
     `CREATE TABLE samples (at INTEGER PRIMARY KEY, data TEXT NOT NULL)`,
   ],
+  [`CREATE TABLE maintenances (id TEXT PRIMARY KEY, data TEXT NOT NULL) WITHOUT ROWID`],
 ];
 
 export function migrate(sql: Sql): void {

@@ -1,13 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
 import {
-  writeMaintenancesToStorage,
-  readMaintenancesFromStorage,
   isJsonObject,
   type Maintenance,
   type MaintenanceConfig,
   isNonEmptyString,
 } from '@flarewatch/shared';
-import { requireStateKv } from '@/lib/runtime-env';
+import { deleteMaintenance, fetchHubView, saveMaintenance } from '@/lib/hub';
+import { forgetCachedView } from '@/lib/kv';
 
 function jsonError(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), {
@@ -148,8 +147,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
     handlers: {
       GET: async () => {
         try {
-          const kv = await requireStateKv();
-          const maintenances = await readMaintenancesFromStorage(kv);
+          const { maintenances } = await fetchHubView();
           return Response.json(maintenances);
         } catch (error) {
           console.error('Error listing maintenances:', error);
@@ -166,7 +164,6 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             return jsonError('Invalid maintenance payload', 400);
           }
 
-          const kv = await requireStateKv();
           const now = Date.now();
           const maintenance: Maintenance = {
             ...input,
@@ -175,8 +172,8 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             updatedAt: now,
           };
 
-          const maintenances = await readMaintenancesFromStorage(kv);
-          await writeMaintenancesToStorage(kv, [...maintenances, maintenance]);
+          await saveMaintenance(maintenance);
+          forgetCachedView();
 
           return Response.json(maintenance, { status: 201 });
         } catch (error) {
@@ -193,10 +190,8 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             return jsonError('id is required', 400);
           }
 
-          const kv = await requireStateKv();
-          const maintenances = await readMaintenancesFromStorage(kv);
-          const index = maintenances.findIndex((m) => m.id === payload.id);
-          const current = maintenances[index];
+          const { maintenances } = await fetchHubView();
+          const current = maintenances.find((m) => m.id === payload.id);
 
           if (!current) {
             return jsonError('Maintenance not found', 404);
@@ -215,9 +210,8 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             updatedAt: Date.now(),
           };
 
-          const nextMaintenances = [...maintenances];
-          nextMaintenances[index] = updated;
-          await writeMaintenancesToStorage(kv, nextMaintenances);
+          await saveMaintenance(updated);
+          forgetCachedView();
 
           return Response.json(updated);
         } catch (error) {
@@ -234,15 +228,10 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             return jsonError('id is required', 400);
           }
 
-          const kv = await requireStateKv();
-          const maintenances = await readMaintenancesFromStorage(kv);
-          const filtered = maintenances.filter((m) => m.id !== payload.id);
-
-          if (filtered.length === maintenances.length) {
+          if (!(await deleteMaintenance(payload.id))) {
             return jsonError('Maintenance not found', 404);
           }
-
-          await writeMaintenancesToStorage(kv, filtered);
+          forgetCachedView();
           return new Response(null, { status: 204 });
         } catch (error) {
           console.error('Error deleting maintenance:', error);

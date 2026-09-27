@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, it } from 'vite-plus/test';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { Route } from '@/routes/api/admin/session';
-import { AUTH } from '@/lib/constants';
 import { memoryKv } from '../helpers/kv';
 
 type SessionHandler = (ctx: { request: Request }) => Promise<Response>;
@@ -57,11 +56,11 @@ describe('POST /api/admin/session login rate limit', () => {
     });
   }
 
-  it('blocks the next attempt after the failure maximum', async () => {
+  async function adminSecret(password: string): Promise<string> {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const keyMaterial = await crypto.subtle.importKey(
       'raw',
-      new TextEncoder().encode('e2e-password'),
+      new TextEncoder().encode(password),
       { name: 'PBKDF2' },
       false,
       ['deriveBits'],
@@ -71,20 +70,48 @@ describe('POST /api/admin/session login rate limit', () => {
       keyMaterial,
       256,
     );
-    const secret = JSON.stringify({
+    return JSON.stringify({
       username: 'e2e-admin',
       salt: btoa(String.fromCharCode(...salt)),
       hash: btoa(String.fromCharCode(...new Uint8Array(bits))),
     });
-    const kv = memoryKv();
-    globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: secret, FLAREWATCH_STATE: kv };
+  }
 
-    for (let attempt = 0; attempt < AUTH.LOGIN_RATE_LIMIT_MAX_ATTEMPTS; attempt++) {
-      const response = await getPostHandler()({ request: loginRequest('wrong') });
-      expect(response.status).toBe(401);
-    }
+  function limiter(allow: boolean) {
+    const limit = vi.fn(async (_options: { key: string }) => ({ success: allow }));
+    return { limit, binding: { limit } as { limit: typeof limit } & RateLimit };
+  }
+
+  it('turns the right password away once the IP is over its limit', async () => {
+    const kv = memoryKv();
+    const { limit, binding } = limiter(false);
+    globalThis.__env__ = {
+      FLAREWATCH_ADMIN_BASIC_AUTH: await adminSecret('e2e-password'),
+      FLAREWATCH_STATE: kv,
+      LOGIN_RATE_LIMIT: binding,
+    };
 
     const blocked = await getPostHandler()({ request: loginRequest('e2e-password') });
+
     expect(blocked.status).toBe(429);
+    expect(limit).toHaveBeenCalledWith({ key: '203.0.113.7' });
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing for a wrong password and a session for the right one', async () => {
+    const kv = memoryKv();
+    globalThis.__env__ = {
+      FLAREWATCH_ADMIN_BASIC_AUTH: await adminSecret('e2e-password'),
+      FLAREWATCH_STATE: kv,
+      LOGIN_RATE_LIMIT: limiter(true).binding,
+    };
+
+    const wrong = await getPostHandler()({ request: loginRequest('wrong') });
+    expect(wrong.status).toBe(401);
+    expect(kv.put).not.toHaveBeenCalled();
+
+    const right = await getPostHandler()({ request: loginRequest('e2e-password') });
+    expect(right.status).toBe(200);
+    expect(kv.put).toHaveBeenCalledTimes(1);
   });
 });

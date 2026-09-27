@@ -25,6 +25,7 @@ describe('MonitorHub incidents', () => {
 
     expect(update).toEqual({
       monitorId: 'api',
+      inMaintenance: false,
       statusChanged: true,
       changeType: 'down',
       isUp: false,
@@ -193,6 +194,50 @@ describe('MonitorHub storage', () => {
 
   it('reports nothing before the first check run', () => {
     const { hub } = createHub();
-    expect(hub.view()).toEqual({ lastUpdate: 0, monitors: {} });
+    expect(hub.view()).toEqual({ lastUpdate: 0, monitors: {}, maintenances: [] });
+  });
+});
+
+describe('MonitorHub maintenance windows', () => {
+  const window = (id: string, start: number, end?: number, monitors?: string[]) => ({
+    id,
+    body: id,
+    start: new Date(start * 1000).toISOString(),
+    ...(end !== undefined && { end: new Date(end * 1000).toISOString() }),
+    ...(monitors && { monitors }),
+    createdAt: 0,
+    updatedAt: 0,
+  });
+
+  it('keeps windows by id, oldest start first, and deletes them', () => {
+    const { hub } = createHub();
+    hub.putMaintenance(window('a-late', T0 + 600));
+    hub.putMaintenance(window('b-early', T0));
+    hub.putMaintenance({ ...window('b-early', T0), body: 'edited' });
+
+    expect(hub.view().maintenances.map(({ id, body }) => [id, body])).toEqual([
+      ['b-early', 'edited'],
+      ['a-late', 'a-late'],
+    ]);
+    expect(hub.deleteMaintenance('a-late')).toBe(true);
+    expect(hub.deleteMaintenance('a-late')).toBe(false);
+    expect(hub.view().maintenances.map(({ id }) => id)).toEqual(['b-early']);
+  });
+
+  it('marks changes inside a window that covers the monitor, up to its end', () => {
+    const { hub } = createHub();
+    hub.putMaintenance(window('db-only', T0 - 60, T0 + 60, ['db']));
+    hub.putMaintenance(window('everything', T0 + 120, T0 + 180));
+
+    const inside = hub.record(T0, [check('db', down()), check('api', down())]);
+    const atEnd = hub.record(T0 + 60, [check('db', down('Other'))]);
+    const everything = hub.record(T0 + 120, [check('api', up())]);
+
+    expect(inside.map((u) => [u.monitorId, u.inMaintenance])).toEqual([
+      ['db', true],
+      ['api', false],
+    ]);
+    expect(atEnd[0]?.inMaintenance).toBe(false);
+    expect(everything[0]?.inMaintenance).toBe(true);
   });
 });

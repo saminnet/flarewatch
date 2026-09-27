@@ -1,7 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
 import * as z from 'zod/mini';
 import {
+  coversMonitor,
+  isMaintenanceActive,
   parseHeartbeatSignal,
+  parseMaintenances,
+  type Maintenance,
   parseHeartbeatState,
   type CheckResult,
   type CheckResultWithLocation,
@@ -11,7 +15,7 @@ import {
   type LatencySample,
   type MonitorTarget,
   type MonitorView,
-  type StatusView,
+  type HubView,
 } from '@flarewatch/shared';
 import type { Env } from '../env';
 import { applyPing, evaluateHeartbeat, withMisses, type PingKind } from './heartbeat';
@@ -29,6 +33,8 @@ export type CheckRecord =
 
 export interface IncidentUpdate {
   monitorId: string;
+  /** A maintenance window covers the monitor at the time of the check run. */
+  inMaintenance: boolean;
   statusChanged: boolean;
   changeType: 'none' | 'up' | 'down' | 'error';
   isUp: boolean;
@@ -100,6 +106,9 @@ export class MonitorHub extends DurableObject<Env> {
       );
       const samples: Record<string, [number, string]> = {};
       const updates: IncidentUpdate[] = [];
+      const activeMaintenances = this.maintenances().filter((maintenance) =>
+        isMaintenanceActive(maintenance, now * 1000),
+      );
 
       for (const record of records) {
         const { monitor } = record;
@@ -132,7 +141,12 @@ export class MonitorHub extends DurableObject<Env> {
             now,
           );
         }
-        updates.push(this.applyResult(monitor.id, result, open.get(monitor.id), now));
+        updates.push({
+          ...this.applyResult(monitor.id, result, open.get(monitor.id), now),
+          inMaintenance: activeMaintenances.some((maintenance) =>
+            coversMonitor(maintenance, monitor.id),
+          ),
+        });
       }
 
       if (Object.keys(samples).length > 0) {
@@ -192,7 +206,7 @@ export class MonitorHub extends DurableObject<Env> {
     result: CheckResult,
     open: { id: number; incident: Incident } | undefined,
     now: number,
-  ): IncidentUpdate {
+  ): Omit<IncidentUpdate, 'inMaintenance'> {
     const incidentStartTime = open?.incident.start[0] ?? now;
 
     if (result.ok) {
@@ -245,7 +259,7 @@ export class MonitorHub extends DurableObject<Env> {
   }
 
   /** Every monitor the hub has seen, with its incidents and latest latency sample. */
-  view(): StatusView {
+  view(): HubView {
     const [meta] = this.sql.exec<{ value: string }>(
       "SELECT value FROM meta WHERE key = 'last_update'",
     );
@@ -278,7 +292,39 @@ export class MonitorHub extends DurableObject<Env> {
       };
     }
 
-    return { lastUpdate: meta ? Number(meta.value) : 0, monitors };
+    return {
+      lastUpdate: meta ? Number(meta.value) : 0,
+      monitors,
+      maintenances: this.maintenances(),
+    };
+  }
+
+  /** Every maintenance window, oldest start first. */
+  maintenances(): Maintenance[] {
+    return parseMaintenances(
+      this.sql
+        .exec<{ data: string }>('SELECT data FROM maintenances')
+        .map(({ data }) => parseJson(data)),
+    ).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  }
+
+  /** Adds the window, or replaces the one with its id. */
+  putMaintenance(maintenance: Maintenance): void {
+    this.sql.exec(
+      `INSERT INTO maintenances (id, data) VALUES (?, ?)
+       ON CONFLICT (id) DO UPDATE SET data = excluded.data`,
+      maintenance.id,
+      JSON.stringify(maintenance),
+    );
+  }
+
+  /** False when no window has this id. */
+  deleteMaintenance(id: string): boolean {
+    const [row] = this.sql.exec<{ id: string }>(
+      'DELETE FROM maintenances WHERE id = ? RETURNING id',
+      id,
+    );
+    return row !== undefined;
   }
 
   /** One monitor's latency samples, oldest first. */

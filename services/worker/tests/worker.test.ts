@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
-  KV_KEYS,
   type Fetcher,
   type Maintenance,
   type Monitor,
@@ -12,7 +11,6 @@ import type { Env } from '../src/env';
 import Worker, { runChecks, type WorkerDeps } from '../src/index';
 import { WebhookNotifier } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
-import { asKv, createKv } from './helpers/kv';
 
 const checkMonitorMock = vi.fn<WorkerDeps['checkMonitor']>();
 const getEdgeLocationMock = vi.fn<WorkerDeps['getEdgeLocation']>();
@@ -32,11 +30,11 @@ function createMonitor(id = 'test-monitor'): MonitorTarget {
   };
 }
 
-/** A hub and KV namespace, with maintenance windows stored the way the status page stores them. */
+/** A hub holding these maintenance windows, as the status page saves them. */
 function createEnv(maintenances: Maintenance[] = []) {
   const { hub } = createHub();
-  const kv = createKv([[KV_KEYS.MAINTENANCES, maintenances]]);
-  const env: Env = { FLAREWATCH_STATE: asKv(kv), MONITOR_HUB: hubNamespace(hub) };
+  for (const maintenance of maintenances) hub.putMaintenance(maintenance);
+  const env: Env = { MONITOR_HUB: hubNamespace(hub) };
   return { hub, env };
 }
 
@@ -385,5 +383,31 @@ describe('hub routes for the status page', () => {
 
     await expect(view.json()).resolves.toEqual(hub.view());
     await expect(latency.json()).resolves.toEqual([{ ping: 42, loc: 'SFO', time: NOW_SECONDS }]);
+  });
+
+  it('saves a valid maintenance window under its own id and deletes it once', async () => {
+    const { hub, env } = createEnv();
+    const maintenance = createMaintenance({ id: 'm 1' });
+    const put = (path: string, body: unknown) =>
+      Worker.fetch(
+        new Request(`https://internal${path}`, { method: 'PUT', body: JSON.stringify(body) }),
+        env,
+        {} as ExecutionContext,
+      );
+    const remove = (path: string) =>
+      Worker.fetch(
+        new Request(`https://internal${path}`, { method: 'DELETE' }),
+        env,
+        {} as ExecutionContext,
+      );
+
+    expect((await put('/maintenances/m%201', { ...maintenance, body: '' })).status).toBe(400);
+    expect((await put('/maintenances/other', maintenance)).status).toBe(400);
+    expect((await put('/maintenances/m%201', maintenance)).status).toBe(204);
+    expect(hub.view().maintenances).toEqual([maintenance]);
+
+    expect((await remove('/maintenances/m%201')).status).toBe(204);
+    expect((await remove('/maintenances/m%201')).status).toBe(404);
+    expect(hub.view().maintenances).toEqual([]);
   });
 });

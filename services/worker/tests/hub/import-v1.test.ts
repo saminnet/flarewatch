@@ -61,6 +61,19 @@ describe('1.x import', () => {
     });
   });
 
+  it('copies the maintenance windows and drops invalid ones', async () => {
+    const valid = {
+      id: 'm1',
+      body: 'Upgrade',
+      start: '2025-01-15T10:00:00.000Z',
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const { hub } = await importedHub([['maintenances', JSON.stringify([valid, { id: 'bad' }])]]);
+
+    expect(hub.view().maintenances).toEqual([valid]);
+  });
+
   it('runs once, even when KV changes later', async () => {
     const db = new DatabaseSync(':memory:');
     await importedHub([['state', JSON.stringify(oldState)]], db);
@@ -93,6 +106,7 @@ describe('1.x import', () => {
 
     expect(hub.view()).toEqual({
       lastUpdate: 0,
+      maintenances: [],
       monitors: {
         backup: {
           status: 'pending',
