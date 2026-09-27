@@ -248,6 +248,25 @@ describe('validateHttpResponse', () => {
   });
 
   describe('keyword validation', () => {
+    it('reads at most 1 MiB of the body, so an endless one cannot exhaust memory', async () => {
+      const chunk = new TextEncoder().encode('x'.repeat(64 * 1024));
+      const endless = new ReadableStream<Uint8Array>({
+        pull: (controller) => controller.enqueue(chunk),
+      });
+      const monitor = createMonitor({ responseKeyword: 'ok' });
+
+      await expect(validateHttpResponse(monitor, new Response(endless))).resolves.toBe(
+        'Required keyword "ok" not found in response',
+      );
+
+      const late = `${'x'.repeat(1024 * 1024)}ok`;
+      await expect(validateHttpResponse(monitor, new Response(late))).resolves.toBe(
+        'Required keyword "ok" not found in response',
+      );
+      const early = `${'x'.repeat(1024 * 1024 - 2)}ok`;
+      await expect(validateHttpResponse(monitor, new Response(early))).resolves.toBeNull();
+    });
+
     it('passes when responseKeyword is found', async () => {
       const monitor = createMonitor({ responseKeyword: 'success' });
       const response = new Response('Operation success completed', { status: 200 });

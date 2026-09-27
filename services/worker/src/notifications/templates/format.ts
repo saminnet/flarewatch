@@ -27,3 +27,13 @@ export function stripControlChars(text: string): string {
 export function singleLine(text: string): string {
   return stripControlChars(text).replace(/\s*\n\s*/g, ' ');
 }
+
+/** `&`, `<` and `>`, which Slack and Telegram both read as markup. */
+export function escapeMarkup(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** A code span, where Markdown chat apps render no mentions or links. */
+export function inlineCode(text: string): string {
+  return `\`${stripControlChars(text).replaceAll('`', "'")}\``;
+}

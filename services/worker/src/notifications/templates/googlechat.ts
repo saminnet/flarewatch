@@ -12,7 +12,10 @@ export function googleChatTemplate(ctx: TemplateContext): TemplateOutput {
   ];
 
   if (!ctx.isUp && ctx.reason) {
-    lines.push(`*Reason:* ${stripControlChars(ctx.reason)}`);
+    // Chat has no escape for <users/all> or <url|text>, so the brackets become look-alikes.
+    lines.push(
+      `*Reason:* ${stripControlChars(ctx.reason).replaceAll('<', '‹').replaceAll('>', '›')}`,
+    );
   }
 
   lines.push(`${stripControlChars(ctx.targetUrl)} • ${ctx.timestamp}`);

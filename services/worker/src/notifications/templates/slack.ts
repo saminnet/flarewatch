@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { jsonOutput } from './format';
+import { escapeMarkup, jsonOutput } from './format';
 
 export function slackTemplate(ctx: TemplateContext): TemplateOutput {
   const color = ctx.isUp ? '#36a64f' : '#dc3545';
@@ -34,7 +34,7 @@ export function slackTemplate(ctx: TemplateContext): TemplateOutput {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Reason:*\n${ctx.reason}`,
+        text: `*Reason:*\n${escapeMarkup(ctx.reason)}`,
       },
     });
   }

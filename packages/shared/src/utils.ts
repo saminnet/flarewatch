@@ -55,7 +55,6 @@ export type Fetcher = (url: string, options?: FetchOptions) => Promise<Response>
 
 function getTimeoutSignal(timeoutMs: number) {
   if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-    // AbortSignal.timeout() handles cleanup automatically
     return { signal: AbortSignal.timeout(timeoutMs), cleanup: () => {} };
   }
 
@@ -110,7 +109,6 @@ interface HttpValidationConfig {
   responseForbiddenKeyword?: string | undefined;
 }
 
-/** Validation shared by the direct HTTP checker and GlobalPing. */
 export function validateHttpStatusAndBody(
   status: number,
   body: string | undefined,
@@ -139,6 +137,35 @@ export function validateHttpStatusAndBody(
   return null;
 }
 
+/** A keyword must appear this early: a monitored site must not be able to exhaust the Worker's memory. */
+const MAX_KEYWORD_BODY_BYTES = 1024 * 1024;
+
+async function readTextUpTo(response: Response, maxBytes: number): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) return '';
+  const decoder = new TextDecoder();
+  let text = '';
+  let bytes = 0;
+  while (bytes < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = value.subarray(0, maxBytes - bytes);
+    bytes += chunk.byteLength;
+    text += decoder.decode(chunk, { stream: true });
+  }
+  await reader.cancel().catch(() => {});
+  return text + decoder.decode();
+}
+
+/** JSON from a service whose response size we do not control. Throws past maxBytes. */
+export async function readJsonUpTo(response: Response, maxBytes: number): Promise<unknown> {
+  const text = await readTextUpTo(response, maxBytes + 1);
+  if (new TextEncoder().encode(text).byteLength > maxBytes) {
+    throw new Error(`response is over ${maxBytes} bytes`);
+  }
+  return JSON.parse(text);
+}
+
 export async function validateHttpResponse(
   monitor: MonitorTarget,
   response: Response,
@@ -152,7 +179,7 @@ export async function validateHttpResponse(
   }
 
   if (responseKeyword || responseForbiddenKeyword) {
-    const body = await response.text();
+    const body = await readTextUpTo(response, MAX_KEYWORD_BODY_BYTES);
     return validateHttpStatusAndBody(response.status, body, {
       expectedCodes,
       responseKeyword,
@@ -241,10 +268,7 @@ export function createLogger(component: string) {
   };
 }
 
-/**
- * Compare two strings without leaking their content through timing.
- * Consumes the same amount of work whether or not the strings match.
- */
+/** Consumes the same work regardless of match, so timing cannot leak the strings. */
 export function timingSafeEqual(a: string, b: string): boolean {
   const aBytes = new TextEncoder().encode(a);
   const bBytes = new TextEncoder().encode(b);
@@ -255,4 +279,11 @@ export function timingSafeEqual(a: string, b: string): boolean {
     diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
   }
   return diff === 0;
+}
+
+/** https, or plain http on a loopback address, where nothing crosses the network. */
+export function isSecureUrl(value: string): boolean {
+  const url = URL.parse(value);
+  if (url?.protocol === 'https:') return true;
+  return url?.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
 }

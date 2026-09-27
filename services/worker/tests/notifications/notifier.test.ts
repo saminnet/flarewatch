@@ -29,6 +29,22 @@ describe('WebhookNotifier', () => {
     fetchMock.mockReset();
   });
 
+  it('keeps the webhook URL out of logs and results when the request throws', async () => {
+    const url = 'https://api.telegram.org/bot123:SECRET/sendMessage';
+    fetchMock.mockRejectedValue(new TypeError(`fetch failed for ${url}`));
+    const logged: unknown[] = [];
+    const spies = (['info', 'warn', 'error'] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line)),
+    );
+
+    const notifier = new WebhookNotifier({ url, payloadType: 'json', payload: {} }, fetchMock);
+    const results = await notifier.send(createNotificationContext(), 'hello');
+    for (const spy of spies) spy.mockRestore();
+
+    expect(JSON.stringify([logged, results])).not.toContain('SECRET');
+    expect(results).toEqual([{ success: false, error: 'fetch failed for <webhook URL>' }]);
+  });
+
   it('sends custom JSON payload and replaces $MSG placeholders', async () => {
     fetchMock.mockResolvedValue(new Response('ok', { status: 200 }));
 

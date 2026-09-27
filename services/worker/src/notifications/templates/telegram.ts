@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { jsonOutput } from './format';
+import { escapeMarkup, jsonOutput } from './format';
 
 export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
   const emoji = ctx.isUp ? '✅' : '🔴';
@@ -28,9 +28,5 @@ export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
 }
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return escapeMarkup(text).replace(/"/g, '&quot;');
 }

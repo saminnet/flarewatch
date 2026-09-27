@@ -45,6 +45,35 @@ describe('notification templates', () => {
     expect(payload.text).toContain('q=&lt;&gt;&amp;x=&quot;y&quot;&amp;z=1');
   });
 
+  it('slack template escapes the reason, so a failure message cannot ping or link', () => {
+    const output = getTemplate('slack')({
+      ...baseContext,
+      reason: 'HTTP 500 <!channel> <https://evil.example|log in> & more',
+    });
+
+    expect(output.body).toContain(
+      'HTTP 500 &lt;!channel&gt; &lt;https://evil.example|log in&gt; &amp; more',
+    );
+    expect(output.body).not.toContain('<!channel>');
+  });
+
+  it('keeps a failure reason from pinging everyone or adding links in markup channels', () => {
+    const reason = 'HTTP 500 @**all** <users/all> [log in](https://evil.example) `x`';
+    const body = (template: Parameters<typeof getTemplate>[0]) =>
+      decodeURIComponent(
+        getTemplate(template)({ ...baseContext, reason }).body.replaceAll('+', ' '),
+      );
+
+    expect(body('zulip')).toContain(
+      "- Reason: `HTTP 500 @**all** <users/all> [log in](https://evil.example) 'x'`",
+    );
+    expect(body('discord')).toContain(
+      '"value":"`HTTP 500 @**all** <users/all> [log in](https://evil.example) \'x\'`"',
+    );
+    expect(body('googlechat')).toContain('‹users/all›');
+    expect(body('googlechat')).not.toContain('<users/all>');
+  });
+
   it('ntfy template maps status to priority and tags', () => {
     const ntfy = getTemplate('ntfy');
 

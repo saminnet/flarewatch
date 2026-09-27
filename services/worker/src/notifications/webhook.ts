@@ -155,11 +155,10 @@ export class WebhookNotifier {
     ctx: NotificationContext,
     message: string,
   ): Promise<WebhookResult> {
+    const { url, template, method, headers, payload, payloadType, timeout = 5000 } = webhook;
+    let finalUrl = url;
     try {
-      const { url, template, method, headers, payload, payloadType, timeout = 5000 } = webhook;
-
       let requestInit: RequestInit;
-      let finalUrl = url;
 
       if (template) {
         const templateCtx = buildTemplateContext(ctx, webhook);
@@ -180,9 +179,8 @@ export class WebhookNotifier {
           body: output.body,
         };
       } else {
-        // `param` and `x-www-form-urlencoded` carry the message in the payload object. Anything
-        // that is not an object encodes to nothing, and a silently empty alert is worse than a
-        // reported failure.
+        // `param`/`x-www-form-urlencoded` need an object payload; reject early rather than
+        // send a silently empty alert.
         if (payloadType !== undefined && payloadType !== 'json' && !isJsonObject(payload)) {
           return { success: false, error: `Webhook payloadType '${payloadType}' needs a payload` };
         }
@@ -199,7 +197,8 @@ export class WebhookNotifier {
         }
       }
 
-      log.info('Sending', { url: finalUrl });
+      // The host only: a webhook URL often carries its secret (Telegram, Slack, Discord).
+      log.info('Sending', { host: new URL(finalUrl).host });
 
       const response = await this.fetcher(finalUrl, {
         ...requestInit,
@@ -219,7 +218,11 @@ export class WebhookNotifier {
       log.info('Success', { status: response.status });
       return { success: true, statusCode: response.status };
     } catch (error) {
-      const message = getErrorMessage(error);
+      // A fetch error can quote the URL, and a webhook URL often carries its secret.
+      const message = [finalUrl, url].reduce(
+        (text, secret) => text.replaceAll(secret, '<webhook URL>'),
+        getErrorMessage(error),
+      );
       log.error('Error', { error: message });
       return { success: false, error: message };
     }

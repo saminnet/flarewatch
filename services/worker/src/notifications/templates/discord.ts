@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { jsonOutput } from './format';
+import { inlineCode, jsonOutput } from './format';
 
 export function discordTemplate(ctx: TemplateContext): TemplateOutput {
   // Discord uses decimal color values
@@ -13,7 +13,7 @@ export function discordTemplate(ctx: TemplateContext): TemplateOutput {
   ];
 
   if (!ctx.isUp && ctx.reason) {
-    fields.push({ name: 'Reason', value: ctx.reason, inline: false });
+    fields.push({ name: 'Reason', value: inlineCode(ctx.reason), inline: false });
   }
 
   fields.push({ name: 'Target', value: ctx.targetUrl, inline: false });

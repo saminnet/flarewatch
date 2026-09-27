@@ -81,15 +81,29 @@ describe('checkExternalProxy', () => {
     expect(options?.timeout).toBe(10000);
   });
 
-  it('returns the proxy status and a truncated response body for non-2xx responses', async () => {
-    const body = 'x'.repeat(220);
-    fetchMock.mockResolvedValue(new Response(body, { status: 503 }));
+  it('stops reading a proxy answer that never ends', async () => {
+    const chunk = new TextEncoder().encode(' '.repeat(64 * 1024));
+    fetchMock.mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>({ pull: (c) => c.enqueue(chunk) })),
+    );
+
+    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
+
+    expect(result.location).toBe('ERROR');
+    expect(result.result.ok).toBe(false);
+    expect(JSON.stringify(result.result)).toContain('over 1048576 bytes');
+  });
+
+  it('keeps the proxy response body out of the public error', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('Authorization: Bearer proxy-secret', { status: 503 }),
+    );
 
     const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'ERROR',
-      result: { ok: false, error: `Proxy HTTP 503: ${'x'.repeat(200)}` },
+      result: { ok: false, error: 'Proxy HTTP 503' },
     });
   });
 

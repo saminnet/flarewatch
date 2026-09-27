@@ -1,4 +1,5 @@
 import {
+  createLogger,
   type CheckResult,
   type CheckResultWithLocation,
   type MonitorTarget,
@@ -8,7 +9,10 @@ import {
   type Fetcher,
   getErrorMessage,
   isJsonObject,
+  readJsonUpTo,
 } from '@flarewatch/shared';
+
+const log = createLogger('Proxy');
 
 type ProxyEnv = {
   FLAREWATCH_PROXY_TOKEN?: string;
@@ -63,14 +67,16 @@ export async function checkExternalProxy(
     });
 
     if (!response.ok) {
-      const body = await response.text();
-      return {
-        location: 'ERROR',
-        result: failure(`Proxy HTTP ${response.status}: ${body.slice(0, 200)}`),
-      };
+      // The body goes to the owner's logs only: the error is public, and a proxy
+      // can echo the token or the monitor config it was sent.
+      log.warn('Proxy failed', {
+        status: response.status,
+        body: (await response.text()).slice(0, 200),
+      });
+      return { location: 'ERROR', result: failure(`Proxy HTTP ${response.status}`) };
     }
 
-    const data: unknown = await response.json();
+    const data = await readJsonUpTo(response, 1024 * 1024);
     if (!isProxyCheckResponse(data)) {
       return {
         location: 'ERROR',

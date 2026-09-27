@@ -315,6 +315,23 @@ describe('GlobalPingChecker', () => {
     });
   });
 
+  it('stops reading a measurement that never ends instead of buffering it', async () => {
+    const chunk = new TextEncoder().encode(' '.repeat(64 * 1024));
+    const endless = new ReadableStream<Uint8Array>({
+      pull: (controller) => controller.enqueue(chunk),
+    });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ id: 'measurement-1' }, 202))
+      .mockResolvedValueOnce(new Response(endless));
+
+    const result = await checker.check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'ERROR',
+      result: { ok: false, error: 'GlobalPing: response is over 4194304 bytes' },
+    });
+  });
+
   it('fails the check when measurement creation returns no id', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ notAnId: true }, 202));
 
