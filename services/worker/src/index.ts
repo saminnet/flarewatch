@@ -245,6 +245,15 @@ const Worker = {
       return Response.json({ success: true, message: 'Check triggered' }, { status: 202 });
     }
 
+    // The status page reads the hub through its MONITOR_WORKER binding.
+    if (url.pathname === '/view' && request.method === 'GET') {
+      return Response.json(await getHub(env).view());
+    }
+    if (url.pathname.startsWith('/latency/') && request.method === 'GET') {
+      const id = decodeURIComponent(url.pathname.slice('/latency/'.length));
+      return Response.json(await getHub(env).latency(id));
+    }
+
     // Ping routes and /ping-url are only reachable through the MONITOR_WORKER
     // service binding; the worker has no public ingress (workers_dev = false).
     if (url.pathname.startsWith('/ping/')) {

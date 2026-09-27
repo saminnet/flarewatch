@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import type { PublicMonitor } from '@/lib/public-view';
-import type { MonitorState } from '@flarewatch/shared';
+import type { StatusView } from '@flarewatch/shared';
 import { generateAggregateDailyStatus, type AggregatedDayData } from '@/lib/uptime';
 import { generateCalendarGrids, getDateKey } from '@/lib/date';
 import { CalendarMonth } from './calendar-month';
@@ -12,7 +12,7 @@ const MONTHS_PER_PAGE = 3;
 
 interface UptimeCalendarProps {
   monitors: PublicMonitor[];
-  state: MonitorState;
+  state: StatusView;
   /** The month to end the calendar window at (yyyy-MM). Defaults to the current month. */
   selectedMonth?: string;
 }

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test';
-import type { MonitorState } from '@flarewatch/shared';
+import type { MonitorView, StatusView } from '@flarewatch/shared';
 import {
   calculateUptimePercent,
+  countStatuses,
   generateAggregateDailyStatus,
   generateDailyStatus,
   isMonitorUp,
@@ -10,14 +11,20 @@ import {
   getOverallStatus,
 } from '@/lib/uptime';
 
-const createEmptyState = (lastUpdate?: number): MonitorState => ({
-  lastUpdate: lastUpdate ?? Math.floor(Date.now() / 1000),
-  overallUp: 0,
-  overallDown: 0,
-  startedAt: {},
-  incident: {},
-  latency: {},
-});
+function view(
+  monitors: Record<string, Partial<MonitorView>>,
+  lastUpdate = Math.floor(Date.now() / 1000),
+): StatusView {
+  return {
+    lastUpdate,
+    monitors: Object.fromEntries(
+      Object.entries(monitors).map(([id, monitor]) => [
+        id,
+        { status: 'up', incidents: [], ...monitor },
+      ]),
+    ),
+  };
+}
 
 describe('uptime utilities', () => {
   beforeEach(() => {
@@ -31,9 +38,7 @@ describe('uptime utilities', () => {
 
   describe('calculateUptimePercent', () => {
     it('returns 100% when there are no incidents', () => {
-      const state = createEmptyState();
-      state.incident['test'] = [];
-      state.startedAt['test'] = Math.floor(Date.now() / 1000) - 86400;
+      const state = view({ test: { startedAt: Math.floor(Date.now() / 1000) - 86400 } });
 
       const result = calculateUptimePercent('test', state);
 
@@ -42,15 +47,12 @@ describe('uptime utilities', () => {
 
     it('calculates correct percentage for incident fully inside window', () => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const state = createEmptyState();
-      state.startedAt['test'] = nowSec - 86400;
-      state.incident['test'] = [
-        {
-          start: [nowSec - 3600],
-          end: nowSec - 1800,
-          error: ['Error'],
+      const state = view({
+        test: {
+          startedAt: nowSec - 86400,
+          incidents: [{ start: [nowSec - 3600], end: nowSec - 1800, error: ['Error'] }],
         },
-      ];
+      });
 
       const result = calculateUptimePercent('test', state);
 
@@ -59,15 +61,13 @@ describe('uptime utilities', () => {
 
     it('treats open incident end as now', () => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const state = createEmptyState();
-      state.startedAt['test'] = nowSec - 86400;
-      state.incident['test'] = [
-        {
-          start: [nowSec - 3600],
-          end: undefined,
-          error: ['Ongoing error'],
+      const state = view({
+        test: {
+          status: 'down',
+          startedAt: nowSec - 86400,
+          incidents: [{ start: [nowSec - 3600], end: undefined, error: ['Ongoing error'] }],
         },
-      ];
+      });
 
       const result = calculateUptimePercent('test', state);
 
@@ -76,16 +76,12 @@ describe('uptime utilities', () => {
 
     it('uses startedAt as window start for recently started monitors', () => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const monitorStartSec = nowSec - 3600;
-      const state = createEmptyState();
-      state.startedAt['test'] = monitorStartSec;
-      state.incident['test'] = [
-        {
-          start: [nowSec - 1800],
-          end: nowSec - 900,
-          error: ['Error'],
+      const state = view({
+        test: {
+          startedAt: nowSec - 3600,
+          incidents: [{ start: [nowSec - 1800], end: nowSec - 900, error: ['Error'] }],
         },
-      ];
+      });
 
       const result = calculateUptimePercent('test', state);
 
@@ -94,15 +90,18 @@ describe('uptime utilities', () => {
 
     it('clips incident downtime at the window start', () => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const state = createEmptyState();
-      state.startedAt['test'] = nowSec - 200 * 24 * 60 * 60;
-      state.incident['test'] = [
-        {
-          start: [nowSec - 100 * 24 * 60 * 60],
-          end: nowSec - 50 * 24 * 60 * 60,
-          error: ['Error'],
+      const state = view({
+        test: {
+          startedAt: nowSec - 200 * 24 * 60 * 60,
+          incidents: [
+            {
+              start: [nowSec - 100 * 24 * 60 * 60],
+              end: nowSec - 50 * 24 * 60 * 60,
+              error: ['Error'],
+            },
+          ],
         },
-      ];
+      });
 
       const result = calculateUptimePercent('test', state);
 
@@ -113,9 +112,7 @@ describe('uptime utilities', () => {
   describe('generateDailyStatus', () => {
     it('marks days before monitor start unknown', () => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const state = createEmptyState();
-      state.startedAt['test'] = nowSec - 3600;
-      state.incident['test'] = [];
+      const state = view({ test: { startedAt: nowSec - 3600 } });
 
       const result = generateDailyStatus('test', state);
 
@@ -126,9 +123,7 @@ describe('uptime utilities', () => {
 
     it('returns correct status based on downtime thresholds', () => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const state = createEmptyState();
-      state.startedAt['test'] = nowSec - 90 * 24 * 60 * 60;
-      state.incident['test'] = [];
+      const state = view({ test: { startedAt: nowSec - 90 * 24 * 60 * 60 } });
 
       const result = generateDailyStatus('test', state);
 
@@ -141,15 +136,12 @@ describe('uptime utilities', () => {
       const nowSec = Math.floor(now.getTime() / 1000);
       const todayStart = new Date('2025-01-15T00:00:00Z').getTime() / 1000;
 
-      const state = createEmptyState();
-      state.startedAt['test'] = nowSec - 90 * 24 * 60 * 60;
-      state.incident['test'] = [
-        {
-          start: [todayStart],
-          end: todayStart + 3600,
-          error: ['Error'],
+      const state = view({
+        test: {
+          startedAt: nowSec - 90 * 24 * 60 * 60,
+          incidents: [{ start: [todayStart], end: todayStart + 3600, error: ['Error'] }],
         },
-      ];
+      });
 
       const result = generateDailyStatus('test', state);
 
@@ -164,15 +156,19 @@ describe('uptime utilities', () => {
     const dayStart = new Date('2025-01-05T00:00:00Z').getTime() / 1000;
 
     it('prefers down over partial and skips unknown monitors', () => {
-      const state = createEmptyState(nowSec);
-      state.startedAt['down'] = nowSec - 90 * 24 * 60 * 60;
-      state.startedAt['partial'] = nowSec - 90 * 24 * 60 * 60;
-      state.incident['down'] = [
-        { start: [dayStart], end: dayStart + 0.6 * 86_400, error: ['Down'] },
-      ];
-      state.incident['partial'] = [
-        { start: [dayStart], end: dayStart + 0.2 * 86_400, error: ['Degraded'] },
-      ];
+      const state = view(
+        {
+          down: {
+            startedAt: nowSec - 90 * 24 * 60 * 60,
+            incidents: [{ start: [dayStart], end: dayStart + 0.6 * 86_400, error: ['Down'] }],
+          },
+          partial: {
+            startedAt: nowSec - 90 * 24 * 60 * 60,
+            incidents: [{ start: [dayStart], end: dayStart + 0.2 * 86_400, error: ['Degraded'] }],
+          },
+        },
+        nowSec,
+      );
 
       const days = generateAggregateDailyStatus(
         ['down', 'partial', 'unknown'],
@@ -196,47 +192,63 @@ describe('uptime utilities', () => {
 
   describe('isMonitorUp', () => {
     it('returns true when there are no incidents', () => {
-      const state = createEmptyState();
-      state.incident['test'] = [];
-
-      expect(isMonitorUp('test', state)).toBe(true);
+      expect(isMonitorUp('test', view({ test: { status: 'up' } }))).toBe(true);
     });
 
     it('returns true when last incident is closed', () => {
-      const state = createEmptyState();
-      state.incident['test'] = [{ start: [1000], end: 2000, error: ['Error'] }];
+      const state = view({
+        test: { status: 'up', incidents: [{ start: [1000], end: 2000, error: ['Error'] }] },
+      });
 
       expect(isMonitorUp('test', state)).toBe(true);
     });
 
-    it('returns false when last incident is open', () => {
-      const state = createEmptyState();
-      state.incident['test'] = [{ start: [1000], end: undefined, error: ['Error'] }];
+    it('returns false when the monitor is down with an open incident', () => {
+      const state = view({
+        test: {
+          status: 'down',
+          incidents: [{ start: [1000], end: undefined, error: ['Error'] }],
+        },
+      });
 
       expect(isMonitorUp('test', state)).toBe(false);
+    });
+
+    it('treats late, pending and running jobs as up', () => {
+      const state = view({
+        late: { status: 'late' },
+        pending: { status: 'pending' },
+        running: { status: 'running' },
+      });
+
+      expect(isMonitorUp('late', state)).toBe(true);
+      expect(isMonitorUp('pending', state)).toBe(true);
+      expect(isMonitorUp('running', state)).toBe(true);
     });
   });
 
   describe('getMonitorError', () => {
     it('returns null when there are no incidents', () => {
-      const state = createEmptyState();
-      state.incident['test'] = [];
-
-      expect(getMonitorError('test', state)).toBeNull();
+      expect(getMonitorError('test', view({ test: {} }))).toBeNull();
     });
 
     it('returns null when last incident is closed', () => {
-      const state = createEmptyState();
-      state.incident['test'] = [{ start: [1000], end: 2000, error: ['Error'] }];
+      const state = view({
+        test: { incidents: [{ start: [1000], end: 2000, error: ['Error'] }] },
+      });
 
       expect(getMonitorError('test', state)).toBeNull();
     });
 
     it('returns error message when incident is open', () => {
-      const state = createEmptyState();
-      state.incident['test'] = [
-        { start: [1000, 2000], end: undefined, error: ['First error', 'Second error'] },
-      ];
+      const state = view({
+        test: {
+          status: 'down',
+          incidents: [
+            { start: [1000, 2000], end: undefined, error: ['First error', 'Second error'] },
+          ],
+        },
+      });
 
       expect(getMonitorError('test', state)).toBe('Second error');
     });
@@ -244,57 +256,50 @@ describe('uptime utilities', () => {
 
   describe('getLatestLatency', () => {
     it('returns null when there is no latency data', () => {
-      const state = createEmptyState();
-      state.latency['test'] = { recent: [] };
-
-      expect(getLatestLatency('test', state)).toBeNull();
+      expect(getLatestLatency('test', view({ test: {} }))).toBeNull();
     });
 
-    it('returns the last latency record when present', () => {
-      const state = createEmptyState();
-      state.latency['test'] = {
-        recent: [
-          { loc: 'US', ping: 100, time: 1 },
-          { loc: 'EU', ping: 120, time: 2 },
-        ],
-      };
+    it('returns the latest latency sample when present', () => {
+      const state = view({ test: { latest: { loc: 'EU', ping: 120, time: 2 } } });
 
       expect(getLatestLatency('test', state)).toEqual({ loc: 'EU', ping: 120, time: 2 });
     });
   });
 
+  describe('countStatuses', () => {
+    it('counts pending and running as up and keeps late apart from up and down', () => {
+      const state = view({
+        up: { status: 'up' },
+        pending: { status: 'pending' },
+        running: { status: 'running' },
+        late: { status: 'late' },
+        down: { status: 'down', incidents: [{ start: [1000], error: ['Error'] }] },
+        down2: { status: 'down', incidents: [{ start: [1000], error: ['Error'] }] },
+      });
+
+      expect(countStatuses(state)).toEqual({ up: 3, late: 1, down: 2 });
+    });
+  });
+
   describe('getOverallStatus', () => {
     it('returns operational when all monitors are up', () => {
-      const state = createEmptyState();
-      state.overallUp = 3;
-      state.overallDown = 0;
-
-      expect(getOverallStatus(state)).toBe('operational');
+      expect(getOverallStatus({ up: 3, late: 0, down: 0 })).toBe('operational');
     });
 
     it('returns degraded when a heartbeat monitor is late and none are down', () => {
-      const state = createEmptyState();
-      state.overallUp = 3;
-      state.overallDown = 0;
-      state.overallLate = 1;
-
-      expect(getOverallStatus(state)).toBe('degraded');
+      expect(getOverallStatus({ up: 3, late: 1, down: 0 })).toBe('degraded');
     });
 
     it('returns degraded when some monitors are down', () => {
-      const state = createEmptyState();
-      state.overallUp = 2;
-      state.overallDown = 1;
+      expect(getOverallStatus({ up: 2, late: 0, down: 1 })).toBe('degraded');
+    });
 
-      expect(getOverallStatus(state)).toBe('degraded');
+    it('returns degraded when the only monitors not down are late', () => {
+      expect(getOverallStatus({ up: 0, late: 1, down: 2 })).toBe('degraded');
     });
 
     it('returns down when all monitors are down', () => {
-      const state = createEmptyState();
-      state.overallUp = 0;
-      state.overallDown = 3;
-
-      expect(getOverallStatus(state)).toBe('down');
+      expect(getOverallStatus({ up: 0, late: 0, down: 3 })).toBe('down');
     });
   });
 });

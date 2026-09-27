@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/accordion';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { MonitorRow } from '@/components/monitor-card';
-import type { MonitorState, PageConfigGroup } from '@flarewatch/shared';
+import type { StatusView, PageConfigGroup } from '@flarewatch/shared';
 import type { AdminMonitor } from '@/lib/public-view';
 import { setUiPrefsServerFn, type UiPrefs } from '@/lib/ui-prefs-server';
 import { qk } from '@/lib/query/keys';
@@ -31,7 +31,7 @@ interface MonitorGroup {
 
 interface MonitorListProps {
   monitors: AdminMonitor[];
-  state: MonitorState;
+  state: StatusView;
   groups?: PageConfigGroup;
   uiPrefs?: UiPrefs;
   operator?: boolean;

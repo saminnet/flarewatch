@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { Maintenance, MonitorState } from '@flarewatch/shared';
+import type { Maintenance, MonitorView, StatusView } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
 import { projectBadgeStatus, projectPublicData, projectTimeline } from '@/lib/status-projection';
 
-function createState(overrides: Partial<MonitorState> = {}): MonitorState {
+function createState(
+  monitors: Record<string, Partial<MonitorView>> = {},
+  lastUpdate = 1_789_000_000,
+): StatusView {
   return {
-    incident: {},
-    latency: {},
-    overallUp: 0,
-    overallDown: 0,
-    lastUpdate: 1_789_000_000,
-    startedAt: {},
-    ...overrides,
+    lastUpdate,
+    monitors: Object.fromEntries(
+      Object.entries(monitors).map(([id, monitor]) => [
+        id,
+        { status: 'up', incidents: [], ...monitor },
+      ]),
+    ),
   };
 }
 
@@ -34,22 +37,19 @@ function maintenance(id: string, start: string, end?: string, monitors?: string[
 describe('status projection', () => {
   it('projects public data without exposing raw monitor state', () => {
     const state = createState({
-      overallUp: 5,
-      overallDown: 1,
-      incident: {
-        api: [],
-        web: [{ start: [1_788_999_000], end: undefined, error: ['Timeout'] }],
-      },
-      latency: {
-        api: { recent: [{ loc: 'SFO', ping: 42, time: 1_789_000_000 }] },
-        web: { recent: [{ loc: 'FRA', ping: 120, time: 1_789_000_000 }] },
+      api: { startedAt: 1_788_000_000, latest: { loc: 'SFO', ping: 42, time: 1_789_000_000 } },
+      web: {
+        status: 'down',
+        startedAt: 1_788_000_000,
+        incidents: [{ start: [1_788_999_000], end: undefined, error: ['Timeout'] }],
+        latest: { loc: 'FRA', ping: 120, time: 1_789_000_000 },
       },
     });
 
     expect(
       projectPublicData([publicMonitor('api', 'API'), publicMonitor('web', 'Web')], state),
     ).toEqual({
-      up: 5,
+      up: 1,
       down: 1,
       updatedAt: 1_789_000_000,
       monitors: {
@@ -71,12 +71,10 @@ describe('status projection', () => {
 
   it('projects null latency and a fallback message for monitors without data', () => {
     const state = createState({
-      overallUp: 0,
-      overallDown: 1,
-      incident: {
-        web: [{ start: [1_788_999_000], end: undefined, error: [] }],
+      web: {
+        status: 'down',
+        incidents: [{ start: [1_788_999_000], end: undefined, error: [] }],
       },
-      latency: {},
     });
 
     expect(projectPublicData([publicMonitor('web', 'Web')], state)).toEqual({
@@ -94,42 +92,63 @@ describe('status projection', () => {
     });
   });
 
+  it('counts late, pending and running jobs as up in public data', () => {
+    const state = createState({
+      api: { status: 'up' },
+      late: { status: 'late' },
+      pending: { status: 'pending' },
+      running: { status: 'running' },
+      web: { status: 'down', incidents: [{ start: [1_788_999_000], error: ['Timeout'] }] },
+    });
+
+    expect(
+      projectPublicData(
+        ['api', 'late', 'pending', 'running', 'web'].map((id) => publicMonitor(id)),
+        state,
+      ),
+    ).toMatchObject({ up: 4, down: 1 });
+  });
+
   it('projects badge status as unknown when the monitor has no state', () => {
     expect(projectBadgeStatus('api', createState())).toEqual({ status: 'unknown' });
   });
 
-  it('projects badge status as unknown until a monitor has state and latency', () => {
-    const state = createState({
-      incident: { api: [] },
-      latency: { api: { recent: [] } },
-    });
+  it('projects badge status as unknown until the monitor has its first check result', () => {
+    const state = createState({ api: { status: 'up' } });
 
     expect(projectBadgeStatus('api', state)).toEqual({ status: 'unknown' });
   });
 
-  it('projects badge status as known when monitor state is ready', () => {
+  it('projects badge status as known once the monitor has a check result', () => {
     const state = createState({
-      incident: {
-        api: [{ start: [1_788_999_000], end: undefined, error: ['Down'] }],
+      api: {
+        status: 'down',
+        startedAt: 1_788_999_000,
+        incidents: [{ start: [1_788_999_000], end: undefined, error: ['Down'] }],
+        latest: { loc: 'SFO', ping: 42, time: 1_789_000_000 },
       },
-      latency: {
-        api: { recent: [{ loc: 'SFO', ping: 42, time: 1_789_000_000 }] },
-      },
+      web: { status: 'up', startedAt: 1_788_999_000 },
     });
 
     expect(projectBadgeStatus('api', state)).toEqual({ status: 'known', up: false });
+    expect(projectBadgeStatus('web', state)).toEqual({ status: 'known', up: true });
   });
 
   it('projects a heartbeat badge from heartbeat state, which carries no latency', () => {
-    const incident = { job: [{ start: [1_788_999_000], end: 1_789_000_000, error: ['Late'] }] };
+    const incidents = [{ start: [1_788_999_000], end: 1_789_000_000, error: ['Late'] }];
 
     expect(
-      projectBadgeStatus('job', createState({ incident, heartbeat: { job: { status: 'up' } } })),
+      projectBadgeStatus(
+        'job',
+        createState({
+          job: { status: 'up', startedAt: 1_788_999_000, incidents, heartbeat: { status: 'up' } },
+        }),
+      ),
     ).toEqual({ status: 'known', up: true });
     expect(
       projectBadgeStatus(
         'job',
-        createState({ incident, heartbeat: { job: { status: 'pending' } } }),
+        createState({ job: { status: 'pending', incidents, heartbeat: { status: 'pending' } } }),
       ),
     ).toEqual({ status: 'unknown' });
   });
@@ -137,26 +156,29 @@ describe('status projection', () => {
   it('orders incident and maintenance timeline events by start descending', () => {
     const monthStart = new Date('2026-06-01T00:00:00.000Z');
     const monthEnd = new Date('2026-07-01T00:00:00.000Z');
-    const state = createState({
-      lastUpdate: Date.parse('2026-06-10T12:00:00.000Z') / 1000,
-      incident: {
-        api: [
-          {
-            start: [Date.parse('2026-06-05T10:00:00.000Z') / 1000],
-            end: Date.parse('2026-06-05T10:30:00.000Z') / 1000,
-            error: ['API error'],
-          },
-        ],
-        web: [
-          {
-            start: [Date.parse('2026-06-07T10:00:00.000Z') / 1000],
-            end: Date.parse('2026-06-07T10:30:00.000Z') / 1000,
-            error: ['Web error'],
-          },
-        ],
+    const state = createState(
+      {
+        api: {
+          incidents: [
+            {
+              start: [Date.parse('2026-06-05T10:00:00.000Z') / 1000],
+              end: Date.parse('2026-06-05T10:30:00.000Z') / 1000,
+              error: ['API error'],
+            },
+          ],
+        },
+        web: {
+          incidents: [
+            {
+              start: [Date.parse('2026-06-07T10:00:00.000Z') / 1000],
+              end: Date.parse('2026-06-07T10:30:00.000Z') / 1000,
+              error: ['Web error'],
+            },
+          ],
+        },
       },
-      latency: {},
-    });
+      Date.parse('2026-06-10T12:00:00.000Z') / 1000,
+    );
 
     const result = projectTimeline({
       state,
@@ -179,19 +201,21 @@ describe('status projection', () => {
   it('uses provided now for open incidents without lastUpdate', () => {
     const monthStart = new Date('2026-06-01T00:00:00.000Z');
     const monthEnd = new Date('2026-07-01T00:00:00.000Z');
-    const state = createState({
-      lastUpdate: 0,
-      incident: {
-        api: [
-          {
-            start: [Date.parse('2026-05-20T10:00:00.000Z') / 1000],
-            end: undefined,
-            error: ['Still down'],
-          },
-        ],
+    const state = createState(
+      {
+        api: {
+          status: 'down',
+          incidents: [
+            {
+              start: [Date.parse('2026-05-20T10:00:00.000Z') / 1000],
+              end: undefined,
+              error: ['Still down'],
+            },
+          ],
+        },
       },
-      latency: {},
-    });
+      0,
+    );
 
     const result = projectTimeline({
       state,
@@ -215,33 +239,39 @@ describe('status projection', () => {
   it('excludes incidents outside the selected month', () => {
     const monthStart = new Date('2026-06-01T00:00:00.000Z');
     const monthEnd = new Date('2026-07-01T00:00:00.000Z');
-    const state = createState({
-      lastUpdate: Date.parse('2026-06-10T12:00:00.000Z') / 1000,
-      incident: {
-        may: [
-          {
-            start: [Date.parse('2026-05-05T10:00:00.000Z') / 1000],
-            end: Date.parse('2026-05-06T10:00:00.000Z') / 1000,
-            error: ['May outage'],
-          },
-        ],
-        crossing: [
-          {
-            start: [Date.parse('2026-05-28T10:00:00.000Z') / 1000],
-            end: Date.parse('2026-06-03T10:00:00.000Z') / 1000,
-            error: ['Crossing outage'],
-          },
-        ],
-        july: [
-          {
-            start: [Date.parse('2026-07-02T10:00:00.000Z') / 1000],
-            end: undefined,
-            error: ['July outage'],
-          },
-        ],
+    const state = createState(
+      {
+        may: {
+          incidents: [
+            {
+              start: [Date.parse('2026-05-05T10:00:00.000Z') / 1000],
+              end: Date.parse('2026-05-06T10:00:00.000Z') / 1000,
+              error: ['May outage'],
+            },
+          ],
+        },
+        crossing: {
+          incidents: [
+            {
+              start: [Date.parse('2026-05-28T10:00:00.000Z') / 1000],
+              end: Date.parse('2026-06-03T10:00:00.000Z') / 1000,
+              error: ['Crossing outage'],
+            },
+          ],
+        },
+        july: {
+          status: 'down',
+          incidents: [
+            {
+              start: [Date.parse('2026-07-02T10:00:00.000Z') / 1000],
+              end: undefined,
+              error: ['July outage'],
+            },
+          ],
+        },
       },
-      latency: {},
-    });
+      Date.parse('2026-06-10T12:00:00.000Z') / 1000,
+    );
 
     const result = projectTimeline({
       state,
@@ -288,26 +318,29 @@ describe('status projection', () => {
   it('filters timeline events by selected monitor', () => {
     const monthStart = new Date('2026-06-01T00:00:00.000Z');
     const monthEnd = new Date('2026-07-01T00:00:00.000Z');
-    const state = createState({
-      lastUpdate: Date.parse('2026-06-10T12:00:00.000Z') / 1000,
-      incident: {
-        api: [
-          {
-            start: [Date.parse('2026-06-05T10:00:00.000Z') / 1000],
-            end: Date.parse('2026-06-05T10:30:00.000Z') / 1000,
-            error: ['API error'],
-          },
-        ],
-        web: [
-          {
-            start: [Date.parse('2026-06-04T10:00:00.000Z') / 1000],
-            end: Date.parse('2026-06-04T10:30:00.000Z') / 1000,
-            error: ['Web error'],
-          },
-        ],
+    const state = createState(
+      {
+        api: {
+          incidents: [
+            {
+              start: [Date.parse('2026-06-05T10:00:00.000Z') / 1000],
+              end: Date.parse('2026-06-05T10:30:00.000Z') / 1000,
+              error: ['API error'],
+            },
+          ],
+        },
+        web: {
+          incidents: [
+            {
+              start: [Date.parse('2026-06-04T10:00:00.000Z') / 1000],
+              end: Date.parse('2026-06-04T10:30:00.000Z') / 1000,
+              error: ['Web error'],
+            },
+          ],
+        },
       },
-      latency: {},
-    });
+      Date.parse('2026-06-10T12:00:00.000Z') / 1000,
+    );
 
     const result = projectTimeline({
       state,

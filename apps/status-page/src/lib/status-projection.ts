@@ -1,8 +1,8 @@
-import type { Maintenance, MonitorState } from '@flarewatch/shared';
+import type { Maintenance, StatusView } from '@flarewatch/shared';
 import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/history/types';
 import type { PublicMonitor } from '@/lib/public-view';
 import { getMaintenanceStatus } from '@/lib/maintenance';
-import { getLatestLatency, getMonitorError, isMonitorUp } from '@/lib/uptime';
+import { countStatuses, getLatestLatency, getMonitorError, isMonitorUp } from '@/lib/uptime';
 
 const SECOND_MS = 1000;
 
@@ -25,7 +25,7 @@ type BadgeStatusProjection = { status: 'unknown' } | { status: 'known'; up: bool
 type TimelineEventType = 'incident' | 'maintenance' | 'all';
 
 type TimelineProjectionInput = {
-  state: MonitorState | null;
+  state: StatusView | null;
   monitors: PublicMonitor[];
   maintenances: Maintenance[];
   monthStart: Date;
@@ -48,7 +48,7 @@ function getEventStartMs(event: TimelineEvent): number {
 
 export function projectPublicData(
   monitors: PublicMonitor[],
-  state: MonitorState,
+  state: StatusView,
 ): PublicDataProjection {
   const projectedMonitors: Record<string, PublicDataMonitor> = {};
 
@@ -65,30 +65,23 @@ export function projectPublicData(
     };
   }
 
+  const { up, late, down } = countStatuses(state);
   return {
-    up: state.overallUp,
-    down: state.overallDown,
+    up: up + late,
+    down,
     updatedAt: state.lastUpdate,
     monitors: projectedMonitors,
   };
 }
 
-export function projectBadgeStatus(monitorId: string, state: MonitorState): BadgeStatusProjection {
-  const hasIncidentHistory = Boolean(state.incident?.[monitorId]);
-  const hasLatencyData = Boolean(state.latency?.[monitorId]?.recent?.length);
-  const heartbeatStatus = state.heartbeat?.[monitorId]?.status;
-  const hasCheckData =
-    hasLatencyData || (heartbeatStatus !== undefined && heartbeatStatus !== 'pending');
-
-  if (!hasIncidentHistory || !hasCheckData) {
-    return { status: 'unknown' };
-  }
-
+/** Unknown until the monitor's first check result. */
+export function projectBadgeStatus(monitorId: string, state: StatusView): BadgeStatusProjection {
+  if (state.monitors[monitorId]?.startedAt === undefined) return { status: 'unknown' };
   return { status: 'known', up: isMonitorUp(monitorId, state) };
 }
 
 function projectIncidentEvents(
-  state: MonitorState | null,
+  state: StatusView | null,
   monitors: PublicMonitor[],
   monthStart: Date,
   monthEnd: Date,
@@ -102,7 +95,7 @@ function projectIncidentEvents(
   const nowSec = state.lastUpdate > 0 ? state.lastUpdate : Math.floor(nowMs / SECOND_MS);
 
   for (const monitor of monitors) {
-    const incidents = state.incident[monitor.id];
+    const incidents = state.monitors[monitor.id]?.incidents;
     if (!incidents) continue;
 
     for (const incident of incidents) {

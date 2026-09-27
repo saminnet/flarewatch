@@ -4,7 +4,7 @@ import { cleanup, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { AdminMonitor } from '@/lib/public-view';
 import { renderWithProviders } from '../helpers/render';
-import type { MonitorState } from '@flarewatch/shared';
+import type { StatusView } from '@flarewatch/shared';
 
 // jsdom has no ResizeObserver; the card body only measures its container width.
 vi.stubGlobal(
@@ -20,14 +20,7 @@ const { MonitorList } = await import('@/components/monitor-list');
 
 afterEach(cleanup);
 
-const state: MonitorState = {
-  lastUpdate: 0,
-  overallUp: 2,
-  overallDown: 0,
-  startedAt: {},
-  incident: {},
-  latency: {},
-};
+const state: StatusView = { lastUpdate: 0, monitors: {} };
 
 const heartbeatMonitors: AdminMonitor[] = [
   { id: 'job_a', name: 'Job A', method: 'HEARTBEAT', periodSeconds: 3600, graceSeconds: 60 },

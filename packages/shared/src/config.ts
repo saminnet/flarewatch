@@ -3,11 +3,13 @@ import {
   NOTIFICATION_TEMPLATES,
   type HeartbeatSignal,
   type HeartbeatState,
+  type LatencySample,
   type Maintenance,
   type MonitorState,
   type NotificationConfig,
   type PageConfig,
   type RuntimeConfig,
+  type StatusView,
   type Webhook,
 } from './types';
 import { isJsonObject, isNonEmptyString } from './utils';
@@ -238,28 +240,22 @@ const heartbeatStateSchema = z.object({
   misses: z.exactOptional(z.array(z.number())),
 });
 
+const incidentSchema = z.object({
+  start: z.array(z.number()),
+  end: z.exactOptional(z.number()),
+  error: z.array(z.string()),
+});
+
+const latencySampleSchema = z.object({ loc: z.string(), ping: z.number(), time: z.number() });
+
 const monitorStateSchema: z.ZodMiniType<SchemaOutput<MonitorState>> = z.object({
   lastUpdate: z.number(),
   overallUp: z.number(),
   overallDown: z.number(),
   overallLate: z.optional(z.number()),
   startedAt: z.record(z.string(), z.number()),
-  incident: z.record(
-    z.string(),
-    z.array(
-      z.object({
-        start: z.array(z.number()),
-        end: z.optional(z.number()),
-        error: z.array(z.string()),
-      }),
-    ),
-  ),
-  latency: z.record(
-    z.string(),
-    z.object({
-      recent: z.array(z.object({ loc: z.string(), ping: z.number(), time: z.number() })),
-    }),
-  ),
+  incident: z.record(z.string(), z.array(incidentSchema)),
+  latency: z.record(z.string(), z.object({ recent: z.array(latencySampleSchema) })),
   sslCertificates: z.optional(
     z.record(
       z.string(),
@@ -273,6 +269,20 @@ const monitorStateSchema: z.ZodMiniType<SchemaOutput<MonitorState>> = z.object({
     ),
   ),
   heartbeat: z.optional(z.record(z.string(), heartbeatStateSchema)),
+});
+
+const statusViewSchema: z.ZodMiniType<SchemaOutput<StatusView>> = z.object({
+  lastUpdate: z.number(),
+  monitors: z.record(
+    z.string(),
+    z.object({
+      status: z.enum(['up', 'late', 'pending', 'running', 'down']),
+      startedAt: z.exactOptional(z.number()),
+      incidents: z.array(incidentSchema),
+      latest: z.exactOptional(latencySampleSchema),
+      heartbeat: z.exactOptional(heartbeatStateSchema),
+    }),
+  ),
 });
 
 export const isValidMaintenance = asTypeGuard<Maintenance>(maintenanceSchema);
@@ -304,6 +314,9 @@ export function parseHeartbeatState(value: unknown): HeartbeatState | null {
   const result = heartbeatStateSchema.safeParse(value);
   return result.success ? result.data : null;
 }
+
+export const isStatusView = asTypeGuard<StatusView>(statusViewSchema);
+export const isLatencySamples = asTypeGuard<LatencySample[]>(z.array(latencySampleSchema));
 
 export function parseMaintenances(value: unknown): Maintenance[] {
   return Array.isArray(value) ? value.filter(isValidMaintenance) : [];

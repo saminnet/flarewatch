@@ -1,4 +1,4 @@
-import type { HeartbeatRun, HeartbeatStatus, MonitorState } from '@flarewatch/shared';
+import type { HeartbeatRun, HeartbeatStatus, StatusView } from '@flarewatch/shared';
 import { HEARTBEAT_RUN_HISTORY, isJsonObject } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
 
@@ -17,7 +17,7 @@ export type HeartbeatView = {
   message?: string;
   /** Recent run outcomes incl. cron-detected misses, oldest first. */
   runs?: HeartbeatRun[];
-  /** Worker write time (unix seconds) that anchors elapsed-time facts. */
+  /** Last check run (unix seconds), which anchors elapsed-time facts. */
   nowSec: number;
 };
 
@@ -57,11 +57,11 @@ export function runLatenessSec(
 // Worker-authored phase and deadline keep server and browser rendering identical.
 export function deriveHeartbeat(
   monitor: Pick<PublicMonitor, 'id' | 'method' | 'periodSeconds'>,
-  state: MonitorState,
+  state: StatusView,
 ): HeartbeatView | null {
   if (monitor.method !== 'HEARTBEAT') return null;
 
-  const signal = state.heartbeat?.[monitor.id];
+  const signal = state.monitors[monitor.id]?.heartbeat;
   if (!signal) return { phase: 'pending', nowSec: state.lastUpdate };
 
   const { status, deadline, lastSuccess, lastFail, lastStart, message, runs, misses } = signal;

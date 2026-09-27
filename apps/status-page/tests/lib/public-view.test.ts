@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { Maintenance, MonitorState, RuntimeConfig } from '@flarewatch/shared';
+import type { Maintenance, RuntimeConfig, StatusView } from '@flarewatch/shared';
 import {
   operatorSnapshot,
   publicMaintenances,
@@ -7,6 +7,7 @@ import {
   toAdminMonitors,
   visitorSnapshot,
 } from '@/lib/public-view';
+import { countStatuses } from '@/lib/uptime';
 
 const config: RuntimeConfig = {
   monitors: [
@@ -54,27 +55,41 @@ const config: RuntimeConfig = {
   },
 };
 
-const state: MonitorState = {
-  incident: { public: [], removed: [], hidden: [] },
-  latency: {
-    public: { recent: [{ loc: 'HEL', ping: 12, time: 1 }] },
-    removed: { recent: [{ loc: 'FRA', ping: 34, time: 1 }] },
-    hidden: { recent: [{ loc: 'SFO', ping: 56, time: 1 }] },
-  },
-  overallUp: 7,
-  overallDown: 2,
+const state: StatusView = {
   lastUpdate: 123,
-  startedAt: { public: 100, removed: 90, hidden: 80 },
-  sslCertificates: {
-    public: { expiryDate: 200, daysUntilExpiry: 30, lastCheck: 120 },
-    removed: { expiryDate: 180, daysUntilExpiry: 10, lastCheck: 110 },
-    hidden: { expiryDate: 160, daysUntilExpiry: 5, lastCheck: 100 },
-  },
-  heartbeat: {
-    public: { status: 'up', lastSuccess: 110, deadline: 300 },
-    job: { status: 'late', lastSuccess: 100, deadline: 130, message: 'secret job reason' },
-    hidden: { status: 'late', lastSuccess: 50, deadline: 90, message: 'secret job' },
-    'hidden-job': { status: 'down', lastFail: 60, message: 'secret job failed' },
+  monitors: {
+    public: {
+      status: 'up',
+      startedAt: 100,
+      incidents: [],
+      latest: { loc: 'HEL', ping: 12, time: 1 },
+      heartbeat: { status: 'up', lastSuccess: 110, deadline: 300 },
+    },
+    removed: {
+      status: 'up',
+      startedAt: 90,
+      incidents: [],
+      latest: { loc: 'FRA', ping: 34, time: 1 },
+    },
+    hidden: {
+      status: 'late',
+      startedAt: 80,
+      incidents: [],
+      latest: { loc: 'SFO', ping: 56, time: 1 },
+      heartbeat: { status: 'late', lastSuccess: 50, deadline: 90, message: 'secret job' },
+    },
+    job: {
+      status: 'late',
+      startedAt: 100,
+      incidents: [],
+      heartbeat: { status: 'late', lastSuccess: 100, deadline: 130, message: 'secret job reason' },
+    },
+    'hidden-job': {
+      status: 'down',
+      startedAt: 60,
+      incidents: [{ start: [60], error: ['secret job failed'] }],
+      heartbeat: { status: 'down', lastFail: 60, message: 'secret job failed' },
+    },
   },
 };
 
@@ -105,20 +120,21 @@ describe('publicView', () => {
         },
       },
       state: {
-        incident: { public: [] },
-        latency: {
-          public: { recent: [{ loc: 'HEL', ping: 12, time: 1 }] },
-        },
-        overallUp: 7,
-        overallDown: 2,
         lastUpdate: 123,
-        startedAt: { public: 100 },
-        sslCertificates: {
-          public: { expiryDate: 200, daysUntilExpiry: 30, lastCheck: 120 },
-        },
-        heartbeat: {
-          public: { status: 'up', lastSuccess: 110, deadline: 300 },
-          job: { status: 'late', lastSuccess: 100, deadline: 130 },
+        monitors: {
+          public: {
+            status: 'up',
+            startedAt: 100,
+            incidents: [],
+            latest: { loc: 'HEL', ping: 12, time: 1 },
+            heartbeat: { status: 'up', lastSuccess: 110, deadline: 300 },
+          },
+          job: {
+            status: 'late',
+            startedAt: 100,
+            incidents: [],
+            heartbeat: { status: 'late', lastSuccess: 100, deadline: 130 },
+          },
         },
       },
     });
@@ -261,35 +277,53 @@ describe('snapshots', () => {
       'hidden-job',
     ]);
     expect(snapshot.groups).toEqual({ Services: ['public'], Hidden: ['hidden'] });
-    expect(snapshot.state?.heartbeat?.['hidden-job']?.message).toBe('secret job failed');
+    expect(Object.keys(snapshot.state?.monitors ?? {}).sort()).toEqual([
+      'hidden',
+      'hidden-job',
+      'job',
+      'public',
+    ]);
+    expect(snapshot.state?.monitors['hidden-job']?.heartbeat?.message).toBe('secret job failed');
     expect(snapshot.maintenances).toEqual(maintenances);
   });
 
-  it('counts every monitor the worker has seen for the operator, published only for visitors', () => {
-    const counted: MonitorState = {
+  it('counts every configured monitor for the operator, published only for visitors', () => {
+    const counted: StatusView = {
       lastUpdate: 123,
-      // What the worker stores: published monitors only.
-      overallUp: 2,
-      overallDown: 0,
-      overallLate: 1,
-      startedAt: { public: 100, hidden: 100 },
-      incident: {
-        public: [{ start: [100], end: 110, error: ['recovered'] }],
-        hidden: [{ start: [110], error: ['still failing'] }],
+      monitors: {
+        public: {
+          status: 'up',
+          startedAt: 100,
+          incidents: [{ start: [100], end: 110, error: ['recovered'] }],
+        },
+        hidden: {
+          status: 'down',
+          startedAt: 100,
+          incidents: [{ start: [110], error: ['still failing'] }],
+        },
+        job: {
+          status: 'late',
+          startedAt: 100,
+          incidents: [],
+          heartbeat: { status: 'late', lastSuccess: 100, deadline: 130 },
+        },
+        removed: {
+          status: 'down',
+          startedAt: 100,
+          incidents: [{ start: [110], error: ['no longer configured'] }],
+        },
       },
-      latency: {},
-      heartbeat: { job: { status: 'late', lastSuccess: 100, deadline: 130 } },
     };
 
-    expect(operatorSnapshot(config, counted, []).state).toMatchObject({
-      overallUp: 2,
-      overallDown: 1,
-      overallLate: 1,
+    expect(countStatuses(operatorSnapshot(config, counted, []).state!)).toEqual({
+      up: 1,
+      late: 1,
+      down: 1,
     });
-    expect(visitorSnapshot(config, counted, []).state).toMatchObject({
-      overallUp: 2,
-      overallDown: 0,
-      overallLate: 1,
+    expect(countStatuses(visitorSnapshot(config, counted, []).state!)).toEqual({
+      up: 1,
+      late: 1,
+      down: 0,
     });
   });
 });

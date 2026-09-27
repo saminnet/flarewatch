@@ -2,13 +2,13 @@ import { IconCircleCheck, IconAlertTriangle, IconCircleX, IconRefresh } from '@t
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { formatUtcShort, type MonitorState } from '@flarewatch/shared';
-import { getOverallStatus } from '@/lib/uptime';
+import { formatUtcShort, type StatusView } from '@flarewatch/shared';
+import { countStatuses, getOverallStatus } from '@/lib/uptime';
 import { useAutoRefresh } from '@/lib/hooks/use-auto-refresh';
 import { cn } from '@/lib/utils';
 
 interface OverallStatusProps {
-  state: MonitorState;
+  state: StatusView;
   monitorCount: number;
   jobCount: number;
 }
@@ -41,7 +41,8 @@ const statusConfig = {
 };
 
 export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusProps) {
-  const status = getOverallStatus(state);
+  const { up, late, down } = countStatuses(state);
+  const status = getOverallStatus({ up, late, down });
   const { currentTime, isStale, willRefreshSoon, refreshCountdown } = useAutoRefresh({
     lastUpdate: state.lastUpdate,
   });
@@ -50,15 +51,14 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
   const StatusIcon = config.icon;
   const isInitialState = state.lastUpdate === 0;
   const secondsAgo = currentTime - state.lastUpdate;
-  const late = state.overallLate ?? 0;
 
   function getStatusTitle(): [title: string, count?: string] {
     if (status !== 'degraded') return [config.title];
 
-    if (state.overallDown === 0) {
+    if (down === 0) {
       return ['Some jobs are running late', `(${late} out of ${jobCount})`];
     }
-    return ['Some systems are down', `(${state.overallDown} out of ${monitorCount})`];
+    return ['Some systems are down', `(${down} out of ${monitorCount})`];
   }
 
   const [title, count] = getStatusTitle();
@@ -92,9 +92,7 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
               )}
             </h2>
             <Badge variant={config.badgeVariant} className="shrink-0">
-              {late > 0
-                ? `${state.overallUp - late} up / ${late} late / ${state.overallDown} down`
-                : `${state.overallUp - late} up / ${state.overallDown} down`}
+              {late > 0 ? `${up} up / ${late} late / ${down} down` : `${up} up / ${down} down`}
             </Badge>
           </div>
 

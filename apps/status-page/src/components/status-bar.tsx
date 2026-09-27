@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { IconX } from '@tabler/icons-react';
-import type { MonitorState } from '@flarewatch/shared';
+import type { StatusView } from '@flarewatch/shared';
 import { generateDailyStatus, type DailyStatusData } from '@/lib/uptime';
 import { formatUtc, formatDuration } from '@/lib/date';
 import { cn } from '@/lib/utils';
@@ -67,7 +67,7 @@ function StatusBarSegment({ day, isMobile, onClick }: StatusBarSegmentProps) {
 interface StatusBarProps {
   monitorId: string;
   monitorName?: string;
-  state: MonitorState;
+  state: StatusView;
 }
 
 export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {

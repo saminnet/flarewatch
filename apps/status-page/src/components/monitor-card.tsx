@@ -12,7 +12,7 @@ import { StatusIcon } from '@/components/status-icon';
 import { RunStrip } from '@/components/run-strip';
 import { CopyPingUrlButton } from '@/components/copy-ping-url-button';
 import { getHeartbeatPingUrl } from '@/lib/heartbeat-ping-url';
-import type { MonitorState } from '@flarewatch/shared';
+import type { LatencySample, StatusView } from '@flarewatch/shared';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import type { AdminMonitor } from '@/lib/public-view';
 import { deriveHeartbeat, type HeartbeatView } from '@/lib/heartbeat';
@@ -372,7 +372,7 @@ function LatencyMeta({
 
 interface MonitorViewProps {
   monitor: AdminMonitor;
-  state: MonitorState;
+  state: StatusView;
   operator?: boolean;
 }
 
@@ -388,7 +388,7 @@ function MonitorSummary({
 }: MonitorViewProps & { detail: boolean }) {
   const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
   const heartbeat = deriveHeartbeat(monitor, state);
-  const hasStarted = !!state.startedAt?.[monitor.id];
+  const hasStarted = state.monitors[monitor.id]?.startedAt !== undefined;
   const uptimeDisplay = formatUptimeDisplay(uptimePercent, hasStarted, 2);
 
   const uptimeBadge = (
@@ -472,7 +472,12 @@ export function MonitorRow({ monitor, state, operator }: MonitorViewProps) {
 }
 
 /** Everything about one monitor, for its own page. */
-export function MonitorDetail({ monitor, state, operator = false }: MonitorViewProps) {
+export function MonitorDetail({
+  monitor,
+  state,
+  latency = [],
+  operator = false,
+}: MonitorViewProps & { latency?: LatencySample[] }) {
   const heartbeat = deriveHeartbeat(monitor, state);
 
   return (
@@ -505,7 +510,7 @@ export function MonitorDetail({ monitor, state, operator = false }: MonitorViewP
                 <h2 className="mb-2 text-xs font-medium text-muted-foreground">
                   Response times (ms)
                 </h2>
-                <LatencyChart monitor={monitor} state={state} />
+                <LatencyChart samples={latency} />
               </div>
             )}
           </>

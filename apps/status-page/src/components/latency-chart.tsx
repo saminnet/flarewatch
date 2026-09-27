@@ -1,18 +1,12 @@
 import { useId, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { area, line, curveMonotoneX } from 'd3-shape';
-import { formatUtcShort, type MonitorState } from '@flarewatch/shared';
-import type { PublicMonitor } from '@/lib/public-view';
+import { formatUtcShort, type LatencySample } from '@flarewatch/shared';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { linearScale, niceLinearTicks } from '@/lib/chart-scale';
 import { timeTicks } from '@/lib/chart-ticks';
 import { formatUtc } from '@/lib/date';
 import { CHART_HEIGHT_PX } from '@/lib/constants';
-
-interface LatencyChartProps {
-  monitor: PublicMonitor;
-  state: MonitorState;
-}
 
 type ChartPoint = {
   timeMs: number;
@@ -274,10 +268,8 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
   );
 }
 
-export function LatencyChart({ monitor, state }: LatencyChartProps) {
-  const recentLatency = state.latency[monitor.id]?.recent;
-
-  const chartData: ChartPoint[] = (recentLatency ?? []).map((point) => ({
+export function LatencyChart({ samples }: { samples: LatencySample[] }) {
+  const chartData: ChartPoint[] = samples.map((point) => ({
     timeMs: point.time * 1000,
     ping: point.ping,
     loc: point.loc,

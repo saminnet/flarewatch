@@ -5,7 +5,9 @@ import type { HeartbeatRun, HeartbeatState, Maintenance, MonitorState } from '@f
 import { formatUtcShort, isJsonObject } from '@flarewatch/shared/utils';
 import { privateMonitor } from '../tests/e2e/config/worker.ts';
 
-// Copies the FLAREWATCH_E2E build out of dist, so the public and private instances each keep theirs.
+// Seeds 1.x-format KV state, which the hub imports on its first start, so the
+// browser tests also cover the 1.x upgrade path. Copies the FLAREWATCH_E2E build
+// out of dist, so the public and private instances each keep theirs.
 const variant = process.env.FLAREWATCH_E2E === 'private' ? 'private' : 'public';
 const appDir = process.cwd();
 const variantDir = path.join(appDir, '.wrangler/e2e', variant);
@@ -15,6 +17,8 @@ const fixtureDir = path.join(variantDir, 'fixtures');
 const envFilePath = path.join(appDir, '.wrangler/e2e.dev.vars');
 const configPath = path.join(buildDir, 'server/wrangler.json');
 const e2eConfigPath = path.join(buildDir, 'server/e2e-wrangler.json');
+const workerConfigPath = path.join(variantDir, 'worker-wrangler.json');
+const repoDir = path.resolve(appDir, '../..');
 
 // Public deterministic credentials for the local Playwright instance only; never a production secret.
 const E2E_ADMIN_AUTH_SECRET = JSON.stringify({
@@ -72,6 +76,25 @@ const wranglerConfig = {
 };
 
 writeFileSync(e2eConfigPath, `${JSON.stringify(wranglerConfig, null, 2)}\n`);
+
+// The monitoring worker runs next to the status page in the same wrangler dev
+// process. It shares the KV namespace, so its hub imports the seeded 1.x state
+// on first start, and it uses the e2e monitors. No cron: the data stays fixed.
+const kvNamespaces = Array.isArray(parsedWranglerConfig.kv_namespaces)
+  ? parsedWranglerConfig.kv_namespaces
+  : [];
+const workerConfig = {
+  name: 'flarewatch-worker',
+  main: path.join(repoDir, 'services/worker/src/index.ts'),
+  compatibility_date: '2025-11-17',
+  kv_namespaces: kvNamespaces,
+  durable_objects: { bindings: [{ name: 'MONITOR_HUB', class_name: 'MonitorHub' }] },
+  migrations: [{ tag: 'v1', new_sqlite_classes: ['MonitorHub'] }],
+  alias: {
+    '@flarewatch/config/worker': path.join(appDir, 'tests/e2e/config/worker.ts'),
+  },
+};
+writeFileSync(workerConfigPath, `${JSON.stringify(workerConfig, null, 2)}\n`);
 writeFileSync(envFilePath, `FLAREWATCH_ADMIN_BASIC_AUTH='${E2E_ADMIN_AUTH_SECRET}'\n`);
 
 const nowSec = Math.floor(Date.now() / 1000);
@@ -183,11 +206,9 @@ const latency = (base: number, loc: string) => ({
 
 const state: MonitorState = {
   lastUpdate: nowSec,
-  // What runChecks computes for the fixture's public monitors: late jobs count
-  // in overallUp as well as overallLate, and pending or running jobs count as up.
-  overallUp: 9,
-  overallDown: 3,
-  overallLate: 1,
+  // The 1.x format needs these; the hub ignores them and counts from statuses.
+  overallUp: 0,
+  overallDown: 0,
   startedAt: {
     demo_example: startedAt,
     demo_cloudflare_trace: startedAt,

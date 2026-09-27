@@ -1,32 +1,32 @@
-import type { MonitorState } from '@flarewatch/shared';
+import type { LatencySample, StatusView } from '@flarewatch/shared';
 import { formatUtc } from './date';
 import { UPTIME_DAYS, UPTIME_THRESHOLDS } from './constants';
 
 const MIN_MONITOR_AGE_SECONDS = 60;
 
-/** state.lastUpdate, not Date.now(), so SSR and hydration agree; null before the first state write. */
-function getNowSeconds(state: MonitorState): number | null {
+/** state.lastUpdate, not Date.now(), so SSR and hydration agree; null before the first check run. */
+function getNowSeconds(state: StatusView): number | null {
   return state.lastUpdate > 0 ? state.lastUpdate : null;
 }
 
-function hasMonitorData(monitorId: string, state: MonitorState): boolean {
+function hasMonitorData(monitorId: string, state: StatusView): boolean {
   const nowSec = getNowSeconds(state);
   if (nowSec === null) return false;
-  const startedAt = state.startedAt?.[monitorId];
+  const startedAt = state.monitors[monitorId]?.startedAt;
   if (!startedAt) return false;
   return nowSec - startedAt >= MIN_MONITOR_AGE_SECONDS;
 }
 
-export function calculateUptimePercent(monitorId: string, state: MonitorState): number | null {
+export function calculateUptimePercent(monitorId: string, state: StatusView): number | null {
   const nowSec = getNowSeconds(state);
   if (nowSec === null) return null;
   if (!hasMonitorData(monitorId, state)) return null;
 
-  const incidents = state.incident[monitorId];
+  const incidents = state.monitors[monitorId]?.incidents;
   if (!incidents || incidents.length === 0) return 100;
   const windowDaysAgoSec = nowSec - UPTIME_DAYS * 24 * 60 * 60;
 
-  const monitorStartSec = state.startedAt?.[monitorId];
+  const monitorStartSec = state.monitors[monitorId]?.startedAt;
   const windowStartSec =
     monitorStartSec && monitorStartSec > windowDaysAgoSec ? monitorStartSec : windowDaysAgoSec;
 
@@ -51,35 +51,19 @@ export function calculateUptimePercent(monitorId: string, state: MonitorState): 
   return Math.max(0, Math.min(100, uptimePercent));
 }
 
-export function isMonitorUp(monitorId: string, state: MonitorState): boolean {
-  const incidents = state.incident[monitorId];
-  if (!incidents || incidents.length === 0) return true;
-
-  const lastIncident = incidents[incidents.length - 1];
-  if (!lastIncident) return true;
-  return lastIncident.end !== undefined;
+export function isMonitorUp(monitorId: string, state: StatusView): boolean {
+  return state.monitors[monitorId]?.status !== 'down';
 }
 
-export function getMonitorError(monitorId: string, state: MonitorState): string | null {
-  const incidents = state.incident[monitorId];
-  if (!incidents || incidents.length === 0) return null;
-
-  const lastIncident = incidents[incidents.length - 1];
+export function getMonitorError(monitorId: string, state: StatusView): string | null {
+  const incidents = state.monitors[monitorId]?.incidents;
+  const lastIncident = incidents?.[incidents.length - 1];
   if (!lastIncident || lastIncident.end !== undefined) return null;
-
-  const lastError = lastIncident.error[lastIncident.error.length - 1];
-  return lastError ?? 'Unknown error';
+  return lastIncident.error[lastIncident.error.length - 1] ?? 'Unknown error';
 }
 
-export function getLatestLatency(
-  monitorId: string,
-  state: MonitorState,
-): { ping: number; loc: string; time: number } | null {
-  const latency = state.latency[monitorId];
-  if (!latency || !latency.recent || latency.recent.length === 0) return null;
-
-  const lastRecord = latency.recent[latency.recent.length - 1];
-  return lastRecord ?? null;
+export function getLatestLatency(monitorId: string, state: StatusView): LatencySample | null {
+  return state.monitors[monitorId]?.latest ?? null;
 }
 
 export function formatUptimeDisplay(
@@ -93,9 +77,26 @@ export function formatUptimeDisplay(
   return hasStarted ? 'Starting...' : 'Pending';
 }
 
-export function getOverallStatus(state: MonitorState): 'operational' | 'degraded' | 'down' {
-  if (state.overallDown === 0) return (state.overallLate ?? 0) > 0 ? 'degraded' : 'operational';
-  if (state.overallUp > 0) return 'degraded';
+export type StatusCounts = { up: number; late: number; down: number };
+
+/** Down means an open incident; late jobs are counted apart from up. */
+export function countStatuses(state: StatusView): StatusCounts {
+  const counts: StatusCounts = { up: 0, late: 0, down: 0 };
+  for (const { status } of Object.values(state.monitors)) {
+    if (status === 'down') counts.down++;
+    else if (status === 'late') counts.late++;
+    else counts.up++;
+  }
+  return counts;
+}
+
+export function getOverallStatus({
+  up,
+  late,
+  down,
+}: StatusCounts): 'operational' | 'degraded' | 'down' {
+  if (down === 0) return late > 0 ? 'degraded' : 'operational';
+  if (up + late > 0) return 'degraded';
   return 'down';
 }
 
@@ -142,7 +143,7 @@ function generateUnknownDays(baseDate: Date): DailyStatusData[] {
   return days;
 }
 
-export function generateDailyStatus(monitorId: string, state: MonitorState): DailyStatusData[] {
+export function generateDailyStatus(monitorId: string, state: StatusView): DailyStatusData[] {
   const days: DailyStatusData[] = [];
   const nowSec = getNowSeconds(state);
 
@@ -154,8 +155,8 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
 
   const nowMs = nowSec * 1000;
   const now = new Date(nowMs);
-  const incidents = state.incident[monitorId] || [];
-  const monitorStartSec = state.startedAt?.[monitorId];
+  const incidents = state.monitors[monitorId]?.incidents ?? [];
+  const monitorStartSec = state.monitors[monitorId]?.startedAt;
 
   if (!hasMonitorData(monitorId, state)) {
     return generateUnknownDays(now);
@@ -248,7 +249,7 @@ export function generateDailyStatus(monitorId: string, state: MonitorState): Dai
 export function generateAggregateDailyStatus(
   monitorIds: string[],
   monitorNameMap: Map<string, string>,
-  state: MonitorState,
+  state: StatusView,
 ): AggregatedDayData[] {
   if (monitorIds.length === 0) {
     return [];

@@ -1,8 +1,8 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
+import type { StatusView } from '@flarewatch/shared';
 import { getRouteApi } from '@tanstack/react-router';
 import { StatusIcon } from '@/components/status-icon';
 import { snapshotQuery } from '@/lib/query/monitors.queries';
-import { createEmptyMonitorState } from '@/lib/monitor-state';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import { formatUptimeDisplay } from '@/lib/uptime';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ function EmbedWrapper({ children, theme, className }: EmbedWrapperProps): React.
   );
 }
 
-const EMPTY_STATE = createEmptyMonitorState();
+const EMPTY_STATE: StatusView = { lastUpdate: 0, monitors: {} };
 
 export function EmbedPage() {
   const { monitorId } = embedRoute.useParams();
@@ -43,7 +43,7 @@ export function EmbedPage() {
     monitorId,
     state ?? EMPTY_STATE,
   );
-  const hasStarted = state ? !!state.startedAt?.[monitorId] : false;
+  const hasStarted = state?.monitors[monitorId]?.startedAt !== undefined;
 
   if (!monitor) {
     return (
@@ -57,7 +57,7 @@ export function EmbedPage() {
     return (
       <EmbedWrapper theme={theme} className="h-full flex items-center justify-center p-4">
         <div className="text-sm text-muted-foreground">
-          Monitor state is unavailable. Check the worker status and KV binding.
+          Monitor state is unavailable. Check that the monitoring worker is deployed.
         </div>
       </EmbedWrapper>
     );

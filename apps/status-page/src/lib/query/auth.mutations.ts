@@ -63,6 +63,7 @@ export function useSignOut() {
       queryClient.removeQueries({ queryKey: qk.session });
       await router.navigate({ to: '.', search: (prev) => ({ ...prev, view: undefined }) });
       queryClient.removeQueries({ queryKey: qk.operatorSnapshot });
+      queryClient.removeQueries({ queryKey: qk.allLatency });
     },
   });
 }

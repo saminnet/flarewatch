@@ -1,17 +1,21 @@
 import { createFileRoute, Link, notFound } from '@tanstack/react-router';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { IconArrowLeft } from '@tabler/icons-react';
-import type { MonitorState } from '@flarewatch/shared';
+import type { StatusView } from '@flarewatch/shared';
 import { MonitorDetail } from '@/components/monitor-card';
 import { IncidentCard } from '@/components/history/incident-card';
 import { MaintenanceEventCard } from '@/components/history/maintenance-event-card';
 import { PAGE_CONTAINER_CLASSES, TIME_MS, UPTIME_DAYS } from '@/lib/constants';
 import { useAudience } from '@/lib/hooks/use-audience';
 import { useNow } from '@/lib/hooks/use-now';
-import type { Snapshot } from '@/lib/public-view';
+import type { AdminMonitor, Snapshot } from '@/lib/public-view';
 import { projectTimeline } from '@/lib/status-projection';
-import { snapshotQuery } from '@/lib/query/monitors.queries';
+import { latencyQuery, snapshotQuery } from '@/lib/query/monitors.queries';
 import { audienceOf } from '@/lib/session';
+
+function drawsLatency(monitor: AdminMonitor): boolean {
+  return monitor.method !== 'HEARTBEAT' && !monitor.hideLatencyChart;
+}
 
 export const Route = createFileRoute('/monitors/$monitorId')({
   loaderDeps: ({ search }) => ({ view: search.view }),
@@ -20,7 +24,11 @@ export const Route = createFileRoute('/monitors/$monitorId')({
       snapshotQuery(audienceOf(context.session, deps.view)),
     );
     // A visitor asking for a private monitor gets the same answer as for a missing one.
-    if (!snapshot.monitors.some((monitor) => monitor.id === params.monitorId)) throw notFound();
+    const monitor = snapshot.monitors.find((candidate) => candidate.id === params.monitorId);
+    if (!monitor) throw notFound();
+    if (drawsLatency(monitor)) {
+      await context.queryClient.ensureQueryData(latencyQuery(monitor.id));
+    }
     return { loaderNowMs: Date.now() };
   },
   component: MonitorPage,
@@ -33,6 +41,10 @@ function MonitorPage() {
   const { monitors, state } = snapshot;
   const nowMs = useNow({ serverTime: Route.useLoaderData().loaderNowMs });
   const monitor = monitors.find((candidate) => candidate.id === monitorId);
+  const { data: latency } = useQuery({
+    ...latencyQuery(monitorId),
+    enabled: monitor !== undefined && drawsLatency(monitor),
+  });
   if (!monitor) throw notFound();
 
   return (
@@ -46,7 +58,12 @@ function MonitorPage() {
       </Link>
 
       {state ? (
-        <MonitorDetail monitor={monitor} state={state} operator={audience === 'operator'} />
+        <MonitorDetail
+          monitor={monitor}
+          state={state}
+          latency={latency}
+          operator={audience === 'operator'}
+        />
       ) : (
         <p className="text-sm text-muted-foreground">No monitoring data available yet.</p>
       )}
@@ -67,7 +84,7 @@ function MonitorHistory({
 }: {
   monitorId: string;
   snapshot: Snapshot;
-  state: MonitorState | null;
+  state: StatusView | null;
   nowMs: number;
 }) {
   const { pinned, timeline } = projectTimeline({

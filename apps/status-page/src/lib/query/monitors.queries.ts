@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
-import { getOperatorSnapshot, getVisitorSnapshot } from '@/lib/kv';
+import { getMonitorLatency, getOperatorSnapshot, getVisitorSnapshot } from '@/lib/kv';
 import { getUiPrefsServerFn } from '@/lib/ui-prefs-server';
 import { getConfigServerFn } from '@/lib/config';
 import { getSessionServerFn } from '@/lib/session';
@@ -18,7 +18,14 @@ export const snapshotQuery = (audience: Viewer) =>
   queryOptions({
     queryFn: () => (audience === 'operator' ? getOperatorSnapshot() : getVisitorSnapshot()),
     queryKey: audience === 'operator' ? qk.operatorSnapshot : qk.visitorSnapshot,
-    staleTime: QUERY_STALE_TIME.DEFAULT, // 30 seconds - KV-backed data
+    staleTime: QUERY_STALE_TIME.DEFAULT, // 30 seconds; the hub updates once a minute
+  });
+
+export const latencyQuery = (monitorId: string) =>
+  queryOptions({
+    queryFn: () => getMonitorLatency({ data: { id: monitorId } }),
+    queryKey: qk.latency(monitorId),
+    staleTime: QUERY_STALE_TIME.DEFAULT,
   });
 
 export const sessionQuery = () =>

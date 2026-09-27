@@ -362,3 +362,28 @@ describe('worker', () => {
     });
   });
 });
+
+describe('hub routes for the status page', () => {
+  const fetchRoute = (env: Env, path: string) =>
+    Worker.fetch(new Request(`https://internal${path}`), env, {} as ExecutionContext, {
+      checkMonitor: checkMonitorMock,
+      createNotifier: createNotifierMock,
+      formatNotificationMessage: formatNotificationMessageMock,
+      getEdgeLocation: getEdgeLocationMock,
+      staticConfig: workerConfigMock,
+    });
+
+  it('serves the hub view and one monitor latency, ids decoded', async () => {
+    const { hub, env } = createEnv();
+    const monitor = createMonitor('a/b c');
+    hub.record(NOW_SECONDS, [
+      { monitor, check: { location: 'SFO', result: { ok: true, latency: 42 } } },
+    ]);
+
+    const view = await fetchRoute(env, '/view');
+    const latency = await fetchRoute(env, `/latency/${encodeURIComponent(monitor.id)}`);
+
+    await expect(view.json()).resolves.toEqual(hub.view());
+    await expect(latency.json()).resolves.toEqual([{ ping: 42, loc: 'SFO', time: NOW_SECONDS }]);
+  });
+});

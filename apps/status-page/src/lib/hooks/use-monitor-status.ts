@@ -1,4 +1,4 @@
-import type { MonitorState } from '@flarewatch/shared';
+import type { StatusView } from '@flarewatch/shared';
 import {
   calculateUptimePercent,
   isMonitorUp,
@@ -7,7 +7,7 @@ import {
 } from '@/lib/uptime';
 import { getStatusColor } from '@/lib/color';
 
-export function useMonitorStatus(monitorId: string, state: MonitorState) {
+export function useMonitorStatus(monitorId: string, state: StatusView) {
   const uptimePercent = calculateUptimePercent(monitorId, state);
   return {
     isUp: isMonitorUp(monitorId, state),

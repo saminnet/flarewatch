@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
-import type { HeartbeatState, MonitorState } from '@flarewatch/shared';
+import type { HeartbeatState, StatusView } from '@flarewatch/shared';
 import { deriveHeartbeat, fetchPingUrl, mergeHeartbeatRuns, runLatenessSec } from '@/lib/heartbeat';
 
 const PERIOD = 3600;
@@ -8,15 +8,16 @@ const RUN_AT = 1_757_900_000;
 
 const heartbeatMonitor = { id: 'backup', method: 'HEARTBEAT' } as const;
 
-function stateWith(heartbeat?: HeartbeatState): MonitorState {
+function stateWith(heartbeat?: HeartbeatState): StatusView {
   return {
     lastUpdate: RUN_AT + 60,
-    overallUp: 1,
-    overallDown: 0,
-    startedAt: {},
-    incident: {},
-    latency: {},
-    ...(heartbeat && { heartbeat: { backup: heartbeat } }),
+    monitors: {
+      backup: {
+        status: heartbeat?.status ?? 'pending',
+        incidents: [],
+        ...(heartbeat && { heartbeat }),
+      },
+    },
   };
 }
 
@@ -26,6 +27,10 @@ describe('deriveHeartbeat', () => {
   });
 
   it('reports pending before the first signal arrives', () => {
+    expect(deriveHeartbeat(heartbeatMonitor, { lastUpdate: RUN_AT + 60, monitors: {} })).toEqual({
+      phase: 'pending',
+      nowSec: RUN_AT + 60,
+    });
     expect(deriveHeartbeat(heartbeatMonitor, stateWith())).toEqual({
       phase: 'pending',
       nowSec: RUN_AT + 60,

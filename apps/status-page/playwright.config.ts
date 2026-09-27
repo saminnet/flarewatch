@@ -5,12 +5,12 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${port}`;
 // A second local instance, built with statusPage.visibility 'private'.
 const privatePort = port + 1;
 const privateBaseURL = `http://127.0.0.1:${privatePort}`;
-// Build with the test config, copy the build aside, seed it, and serve it.
+// Build with the test config, copy the build aside, seed it, and serve it next to the monitoring worker.
 const e2eServer = (variant: 'public' | 'private', listenPort: number) =>
   [
     `FLAREWATCH_E2E=${variant} vp build`,
     `FLAREWATCH_E2E=${variant} node --experimental-strip-types scripts/seed-e2e-kv.ts`,
-    `vp exec wrangler dev --local --config .wrangler/e2e/${variant}/build/server/e2e-wrangler.json --env-file .wrangler/e2e.dev.vars --port ${listenPort} --persist-to .wrangler/e2e/${variant}/state`,
+    `vp exec wrangler dev --local --config .wrangler/e2e/${variant}/build/server/e2e-wrangler.json --config .wrangler/e2e/${variant}/worker-wrangler.json --env-file .wrangler/e2e.dev.vars --port ${listenPort} --persist-to .wrangler/e2e/${variant}/state`,
   ].join(' && ');
 
 export default defineConfig({

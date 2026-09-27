@@ -1,13 +1,12 @@
 import {
   isPublicMonitor,
-  type HeartbeatState,
   type Maintenance,
-  type MonitorState,
   type Monitor,
+  type MonitorView,
   type PageConfigGroup,
   type RuntimeConfig,
+  type StatusView,
 } from '@flarewatch/shared';
-import { isMonitorUp } from './uptime';
 
 export type PublicMonitor = Pick<Monitor, 'id' | 'name' | 'tooltip' | 'method'> & {
   hideLatencyChart?: boolean;
@@ -24,14 +23,14 @@ export type AdminMonitor = PublicMonitor & { private?: boolean };
 export type Snapshot = {
   monitors: AdminMonitor[];
   groups: PageConfigGroup;
-  state: MonitorState | null;
+  state: StatusView | null;
   maintenances: Maintenance[];
 };
 
 type PublicView = {
   monitors: PublicMonitor[];
   statusPage: RuntimeConfig['statusPage'];
-  state: MonitorState | null;
+  state: StatusView | null;
 };
 
 function toPublicMonitor(monitor: Monitor): PublicMonitor {
@@ -64,20 +63,19 @@ function deriveMonitorLink(monitor: Monitor): string | undefined {
   return undefined;
 }
 
-function filterMonitorRecord<T>(
-  record: Record<string, T>,
-  monitorIds: Set<string>,
-): Record<string, T> {
-  return Object.fromEntries(Object.entries(record).filter(([id]) => monitorIds.has(id)));
-}
-
-/** The raw failure reason is admin only; public surfaces get the fixed incident text. */
-function stripHeartbeatMessages(
-  heartbeat: Record<string, HeartbeatState>,
-): Record<string, HeartbeatState> {
-  return Object.fromEntries(
-    Object.entries(heartbeat).map(([id, { message: _message, ...signal }]) => [id, signal]),
-  );
+/** The view limited to these monitors. The raw failure reason of a job is operator only. */
+function viewOf(state: StatusView, monitorIds: Set<string>, operator: boolean): StatusView {
+  const monitors: Record<string, MonitorView> = {};
+  for (const [id, monitor] of Object.entries(state.monitors)) {
+    if (!monitorIds.has(id)) continue;
+    if (operator || !monitor.heartbeat) {
+      monitors[id] = monitor;
+      continue;
+    }
+    const { message: _message, ...heartbeat } = monitor.heartbeat;
+    monitors[id] = { ...monitor, heartbeat };
+  }
+  return { lastUpdate: state.lastUpdate, monitors };
 }
 
 // A group left with no visible members is dropped: its name alone can describe a private job.
@@ -89,7 +87,7 @@ function groupsOf(config: RuntimeConfig, monitorIds: Set<string>): PageConfigGro
   );
 }
 
-export function publicView(config: RuntimeConfig, state: MonitorState | null): PublicView {
+export function publicView(config: RuntimeConfig, state: StatusView | null): PublicView {
   const monitors = config.monitors.filter(isPublicMonitor).map(toPublicMonitor);
   const monitorIds = new Set(monitors.map((monitor) => monitor.id));
   const groups = groupsOf(config, monitorIds);
@@ -98,20 +96,7 @@ export function publicView(config: RuntimeConfig, state: MonitorState | null): P
   return {
     monitors,
     statusPage,
-    state: state
-      ? {
-          ...state,
-          incident: filterMonitorRecord(state.incident, monitorIds),
-          latency: filterMonitorRecord(state.latency, monitorIds),
-          startedAt: filterMonitorRecord(state.startedAt, monitorIds),
-          ...(state.sslCertificates && {
-            sslCertificates: filterMonitorRecord(state.sslCertificates, monitorIds),
-          }),
-          ...(state.heartbeat && {
-            heartbeat: stripHeartbeatMessages(filterMonitorRecord(state.heartbeat, monitorIds)),
-          }),
-        }
-      : null,
+    state: state && viewOf(state, monitorIds, false),
   };
 }
 
@@ -147,7 +132,7 @@ export function toAdminMonitors(config: RuntimeConfig): AdminMonitor[] {
 
 export function visitorSnapshot(
   config: RuntimeConfig,
-  state: MonitorState | null,
+  state: StatusView | null,
   maintenances: Maintenance[],
 ): Snapshot {
   const view = publicView(config, state);
@@ -159,34 +144,31 @@ export function visitorSnapshot(
   };
 }
 
-/**
- * The worker's overall counts cover published monitors only. The operator's
- * cover every monitor the worker has seen, counted the way the worker counts.
- */
-function withOperatorCounts(state: MonitorState, monitors: Monitor[]): MonitorState {
-  let up = 0;
-  let down = 0;
-  let late = 0;
-  for (const { id } of monitors) {
-    const heartbeat = state.heartbeat?.[id];
-    if (state.startedAt[id] === undefined && !heartbeat) continue;
-    if (isMonitorUp(id, state)) up++;
-    else down++;
-    if (heartbeat?.status === 'late') late++;
-  }
-  return { ...state, overallUp: up, overallDown: down, overallLate: late };
-}
-
 export function operatorSnapshot(
   config: RuntimeConfig,
-  state: MonitorState | null,
+  state: StatusView | null,
   maintenances: Maintenance[],
 ): Snapshot {
   const monitors = toAdminMonitors(config);
+  const monitorIds = new Set(monitors.map((monitor) => monitor.id));
   return {
     monitors,
-    groups: groupsOf(config, new Set(monitors.map((monitor) => monitor.id))),
-    state: state && withOperatorCounts(state, config.monitors),
+    groups: groupsOf(config, monitorIds),
+    state: state && viewOf(state, monitorIds, true),
     maintenances,
   };
+}
+
+/**
+ * Who may read a monitor's latency: nobody when it has no chart, the operator
+ * for a private monitor or a private-only page, anyone otherwise.
+ */
+export function latencyAccess(
+  config: RuntimeConfig,
+  monitorId: string,
+  privateOnly: boolean,
+): 'none' | 'operator' | 'anyone' {
+  const monitor = config.monitors.find((candidate) => candidate.id === monitorId);
+  if (!monitor || monitor.method === 'HEARTBEAT') return 'none';
+  return privateOnly || !isPublicMonitor(monitor) ? 'operator' : 'anyone';
 }
