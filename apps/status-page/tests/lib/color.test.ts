@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vite-plus/test';
-import { getStatusColor, getStatusHexColor } from '@/lib/color';
+import { getStatusColor } from '@/lib/color';
 
 describe('color utilities', () => {
   it('maps uptime thresholds to status token classes', () => {
@@ -44,14 +44,5 @@ describe('color utilities', () => {
       text: 'text-status-down',
       border: 'border-status-down',
     });
-  });
-
-  it('maps uptime thresholds to hex colors', () => {
-    expect(getStatusHexColor(99.9)).toBe('#10b981');
-    expect(getStatusHexColor(99.9, true)).toBe('#059669');
-    expect(getStatusHexColor(99)).toBe('#34d399');
-    expect(getStatusHexColor(95)).toBe('#f59e0b');
-    expect(getStatusHexColor('not-a-number')).toBe('#a3a3a3');
-    expect(getStatusHexColor(0)).toBe('#ef4444');
   });
 });

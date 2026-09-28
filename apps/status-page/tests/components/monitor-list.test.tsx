@@ -36,4 +36,34 @@ describe('MonitorList', () => {
     expect(screen.queryByText('Scheduled jobs')).toBeNull();
     expect(screen.queryByRole('group', { name: 'Filter monitors by kind' })).toBeNull();
   });
+
+  it('counts only the days a young monitor has been watched in the row label', () => {
+    const lastUpdate = Date.parse('2025-01-15T12:00:00Z') / 1000;
+    const startedAt = Date.parse('2024-12-23T12:00:00Z') / 1000;
+    const outage = Date.parse('2025-01-10T08:00:00Z') / 1000;
+    const young: StatusView = {
+      lastUpdate,
+      monitors: {
+        quiet: { status: 'up', startedAt, incidents: [] },
+        flaky: {
+          status: 'up',
+          startedAt,
+          incidents: [{ start: [outage], end: outage + 3600, error: ['HTTP 503'] }],
+        },
+      },
+    };
+    const monitors: AdminMonitor[] = [
+      { id: 'quiet', name: 'Quiet', method: 'GET' },
+      { id: 'flaky', name: 'Flaky', method: 'GET' },
+    ];
+
+    renderWithProviders(<MonitorList monitors={monitors} state={young} />);
+
+    expect(
+      screen.getByRole('link', { name: /^Quiet, .*, no downtime in the last 24 days$/ }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: /^Flaky, .*, downtime on 1 of the last 24 days$/ }),
+    ).toBeTruthy();
+  });
 });

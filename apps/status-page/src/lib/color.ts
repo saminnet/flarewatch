@@ -35,24 +35,3 @@ export function getStatusColor(percent: number | string | null): StatusColor {
   }
   return { bg: 'bg-status-down', text: 'text-status-down', border: 'border-status-down' };
 }
-
-const HEX_NEUTRAL = '#a3a3a3'; // neutral-400
-
-/** Hex colors for charts, which cannot consume the CSS status tokens. */
-export function getStatusHexColor(percent: number | string | null, darker = false): string {
-  if (percent === null) return HEX_NEUTRAL;
-
-  const p = Number(percent);
-  if (Number.isNaN(p)) return HEX_NEUTRAL;
-
-  if (p >= UPTIME_THRESHOLDS.EXCELLENT) {
-    return darker ? '#059669' : '#10b981'; // emerald-600 / emerald-500
-  }
-  if (p >= UPTIME_THRESHOLDS.GOOD) {
-    return darker ? '#10b981' : '#34d399'; // emerald-500 / emerald-400
-  }
-  if (p >= UPTIME_THRESHOLDS.DEGRADED) {
-    return '#f59e0b'; // amber-500
-  }
-  return '#ef4444'; // red-500
-}

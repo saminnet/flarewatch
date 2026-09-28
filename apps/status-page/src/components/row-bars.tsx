@@ -77,7 +77,9 @@ export function barsSummary(days: DailyStatusData[], heartbeat: HeartbeatView | 
       runs.filter((run) => run.outcome === outcome).length;
     return `last ${runs.length} runs: ${count('miss')} missed, ${count('fail')} failed, ${count('late')} late`;
   }
-  if (days.every((day) => day.status === 'unknown')) return 'no data yet';
-  const bad = days.filter((day) => day.status === 'down' || day.status === 'partial').length;
-  return bad === 0 ? 'no downtime in the last 90 days' : `downtime on ${bad} of the last 90 days`;
+  const watched = days.filter((day) => day.status !== 'unknown');
+  if (watched.length === 0) return 'no data yet';
+  const span = `the last ${watched.length} ${watched.length === 1 ? 'day' : 'days'}`;
+  const bad = watched.filter((day) => day.status !== 'up').length;
+  return bad === 0 ? `no downtime in ${span}` : `downtime on ${bad} of ${span}`;
 }
