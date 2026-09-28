@@ -81,6 +81,29 @@ Every check run is saved in the hub, the monitor Worker's Durable Object, so the
 
 See Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
 
+## Update your fork
+
+FlareWatch gets new releases in [saminnet/flarewatch](https://github.com/saminnet/flarewatch). Read the [changelog](../CHANGELOG.md) for breaking changes before you update.
+
+Your fork and each release both change files in `packages/config`. When a release changes those files, expect a conflict.
+
+If your fork is only behind, update it on GitHub. Open your fork, select **Sync fork**, then **Update branch**.
+
+If the sync runs into conflicts, update from a clone of your fork:
+
+```bash
+git remote add upstream https://github.com/saminnet/flarewatch.git
+git fetch upstream
+git checkout main
+git merge upstream/main
+```
+
+Git lists each file in conflict. In `worker.ts`, `public.ts` and `access.ts`, keep your monitors and settings, and make any config change the changelog asks for. Take the release's side everywhere else. Commit the merge, then push to `main`.
+
+Never pick an option that discards your fork's commits or force-syncs over `main`. That throws away your config. Your secrets stay in GitHub either way.
+
+A push to `main` starts the deploy, as in step 5. If a web update did not start it, run **CI and Deploy** from the **Actions** tab.
+
 ## Uninstall
 
 ```bash

@@ -34,6 +34,7 @@
 2. Add two repository secrets, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. The [deploy guide](docs/deploy.md) lists the token permissions.
 3. List your monitors in `packages/config/src/worker.ts`.
 4. Push to `main`. GitHub Actions tests and deploys both Workers, then prints your status page URL.
+5. To pick up new releases, [update your fork](docs/deploy.md#update-your-fork).
 
 A monitor is one line:
 
