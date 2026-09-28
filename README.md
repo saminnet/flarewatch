@@ -23,7 +23,7 @@
 
 - Checks every minute for websites, APIs and TCP ports, and a warning before an SSL certificate expires.
 - Heartbeats for backups, cron jobs and CI. They ping when they finish, and you hear about it when one doesn't.
-- Alerts to Slack, Discord, Telegram, ntfy, email and [more](docs/alerts.md).
+- Alerts to Slack, Discord, Telegram, ntfy, email and [more](docs/alerts.md). When a shared proxy or server goes down, you get one alert, not ten.
 - A status page with uptime, response times and incident history.
 - Sign-in with a password or your own identity provider (Pocket ID, Google, GitHub and others), for you and anyone you choose to let in. The whole page can be private too.
 - Badges, embeds and a JSON API.

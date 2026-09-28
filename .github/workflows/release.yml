@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Forks keep their own tags; only the upstream repo publishes releases.
+    if: ${{ github.repository == 'saminnet/flarewatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7.0.0
+
+      - name: Publish the CHANGELOG.md section as the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NOTES="$RUNNER_TEMP/notes.md"
+          awk -v heading="## ${TAG#v} - " '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md \
+            | sed -E "s#\]\(([^):\#][^):]*)\)#](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/\1)#g" > "$NOTES"
+
+          if ! grep -q '[^[:space:]]' "$NOTES"; then
+            echo "CHANGELOG.md has no '## ${TAG#v} - <date>' section with content"
+            exit 1
+          fi
+
+          gh release create "$TAG" --title "$TAG" --notes-file "$NOTES"
