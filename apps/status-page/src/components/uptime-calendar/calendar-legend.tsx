@@ -1,9 +1,9 @@
 import { STATUS_COLORS } from '@/lib/constants';
 
 const legendItems = [
-  { label: '99.9% up or more', color: STATUS_COLORS.up },
-  { label: '99% to 99.9%', color: STATUS_COLORS.partial },
-  { label: 'Under 99%', color: STATUS_COLORS.down },
+  { label: 'Operational', color: STATUS_COLORS.up },
+  { label: 'Brief downtime', color: STATUS_COLORS.partial },
+  { label: 'Longer downtime', color: STATUS_COLORS.down },
 ] as const;
 
 export function CalendarLegend() {
