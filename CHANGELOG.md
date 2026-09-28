@@ -2,6 +2,13 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## 2.1.0 - 2026-09-28
+
+### Changed
+
+- Each row on the dashboard shows the monitor's last 90 days, or the last 30 on a phone. Jobs show their recent runs. The row still opens the monitor's page.
+- Colors are stricter. The uptime badge turns amber below 99.9% and red below 99%, where it used to stay green down to 99%. A day turns red after about 15 minutes down, not 12 hours.
+
 ## 2.0.0 - 2026-09-28
 
 ### Breaking changes

@@ -19,14 +19,14 @@ export function getStatusColor(percent: number | string | null): StatusColor {
   const p = Number(percent);
   if (Number.isNaN(p)) return UNKNOWN;
 
-  if (p >= UPTIME_THRESHOLDS.GOOD) {
+  if (p >= UPTIME_THRESHOLDS.EXCELLENT) {
     return {
       bg: 'bg-status-operational',
       text: 'text-status-operational',
       border: 'border-status-operational',
     };
   }
-  if (p >= UPTIME_THRESHOLDS.DEGRADED) {
+  if (p >= UPTIME_THRESHOLDS.GOOD) {
     return {
       bg: 'bg-status-degraded',
       text: 'text-status-degraded',

@@ -228,7 +228,7 @@ export function generateDailyStatus(monitorId: string, state: StatusView): Daily
       status = 'unknown';
     } else if (uptimePercent >= UPTIME_THRESHOLDS.EXCELLENT) {
       status = 'up';
-    } else if (uptimePercent >= UPTIME_THRESHOLDS.PARTIAL) {
+    } else if (uptimePercent >= UPTIME_THRESHOLDS.GOOD) {
       status = 'partial';
     } else {
       status = 'down';

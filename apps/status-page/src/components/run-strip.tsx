@@ -15,14 +15,14 @@ import { useContainerWidth } from '@/lib/hooks/use-container-width';
 import { STATUS_BAR } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
-const CELL_CLASSES: Record<HeartbeatRun['outcome'], string> = {
+export const RUN_CELL_CLASSES: Record<HeartbeatRun['outcome'], string> = {
   ok: 'bg-status-operational',
   late: 'bg-status-degraded',
   fail: 'bg-status-down',
   miss: 'bg-status-down/40 border border-dashed border-status-down',
 };
 
-const RUNNING_CELL_CLASSES = 'border border-status-maintenance';
+export const RUNNING_CELL_CLASSES = 'border border-status-maintenance';
 
 const GROUP_FOCUS =
   'outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
@@ -190,7 +190,7 @@ function StripCells({
               className={cn(
                 'h-6 rounded-sm',
                 sizing,
-                slot.kind === 'run' ? CELL_CLASSES[slot.run.outcome] : RUNNING_CELL_CLASSES,
+                slot.kind === 'run' ? RUN_CELL_CLASSES[slot.run.outcome] : RUNNING_CELL_CLASSES,
                 CELL_FEEDBACK,
               )}
             />

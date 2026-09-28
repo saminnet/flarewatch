@@ -131,22 +131,25 @@ describe('uptime utilities', () => {
       expect(todayStatus?.status).toBe('up');
     });
 
-    it('marks day as partial when uptime is between 50-99.9%', () => {
-      const now = new Date('2025-01-15T12:00:00Z');
-      const nowSec = Math.floor(now.getTime() / 1000);
-      const todayStart = new Date('2025-01-15T00:00:00Z').getTime() / 1000;
-
+    it.each([
+      [1, 'up'],
+      [10, 'partial'],
+      [30, 'down'],
+    ])('colors a full day with %i minutes down as %s', (minutes, expected) => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const yesterdayStart = new Date('2025-01-14T00:00:00Z').getTime() / 1000;
       const state = view({
         test: {
           startedAt: nowSec - 90 * 24 * 60 * 60,
-          incidents: [{ start: [todayStart], end: todayStart + 3600, error: ['Error'] }],
+          incidents: [
+            { start: [yesterdayStart], end: yesterdayStart + minutes * 60, error: ['Error'] },
+          ],
         },
       });
 
-      const result = generateDailyStatus('test', state);
+      const yesterday = generateDailyStatus('test', state).at(-2);
 
-      const todayStatus = result[result.length - 1];
-      expect(todayStatus?.status).toBe('partial');
+      expect(yesterday?.status).toBe(expected);
     });
   });
 

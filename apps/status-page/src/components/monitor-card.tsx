@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusBar } from '@/components/status-bar';
+import { RowBars, barsSummary } from '@/components/row-bars';
 import { StatusIcon } from '@/components/status-icon';
 import { RunStrip } from '@/components/run-strip';
 import { CopyPingUrlButton } from '@/components/copy-ping-url-button';
@@ -18,7 +19,7 @@ import type { AdminMonitor } from '@/lib/public-view';
 import { deriveHeartbeat, type HeartbeatView } from '@/lib/heartbeat';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { formatCadence, formatDuration } from '@/lib/date';
-import { formatUptimeDisplay } from '@/lib/uptime';
+import { formatUptimeDisplay, generateDailyStatus } from '@/lib/uptime';
 import { LatencyChart } from '@/components/latency-chart';
 import { cn } from '@/lib/utils';
 
@@ -385,7 +386,8 @@ function MonitorSummary({
   state,
   operator = false,
   detail,
-}: MonitorViewProps & { detail: boolean }) {
+  history,
+}: MonitorViewProps & { detail: boolean; history?: string }) {
   const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
   const heartbeat = deriveHeartbeat(monitor, state);
   const hasStarted = state.monitors[monitor.id]?.startedAt !== undefined;
@@ -413,7 +415,7 @@ function MonitorSummary({
           to="/monitors/$monitorId"
           params={{ monitorId: monitor.id }}
           className="absolute inset-0 z-10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
-          aria-label={rowLabel({ name: monitor.name, heartbeat, isUp, uptime: uptimeDisplay })}
+          aria-label={`${rowLabel({ name: monitor.name, heartbeat, isUp, uptime: uptimeDisplay })}, ${history}`}
         />
       )}
       <div className="shrink-0 mt-0.5">
@@ -461,12 +463,21 @@ function MonitorSummary({
 
 /** One line in the monitor list; the whole row opens the monitor's page. */
 export function MonitorRow({ monitor, state, operator }: MonitorViewProps) {
+  const heartbeat = deriveHeartbeat(monitor, state);
+  const days = generateDailyStatus(monitor.id, state);
   return (
     <div
       data-slot="monitor-row"
       className="@container relative px-3 py-2 transition-colors hover:bg-muted/50"
     >
-      <MonitorSummary monitor={monitor} state={state} operator={operator} detail={false} />
+      <MonitorSummary
+        monitor={monitor}
+        state={state}
+        operator={operator}
+        detail={false}
+        history={barsSummary(days, heartbeat)}
+      />
+      <RowBars days={days} heartbeat={heartbeat} />
     </div>
   );
 }

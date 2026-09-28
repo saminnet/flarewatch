@@ -378,6 +378,44 @@ const privateHeartbeat = {
   name: 'Internal Vault Backup',
 } as const;
 
+test('rows show the last 90 days, or 30 on a phone, and still open the monitor page', async ({
+  page,
+}) => {
+  const clientErrors = collectClientErrors(page);
+  const docsRow = monitorRow(page, 'Cloudflare Docs');
+  const cells = docsRow.locator('[data-slot="row-bars"] > span');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(cells.filter({ visible: true })).toHaveCount(30);
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/');
+  await expect(cells.filter({ visible: true })).toHaveCount(90);
+  await expect(
+    page.getByRole('link', { name: /^Cloudflare Docs, .*, no downtime in the last 90 days$/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', {
+      name: /^Cloudflare Status API, .*, downtime on [12] of the last 90 days$/,
+    }),
+  ).toBeVisible();
+  await expect(
+    monitorRow(page, 'Nightly Compactor').locator('[data-slot="row-bars"] > span'),
+  ).toHaveCount(90);
+  // A job that never ran has no history to show.
+  await expect(monitorRow(page, 'Weekly Prune').locator('[data-slot="row-bars"]')).toHaveCount(0);
+
+  // The strip is not a target of its own: a click on it lands on the row link.
+  const strip = docsRow.locator('[data-slot="row-bars"]');
+  await strip.scrollIntoViewIfNeeded();
+  const box = await strip.boundingBox();
+  if (!box) throw new Error('row strip has no box');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page).toHaveURL(/\/monitors\/demo_cloudflare_docs$/);
+  expect(clientErrors).toEqual([]);
+});
+
 const UTC_STAMP = String.raw`\w{3} \d{1,2}, \d{2}:\d{2} UTC`;
 
 function monitorRow(page: Page, name: string) {
@@ -393,7 +431,7 @@ test('heartbeat monitors render every phase on the public page', async ({ page }
   await expect(
     page.getByRole('link', {
       name: new RegExp(
-        `^Nightly Backup, operational, last run ${UTC_STAMP}, next expected by ${UTC_STAMP}$`,
+        `^Nightly Backup, operational, last run ${UTC_STAMP}, next expected by ${UTC_STAMP}, last 2 runs: 0 missed, 0 failed, 0 late$`,
       ),
     }),
   ).toBeVisible();
