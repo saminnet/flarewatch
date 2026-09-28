@@ -29,7 +29,7 @@ Some monitors reach their target through something else, like a reverse proxy, a
 { id: 'wiki', name: 'Wiki', method: 'GET', target: 'https://wiki.example.com', dependsOn: ['proxy'] },
 ```
 
-- While the proxy is down, App and Wiki don't alert. The proxy's alert ends with `Also down: App, Wiki`.
+- While the proxy is down, App and Wiki don't alert. The proxy's alert ends with `Also down: App, Wiki`, naming the ones already down when it goes out. A long list ends with "and N more".
 - A monitor with `dependsOn` waits one extra check, about a minute, before its first alert. So an app that fails a minute before its proxy is still covered.
 - When the proxy is back, anything still down behind it alerts on its own.
 - A monitor that already sent a down alert still sends its recovery, even while the proxy is down.

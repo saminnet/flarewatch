@@ -390,6 +390,18 @@ describe('notification templates', () => {
       expect(render({ alsoDown: [] })).not.toContain('Also down');
     });
 
+    it('shortens a long list to fit chat field limits', () => {
+      const names = Array.from(
+        { length: 60 },
+        (_, i) => `service-${String(i).padStart(2, '0')}-behind-proxy`,
+      );
+      const text = render({ alsoDown: names });
+
+      expect(text).toContain('service-00-behind-proxy');
+      expect(text).not.toContain('service-59-behind-proxy');
+      expect(text).toMatch(/and \d+ more/);
+    });
+
     it('leaves the list out of an up alert', () => {
       expect(
         render({ isUp: true, isRecovery: true, isInitialOutage: false, alsoDown: ['App'] }),

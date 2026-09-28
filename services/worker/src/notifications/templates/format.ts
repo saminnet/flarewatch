@@ -18,9 +18,28 @@ export function notificationBody(ctx: TemplateContext): string {
   return `${lead}\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
 }
 
-/** The names of the monitors down behind this one, comma-separated; empty when there are none. */
-export function alsoDownList(ctx: TemplateContext): string {
-  return ctx.isUp ? '' : ctx.alsoDown.join(', ');
+/** Leaves room under chat field limits; Discord's is 1,024 characters. */
+const ALSO_DOWN_MAX_CHARS = 900;
+
+/**
+ * The names of the monitors down behind this one, each passed through `format`,
+ * comma-separated and cut short with "and N more"; empty when there are none.
+ */
+export function alsoDownList(
+  ctx: TemplateContext,
+  format: (name: string) => string = (name) => name,
+): string {
+  if (ctx.isUp) return '';
+  const shown: string[] = [];
+  let length = 0;
+  for (const name of ctx.alsoDown) {
+    const item = format(name);
+    if (shown.length > 0 && length + item.length + 2 > ALSO_DOWN_MAX_CHARS) break;
+    shown.push(item);
+    length += item.length + 2;
+  }
+  const rest = ctx.alsoDown.length - shown.length;
+  return rest > 0 ? `${shown.join(', ')} and ${rest} more` : shown.join(', ');
 }
 
 /** A trailing "Also down" line for plain-text bodies. */

@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { inlineCode, stripControlChars } from './format';
+import { alsoDownList, inlineCode, stripControlChars } from './format';
 
 export function zulipTemplate(ctx: TemplateContext): TemplateOutput {
   const emoji = ctx.isUp ? '✅' : '🔴';
@@ -15,9 +15,8 @@ export function zulipTemplate(ctx: TemplateContext): TemplateOutput {
     lines.push(`- Reason: ${inlineCode(ctx.reason)}`);
   }
 
-  if (!ctx.isUp && ctx.alsoDown.length > 0) {
-    lines.push(`- Also down: ${ctx.alsoDown.map(inlineCode).join(', ')}`);
-  }
+  const alsoDown = alsoDownList(ctx, inlineCode);
+  if (alsoDown) lines.push(`- Also down: ${alsoDown}`);
 
   lines.push(`- Target: ${stripControlChars(ctx.targetUrl)}`, `- Time: ${ctx.timestamp}`);
 
