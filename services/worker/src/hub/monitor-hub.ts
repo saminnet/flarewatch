@@ -16,6 +16,7 @@ import {
   type MonitorTarget,
   type MonitorView,
   type HubView,
+  type Monitor,
 } from '@flarewatch/shared';
 import type { Env } from '../env';
 import { applyPing, evaluateHeartbeat, withMisses, type PingKind } from './heartbeat';
@@ -34,13 +35,27 @@ export type CheckRecord =
 
 export interface IncidentUpdate {
   monitorId: string;
-  /** A maintenance window covers the monitor at the time of the check run. */
-  inMaintenance: boolean;
   statusChanged: boolean;
   changeType: 'none' | 'up' | 'down' | 'error';
   isUp: boolean;
   incidentStartTime: number;
   error: string;
+}
+
+/** The notification settings the hub decides alerts with. */
+export interface AlertPolicy {
+  gracePeriodSeconds: number;
+  skipIds: string[];
+  skipErrorChanges: boolean;
+}
+
+export interface Alert {
+  monitorId: string;
+  kind: 'down' | 'error' | 'up';
+  incidentStartTime: number;
+  error: string;
+  /** Down alerts only: names of the monitors behind this one that are down too. */
+  alsoDown: string[];
 }
 
 type MonitorRow = { id: string; started_at: number | null; heartbeat: string | null };
@@ -50,6 +65,7 @@ type IncidentRow = {
   starts: string;
   errors: string;
   end_at: number | null;
+  alert: 'pending' | 'sent' | 'silent';
 };
 
 /** Reads kept until the next write, so page traffic between check runs reads no rows. */
@@ -94,7 +110,15 @@ export class MonitorHub extends DurableObject<Env> {
     void ctx.blockConcurrencyWhile(() => importV1(this.sql, env.FLAREWATCH_STATE));
   }
 
-  record(now: number, records: CheckRecord[]): IncidentUpdate[] {
+  /**
+   * Stores one check run. With a policy (a webhook is configured) it also
+   * decides the run's alerts and marks each incident whose down alert goes out.
+   */
+  record(
+    now: number,
+    records: CheckRecord[],
+    policy?: AlertPolicy,
+  ): { updates: IncidentUpdate[]; alerts: Alert[] } {
     this.reads = {};
     return this.sql.transaction(() => {
       const rows = new Map(
@@ -105,9 +129,12 @@ export class MonitorHub extends DurableObject<Env> {
       const open = new Map(
         this.sql
           .exec<IncidentRow>(
-            'SELECT id, monitor_id, starts, errors, end_at FROM incidents WHERE end_at IS NULL',
+            'SELECT id, monitor_id, starts, errors, end_at, alert FROM incidents WHERE end_at IS NULL',
           )
-          .map((row) => [row.monitor_id, { id: row.id, incident: toIncident(row) }]),
+          .map((row) => [
+            row.monitor_id,
+            { id: row.id, incident: toIncident(row), alert: row.alert },
+          ]),
       );
       const samples: Record<string, [number, string]> = {};
       const updates: IncidentUpdate[] = [];
@@ -146,12 +173,7 @@ export class MonitorHub extends DurableObject<Env> {
             now,
           );
         }
-        updates.push({
-          ...this.applyResult(monitor.id, result, open.get(monitor.id), now),
-          inMaintenance: activeMaintenances.some((maintenance) =>
-            coversMonitor(maintenance, monitor.id),
-          ),
-        });
+        updates.push(this.applyResult(monitor.id, result, open.get(monitor.id), now));
       }
 
       if (Object.keys(samples).length > 0) {
@@ -168,8 +190,99 @@ export class MonitorHub extends DurableObject<Env> {
          ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
         String(now),
       );
-      return updates;
+      const alerts = policy
+        ? this.decideAlerts(now, records, updates, open, activeMaintenances, policy)
+        : [];
+      return { updates, alerts };
     });
+  }
+
+  /**
+   * Runs after every result is applied, so a monitor and the monitors it
+   * depends on are judged on the same, finished run. A monitor is blocked
+   * while anything it depends on, directly or through a chain, has an open
+   * incident; a blocked monitor sends no new down or error alert.
+   */
+  private decideAlerts(
+    now: number,
+    records: CheckRecord[],
+    updates: IncidentUpdate[],
+    openBefore: Map<string, { alert: IncidentRow['alert'] }>,
+    activeMaintenances: Maintenance[],
+    policy: AlertPolicy,
+  ): Alert[] {
+    const monitors = records.map((record): Monitor => record.monitor);
+    const openNow = new Map(
+      this.sql
+        .exec<IncidentRow>(
+          'SELECT id, monitor_id, starts, errors, end_at, alert FROM incidents WHERE end_at IS NULL',
+        )
+        .map((row) => [row.monitor_id, row]),
+    );
+    const ancestors = dependencyClosure(monitors);
+    const isDown = (id: string) => openNow.has(id);
+    const blocked = (id: string) => [...(ancestors.get(id) ?? [])].some(isDown);
+    const changes = new Map(updates.map((update) => [update.monitorId, update]));
+    const alerts: Alert[] = [];
+
+    for (const monitor of monitors) {
+      if (policy.skipIds.includes(monitor.id)) continue;
+      const change = changes.get(monitor.id);
+      if (change?.changeType === 'up') {
+        // Closes an alert that went out, whatever blocks or maintenance say now.
+        if (openBefore.get(monitor.id)?.alert === 'sent') {
+          alerts.push({
+            monitorId: monitor.id,
+            kind: 'up',
+            incidentStartTime: change.incidentStartTime,
+            error: '',
+            alsoDown: [],
+          });
+        }
+        continue;
+      }
+
+      const row = openNow.get(monitor.id);
+      if (!row) continue;
+      const incident = toIncident(row);
+      const start = incident.start[0] ?? now;
+      const error = incident.error[incident.error.length - 1] ?? '';
+      const quiet =
+        blocked(monitor.id) ||
+        activeMaintenances.some((maintenance) => coversMonitor(maintenance, monitor.id));
+
+      if (row.alert === 'pending') {
+        // A job's own graceSeconds already delays its down state.
+        const grace = monitor.method === 'HEARTBEAT' ? 0 : policy.gracePeriodSeconds;
+        // One run's wait lets a dependency that fails a run later cover this monitor.
+        const held = (monitor.dependsOn?.length ?? 0) > 0 && start === now;
+        if (quiet || held || now - start < grace) continue;
+        this.sql.exec("UPDATE incidents SET alert = 'sent' WHERE id = ?", row.id);
+        alerts.push({
+          monitorId: monitor.id,
+          kind: 'down',
+          incidentStartTime: start,
+          error,
+          alsoDown: monitors
+            .filter((other) => isDown(other.id) && ancestors.get(other.id)?.has(monitor.id))
+            .map((other) => other.name),
+        });
+      } else if (
+        row.alert === 'sent' &&
+        change?.changeType === 'error' &&
+        !quiet &&
+        !policy.skipErrorChanges
+      ) {
+        alerts.push({
+          monitorId: monitor.id,
+          kind: 'error',
+          incidentStartTime: start,
+          error,
+          alsoDown: [],
+        });
+      }
+    }
+    return alerts;
   }
 
   /** Records a job's ping. Its status changes at the next check run. */
@@ -212,7 +325,7 @@ export class MonitorHub extends DurableObject<Env> {
     result: CheckResult,
     open: { id: number; incident: Incident } | undefined,
     now: number,
-  ): Omit<IncidentUpdate, 'inMaintenance'> {
+  ): IncidentUpdate {
     const incidentStartTime = open?.incident.start[0] ?? now;
 
     if (result.ok) {
@@ -362,6 +475,24 @@ export class MonitorHub extends DurableObject<Env> {
     }
     return samples;
   }
+}
+
+/** Every monitor's dependencies, direct or through a chain. Config validation rules out loops. */
+function dependencyClosure(monitors: Monitor[]): Map<string, Set<string>> {
+  const byId = new Map(monitors.map((monitor) => [monitor.id, monitor]));
+  const closure = new Map<string, Set<string>>();
+  for (const monitor of monitors) {
+    const found = new Set<string>();
+    const pending = [...(monitor.dependsOn ?? [])];
+    while (pending.length > 0) {
+      const id = pending.pop()!;
+      if (found.has(id) || id === monitor.id) continue;
+      found.add(id);
+      pending.push(...(byId.get(id)?.dependsOn ?? []));
+    }
+    closure.set(monitor.id, found);
+  }
+  return closure;
 }
 
 const sampleSchema = z.record(z.string(), z.tuple([z.number(), z.string()]));

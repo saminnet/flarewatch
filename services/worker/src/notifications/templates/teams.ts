@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { jsonOutput, singleLine, stripControlChars } from './format';
+import { alsoDownList, jsonOutput, singleLine, stripControlChars } from './format';
 
 export function teamsTemplate(ctx: TemplateContext): TemplateOutput {
   const emoji = ctx.isUp ? '✅' : '🔴';
@@ -14,6 +14,9 @@ export function teamsTemplate(ctx: TemplateContext): TemplateOutput {
   if (!ctx.isUp && ctx.reason) {
     facts.push({ title: 'Reason', value: stripControlChars(ctx.reason) });
   }
+
+  const alsoDown = alsoDownList(ctx);
+  if (alsoDown) facts.push({ title: 'Also down', value: stripControlChars(alsoDown) });
 
   const payload = {
     type: 'message',

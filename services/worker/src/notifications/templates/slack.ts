@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { escapeMarkup, jsonOutput } from './format';
+import { alsoDownList, escapeMarkup, jsonOutput } from './format';
 
 export function slackTemplate(ctx: TemplateContext): TemplateOutput {
   const color = ctx.isUp ? '#36a64f' : '#dc3545';
@@ -36,6 +36,14 @@ export function slackTemplate(ctx: TemplateContext): TemplateOutput {
         type: 'mrkdwn',
         text: `*Reason:*\n${escapeMarkup(ctx.reason)}`,
       },
+    });
+  }
+
+  const alsoDown = alsoDownList(ctx);
+  if (alsoDown) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Also down:*\n${escapeMarkup(alsoDown)}` },
     });
   }
 

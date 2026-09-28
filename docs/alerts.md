@@ -17,7 +17,25 @@ notification: {
 
 Webhook URLs usually contain a secret. Keep them out of a public repo.
 
-A monitor in an active [maintenance window](status-page.md#maintenance) doesn't alert.
+A monitor in an active [maintenance window](status-page.md#maintenance) doesn't alert. If it's still down when the window ends, it alerts then.
+
+## Dependencies
+
+Some monitors reach their target through something else, like a reverse proxy, a VPN or one server that runs several apps. When that goes down, every monitor behind it fails too. Put it in `dependsOn` and you get one alert, not one per monitor:
+
+```ts
+{ id: 'proxy', name: 'Reverse proxy', method: 'GET', target: 'https://proxy.example.com/health' },
+{ id: 'app', name: 'App', method: 'GET', target: 'https://app.example.com', dependsOn: ['proxy'] },
+{ id: 'wiki', name: 'Wiki', method: 'GET', target: 'https://wiki.example.com', dependsOn: ['proxy'] },
+```
+
+- While the proxy is down, App and Wiki don't alert. The proxy's alert ends with `Also down: App, Wiki`.
+- A monitor with `dependsOn` waits one extra check, about a minute, before its first alert. So an app that fails a minute before its proxy is still covered.
+- When the proxy is back, anything still down behind it alerts on its own.
+- A monitor that already sent a down alert still sends its recovery, even while the proxy is down.
+- The status page and History show every monitor as it is. Only alerts change.
+
+Dependencies can have their own dependencies, and heartbeats can use `dependsOn` too. The config check rejects unknown ids and loops.
 
 ## Channels
 

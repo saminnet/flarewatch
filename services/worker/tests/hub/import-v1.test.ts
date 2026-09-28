@@ -186,4 +186,36 @@ describe('1.x import', () => {
       },
     });
   });
+
+  it('imports open incidents without ever alerting for them', async () => {
+    const { hub } = await importedHub([
+      [
+        'state',
+        JSON.stringify({
+          ...oldState,
+          incident: { legacy: [{ start: [T0 - 60], error: ['Timeout'] }] },
+        }),
+      ],
+    ]);
+    const monitor = {
+      id: 'legacy',
+      name: 'Legacy',
+      method: 'GET' as const,
+      target: 'https://legacy.example.com',
+    };
+    const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+
+    const stillDown = hub.record(
+      T0,
+      [{ monitor, check: { location: 'HEL', result: { ok: false, error: 'HTTP 502' } } }],
+      policy,
+    );
+    const recovered = hub.record(
+      T0 + 60,
+      [{ monitor, check: { location: 'HEL', result: { ok: true, latency: 1 } } }],
+      policy,
+    );
+
+    expect([...stillDown.alerts, ...recovered.alerts]).toEqual([]);
+  });
 });

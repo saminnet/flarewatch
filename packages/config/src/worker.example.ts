@@ -73,6 +73,16 @@ export const workerConfig: WorkerConfig = {
     //   link: false, // Don't expose internal URL to status page visitors
     // },
 
+    // Behind another monitor: no alert of its own while 'internal-api' is down,
+    // and the API's alert lists it under "Also down"
+    // {
+    //   id: 'reports',
+    //   name: 'Reports',
+    //   method: 'GET',
+    //   target: 'https://reports.internal.example.com/health',
+    //   dependsOn: ['internal-api'],
+    // },
+
     // Private monitor (checked and alerted like any other, but hidden from
     // the public page and public API; visible once you sign in)
     // {

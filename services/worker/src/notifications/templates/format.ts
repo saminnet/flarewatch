@@ -12,10 +12,21 @@ export function notificationBody(ctx: TemplateContext): string {
   if (ctx.isRecovery) {
     return `Recovered after ${ctx.downtimeMinutes} minutes of downtime.`;
   }
-  if (ctx.isInitialOutage) {
-    return `Detected at ${ctx.timestamp}\nReason: ${ctx.reason || 'Unknown'}`;
-  }
-  return `Down for ${ctx.downtimeMinutes} minutes\nReason: ${ctx.reason || 'Unknown'}`;
+  const lead = ctx.isInitialOutage
+    ? `Detected at ${ctx.timestamp}`
+    : `Down for ${ctx.downtimeMinutes} minutes`;
+  return `${lead}\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
+}
+
+/** The names of the monitors down behind this one, comma-separated; empty when there are none. */
+export function alsoDownList(ctx: TemplateContext): string {
+  return ctx.isUp ? '' : ctx.alsoDown.join(', ');
+}
+
+/** A trailing "Also down" line for plain-text bodies. */
+export function alsoDownSuffix(ctx: TemplateContext): string {
+  const list = alsoDownList(ctx);
+  return list ? `\nAlso down: ${list}` : '';
 }
 
 // Preserve newlines and tabs used by notification formats.

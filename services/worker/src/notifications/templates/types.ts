@@ -7,6 +7,8 @@ export interface TemplateContext {
   isInitialOutage: boolean;
   downtimeMinutes: number;
   reason: string;
+  /** Monitors behind this one that are down with it; their own alerts are held back. */
+  alsoDown: string[];
   timestamp: string;
   timestampIso: string;
   /** Stable id for one incident, identical across its down and up notifications */

@@ -2,6 +2,18 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## 2.2.0 - 2026-09-28
+
+### Added
+
+- `dependsOn` on a monitor lists the monitors it reaches its target through. While one of them is down, it sends no alert of its own, and that monitor's alert names it under "Also down". See [Alerts](docs/alerts.md#dependencies).
+
+### Changed
+
+- FlareWatch keeps track of which outages it alerted about. A recovery alert only follows a down alert that went out, and a missed check at the end of `gracePeriod` no longer drops the alert.
+- A monitor that is still down when its maintenance window ends now alerts. It used to stay silent.
+- Outages already open when you upgrade stay silent, recovery included. After upgrading, check the status page for monitors that were down at the time.
+
 ## 2.1.0 - 2026-09-28
 
 ### Changed

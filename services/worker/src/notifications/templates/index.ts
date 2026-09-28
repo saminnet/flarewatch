@@ -1,5 +1,6 @@
 import type { NotificationTemplate } from '@flarewatch/shared';
 import type { TemplateContext, TemplateOutput } from './types';
+import { alsoDownSuffix } from './format';
 import { slackTemplate } from './slack';
 import { discordTemplate } from './discord';
 import { telegramTemplate } from './telegram';
@@ -22,9 +23,9 @@ function textTemplate(ctx: TemplateContext): TemplateOutput {
   if (ctx.isRecovery) {
     text = `${emoji} ${ctx.monitorName} is up!\nRecovered after ${ctx.downtimeMinutes} minutes of downtime.`;
   } else if (ctx.isInitialOutage) {
-    text = `${emoji} ${ctx.monitorName} is ${status}\nDetected at ${ctx.timestamp}\nReason: ${ctx.reason || 'Unknown'}`;
+    text = `${emoji} ${ctx.monitorName} is ${status}\nDetected at ${ctx.timestamp}\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
   } else {
-    text = `${emoji} ${ctx.monitorName} is still ${status}\nDown for ${ctx.downtimeMinutes} minutes\nReason: ${ctx.reason || 'Unknown'}`;
+    text = `${emoji} ${ctx.monitorName} is still ${status}\nDown for ${ctx.downtimeMinutes} minutes\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
   }
 
   return {

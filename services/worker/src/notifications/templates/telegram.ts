@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { escapeMarkup, jsonOutput } from './format';
+import { alsoDownList, escapeMarkup, jsonOutput } from './format';
 
 export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
   const emoji = ctx.isUp ? '✅' : '🔴';
@@ -15,6 +15,9 @@ export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
   if (!ctx.isUp && ctx.reason) {
     lines.push(`<b>Reason:</b> ${escapeHtml(ctx.reason)}`);
   }
+
+  const alsoDown = alsoDownList(ctx);
+  if (alsoDown) lines.push(`<b>Also down:</b> ${escapeHtml(alsoDown)}`);
 
   lines.push('', `<code>${escapeHtml(ctx.targetUrl)}</code>`, `<i>${ctx.timestamp}</i>`);
 

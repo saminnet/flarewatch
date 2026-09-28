@@ -121,6 +121,7 @@ const monitorCommon = {
   id: nonEmptyString('id'),
   name: nonEmptyString('name'),
   private: z.optional(z.boolean({ error: 'private must be a boolean' })),
+  dependsOn: z.optional(z.array(z.string(), { error: 'dependsOn must be a list of monitor ids' })),
 };
 
 const pullMonitorSchema = z
@@ -179,7 +180,47 @@ const monitorListSchema = z.array(monitorSchema).check((ctx) => {
     }
     ids.add(monitor.id);
   });
+  const byId = new Map(ctx.value.map((monitor) => [monitor.id, monitor]));
+  ctx.value.forEach((monitor, index) => {
+    for (const message of dependencyIssues(monitor, byId)) {
+      ctx.issues.push({ code: 'custom', message, input: monitor, path: [index] });
+    }
+  });
 });
+
+type DependencyNode = { id: string; dependsOn?: string[] | undefined };
+
+function dependencyIssues(monitor: DependencyNode, byId: Map<string, DependencyNode>): string[] {
+  const dependsOn = monitor.dependsOn ?? [];
+  const issues: string[] = [];
+  dependsOn.forEach((id, index) => {
+    if (id === monitor.id) issues.push('dependsOn cannot list the monitor itself');
+    else if (!byId.has(id)) issues.push(`dependsOn: no monitor has id "${id}"`);
+    else if (dependsOn.indexOf(id) !== index) issues.push(`dependsOn lists "${id}" twice`);
+  });
+  const loop = loopFrom(monitor.id, byId);
+  if (loop) issues.push(`dependsOn forms a loop: ${loop.join(' → ')}`);
+  return issues;
+}
+
+/** A dependency path from `start` back to itself, if there is one. */
+function loopFrom(start: string, byId: Map<string, DependencyNode>): string[] | null {
+  const seen = new Set<string>();
+  const walk = (id: string, path: string[]): string[] | null => {
+    for (const next of byId.get(id)?.dependsOn ?? []) {
+      if (next === start) {
+        if (path.length > 1) return [...path, start];
+        continue;
+      }
+      if (seen.has(next) || !byId.has(next)) continue;
+      seen.add(next);
+      const loop = walk(next, [...path, next]);
+      if (loop) return loop;
+    }
+    return null;
+  };
+  return walk(start, [start]);
+}
 
 const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.object({
   title: z.optional(z.string()),

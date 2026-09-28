@@ -208,4 +208,55 @@ describe('config validation', () => {
       'monitor "duplicate": id must be unique',
     );
   });
+
+  describe('dependsOn', () => {
+    const pull = (id: string, dependsOn?: unknown) => ({
+      id,
+      name: id,
+      method: 'GET',
+      target: `https://${id}.example.com`,
+      ...(dependsOn !== undefined && { dependsOn }),
+    });
+
+    it('accepts a chain of dependencies, heartbeats included', () => {
+      const job = {
+        id: 'job',
+        name: 'Job',
+        method: 'HEARTBEAT',
+        periodSeconds: 60,
+        graceSeconds: 0,
+        dependsOn: ['app'],
+      };
+
+      expect(configIssues({ monitors: [pull('gateway'), pull('app', ['gateway']), job] })).toEqual(
+        [],
+      );
+    });
+
+    it.each([
+      [
+        'a string',
+        [pull('app', 'gateway'), pull('gateway')],
+        'monitor "app": dependsOn must be a list of monitor ids',
+      ],
+      [
+        'an unknown id',
+        [pull('app', ['missing'])],
+        'monitor "app": dependsOn: no monitor has id "missing"',
+      ],
+      ['itself', [pull('app', ['app'])], 'monitor "app": dependsOn cannot list the monitor itself'],
+      [
+        'a duplicate',
+        [pull('app', ['gateway', 'gateway']), pull('gateway')],
+        'monitor "app": dependsOn lists "gateway" twice',
+      ],
+      [
+        'a loop',
+        [pull('a', ['b']), pull('b', ['c']), pull('c', ['a'])],
+        'monitor "a": dependsOn forms a loop: a → b → c → a',
+      ],
+    ])('rejects %s', (_case, monitors, issue) => {
+      expect(configIssues({ monitors })).toContain(issue);
+    });
+  });
 });

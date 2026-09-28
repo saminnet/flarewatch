@@ -32,6 +32,10 @@ The Worker opens a TCP connection to the host and port.
 
 `private: true` keeps a monitor off the public page and the public API. It is still checked, saved and alerted. When you sign in, you see it with a Private badge.
 
+## Dependencies
+
+`dependsOn: ['proxy']` tells FlareWatch the monitor reaches its target through another one. While that one is down, this one doesn't alert. See [Alerts](alerts.md#dependencies).
+
 ## Groups
 
 Group monitors on the page in `packages/config/src/public.ts`:

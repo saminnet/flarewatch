@@ -1,10 +1,12 @@
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vite-plus/test';
 import type { CheckResult, HeartbeatMonitor, MonitorTarget } from '@flarewatch/shared';
-import type { CheckRecord } from '../../src/hub/monitor-hub';
+import type { AlertPolicy, CheckRecord } from '../../src/hub/monitor-hub';
 import { createHub, rowsWritten } from '../helpers/hub';
 
 const T0 = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const DAY = 24 * 60 * 60;
+const POLICY: AlertPolicy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
 
 function monitor(id: string): MonitorTarget {
   return { id, name: id, method: 'GET', target: `https://${id}.example.com` };
@@ -21,11 +23,10 @@ describe('MonitorHub incidents', () => {
   it('opens an incident on the first failure and reports it as a down change', () => {
     const { hub } = createHub();
 
-    const [update] = hub.record(T0, [check('api', down())]);
+    const [update] = hub.record(T0, [check('api', down())]).updates;
 
     expect(update).toEqual({
       monitorId: 'api',
-      inMaintenance: false,
       statusChanged: true,
       changeType: 'down',
       isUp: false,
@@ -43,9 +44,9 @@ describe('MonitorHub incidents', () => {
     const { hub } = createHub();
     hub.record(T0, [check('api', down('Timeout'))]);
 
-    const [same] = hub.record(T0 + 60, [check('api', down('Timeout'))]);
-    const [changed] = hub.record(T0 + 120, [check('api', down('HTTP 502'))]);
-    const [recovered] = hub.record(T0 + 180, [check('api', up())]);
+    const [same] = hub.record(T0 + 60, [check('api', down('Timeout'))]).updates;
+    const [changed] = hub.record(T0 + 120, [check('api', down('HTTP 502'))]).updates;
+    const [recovered] = hub.record(T0 + 180, [check('api', up())]).updates;
 
     expect(same).toMatchObject({ statusChanged: false, changeType: 'none', incidentStartTime: T0 });
     expect(changed).toMatchObject({
@@ -146,7 +147,7 @@ describe('MonitorHub heartbeat state', () => {
   it('shows a job that never pinged as pending, without a start time or incident', () => {
     const { hub } = createHub();
 
-    const updates = hub.record(T0, [{ monitor: job }]);
+    const { updates } = hub.record(T0, [{ monitor: job }]);
 
     expect(updates).toEqual([]);
     expect(hub.view().monitors.backup).toEqual({
@@ -172,7 +173,7 @@ describe('MonitorHub heartbeat state', () => {
       },
     });
 
-    const [update] = hub.record(T0 + 60, [{ monitor: job }]);
+    const [update] = hub.record(T0 + 60, [{ monitor: job }]).updates;
     expect(update).toMatchObject({ changeType: 'up', incidentStartTime: T0 + 1 });
     expect(hub.view().monitors.backup?.status).toBe('up');
     expect(hub.view().monitors.backup?.heartbeat).not.toHaveProperty('message');
@@ -263,20 +264,45 @@ describe('MonitorHub maintenance windows', () => {
     expect(hub.view().maintenances.map(({ id }) => id)).toEqual(['b-early']);
   });
 
-  it('marks changes inside a window that covers the monitor, up to its end', () => {
+  it('holds back alerts inside a window that covers the monitor, up to its end', () => {
     const { hub } = createHub();
     hub.putMaintenance(window('db-only', T0 - 60, T0 + 60, ['db']));
     hub.putMaintenance(window('everything', T0 + 120, T0 + 180));
 
-    const inside = hub.record(T0, [check('db', down()), check('api', down())]);
-    const atEnd = hub.record(T0 + 60, [check('db', down('Other'))]);
-    const everything = hub.record(T0 + 120, [check('api', up())]);
+    const inside = hub.record(T0, [check('db', down()), check('api', down())], POLICY);
+    const atEnd = hub.record(T0 + 60, [check('db', down('Other'))], POLICY);
+    const everything = hub.record(T0 + 120, [check('web', down())], POLICY);
 
-    expect(inside.map((u) => [u.monitorId, u.inMaintenance])).toEqual([
-      ['db', true],
-      ['api', false],
+    expect(inside.alerts.map(({ monitorId }) => monitorId)).toEqual(['api']);
+    expect(atEnd.alerts.map(({ monitorId }) => monitorId)).toEqual(['db']);
+    expect(everything.alerts).toEqual([]);
+  });
+});
+
+describe('MonitorHub after an upgrade from a release without alert tracking', () => {
+  it('never alerts for an incident that was already open, and alerts for the next one', () => {
+    // The schema as releases before alert tracking left it, with one open incident.
+    const db = new DatabaseSync(':memory:');
+    db.exec(`
+      CREATE TABLE _migrations (id INTEGER PRIMARY KEY);
+      INSERT INTO _migrations (id) VALUES (1), (2);
+      CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+      CREATE TABLE monitors (id TEXT PRIMARY KEY, started_at INTEGER, heartbeat TEXT) WITHOUT ROWID;
+      CREATE TABLE incidents (
+        id INTEGER PRIMARY KEY, monitor_id TEXT NOT NULL, starts TEXT NOT NULL,
+        errors TEXT NOT NULL, end_at INTEGER
+      );
+      CREATE TABLE samples (at INTEGER PRIMARY KEY, data TEXT NOT NULL);
+      CREATE TABLE maintenances (id TEXT PRIMARY KEY, data TEXT NOT NULL) WITHOUT ROWID;
+      INSERT INTO monitors (id, started_at) VALUES ('api', ${T0 - 3600});
+      INSERT INTO incidents (monitor_id, starts, errors) VALUES ('api', '[${T0 - 600}]', '["Timeout"]');
+    `);
+    const { hub } = createHub({}, db);
+
+    expect(hub.record(T0, [check('api', down('HTTP 502'))], POLICY).alerts).toEqual([]);
+    expect(hub.record(T0 + 60, [check('api', up())], POLICY).alerts).toEqual([]);
+    expect(hub.record(T0 + 120, [check('api', down())], POLICY).alerts).toMatchObject([
+      { monitorId: 'api', kind: 'down' },
     ]);
-    expect(atEnd[0]?.inMaintenance).toBe(false);
-    expect(everything[0]?.inMaintenance).toBe(true);
   });
 });

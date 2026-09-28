@@ -33,6 +33,8 @@ export interface NotificationContext {
   currentTime: number;
   reason: string;
   timeZone: string;
+  /** Monitors behind this one that are down with it; their own alerts are held back. */
+  alsoDown: string[];
 }
 
 interface WebhookResult {
@@ -55,11 +57,13 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
     ].join('\n');
   }
 
+  const alsoDown = ctx.alsoDown.length > 0 ? [`Also down: ${ctx.alsoDown.join(', ')}`] : [];
   if (currentTime === incidentStartTime) {
     return [
       `🔴 ${monitor.name} is down`,
       `Detected at ${currentTimeFormatted}`,
       `Reason: ${reason || 'Unknown'}`,
+      ...alsoDown,
     ].join('\n');
   }
 
@@ -67,6 +71,7 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
     `🔴 ${monitor.name} is still down`,
     `Down since ${incidentStartFormatted} (${downtimeMinutes} minutes)`,
     `Reason: ${reason || 'Unknown'}`,
+    ...alsoDown,
   ].join('\n');
 }
 
@@ -130,6 +135,7 @@ export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook)
     isInitialOutage: !isUp && currentTime === incidentStartTime,
     downtimeMinutes,
     reason: reason || 'Unknown',
+    alsoDown: ctx.alsoDown,
     timestamp,
     timestampIso,
     incidentKey: `${monitor.id}:${incidentStartTime}`,

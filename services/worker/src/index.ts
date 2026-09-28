@@ -18,18 +18,12 @@ import {
   formatNotificationMessage,
   type NotificationContext,
 } from './notifications/webhook';
-import type { CheckRecord } from './hub/monitor-hub';
+import type { AlertPolicy, CheckRecord } from './hub/monitor-hub';
 
 // Durable Object classes must be exports of the Worker's main module.
 export { MonitorHub } from './hub/monitor-hub';
 
 const log = createLogger('Worker');
-
-const GRACE_PERIOD_BUFFER_SECONDS = 30;
-
-function skipsNotification(monitorId: string, config: WorkerConfig): boolean {
-  return (config.notification?.skipNotificationIds ?? []).includes(monitorId);
-}
 
 async function safeCallback<T extends unknown[]>(
   callback: ((...args: T) => Promise<void>) | undefined,
@@ -42,44 +36,6 @@ async function safeCallback<T extends unknown[]>(
   } catch (error) {
     log.error(`${label} error`, { error: String(error) });
   }
-}
-
-/** A grace period delays notification until it elapses; an UP notifies only if the DOWN before it would have. */
-function shouldNotify(
-  incidentStartTime: number,
-  currentTime: number,
-  statusChanged: boolean,
-  isUp: boolean,
-  config: WorkerConfig,
-  ignoreGracePeriod: boolean,
-): boolean {
-  if (ignoreGracePeriod) return statusChanged;
-
-  const gracePeriod = config.notification?.gracePeriod;
-
-  if (gracePeriod === undefined) {
-    return statusChanged;
-  }
-
-  const gracePeriodSeconds = gracePeriod * 60;
-  const timeSinceIncident = currentTime - incidentStartTime;
-  const gracePeriodReached = timeSinceIncident >= gracePeriodSeconds - GRACE_PERIOD_BUFFER_SECONDS;
-
-  if (!gracePeriodReached) {
-    return false;
-  }
-
-  if (statusChanged) {
-    return true;
-  }
-
-  if (!isUp) {
-    const justCrossedThreshold =
-      timeSinceIncident < gracePeriodSeconds + GRACE_PERIOD_BUFFER_SECONDS;
-    return justCrossedThreshold;
-  }
-
-  return false;
 }
 
 export interface WorkerDeps {
@@ -124,42 +80,34 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
     }),
   );
 
-  const updates = await hub.record(currentTime, records);
+  const policy: AlertPolicy | undefined = notifier
+    ? {
+        gracePeriodSeconds: (config.notification?.gracePeriod ?? 0) * 60,
+        skipIds: config.notification?.skipNotificationIds ?? [],
+        skipErrorChanges: Boolean(config.notification?.skipErrorChangeNotification),
+      }
+    : undefined;
+  const { updates, alerts } = await hub.record(currentTime, records, policy);
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
+
+  for (const alert of notifier ? alerts : []) {
+    const monitor = monitors.get(alert.monitorId);
+    if (!monitor) continue;
+    const ctx: NotificationContext = {
+      monitor,
+      isUp: alert.kind === 'up',
+      incidentStartTime: alert.incidentStartTime,
+      currentTime,
+      reason: alert.error,
+      timeZone: config.notification?.timeZone ?? 'UTC',
+      alsoDown: alert.alsoDown,
+    };
+    await notifier?.send(ctx, deps.formatNotificationMessage(ctx));
+  }
 
   for (const update of updates) {
     const monitor = monitors.get(update.monitorId);
     if (!monitor) continue;
-
-    if (notifier && !update.inMaintenance && !skipsNotification(monitor.id, config)) {
-      const skipErrorChanges = Boolean(config.notification?.skipErrorChangeNotification);
-      const statusChangedForNotification =
-        update.changeType === 'up' ||
-        update.changeType === 'down' ||
-        (update.changeType === 'error' && !skipErrorChanges);
-
-      const shouldSend = shouldNotify(
-        update.incidentStartTime,
-        currentTime,
-        statusChangedForNotification,
-        update.isUp,
-        config,
-        monitor.method === 'HEARTBEAT',
-      );
-
-      if (shouldSend) {
-        const ctx: NotificationContext = {
-          monitor,
-          isUp: update.isUp,
-          incidentStartTime: update.incidentStartTime,
-          currentTime,
-          reason: update.error,
-          timeZone: config.notification?.timeZone ?? 'UTC',
-        };
-        const message = deps.formatNotificationMessage(ctx);
-        await notifier.send(ctx, message);
-      }
-    }
 
     if (update.statusChanged) {
       await safeCallback(

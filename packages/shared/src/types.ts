@@ -105,6 +105,8 @@ export type PullMonitor = {
    * stored, and alerted, only signed-in admins see it.
    */
   private?: boolean;
+  /** Monitor ids this one reaches its target through. While one of them is down, this one sends no alert of its own. */
+  dependsOn?: string[];
 };
 
 export type HeartbeatMonitor = {
@@ -114,6 +116,7 @@ export type HeartbeatMonitor = {
   periodSeconds: number;
   graceSeconds: number;
   private?: boolean;
+  dependsOn?: string[];
   link?: string | false;
   tooltip?: string;
 };

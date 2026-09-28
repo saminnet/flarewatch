@@ -1,4 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
+import { alsoDownSuffix } from './format';
 
 export function ntfyTemplate(ctx: TemplateContext): TemplateOutput {
   let title: string;
@@ -9,10 +10,10 @@ export function ntfyTemplate(ctx: TemplateContext): TemplateOutput {
     body = `Recovered after ${ctx.downtimeMinutes} minutes of downtime.`;
   } else if (ctx.isInitialOutage) {
     title = `${ctx.monitorName} is down`;
-    body = `Detected at ${ctx.timestamp}\nReason: ${ctx.reason || 'Unknown'}`;
+    body = `Detected at ${ctx.timestamp}\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
   } else {
     title = `${ctx.monitorName} is still down`;
-    body = `Down for ${ctx.downtimeMinutes} minutes\nReason: ${ctx.reason || 'Unknown'}`;
+    body = `Down for ${ctx.downtimeMinutes} minutes\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
   }
 
   return {

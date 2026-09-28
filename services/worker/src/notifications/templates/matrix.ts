@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { stripControlChars } from './format';
+import { alsoDownList, stripControlChars } from './format';
 
 export function matrixTemplate(ctx: TemplateContext): TemplateOutput {
   const emoji = ctx.isUp ? '✅' : '🔴';
@@ -14,6 +14,9 @@ export function matrixTemplate(ctx: TemplateContext): TemplateOutput {
   if (!ctx.isUp && ctx.reason) {
     lines.push(`Reason: ${stripControlChars(ctx.reason)}`);
   }
+
+  const alsoDown = alsoDownList(ctx);
+  if (alsoDown) lines.push(`Also down: ${stripControlChars(alsoDown)}`);
 
   lines.push(stripControlChars(ctx.targetUrl));
 

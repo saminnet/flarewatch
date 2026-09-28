@@ -20,6 +20,7 @@ const createContext = (overrides: Partial<NotificationContext> = {}): Notificati
   currentTime: 2000,
   reason: 'Connection refused',
   timeZone: 'UTC',
+  alsoDown: [],
   ...overrides,
 });
 
@@ -74,6 +75,12 @@ describe('webhook notifications', () => {
 
       expect(message).toContain('Test Monitor is up');
       expect(message).toContain('recovered');
+    });
+
+    it('ends a down message with the monitors down behind it', () => {
+      const message = formatNotificationMessage(createContext({ alsoDown: ['App', 'Dashboard'] }));
+
+      expect(message).toMatch(/\nAlso down: App, Dashboard$/);
     });
 
     it('uses "Unknown" as fallback when reason is empty', () => {

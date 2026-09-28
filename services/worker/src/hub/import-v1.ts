@@ -70,7 +70,8 @@ function write(sql: Sql, { state, signals, maintenances }: V1Data): void {
     for (const [id, incidents] of Object.entries(state.incident)) {
       for (const incident of incidents) {
         sql.exec(
-          'INSERT INTO incidents (monitor_id, starts, errors, end_at) VALUES (?, ?, ?, ?)',
+          // 1.x kept no record of which incidents alerted.
+          "INSERT INTO incidents (monitor_id, starts, errors, end_at, alert) VALUES (?, ?, ?, ?, 'silent')",
           id,
           JSON.stringify(capSegments(incident.start)),
           JSON.stringify(capSegments(incident.error)),

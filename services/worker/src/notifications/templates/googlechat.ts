@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { jsonOutput, stripControlChars } from './format';
+import { alsoDownList, jsonOutput, stripControlChars } from './format';
 
 export function googleChatTemplate(ctx: TemplateContext): TemplateOutput {
   const emoji = ctx.isUp ? '✅' : '🔴';
@@ -15,6 +15,13 @@ export function googleChatTemplate(ctx: TemplateContext): TemplateOutput {
     // Chat has no escape for <users/all> or <url|text>, so the brackets become look-alikes.
     lines.push(
       `*Reason:* ${stripControlChars(ctx.reason).replaceAll('<', '‹').replaceAll('>', '›')}`,
+    );
+  }
+
+  const alsoDown = alsoDownList(ctx);
+  if (alsoDown) {
+    lines.push(
+      `*Also down:* ${stripControlChars(alsoDown).replaceAll('<', '‹').replaceAll('>', '›')}`,
     );
   }
 

@@ -21,6 +21,7 @@ function createNotificationContext() {
     currentTime: 1000,
     reason: 'Connection refused',
     timeZone: 'UTC',
+    alsoDown: [],
   };
 }
 

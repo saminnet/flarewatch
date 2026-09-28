@@ -38,17 +38,6 @@ function createEnv(maintenances: Maintenance[] = []) {
   return { hub, env };
 }
 
-/** Records an earlier failed run, so the next run sees an open incident from incidentStartTime. */
-function openIncident(
-  env: ReturnType<typeof createEnv>,
-  monitor: MonitorTarget,
-  incidentStartTime: number,
-) {
-  env.hub.record(incidentStartTime, [
-    { monitor, check: { location: 'SFO', result: { ok: false, error: 'Unavailable' } } },
-  ]);
-}
-
 function createMaintenance(overrides: Partial<Maintenance> = {}): Maintenance {
   return {
     id: 'maintenance',
@@ -155,45 +144,6 @@ describe('worker', () => {
       const { env } = createEnv();
 
       await runScheduled(env);
-
-      expect(notifierSendMock).not.toHaveBeenCalled();
-    });
-
-    it('notifies for a status change after the grace period is reached', async () => {
-      setNotifications({ gracePeriod: 1 });
-      const test = createEnv();
-      openIncident(test, createMonitor(), NOW_SECONDS - 90);
-
-      await runScheduled(test.env);
-
-      expect(notifierSendMock).toHaveBeenCalledTimes(1);
-      expect(notifierSendMock.mock.calls[0]?.[0]).toMatchObject({
-        isUp: true,
-        incidentStartTime: NOW_SECONDS - 90,
-      });
-    });
-
-    it('notifies for an unchanged outage at the buffered grace-period threshold', async () => {
-      setNotifications({ gracePeriod: 2 });
-      mockDown();
-      const test = createEnv();
-      openIncident(test, createMonitor(), NOW_SECONDS - 90);
-
-      await runScheduled(test.env);
-
-      expect(notifierSendMock).toHaveBeenCalledTimes(1);
-      expect(notifierSendMock.mock.calls[0]?.[0]).toMatchObject({
-        isUp: false,
-        incidentStartTime: NOW_SECONDS - 90,
-      });
-    });
-
-    it('suppresses an up transition when the outage ended before its grace period', async () => {
-      setNotifications({ gracePeriod: 1 });
-      const test = createEnv();
-      openIncident(test, createMonitor(), NOW_SECONDS - 20);
-
-      await runScheduled(test.env);
 
       expect(notifierSendMock).not.toHaveBeenCalled();
     });
