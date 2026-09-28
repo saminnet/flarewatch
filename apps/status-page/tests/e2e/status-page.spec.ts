@@ -782,11 +782,21 @@ test('embed route renders seeded monitor status and variants', async ({ page, re
 
   await expect(page.getByText('Example Domain')).toBeVisible();
   await expect(page.getByText('74ms (edge HEL)')).toBeVisible();
+  await expect(page.getByRole('banner')).toHaveCount(0);
+  await expect(page.getByRole('contentinfo')).toHaveCount(0);
 
   await page.goto('/embed/demo_cloudflare_status?theme=dark');
   await expect(page.getByText('Cloudflare Status API')).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).toBeVisible();
-  await expect(page.locator('.dark')).toBeVisible();
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/embed/demo_cloudflare_status?theme=light');
+  await expect(page.getByText('Cloudflare Status API')).toBeVisible();
+  await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+  await page.goto('/embed/demo_cloudflare_status');
+  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  await page.emulateMedia({ colorScheme: 'light' });
 
   await page.goto('/embed/demo_cloudflare_status?minimal=true');
   await expect(page.getByText(/99\./)).toBeVisible();

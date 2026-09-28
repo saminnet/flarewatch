@@ -1,4 +1,4 @@
-import { getRouteApi, Outlet, HeadContent, Scripts } from '@tanstack/react-router';
+import { getRouteApi, Outlet, HeadContent, Scripts, useMatch } from '@tanstack/react-router';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { VisitorViewBar } from '@/components/visitor-view-bar';
@@ -8,8 +8,12 @@ import { sanitizeThemeVars } from '@flarewatch/shared';
 const rootRoute = getRouteApi('__root__');
 
 export function RootComponent() {
-  const { theme, statusPage } = rootRoute.useLoaderData();
+  const { theme: themePreference, statusPage } = rootRoute.useLoaderData();
   const { session } = rootRoute.useRouteContext();
+  // An embed sits in someone else's page: no site chrome, and its theme comes from the URL.
+  const embedTheme = useMatch({ from: '/embed/$monitorId', shouldThrow: false })?.search.theme;
+  const theme =
+    embedTheme === undefined ? themePreference : embedTheme === 'auto' ? 'system' : embedTheme;
   const { view } = rootRoute.useSearch();
   const visitorView = session.viewer !== 'visitor' && view === 'visitor';
   const themeInitScript = getThemeInitScript(theme);
@@ -40,24 +44,30 @@ export function RootComponent() {
         {themeVars && <style>{themeVars}</style>}
       </head>
       <body className="flex min-h-full flex-col bg-background font-sans text-foreground antialiased">
-        <a
-          href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-100 focus:bg-card focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg"
-        >
-          Skip to main content
-        </a>
-        <Header config={statusPage} session={session} visitorView={visitorView} />
-        {visitorView && <VisitorViewBar />}
+        {embedTheme === undefined ? (
+          <>
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-100 focus:bg-card focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg"
+            >
+              Skip to main content
+            </a>
+            <Header config={statusPage} session={session} visitorView={visitorView} />
+            {visitorView && <VisitorViewBar />}
 
-        <main id="main-content" className="flex-1">
+            <main id="main-content" className="flex-1">
+              <Outlet />
+            </main>
+
+            <Footer
+              config={statusPage}
+              theme={theme}
+              showSignIn={session.viewer === 'visitor' && session.canSignIn}
+            />
+          </>
+        ) : (
           <Outlet />
-        </main>
-
-        <Footer
-          config={statusPage}
-          theme={theme}
-          showSignIn={session.viewer === 'visitor' && session.canSignIn}
-        />
+        )}
 
         <Scripts />
       </body>

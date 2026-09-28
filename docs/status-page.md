@@ -81,9 +81,15 @@ vp exec --filter status-page -- wrangler secret delete FLAREWATCH_STATUS_PAGE_BA
 
 ## API, badges and embeds
 
-| URL                       | Returns                                                                            |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `/api/data`               | Current status of every public monitor, as JSON.                                   |
-| `/api/maintenances`       | Maintenance windows, as JSON.                                                      |
-| `/api/badge?id=<monitor>` | An SVG badge. `label`, `up`, `down`, `colorUp` and `colorDown` change it.          |
-| `/embed/<monitor>`        | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`. |
+| URL                       | Returns                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| `/api/data`               | Current status of every public monitor, as JSON.                                       |
+| `/api/maintenances`       | Maintenance windows, as JSON.                                                          |
+| `/api/badge?id=<monitor>` | Badge data for shields.io. `label`, `up`, `down`, `colorUp` and `colorDown` change it. |
+| `/embed/<monitor>`        | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`.     |
+
+The badge route returns JSON for [shields.io's endpoint badge](https://shields.io/badges/endpoint-badge), not an image. Pass it to shields.io, URL-encoded:
+
+```md
+![API status](https://img.shields.io/endpoint?url=https%3A%2F%2Fstatus.example.com%2Fapi%2Fbadge%3Fid%3Dapi)
+```

@@ -15,7 +15,13 @@ notification: {
 },
 ```
 
-Webhook URLs usually contain a secret. Keep them out of a public repo.
+Webhook URLs usually contain a secret, and a fork of a public repo is public too. To keep them out of git, put them in the `FLAREWATCH_WEBHOOKS` [GitHub secret](deploy.md#3-add-secrets-to-your-fork) instead, as JSON in the same shape:
+
+```json
+[{ "url": "https://hooks.slack.com/services/...", "template": "slack" }]
+```
+
+Each deploy copies the secret to the monitor Worker. It alerts these webhooks as well as the ones in `worker.ts`. Tokens in `headers` or `options` can go in the secret too. The Worker skips a broken entry and logs why. The others still alert.
 
 A monitor in an active [maintenance window](status-page.md#maintenance) doesn't alert. If it's still down when the window ends, it alerts then.
 

@@ -49,7 +49,11 @@ function maintenance(monitors: string[], start: number, end: number): Maintenanc
 }
 
 /** A deployment with an in-memory hub. `run` is one cron run; `alerts` drains what it sent. */
-function deployment(monitors: Monitor[], notification: NotificationConfig = {}) {
+function deployment(
+  monitors: Monitor[],
+  notification: NotificationConfig = {},
+  secretWebhooks?: string,
+) {
   const db = new DatabaseSync(':memory:');
   let { hub } = createHub({}, db);
   const failing = new Map<string, string>();
@@ -94,6 +98,9 @@ function deployment(monitors: Monitor[], notification: NotificationConfig = {}) 
       unformattable.delete(id);
     },
     deliveryAttempts: () => fetcher.mock.calls.length,
+    requests: () => fetcher.mock.calls.map(([, init]) => init),
+    /** The host of every webhook call so far. */
+    deliveredTo: () => fetcher.mock.calls.map(([url]) => new URL(String(url)).host),
     /** Runs `hook` inside the next webhook call, as a run that overlaps the delivery. */
     whileDelivering(hook: () => Promise<void>) {
       duringDelivery = hook;
@@ -105,7 +112,10 @@ function deployment(monitors: Monitor[], notification: NotificationConfig = {}) 
     async run(at: number) {
       vi.setSystemTime(at * 1000);
       await runChecks(
-        { MONITOR_HUB: hubNamespace(hub) },
+        {
+          MONITOR_HUB: hubNamespace(hub),
+          ...(secretWebhooks !== undefined && { FLAREWATCH_WEBHOOKS: secretWebhooks }),
+        },
         {
           checkMonitor: async (monitor) => {
             const error = failing.get(monitor.id);
@@ -664,5 +674,89 @@ describe('alert delivery', () => {
     expect(record(T + 60).alerts).toEqual([]);
     expect(record(T + 15 * 60).alerts).toEqual([]);
     expect(record(T + 20 * 60).alerts).toMatchObject([{ kind: 'down' }]);
+  });
+});
+
+describe('webhooks in the FLAREWATCH_WEBHOOKS secret', () => {
+  function logErrors() {
+    const logged: unknown[] = [];
+    vi.spyOn(console, 'error').mockImplementation((line: unknown) => logged.push(line));
+    return logged;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('alerts through the secret when the config has no webhook', async () => {
+    const d = deployment([pull('api')], { webhook: [] }, '{"url": "https://secret.example.com"}');
+    d.down('api');
+
+    await d.run(T);
+
+    expect(d.alerts()).toEqual(['api down']);
+    expect(d.deliveredTo()).toEqual(['secret.example.com']);
+  });
+
+  it('alerts the config webhook and every webhook in the secret', async () => {
+    const secret = JSON.stringify([
+      { url: 'https://one.example.com' },
+      { url: 'https://two.example.com', template: 'slack' },
+    ]);
+    const d = deployment([pull('api')], {}, secret);
+    d.down('api');
+
+    await d.run(T);
+
+    expect(d.deliveredTo().sort()).toEqual([
+      'hooks.example.com',
+      'one.example.com',
+      'two.example.com',
+    ]);
+  });
+
+  it('skips a bad entry and still alerts the rest, without logging the secret', async () => {
+    const logged = logErrors();
+    const secret = JSON.stringify([
+      { url: 'not-a-url/T0SECRET', template: 'slack' },
+      { url: 'https://two.example.com', template: 'nope' },
+      { url: 'https://three.example.com', headers: { T0SECRET: ['not', 'a', 'string'] } },
+      { url: 'https://four.example.com' },
+    ]);
+    const d = deployment([pull('api')], { webhook: [] }, secret);
+    d.down('api');
+
+    await d.run(T);
+
+    expect(d.deliveredTo()).toEqual(['four.example.com']);
+    expect(logged).toHaveLength(3);
+    expect(logged.join('\n')).toMatch(/webhook 1\.url/);
+    expect(logged.join('\n')).toMatch(/webhook 2\.template/);
+    expect(logged.join('\n')).toMatch(/webhook 3\.headers/);
+    expect(logged.join('\n')).not.toMatch(/T0SECRET|two\.example\.com/);
+  });
+
+  it('keeps alerting the config webhook when the secret is not JSON', async () => {
+    const logged = logErrors();
+    const d = deployment([pull('api')], {}, 'https://hooks.slack.com/services/T0SECRET');
+    d.down('api');
+
+    await d.run(T);
+
+    expect(d.deliveredTo()).toEqual(['hooks.example.com']);
+    expect(logged.join('\n')).toMatch(/not valid JSON/);
+    expect(logged.join('\n')).not.toMatch(/T0SECRET/);
+  });
+
+  it('sends the method upper-cased when the secret writes it in lower case', async () => {
+    const secret =
+      '{"url": "https://one.example.com", "method": "patch", "payload": {"text": "$MSG"}}';
+    const d = deployment([pull('api')], { webhook: [] }, secret);
+    d.down('api');
+
+    await d.run(T);
+
+    expect(d.alerts()).toEqual(['api down']);
+    expect(d.requests()).toMatchObject([{ method: 'PATCH' }]);
   });
 });

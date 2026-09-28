@@ -2,6 +2,16 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## 2.3.0 - 2026-09-28
+
+### Added
+
+- The optional `FLAREWATCH_WEBHOOKS` secret holds alert webhooks as JSON, so their URLs and tokens stay out of your fork. See [Alerts](docs/alerts.md).
+
+### Fixed
+
+- `/embed/<monitor>` shows only the status card, without the page header and footer, and `theme=light` or `theme=dark` applies to the whole frame.
+
 ## 2.2.0 - 2026-09-28
 
 ### Added

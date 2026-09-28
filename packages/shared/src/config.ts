@@ -401,6 +401,35 @@ export function configIssues(value: unknown): string[] {
   });
 }
 
+/**
+ * The webhooks in the FLAREWATCH_WEBHOOKS secret, one or a list as in `notification.webhook`.
+ * A bad entry is dropped with an issue; the others still alert. Issues never quote the secret.
+ */
+export function parseSecretWebhooks(text: string) {
+  const webhooks: Webhook[] = [];
+  const issues: string[] = [];
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    issues.push('not valid JSON');
+    return { webhooks, issues };
+  }
+  const entries: unknown[] = Array.isArray(value) ? value : [value];
+  entries.forEach((entry, index) => {
+    const result = webhookSchema.safeParse(entry);
+    // The parsed value, not the entry: parsing upper-cases the method.
+    if (result.success && isWebhook(result.data)) webhooks.push(result.data);
+    for (const { path, message } of result.error?.issues ?? []) {
+      // The top field only: a deeper key sits inside headers or options and could be a token.
+      issues.push(
+        `webhook ${index + 1}${path.length > 0 ? `.${String(path[0])}` : ''}: ${message}`,
+      );
+    }
+  });
+  return { webhooks, issues };
+}
+
 export function accessConfigIssues(value: unknown, pageGroups: string[]): string[] {
   const result = accessConfigSchema.safeParse(value);
   if (!result.success) {
@@ -430,6 +459,7 @@ export function parseHeartbeatState(value: unknown): HeartbeatState | null {
 
 export const isHubView = asTypeGuard<HubView>(hubViewSchema);
 const isAccessConfig = asTypeGuard<AccessConfig>(accessConfigSchema);
+const isWebhook = asTypeGuard<Webhook>(webhookSchema);
 export const isLatencySamples = asTypeGuard<LatencySample[]>(z.array(latencySampleSchema));
 
 export function parseMaintenances(value: unknown): Maintenance[] {

@@ -4,6 +4,8 @@ import {
   failure,
   type CheckResultWithLocation,
   type MonitorTarget,
+  parseSecretWebhooks,
+  type WebhookConfig,
   type WorkerConfig,
 } from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
@@ -38,6 +40,19 @@ async function safeCallback<T extends unknown[]>(
   }
 }
 
+/** The config's webhooks plus FLAREWATCH_WEBHOOKS, which keeps webhook URLs out of a public fork. */
+function alertWebhooks(
+  configured: WebhookConfig | undefined,
+  secret: string | undefined,
+): WebhookConfig | undefined {
+  if (!secret) return configured;
+  const { webhooks, issues } = parseSecretWebhooks(secret);
+  for (const issue of issues) log.error('Skipping part of FLAREWATCH_WEBHOOKS', { issue });
+  const listed =
+    configured === undefined ? [] : Array.isArray(configured) ? configured : [configured];
+  return [...listed, ...webhooks];
+}
+
 export interface WorkerDeps {
   readonly checkMonitor: (
     target: MonitorTarget,
@@ -65,7 +80,9 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const hub = getHub(env);
 
   const currentTime = Math.floor(Date.now() / 1000);
-  const notifier = deps.createNotifier(config.notification?.webhook);
+  const notifier = deps.createNotifier(
+    alertWebhooks(config.notification?.webhook, env.FLAREWATCH_WEBHOOKS),
+  );
 
   const records = await Promise.all(
     config.monitors.map(async (monitor): Promise<CheckRecord> => {

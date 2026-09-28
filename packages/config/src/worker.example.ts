@@ -117,7 +117,8 @@ export const workerConfig: WorkerConfig = {
   ],
 
   // Notifications (optional)
-  // Never commit real webhook URLs/tokens into a public repo.
+  // Never commit real webhook URLs/tokens into a public repo. Put them in the
+  // FLAREWATCH_WEBHOOKS secret instead: see docs/alerts.md.
   //
   // notification: {
   //   // Single webhook (templates)

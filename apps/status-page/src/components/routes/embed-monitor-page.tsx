@@ -7,26 +7,7 @@ import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import { formatUptimeDisplay } from '@/lib/uptime';
 import { cn } from '@/lib/utils';
 
-type EmbedTheme = 'light' | 'dark' | 'auto';
-
-interface EmbedWrapperProps {
-  children: React.ReactNode;
-  theme: EmbedTheme | undefined;
-  className?: string;
-}
-
 const embedRoute = getRouteApi('/embed/$monitorId');
-
-function EmbedWrapper({ children, theme, className }: EmbedWrapperProps): React.ReactNode {
-  return (
-    <div
-      className={cn(className, theme === 'dark' && 'dark')}
-      style={{ colorScheme: theme === 'auto' ? undefined : theme }}
-    >
-      {children}
-    </div>
-  );
-}
 
 const EMPTY_STATE: StatusView = { lastUpdate: 0, monitors: {} };
 
@@ -35,7 +16,7 @@ export function EmbedPage() {
   const {
     data: { state, monitors },
   } = useSuspenseQuery(snapshotQuery('visitor'));
-  const { theme, minimal } = embedRoute.useSearch();
+  const { minimal } = embedRoute.useSearch();
 
   const monitor = monitors.find((m) => m.id === monitorId);
 
@@ -47,40 +28,37 @@ export function EmbedPage() {
 
   if (!monitor) {
     return (
-      <EmbedWrapper theme={theme} className="h-full flex items-center justify-center p-4">
+      <div className="h-full flex items-center justify-center p-4">
         <div className="text-sm text-destructive">{`Monitor with ID ${monitorId} not found.`}</div>
-      </EmbedWrapper>
+      </div>
     );
   }
 
   if (!state) {
     return (
-      <EmbedWrapper theme={theme} className="h-full flex items-center justify-center p-4">
+      <div className="h-full flex items-center justify-center p-4">
         <div className="text-sm text-muted-foreground">
           Monitor state is unavailable. Check that the monitoring worker is deployed.
         </div>
-      </EmbedWrapper>
+      </div>
     );
   }
 
   if (minimal) {
     return (
-      <EmbedWrapper
-        theme={theme}
-        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium"
-      >
+      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium">
         <span
           className={cn('w-2 h-2 rounded-full', isUp ? 'bg-status-operational' : 'bg-status-down')}
         />
         <span className={cn('font-mono', statusColor.text)}>
           {formatUptimeDisplay(uptimePercent, hasStarted, 1)}
         </span>
-      </EmbedWrapper>
+      </div>
     );
   }
 
   return (
-    <EmbedWrapper theme={theme} className="p-3">
+    <div className="p-3">
       <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 shadow-sm">
         <div className="shrink-0">
           <StatusIcon isUp={isUp} />
@@ -108,6 +86,6 @@ export function EmbedPage() {
           {formatUptimeDisplay(uptimePercent, hasStarted, 2)}
         </div>
       </div>
-    </EmbedWrapper>
+    </div>
   );
 }

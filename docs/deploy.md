@@ -35,6 +35,7 @@ In your fork, open **Settings > Secrets and variables > Actions**.
 | `FLAREWATCH_OIDC_SECRETS`     | Your providers' client secrets, as JSON: `{"github": "..."}`.                                 |
 | `HEARTBEAT_SECRET`            | [Heartbeat](monitors.md#heartbeats) ping URLs. Any long random string.                        |
 | `FLAREWATCH_PROXY_TOKEN`      | A [check proxy](monitors.md#other-regions-and-private-networks).                              |
+| `FLAREWATCH_WEBHOOKS`         | [Alert webhooks](alerts.md) you keep out of git, as JSON.                                     |
 
 Make the password secret from a username and password, and paste the whole output as the value:
 
@@ -83,26 +84,30 @@ See Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/plat
 
 ## Update your fork
 
-FlareWatch gets new releases in [saminnet/flarewatch](https://github.com/saminnet/flarewatch). Read the [changelog](../CHANGELOG.md) for breaking changes before you update.
+New releases land in [saminnet/flarewatch](https://github.com/saminnet/flarewatch). Read the [changelog](../CHANGELOG.md) for breaking changes before you update.
 
-Your fork and each release both change files in `packages/config`. When a release changes those files, expect a conflict.
+Most updates happen on GitHub. Open your fork, select **Sync fork**, then **Update branch**.
 
-If your fork is only behind, update it on GitHub. Open your fork, select **Sync fork**, then **Update branch**.
-
-If the sync runs into conflicts, update from a clone of your fork:
+Your config lives in `packages/config`, and releases change those files too. When a release changes the same part of a file as you did, GitHub can't sync and offers a pull request instead. Merge from a clone of your fork:
 
 ```bash
 git remote add upstream https://github.com/saminnet/flarewatch.git
 git fetch upstream
-git checkout main
+git switch main
 git merge upstream/main
 ```
 
-Git lists each file in conflict. In `worker.ts`, `public.ts` and `access.ts`, keep your monitors and settings, and make any config change the changelog asks for. Take the release's side everywhere else. Commit the merge, then push to `main`.
+Git lists each file in conflict. In `worker.ts`, `public.ts` and `access.ts`, keep your monitors and settings, and make any config change the changelog asks for. In `apps/status-page/wrangler.jsonc`, take the release's version and put your [custom domain](#custom-domain) back if you set one. Take the release's side everywhere else. Commit the merge, then push to `main`.
 
-Never pick an option that discards your fork's commits or force-syncs over `main`. That throws away your config. Your secrets stay in GitHub either way.
+Don't pick the option in the **Sync fork** menu that discards your commits, and don't run `gh repo sync --force`. Both throw away your config. Your secrets are safe either way: they live in the repo settings, not in git.
 
-A push to `main` starts the deploy, as in step 5. If a web update did not start it, run **CI and Deploy** from the **Actions** tab.
+A push to `main` starts the deploy, as in step 5. If a sync on GitHub didn't start it, run **CI and Deploy** from the **Actions** tab.
+
+## Upgrading from 1.x
+
+Remove `kvWriteCooldownMinutes` from `worker.ts` if you set it, then push. On its first run, the new version copies your uptime history, heartbeat runs and maintenance windows from KV into the hub. It leaves the 1.x data in KV as it was, so you can still go back to 1.x, and adds one key, `imported_to_hub`, with the time of the copy.
+
+A later major version will drop this copy step. Its deploy checks for `imported_to_hub` first, so if you're on 1.x, deploy a 2.x release before you jump further ahead.
 
 ## Uninstall
 
@@ -113,9 +118,3 @@ vp exec --filter worker -- wrangler kv namespace delete --namespace-id "<flarewa
 ```
 
 `wrangler kv namespace list` shows its ID. Uptime history lives in the monitor Worker's Durable Object. Afterwards, check the Durable Objects page in the Cloudflare dashboard and delete the namespace there if it's still listed.
-
-## Upgrading from 1.x
-
-Remove `kvWriteCooldownMinutes` from `worker.ts` if you set it, then push. On its first run, the new version copies your uptime history, heartbeat runs and maintenance windows from KV into the hub. It leaves the 1.x data in KV as it was, so you can still go back to 1.x, and adds one key, `imported_to_hub`, with the time of the copy.
-
-A later major version will drop this copy step. Its deploy checks for `imported_to_hub` first, so if you're on 1.x, deploy a 2.x release before you jump further ahead.

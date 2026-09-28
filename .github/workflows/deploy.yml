@@ -172,6 +172,7 @@ jobs:
       - name: Deploy with Wrangler
         env:
           FLAREWATCH_PROXY_TOKEN: ${{ secrets.FLAREWATCH_PROXY_TOKEN }}
+          FLAREWATCH_WEBHOOKS: ${{ secrets.FLAREWATCH_WEBHOOKS }}
           FLAREWATCH_ADMIN_BASIC_AUTH: ${{ secrets.FLAREWATCH_ADMIN_BASIC_AUTH }}
           FLAREWATCH_AUTH_SECRET: ${{ secrets.FLAREWATCH_AUTH_SECRET }}
           FLAREWATCH_OIDC_SECRETS: ${{ secrets.FLAREWATCH_OIDC_SECRETS }}
@@ -198,6 +199,7 @@ jobs:
           vp exec --filter worker -- wrangler deploy --config wrangler.toml
           put_secret worker wrangler.toml FLAREWATCH_PROXY_TOKEN "$FLAREWATCH_PROXY_TOKEN"
           put_secret worker wrangler.toml HEARTBEAT_SECRET "$HEARTBEAT_SECRET"
+          put_secret worker wrangler.toml FLAREWATCH_WEBHOOKS "$FLAREWATCH_WEBHOOKS"
 
           echo "Building status page"
           vp run --filter status-page build
