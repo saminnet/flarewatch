@@ -18,7 +18,7 @@ import {
   formatNotificationMessage,
   type NotificationContext,
 } from './notifications/webhook';
-import type { AlertPolicy, CheckRecord } from './hub/monitor-hub';
+import type { Alert, AlertPolicy, CheckRecord } from './hub/monitor-hub';
 
 // Durable Object classes must be exports of the Worker's main module.
 export { MonitorHub } from './hub/monitor-hub';
@@ -90,16 +90,17 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const { updates, alerts } = await hub.record(currentTime, records, policy);
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
-  const outcomes: { incident: number; delivered: boolean }[] = [];
-  if (notifier) {
-    for (const alert of alerts) {
+  const deliver = async (batch: Alert[]) => {
+    const outcomes: { incident: number; delivered: boolean }[] = [];
+    if (!notifier) return outcomes;
+    for (const alert of batch) {
       const monitor = monitors.get(alert.monitorId);
       if (!monitor) continue;
       const ctx: NotificationContext = {
         monitor,
         isUp: alert.kind === 'up',
         incidentStartTime: alert.incidentStartTime,
-        currentTime,
+        currentTime: alert.at ?? currentTime,
         reason: alert.error,
         timeZone: config.notification?.timeZone ?? 'UTC',
         alsoDown: alert.alsoDown,
@@ -113,8 +114,10 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
       }
       if (alert.kind === 'down') outcomes.push({ incident: alert.incident, delivered });
     }
-  }
-  if (outcomes.length > 0) await hub.confirmAlerts(outcomes);
+    return outcomes;
+  };
+  const outcomes = await deliver(alerts);
+  if (outcomes.length > 0) await deliver(await hub.confirmAlerts(outcomes));
 
   for (const update of updates) {
     const monitor = monitors.get(update.monitorId);

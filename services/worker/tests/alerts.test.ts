@@ -5,6 +5,7 @@ import type {
   HeartbeatMonitor,
   Maintenance,
   Monitor,
+  MonitorTarget,
   NotificationConfig,
   WorkerConfig,
 } from '@flarewatch/shared';
@@ -59,10 +60,13 @@ function deployment(monitors: Monitor[], notification: NotificationConfig = {}) 
   };
   const refusing = new Set<string>();
   const unformattable = new Set<string>();
-  const fetcher = vi.fn<Fetcher>(
-    async (url) =>
-      new Response('', { status: refusing.has(new URL(String(url)).host) ? 500 : 200 }),
-  );
+  let duringDelivery: (() => Promise<void>) | undefined;
+  const fetcher = vi.fn<Fetcher>(async (url) => {
+    const hook = duringDelivery;
+    duringDelivery = undefined;
+    await hook?.();
+    return new Response('', { status: refusing.has(new URL(String(url)).host) ? 500 : 200 });
+  });
 
   return {
     config,
@@ -90,6 +94,10 @@ function deployment(monitors: Monitor[], notification: NotificationConfig = {}) 
       unformattable.delete(id);
     },
     deliveryAttempts: () => fetcher.mock.calls.length,
+    /** Runs `hook` inside the next webhook call, as a run that overlaps the delivery. */
+    whileDelivering(hook: () => Promise<void>) {
+      duringDelivery = hook;
+    },
     /** A new hub instance over the same storage, as after an eviction. */
     restart() {
       hub = createHub({}, db).hub;
@@ -619,5 +627,42 @@ describe('alert delivery', () => {
     d.fixFormatting('broken');
     await d.run(T + 60);
     expect(d.alerts()).toEqual(['broken down']);
+  });
+
+  it('sends the recovery when the outage ends while its down alert is being delivered', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    d.whileDelivering(async () => {
+      d.up('api');
+      await d.run(T + 60);
+    });
+
+    await d.run(T);
+
+    expect(d.lastSent()).toMatchObject({ isUp: true, currentTime: T + 60 });
+    expect(d.alerts()).toEqual(['api down', 'api up']);
+  });
+
+  it('does not send a down alert twice when a second run overlaps its delivery', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    d.whileDelivering(() => d.run(T + 30));
+
+    await d.run(T);
+
+    expect(d.alerts()).toEqual(['api down']);
+  });
+
+  it('sends a down alert again if the run that claimed it never reported back', async () => {
+    const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+    const d = deployment([pull('api')]);
+    const failing = { location: 'SFO', result: { ok: false as const, error: 'Unavailable' } };
+    const record = (at: number) =>
+      d.hub.record(at, [{ monitor: pull('api') as MonitorTarget, check: failing }], policy);
+
+    expect(record(T).alerts).toMatchObject([{ kind: 'down' }]);
+    expect(record(T + 60).alerts).toEqual([]);
+    expect(record(T + 15 * 60).alerts).toEqual([]);
+    expect(record(T + 20 * 60).alerts).toMatchObject([{ kind: 'down' }]);
   });
 });

@@ -29,6 +29,11 @@ const INCIDENT_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
 /** Failed deliveries of one down alert before the hub stops trying. */
 export const MAX_ALERT_ATTEMPTS = 10;
+/**
+ * How long a run's claim on a down alert holds before another run may send it.
+ * Longer than a cron run can last (15 minutes), so the run that made it is gone.
+ */
+const ALERT_CLAIM_SECONDS = 20 * 60;
 
 /** A check monitor's result, or a heartbeat monitor, which the hub evaluates from its pings. */
 export type CheckRecord =
@@ -59,6 +64,8 @@ export interface Alert {
   error: string;
   /** Down alerts only: names of the monitors behind this one that are down too. */
   alsoDown: string[];
+  /** A recovery found only once its down alert was delivered: when it happened. */
+  at?: number;
 }
 
 type MonitorRow = { id: string; started_at: number | null; heartbeat: string | null };
@@ -68,7 +75,8 @@ type IncidentRow = {
   starts: string;
   errors: string;
   end_at: number | null;
-  alert: 'pending' | 'sent' | 'failed' | 'silent';
+  alert: 'pending' | 'sending' | 'sent' | 'failed' | 'silent';
+  alert_claimed_at: number | null;
 };
 
 /** Reads kept until the next write, so page traffic between check runs reads no rows. */
@@ -218,7 +226,8 @@ export class MonitorHub extends DurableObject<Env> {
     const openNow = new Map(
       this.sql
         .exec<IncidentRow>(
-          'SELECT id, monitor_id, starts, errors, end_at, alert FROM incidents WHERE end_at IS NULL',
+          `SELECT id, monitor_id, starts, errors, end_at, alert, alert_claimed_at
+           FROM incidents WHERE end_at IS NULL`,
         )
         .map((row) => [row.monitor_id, row]),
     );
@@ -235,14 +244,7 @@ export class MonitorHub extends DurableObject<Env> {
         // Closes an alert that went out, whatever blocks or maintenance say now.
         const closed = openBefore.get(monitor.id);
         if (closed?.alert === 'sent') {
-          alerts.push({
-            monitorId: monitor.id,
-            incident: closed.id,
-            kind: 'up',
-            incidentStartTime: change.incidentStartTime,
-            error: '',
-            alsoDown: [],
-          });
+          alerts.push(recoveryAlert(monitor.id, closed.id, change.incidentStartTime));
         }
         continue;
       }
@@ -256,13 +258,22 @@ export class MonitorHub extends DurableObject<Env> {
         blocked(monitor.id) ||
         activeMaintenances.some((maintenance) => coversMonitor(maintenance, monitor.id));
 
-      if (row.alert === 'pending') {
+      // A claim older than any run means the run that made it died before reporting back.
+      const due =
+        row.alert === 'pending' ||
+        (row.alert === 'sending' && now - (row.alert_claimed_at ?? 0) >= ALERT_CLAIM_SECONDS);
+      if (due) {
         // A job's own graceSeconds already delays its down state.
         const grace = monitor.method === 'HEARTBEAT' ? 0 : policy.gracePeriodSeconds;
         // One run's wait lets a dependency that fails a run later cover this monitor.
         const held = (monitor.dependsOn?.length ?? 0) > 0 && change?.changeType === 'down';
         if (quiet || held || now - start < grace) continue;
-        // Stays pending until confirmAlerts hears a webhook took it.
+        // Claimed so an overlapping run skips it, until confirmAlerts hears how delivery went.
+        this.sql.exec(
+          "UPDATE incidents SET alert = 'sending', alert_claimed_at = ? WHERE id = ?",
+          now,
+          row.id,
+        );
         alerts.push({
           monitorId: monitor.id,
           incident: row.id,
@@ -293,27 +304,35 @@ export class MonitorHub extends DurableObject<Env> {
   }
 
   /**
-   * Records which down alerts reached a webhook. One that did not stays due and
-   * is tried again next run, until MAX_ALERT_ATTEMPTS failures.
+   * Records which down alerts reached a webhook. One that did not is due again
+   * next run, until MAX_ALERT_ATTEMPTS failures. Returns the recovery alerts of
+   * delivered outages that ended while they were being sent.
    */
-  confirmAlerts(outcomes: { incident: number; delivered: boolean }[]): void {
-    this.sql.transaction(() => {
+  confirmAlerts(outcomes: { incident: number; delivered: boolean }[]): Alert[] {
+    return this.sql.transaction(() => {
+      const recoveries: Alert[] = [];
       for (const { incident, delivered } of outcomes) {
-        if (delivered) {
-          this.sql.exec(
-            "UPDATE incidents SET alert = 'sent' WHERE id = ? AND alert = 'pending'",
-            incident,
-          );
-        } else {
+        if (!delivered) {
           this.sql.exec(
             `UPDATE incidents SET alert_attempts = alert_attempts + 1,
-               alert = CASE WHEN alert_attempts + 1 >= ? THEN 'failed' ELSE alert END
-             WHERE id = ? AND alert = 'pending'`,
+               alert = CASE WHEN alert_attempts + 1 >= ? THEN 'failed' ELSE 'pending' END
+             WHERE id = ? AND alert = 'sending'`,
             MAX_ALERT_ATTEMPTS,
             incident,
           );
+          continue;
+        }
+        const [ended] = this.sql.exec<IncidentRow>(
+          `UPDATE incidents SET alert = 'sent' WHERE id = ? AND alert = 'sending'
+           RETURNING id, monitor_id, starts, errors, end_at, alert, alert_claimed_at`,
+          incident,
+        );
+        if (ended?.end_at != null) {
+          const start = toIncident(ended).start[0] ?? ended.end_at;
+          recoveries.push(recoveryAlert(ended.monitor_id, ended.id, start, ended.end_at));
         }
       }
+      return recoveries;
     });
   }
 
@@ -507,6 +526,18 @@ export class MonitorHub extends DurableObject<Env> {
     }
     return samples;
   }
+}
+
+function recoveryAlert(monitorId: string, incident: number, start: number, at?: number): Alert {
+  return {
+    monitorId,
+    incident,
+    kind: 'up',
+    incidentStartTime: start,
+    error: '',
+    alsoDown: [],
+    ...(at !== undefined && { at }),
+  };
 }
 
 /** Every monitor's dependencies, direct or through a chain. Config validation rules out loops. */
