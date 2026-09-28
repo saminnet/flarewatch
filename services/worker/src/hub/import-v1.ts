@@ -18,6 +18,7 @@ import type { Sql } from './sql';
 const log = createLogger('ImportV1');
 
 const DONE_KEY = 'v1_import';
+const MARKED_KEY = 'v1_import_marked';
 const MARKER_KEY = 'imported_to_hub';
 const STATE_KEY = 'state';
 const MAINTENANCES_KEY = 'maintenances';
@@ -115,30 +116,41 @@ function write(sql: Sql, { state, signals, maintenances }: V1Data): void {
   }
 }
 
-/** Copies 1.x KV data into an empty hub once. A KV error leaves the import for the next start. */
-export async function importV1(sql: Sql, kv: KVNamespace | undefined): Promise<void> {
-  if (sql.exec('SELECT 1 FROM meta WHERE key = ?', DONE_KEY).length > 0) return;
+function has(sql: Sql, key: string): boolean {
+  return sql.exec('SELECT 1 FROM meta WHERE key = ?', key).length > 0;
+}
 
-  let v1: V1Data = { state: null, signals: new Map(), maintenances: [] };
-  if (kv) {
-    try {
-      v1 = await readV1(kv);
-      // Before the hub records the import, so a failed write means another try.
-      await kv.put(MARKER_KEY, String(Math.floor(Date.now() / 1000)));
-    } catch (error) {
-      log.error('Importing 1.x state failed, retrying on next start', { error: String(error) });
-      return;
+/** Copies 1.x KV data into an empty hub once, then marks KV. A KV error leaves either step for the next start. */
+export async function importV1(sql: Sql, kv: KVNamespace | undefined): Promise<void> {
+  if (!has(sql, DONE_KEY)) {
+    let v1: V1Data = { state: null, signals: new Map(), maintenances: [] };
+    if (kv) {
+      try {
+        v1 = await readV1(kv);
+      } catch (error) {
+        log.error('Importing 1.x state failed, retrying on next start', { error: String(error) });
+        return;
+      }
+    }
+
+    sql.transaction(() => {
+      write(sql, v1);
+      sql.exec("INSERT INTO meta (key, value) VALUES (?, '1')", DONE_KEY);
+    });
+    if (v1.state || v1.signals.size > 0 || v1.maintenances.length > 0) {
+      log.info('Imported 1.x state', {
+        heartbeats: v1.signals.size,
+        maintenances: v1.maintenances.length,
+      });
     }
   }
 
-  sql.transaction(() => {
-    write(sql, v1);
-    sql.exec("INSERT INTO meta (key, value) VALUES (?, '1')", DONE_KEY);
-  });
-  if (v1.state || v1.signals.size > 0 || v1.maintenances.length > 0) {
-    log.info('Imported 1.x state', {
-      heartbeats: v1.signals.size,
-      maintenances: v1.maintenances.length,
-    });
+  // Only after the import commits: the marker tells a later release the data is safe to drop.
+  if (!kv || has(sql, MARKED_KEY)) return;
+  try {
+    await kv.put(MARKER_KEY, String(Math.floor(Date.now() / 1000)));
+    sql.exec("INSERT INTO meta (key, value) VALUES (?, '1')", MARKED_KEY);
+  } catch (error) {
+    log.error('Marking KV as imported failed, retrying on next start', { error: String(error) });
   }
 }

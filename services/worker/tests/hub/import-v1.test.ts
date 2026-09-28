@@ -110,6 +110,7 @@ describe('1.x import', () => {
     const again = await importedHub([['hb:v1:late', JSON.stringify({ lastSuccess: T0 })]], db);
 
     expect(again.kv.get).not.toHaveBeenCalled();
+    expect(again.kv.put).not.toHaveBeenCalled();
     expect(again.hub.view().monitors.legacy?.incidents).toHaveLength(1);
     expect(again.hub.view().monitors.late).toBeUndefined();
   });
@@ -121,14 +122,32 @@ describe('1.x import', () => {
     expect(kv.values.get('state')).toBe(JSON.stringify(oldState));
   });
 
-  it('retries on the next start when the marker cannot be written', async () => {
+  it('marks KV on a later start when the marker cannot be written', async () => {
     const db = new DatabaseSync(':memory:');
     const kv = createKv([['state', JSON.stringify(oldState)]]);
     kv.put.mockRejectedValueOnce(new Error('KV unavailable'));
     const first = createHub({ FLAREWATCH_STATE: asKv(kv) }, db);
     await first.ready();
-    expect(first.hub.view().monitors).toEqual({});
+    expect(first.hub.view().monitors.legacy?.incidents).toHaveLength(1);
+    expect(kv.values.has('imported_to_hub')).toBe(false);
 
+    const second = createHub({ FLAREWATCH_STATE: asKv(kv) }, db);
+    await second.ready();
+
+    expect(kv.values.has('imported_to_hub')).toBe(true);
+  });
+
+  it('leaves KV unmarked when the hub cannot save the import', async () => {
+    const db = new DatabaseSync(':memory:');
+    const kv = createKv([['state', JSON.stringify(oldState)]]);
+    const first = createHub({ FLAREWATCH_STATE: asKv(kv) }, db);
+    db.exec(
+      "CREATE TRIGGER no_meta BEFORE INSERT ON meta BEGIN SELECT RAISE(ABORT, 'disk full'); END",
+    );
+    await expect(first.ready()).rejects.toThrow('disk full');
+    expect(kv.values.has('imported_to_hub')).toBe(false);
+
+    db.exec('DROP TRIGGER no_meta');
     const second = createHub({ FLAREWATCH_STATE: asKv(kv) }, db);
     await second.ready();
 

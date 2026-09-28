@@ -69,9 +69,11 @@ export async function checkExternalProxy(
     if (!response.ok) {
       // The body goes to the owner's logs only: the error is public, and a proxy
       // can echo the token or the monitor config it was sent.
+      const body = await response.text();
+      const token = env?.FLAREWATCH_PROXY_TOKEN;
       log.warn('Proxy failed', {
         status: response.status,
-        body: (await response.text()).slice(0, 200),
+        body: (token ? body.replaceAll(token, '<proxy token>') : body).slice(0, 200),
       });
       return { location: 'ERROR', result: failure(`Proxy HTTP ${response.status}`) };
     }
