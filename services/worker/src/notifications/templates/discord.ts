@@ -1,5 +1,5 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { alsoDownList, inlineCode, jsonOutput } from './format';
+import { inlineCode, jsonOutput } from './format';
 
 export function discordTemplate(ctx: TemplateContext): TemplateOutput {
   // Discord uses decimal color values
@@ -16,8 +16,13 @@ export function discordTemplate(ctx: TemplateContext): TemplateOutput {
     fields.push({ name: 'Reason', value: inlineCode(ctx.reason), inline: false });
   }
 
-  const alsoDown = alsoDownList(ctx);
-  if (alsoDown) fields.push({ name: 'Also down', value: alsoDown, inline: false });
+  if (!ctx.isUp && ctx.alsoDown.length > 0) {
+    fields.push({
+      name: 'Also down',
+      value: ctx.alsoDown.map(inlineCode).join(', '),
+      inline: false,
+    });
+  }
 
   fields.push({ name: 'Target', value: ctx.targetUrl, inline: false });
 

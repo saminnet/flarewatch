@@ -9,7 +9,7 @@ import type {
   WorkerConfig,
 } from '@flarewatch/shared';
 import { runChecks } from '../src/index';
-import { WebhookNotifier, type NotificationContext } from '../src/notifications/webhook';
+import { createNotifier, type NotificationContext } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
 
 const T = Date.parse('2025-01-15T12:00:00Z') / 1000;
@@ -57,11 +57,7 @@ function deployment(monitors: Monitor[], notification: NotificationConfig = {}) 
     monitors,
     notification: { webhook: { url: 'https://hooks.example.com' }, ...notification },
   };
-  const notifier = new WebhookNotifier({ url: 'https://hooks.example.com' }, vi.fn<Fetcher>());
-  vi.spyOn(notifier, 'send').mockImplementation(async (ctx) => {
-    sent.push(ctx);
-    return [];
-  });
+  const fetcher = vi.fn<Fetcher>(async () => new Response('ok'));
 
   return {
     config,
@@ -90,7 +86,18 @@ function deployment(monitors: Monitor[], notification: NotificationConfig = {}) 
               result: error === undefined ? { ok: true, latency: 10 } : { ok: false, error },
             };
           },
-          createNotifier: (webhook) => (webhook ? notifier : null),
+          // An alert counts as sent when at least one destination received it.
+          createNotifier: (webhook) => {
+            const notifier = createNotifier(webhook, fetcher);
+            if (!notifier) return null;
+            const send = notifier.send.bind(notifier);
+            vi.spyOn(notifier, 'send').mockImplementation(async (ctx, message) => {
+              const results = await send(ctx, message);
+              if (results.length > 0) sent.push(ctx);
+              return results;
+            });
+            return notifier;
+          },
           formatNotificationMessage: () => 'message',
           getEdgeLocation: async () => 'SFO',
           staticConfig: config,
@@ -171,6 +178,17 @@ describe('alerts for monitors with dependencies', () => {
     await d.run(T);
 
     expect(d.alerts()).toEqual(['gateway down (also: App, Dashboard)']);
+  });
+
+  it('blocks a monitor whose dependency is up but depends on one that is down', async () => {
+    const d = deployment([pull('gateway'), pull('app', ['gateway']), pull('dashboard', ['app'])]);
+    d.down('gateway');
+    d.down('dashboard');
+
+    await d.run(T);
+    await d.run(T + 60);
+
+    expect(d.alerts()).toEqual(['gateway down (also: Dashboard)']);
   });
 
   it('blocks a monitor when any one of its dependencies is down', async () => {
@@ -451,6 +469,44 @@ describe('alert state', () => {
     d.up('api');
     await d.run(T + 120);
     expect(d.alerts()).toEqual(['api up']);
+  });
+
+  it('treats an empty webhook list as no webhook', async () => {
+    const d = deployment([pull('api')]);
+    const { webhook } = d.config.notification!;
+    d.config.notification = { webhook: [] };
+    d.down('api');
+    await d.run(T);
+
+    d.config.notification = { webhook: webhook! };
+    await d.run(T + 60);
+    d.up('api');
+    await d.run(T + 120);
+
+    expect(d.alerts()).toEqual(['api down', 'api up']);
+  });
+
+  it('sends an error change for an alerted monitor that is not blocked', async () => {
+    const d = deployment([pull('gateway'), pull('app', ['gateway'])]);
+    d.down('app', 'Timeout');
+    await d.run(T);
+    await d.run(T + 60);
+    d.alerts();
+
+    d.down('app', 'HTTP 502');
+    await d.run(T + 120);
+
+    expect(d.lastSent()).toMatchObject({ reason: 'HTTP 502' });
+    expect(d.alerts()).toEqual(['app down']);
+  });
+
+  it('does not hold a dependent again in a second run within the same second', async () => {
+    const d = deployment([pull('gateway'), pull('app', ['gateway'])]);
+    d.down('app');
+    await d.run(T);
+    await d.run(T);
+
+    expect(d.alerts()).toEqual(['app down']);
   });
 
   it('decides nothing without a webhook, so one added later sends a down alert first', async () => {

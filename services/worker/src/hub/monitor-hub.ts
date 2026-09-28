@@ -255,7 +255,7 @@ export class MonitorHub extends DurableObject<Env> {
         // A job's own graceSeconds already delays its down state.
         const grace = monitor.method === 'HEARTBEAT' ? 0 : policy.gracePeriodSeconds;
         // One run's wait lets a dependency that fails a run later cover this monitor.
-        const held = (monitor.dependsOn?.length ?? 0) > 0 && start === now;
+        const held = (monitor.dependsOn?.length ?? 0) > 0 && change?.changeType === 'down';
         if (quiet || held || now - start < grace) continue;
         this.sql.exec("UPDATE incidents SET alert = 'sent' WHERE id = ?", row.id);
         alerts.push({

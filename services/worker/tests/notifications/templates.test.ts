@@ -386,7 +386,7 @@ describe('notification templates', () => {
     };
 
     it('names the monitors down behind a down monitor', () => {
-      expect(render({ alsoDown: ['App', 'Dashboard'] })).toContain('App, Dashboard');
+      expect(render({ alsoDown: ['App', 'Dashboard'] })).toMatch(/App`?, `?Dashboard/);
       expect(render({ alsoDown: [] })).not.toContain('Also down');
     });
 
@@ -396,4 +396,17 @@ describe('notification templates', () => {
       ).not.toContain('Also down');
     });
   });
+
+  it.each(['discord', 'zulip'] as const)(
+    '%s puts each name behind the list in a code span, as it does the reason',
+    (name) => {
+      const { body } = getTemplate(name)({
+        ...baseContext,
+        alsoDown: ['@**all**', '[x](https://evil.example)'],
+      });
+      const text = decodeURIComponent(body.replaceAll('+', ' '));
+
+      expect(text).toContain('`@**all**`, `[x](https://evil.example)`');
+    },
+  );
 });

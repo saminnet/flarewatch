@@ -281,6 +281,7 @@ export function createNotifier(
   config: WebhookConfig | undefined,
   fetcher: Fetcher = fetchWithTimeout,
 ): WebhookNotifier | null {
-  if (!config) return null;
+  // An empty list would mark outages as alerted with nowhere to send them.
+  if (!config || (Array.isArray(config) && config.length === 0)) return null;
   return new WebhookNotifier(config, fetcher);
 }

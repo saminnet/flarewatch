@@ -37,6 +37,8 @@ Some monitors reach their target through something else, like a reverse proxy, a
 
 Dependencies can have their own dependencies, and heartbeats can use `dependsOn` too. The config check rejects unknown ids and loops.
 
+A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced.
+
 ## Channels
 
 | Template                   | URL                                                                                                | Also needs                                                               |
