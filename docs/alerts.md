@@ -37,7 +37,7 @@ Some monitors reach their target through something else, like a reverse proxy, a
 
 Dependencies can have their own dependencies, and heartbeats can use `dependsOn` too. The config check rejects unknown ids and loops.
 
-A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced.
+A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced. The same goes for an outage already open when you upgrade to 2.2: it stays silent until it ends, recovery included.
 
 ## Channels
 
