@@ -718,6 +718,10 @@ test('history route filters by type, monitor, and invalid month fallback', async
   await expect(page.getByText('E2E active maintenance')).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).not.toBeVisible();
 
+  await page.goto('/events?type=maintenance');
+  await expect(page).toHaveURL(/\/history\?type=maintenance/);
+  await expect(page.getByText('E2E active maintenance')).toBeVisible();
+
   await page.goto(`/history?type=maintenance&month=${upcomingMonth}`);
   await expect(page.getByText('E2E upcoming maintenance')).toBeVisible();
 

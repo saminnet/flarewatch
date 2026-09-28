@@ -23,8 +23,14 @@ function setMaintenances(
   void queryClient.invalidateQueries({ queryKey: qk.snapshot });
 }
 
-function normalizeMutationError(error: unknown): Error {
-  return error instanceof Error ? error : new Error('Something went wrong');
+function reportError(
+  queryClient: QueryClient,
+  error: unknown,
+  onError?: (error: Error) => void,
+): void {
+  // Otherwise the cached session still says operator and /login sends the user back.
+  if (error instanceof SessionExpiredError) queryClient.removeQueries({ queryKey: qk.session });
+  onError?.(error instanceof Error ? error : new Error('Something went wrong'));
 }
 
 export type MaintenanceUpdatePatch = {
@@ -75,9 +81,7 @@ export function useCreateMaintenance(callbacks?: MutationCallbacks) {
       setMaintenances(queryClient, (current) => [...current, result], { sort: true });
       callbacks?.onSuccess?.(result);
     },
-    onError: (error) => {
-      callbacks?.onError?.(normalizeMutationError(error));
-    },
+    onError: (error) => reportError(queryClient, error, callbacks?.onError),
   });
 }
 
@@ -100,9 +104,7 @@ export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
       );
       callbacks?.onSuccess?.(result);
     },
-    onError: (error) => {
-      callbacks?.onError?.(normalizeMutationError(error));
-    },
+    onError: (error) => reportError(queryClient, error, callbacks?.onError),
   });
 }
 
@@ -122,8 +124,6 @@ export function useDeleteMaintenance(callbacks?: MutationCallbacks<string>) {
       setMaintenances(queryClient, (current) => current.filter((m) => m.id !== id));
       callbacks?.onSuccess?.(id);
     },
-    onError: (error) => {
-      callbacks?.onError?.(normalizeMutationError(error));
-    },
+    onError: (error) => reportError(queryClient, error, callbacks?.onError),
   });
 }

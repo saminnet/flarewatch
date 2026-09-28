@@ -8,7 +8,7 @@ import type { Maintenance } from '@flarewatch/shared';
 import { qk } from '@/lib/query/keys';
 import type { Snapshot } from '@/lib/public-view';
 
-const { useCreateMaintenance, useDeleteMaintenance } =
+const { useCreateMaintenance, useDeleteMaintenance, useUpdateMaintenance } =
   await import('../../src/lib/query/maintenance.mutations');
 
 afterEach(() => {
@@ -66,5 +66,30 @@ describe('maintenance mutations', () => {
     result.current.mutate('gone');
 
     await waitFor(() => expect(operatorMaintenances(queryClient)).toEqual([kept]));
+  });
+
+  it('forgets the signed-in session when the server says it expired', async () => {
+    const { queryClient, wrapper } = setup(maintenance('x', '2026-01-01T00:00:00.000Z'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 401 })),
+    );
+    queryClient.setQueryData(qk.session, { viewer: 'operator' });
+
+    const { result } = renderHook(() => useUpdateMaintenance(), { wrapper });
+    result.current.mutate({
+      id: 'x',
+      updates: {
+        title: null,
+        body: 'x',
+        start: '2026-01-01T00:00:00.000Z',
+        end: null,
+        monitors: null,
+        color: null,
+      },
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(queryClient.getQueryData(qk.session)).toBeUndefined();
   });
 });

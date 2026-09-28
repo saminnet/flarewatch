@@ -348,6 +348,7 @@ describe('status projection', () => {
       maintenances: [
         maintenance('api-maintenance', '2026-06-06T00:00:00.000Z', undefined, ['api']),
         maintenance('web-maintenance', '2026-06-07T00:00:00.000Z', undefined, ['web']),
+        maintenance('site-wide', '2026-06-08T00:00:00.000Z'),
       ],
       monthStart,
       monthEnd,
@@ -356,7 +357,10 @@ describe('status projection', () => {
       eventType: 'all',
     });
 
-    expect(result.pinned.map((event) => event.maintenance.id)).toEqual(['api-maintenance']);
+    expect(result.pinned.map((event) => event.maintenance.id)).toEqual([
+      'site-wide',
+      'api-maintenance',
+    ]);
     expect(result.timeline).toHaveLength(1);
     expect(result.timeline[0]).toMatchObject({ type: 'incident', monitorId: 'api' });
   });

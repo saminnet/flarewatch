@@ -1,4 +1,4 @@
-import type { Maintenance, StatusView } from '@flarewatch/shared';
+import { coversMonitor, type Maintenance, type StatusView } from '@flarewatch/shared';
 import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/history/types';
 import type { PublicMonitor } from '@/lib/public-view';
 import { getMaintenanceStatus } from '@/lib/maintenance';
@@ -174,7 +174,7 @@ export function projectTimeline(input: TimelineProjectionInput): TimelineProject
       if (event.type === 'incident') {
         return event.monitorId === selectedMonitor;
       }
-      return event.maintenance.monitors?.includes(selectedMonitor) ?? false;
+      return coversMonitor(event.maintenance, selectedMonitor);
     });
   }
 

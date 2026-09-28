@@ -3,6 +3,7 @@ import type { AccessConfig } from '@flarewatch/shared';
 import { principalFor, type Identity } from '@/lib/auth/access';
 
 const access: AccessConfig = {
+  providers: [{ id: 'oidc', name: 'ID', issuer: 'https://id.example', clientId: 'flarewatch' }],
   operators: ['Owner@Example.com', 'group:admins'],
   members: ['*@team.example', 'github:Octocat'],
   audiences: {
@@ -69,6 +70,12 @@ describe('principalFor', () => {
       role: 'member',
       groups: ['Acme', 'Beta'],
     });
+  });
+
+  it('lets nobody in from a provider that is no longer configured', () => {
+    expect(
+      principalFor(access, person({ provider: 'removed', email: 'owner@example.com' })),
+    ).toBeNull();
   });
 
   it('lets nobody in who matches no rule', () => {
