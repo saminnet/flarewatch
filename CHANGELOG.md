@@ -2,7 +2,7 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
-## 2.0.0 - Unreleased
+## 2.0.0 - 2026-09-28
 
 ### Breaking changes
 
@@ -28,7 +28,7 @@ All notable changes to FlareWatch will be documented in this file.
 ### Fixed
 
 - Slack, Discord, Zulip and Google Chat alerts no longer let text from a monitored site ping everyone or add links.
-- A failing check proxy shows as `Proxy HTTP <status>` on the page. Its response body goes to the Worker log, since a proxy can echo the token it was sent.
+- A failing check proxy shows as `Proxy HTTP <status>` on the page. Its response body goes to the Worker log, with the proxy token taken out.
 - Webhook errors in the Worker log no longer quote the webhook URL.
 - An oversized answer from a monitored site, GlobalPing or a check proxy fails that one check instead of the whole run.
 
