@@ -57,7 +57,12 @@ function deployment(monitors: Monitor[], notification: NotificationConfig = {}) 
     monitors,
     notification: { webhook: { url: 'https://hooks.example.com' }, ...notification },
   };
-  const fetcher = vi.fn<Fetcher>(async () => new Response('ok'));
+  const refusing = new Set<string>();
+  const unformattable = new Set<string>();
+  const fetcher = vi.fn<Fetcher>(
+    async (url) =>
+      new Response('', { status: refusing.has(new URL(String(url)).host) ? 500 : 200 }),
+  );
 
   return {
     config,
@@ -70,6 +75,21 @@ function deployment(monitors: Monitor[], notification: NotificationConfig = {}) 
     up(id: string) {
       failing.delete(id);
     },
+    /** Webhook hosts that answer 500. */
+    refuse(host = 'hooks.example.com') {
+      refusing.add(host);
+    },
+    accept(host = 'hooks.example.com') {
+      refusing.delete(host);
+    },
+    /** Monitors whose message cannot be formatted, like a config with a bad time zone. */
+    breakFormatting(id: string) {
+      unformattable.add(id);
+    },
+    fixFormatting(id: string) {
+      unformattable.delete(id);
+    },
+    deliveryAttempts: () => fetcher.mock.calls.length,
     /** A new hub instance over the same storage, as after an eviction. */
     restart() {
       hub = createHub({}, db).hub;
@@ -86,19 +106,22 @@ function deployment(monitors: Monitor[], notification: NotificationConfig = {}) 
               result: error === undefined ? { ok: true, latency: 10 } : { ok: false, error },
             };
           },
-          // An alert counts as sent when at least one destination received it.
+          // An alert counts as sent when at least one destination accepted it.
           createNotifier: (webhook) => {
             const notifier = createNotifier(webhook, fetcher);
             if (!notifier) return null;
             const send = notifier.send.bind(notifier);
             vi.spyOn(notifier, 'send').mockImplementation(async (ctx, message) => {
               const results = await send(ctx, message);
-              if (results.length > 0) sent.push(ctx);
+              if (results.some((result) => result.success)) sent.push(ctx);
               return results;
             });
             return notifier;
           },
-          formatNotificationMessage: () => 'message',
+          formatNotificationMessage: (ctx) => {
+            if (unformattable.has(ctx.monitor.id)) throw new RangeError('Invalid time zone');
+            return 'message';
+          },
           getEdgeLocation: async () => 'SFO',
           staticConfig: config,
         },
@@ -520,5 +543,81 @@ describe('alert state', () => {
     await d.run(T + 60);
 
     expect(d.alerts()).toEqual(['api down']);
+  });
+});
+
+describe('alert delivery', () => {
+  it('tries a down alert again on each run until a webhook accepts it', async () => {
+    const d = deployment([pull('api')]);
+    d.refuse();
+    d.down('api');
+    await d.run(T);
+    expect(d.alerts()).toEqual([]);
+
+    d.accept();
+    await d.run(T + 60);
+    expect(d.alerts()).toEqual(['api down']);
+    await d.run(T + 120);
+    expect(d.alerts()).toEqual([]);
+
+    d.up('api');
+    await d.run(T + 180);
+    expect(d.alerts()).toEqual(['api up']);
+  });
+
+  it('sends no recovery for an outage whose down alert never got through', async () => {
+    const d = deployment([pull('api')]);
+    d.refuse();
+    d.down('api');
+    await d.run(T);
+
+    d.accept();
+    d.up('api');
+    await d.run(T + 60);
+
+    expect(d.alerts()).toEqual([]);
+  });
+
+  it('counts a down alert as delivered when any one webhook accepts it', async () => {
+    const d = deployment([pull('api')], {
+      webhook: [{ url: 'https://hooks.example.com' }, { url: 'https://backup.example.com' }],
+    });
+    d.refuse('backup.example.com');
+    d.down('api');
+    await d.run(T);
+    expect(d.alerts()).toEqual(['api down']);
+
+    const attempts = d.deliveryAttempts();
+    await d.run(T + 60);
+    expect(d.deliveryAttempts()).toBe(attempts);
+  });
+
+  it('gives up after ten failed tries and then sends nothing for that outage', async () => {
+    const d = deployment([pull('api')]);
+    d.refuse();
+    d.down('api');
+    for (let run = 0; run < 12; run++) await d.run(T + run * 60);
+    expect(d.deliveryAttempts()).toBe(10);
+
+    d.accept();
+    await d.run(T + 720);
+    d.up('api');
+    await d.run(T + 780);
+
+    expect(d.deliveryAttempts()).toBe(10);
+    expect(d.alerts()).toEqual([]);
+  });
+
+  it('keeps sending the other alerts when one cannot be formatted, and retries that one', async () => {
+    const d = deployment([pull('broken'), pull('api')]);
+    d.breakFormatting('broken');
+    d.down('broken');
+    d.down('api');
+    await d.run(T);
+    expect(d.alerts()).toEqual(['api down']);
+
+    d.fixFormatting('broken');
+    await d.run(T + 60);
+    expect(d.alerts()).toEqual(['broken down']);
   });
 });

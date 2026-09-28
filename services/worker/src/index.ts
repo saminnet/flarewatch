@@ -90,20 +90,31 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const { updates, alerts } = await hub.record(currentTime, records, policy);
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
-  for (const alert of notifier ? alerts : []) {
-    const monitor = monitors.get(alert.monitorId);
-    if (!monitor) continue;
-    const ctx: NotificationContext = {
-      monitor,
-      isUp: alert.kind === 'up',
-      incidentStartTime: alert.incidentStartTime,
-      currentTime,
-      reason: alert.error,
-      timeZone: config.notification?.timeZone ?? 'UTC',
-      alsoDown: alert.alsoDown,
-    };
-    await notifier?.send(ctx, deps.formatNotificationMessage(ctx));
+  const outcomes: { incident: number; delivered: boolean }[] = [];
+  if (notifier) {
+    for (const alert of alerts) {
+      const monitor = monitors.get(alert.monitorId);
+      if (!monitor) continue;
+      const ctx: NotificationContext = {
+        monitor,
+        isUp: alert.kind === 'up',
+        incidentStartTime: alert.incidentStartTime,
+        currentTime,
+        reason: alert.error,
+        timeZone: config.notification?.timeZone ?? 'UTC',
+        alsoDown: alert.alsoDown,
+      };
+      let delivered = false;
+      try {
+        const results = await notifier.send(ctx, deps.formatNotificationMessage(ctx));
+        delivered = results.some((result) => result.success);
+      } catch (error) {
+        log.error('Alert failed', { monitor: monitor.id, error: String(error) });
+      }
+      if (alert.kind === 'down') outcomes.push({ incident: alert.incident, delivered });
+    }
   }
+  if (outcomes.length > 0) await hub.confirmAlerts(outcomes);
 
   for (const update of updates) {
     const monitor = monitors.get(update.monitorId);

@@ -27,6 +27,8 @@ import { durableObjectSql, type Sql } from './sql';
 
 const INCIDENT_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
+/** Failed deliveries of one down alert before the hub stops trying. */
+export const MAX_ALERT_ATTEMPTS = 10;
 
 /** A check monitor's result, or a heartbeat monitor, which the hub evaluates from its pings. */
 export type CheckRecord =
@@ -51,6 +53,7 @@ export interface AlertPolicy {
 
 export interface Alert {
   monitorId: string;
+  incident: number;
   kind: 'down' | 'error' | 'up';
   incidentStartTime: number;
   error: string;
@@ -65,7 +68,7 @@ type IncidentRow = {
   starts: string;
   errors: string;
   end_at: number | null;
-  alert: 'pending' | 'sent' | 'silent';
+  alert: 'pending' | 'sent' | 'failed' | 'silent';
 };
 
 /** Reads kept until the next write, so page traffic between check runs reads no rows. */
@@ -112,7 +115,7 @@ export class MonitorHub extends DurableObject<Env> {
 
   /**
    * Stores one check run. With a policy (a webhook is configured) it also
-   * decides the run's alerts and marks each incident whose down alert goes out.
+   * decides the run's alerts; confirmAlerts records which down alerts arrived.
    */
   record(
     now: number,
@@ -207,7 +210,7 @@ export class MonitorHub extends DurableObject<Env> {
     now: number,
     records: CheckRecord[],
     updates: IncidentUpdate[],
-    openBefore: Map<string, { alert: IncidentRow['alert'] }>,
+    openBefore: Map<string, { id: number; alert: IncidentRow['alert'] }>,
     activeMaintenances: Maintenance[],
     policy: AlertPolicy,
   ): Alert[] {
@@ -230,9 +233,11 @@ export class MonitorHub extends DurableObject<Env> {
       const change = changes.get(monitor.id);
       if (change?.changeType === 'up') {
         // Closes an alert that went out, whatever blocks or maintenance say now.
-        if (openBefore.get(monitor.id)?.alert === 'sent') {
+        const closed = openBefore.get(monitor.id);
+        if (closed?.alert === 'sent') {
           alerts.push({
             monitorId: monitor.id,
+            incident: closed.id,
             kind: 'up',
             incidentStartTime: change.incidentStartTime,
             error: '',
@@ -257,9 +262,10 @@ export class MonitorHub extends DurableObject<Env> {
         // One run's wait lets a dependency that fails a run later cover this monitor.
         const held = (monitor.dependsOn?.length ?? 0) > 0 && change?.changeType === 'down';
         if (quiet || held || now - start < grace) continue;
-        this.sql.exec("UPDATE incidents SET alert = 'sent' WHERE id = ?", row.id);
+        // Stays pending until confirmAlerts hears a webhook took it.
         alerts.push({
           monitorId: monitor.id,
+          incident: row.id,
           kind: 'down',
           incidentStartTime: start,
           error,
@@ -275,6 +281,7 @@ export class MonitorHub extends DurableObject<Env> {
       ) {
         alerts.push({
           monitorId: monitor.id,
+          incident: row.id,
           kind: 'error',
           incidentStartTime: start,
           error,
@@ -283,6 +290,31 @@ export class MonitorHub extends DurableObject<Env> {
       }
     }
     return alerts;
+  }
+
+  /**
+   * Records which down alerts reached a webhook. One that did not stays due and
+   * is tried again next run, until MAX_ALERT_ATTEMPTS failures.
+   */
+  confirmAlerts(outcomes: { incident: number; delivered: boolean }[]): void {
+    this.sql.transaction(() => {
+      for (const { incident, delivered } of outcomes) {
+        if (delivered) {
+          this.sql.exec(
+            "UPDATE incidents SET alert = 'sent' WHERE id = ? AND alert = 'pending'",
+            incident,
+          );
+        } else {
+          this.sql.exec(
+            `UPDATE incidents SET alert_attempts = alert_attempts + 1,
+               alert = CASE WHEN alert_attempts + 1 >= ? THEN 'failed' ELSE alert END
+             WHERE id = ? AND alert = 'pending'`,
+            MAX_ALERT_ATTEMPTS,
+            incident,
+          );
+        }
+      }
+    });
   }
 
   /** Records a job's ping. Its status changes at the next check run. */

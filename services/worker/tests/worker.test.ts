@@ -112,7 +112,7 @@ describe('worker', () => {
     const notifier = new WebhookNotifier({ url: 'https://hooks.example.com' }, vi.fn<Fetcher>());
     vi.spyOn(notifier, 'send').mockImplementation(notifierSendMock);
     createNotifierMock.mockImplementation((config) => (config ? notifier : null));
-    notifierSendMock.mockResolvedValue([]);
+    notifierSendMock.mockResolvedValue([{ success: true }]);
     formatNotificationMessageMock.mockReturnValue('notification');
     mockUp();
   });

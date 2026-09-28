@@ -64,7 +64,7 @@ describe('heartbeat scheduled checks', () => {
     vi.useFakeTimers();
     setNow(NOW);
     vi.clearAllMocks();
-    notifierSendMock.mockResolvedValue([]);
+    notifierSendMock.mockResolvedValue([{ success: true }]);
     workerConfigMock.monitors = [heartbeat];
     workerConfigMock.notification = {
       webhook: { url: 'https://hooks.example.com' },

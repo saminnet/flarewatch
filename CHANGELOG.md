@@ -10,7 +10,7 @@ All notable changes to FlareWatch will be documented in this file.
 
 ### Changed
 
-- FlareWatch keeps track of which outages it alerted about. A recovery alert only follows a down alert that went out, and a missed check at the end of `gracePeriod` no longer drops the alert.
+- FlareWatch keeps track of which outages it alerted about. A down alert that no webhook accepted is tried again on each check run, up to 10 times. A recovery alert only follows a down alert that went out, and a missed check at the end of `gracePeriod` no longer drops the alert.
 - A monitor that is still down when its maintenance window ends now alerts. It used to stay silent.
 - Outages already open when you upgrade stay silent, recovery included. After upgrading, check the status page for monitors that were down at the time.
 

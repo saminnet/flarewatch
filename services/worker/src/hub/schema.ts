@@ -22,10 +22,12 @@ const MIGRATIONS: string[][] = [
     `CREATE TABLE samples (at INTEGER PRIMARY KEY, data TEXT NOT NULL)`,
   ],
   [`CREATE TABLE maintenances (id TEXT PRIMARY KEY, data TEXT NOT NULL) WITHOUT ROWID`],
-  // Whether the incident's down alert went out: 'pending', 'sent', or 'silent'
-  // (never alert). Earlier releases kept no record, so their incidents go silent.
+  // Whether the incident's down alert reached a webhook: 'pending', 'sent',
+  // 'failed' (gave up after repeated failed deliveries) or 'silent' (never alert).
+  // Earlier releases kept no record, so their incidents go silent.
   [
     `ALTER TABLE incidents ADD COLUMN alert TEXT NOT NULL DEFAULT 'pending'`,
+    `ALTER TABLE incidents ADD COLUMN alert_attempts INTEGER NOT NULL DEFAULT 0`,
     `UPDATE incidents SET alert = 'silent'`,
   ],
 ];
