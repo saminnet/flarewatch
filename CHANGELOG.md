@@ -2,7 +2,7 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
-## 3.0.0 - 2026-10-19
+## 3.0.0 - 2026-09-30
 
 3.0 removes the code that moved 1.x installs onto 2.x. On 2.x, update as usual. If you're still on 1.x, update to 2.3.1 first, from a clone of your fork with `upstream` set up as in [Update your fork](docs/deploy.md#update-your-fork):
 
