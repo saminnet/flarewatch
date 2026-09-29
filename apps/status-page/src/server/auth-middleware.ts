@@ -14,7 +14,7 @@ function jsonError(status: number, message: string): Response {
 /** On a private-only page, what a visitor may still reach. Data server fns check for themselves. */
 function isOpenToVisitors(pathname: string): boolean {
   return (
-    pathname === '/login' || pathname.startsWith('/auth/') || pathname.startsWith('/_serverFn/')
+    pathname === '/login' || pathname.startsWith('/auth/') || pathname.startsWith('/_serverfn/')
   );
 }
 
@@ -36,7 +36,7 @@ export async function authMiddlewareServer(
   // Ping endpoints carry their own HMAC token, verified by the monitoring
   // worker over the service binding. Basic Auth would break curl and systemd
   // reporters, so they are exempt here.
-  if (opts.pathname.startsWith('/ping/')) {
+  if (opts.pathname.toLowerCase().startsWith('/ping/')) {
     return opts.next();
   }
 
@@ -51,7 +51,9 @@ export async function authMiddlewareServer(
 }
 
 async function authorize(opts: RequestServerOptions<any, any>): Promise<MiddlewareResult> {
-  const { request, pathname, next } = opts;
+  const { request, next } = opts;
+  // The router matches routes in any letter case, so every gate here must too.
+  const pathname = opts.pathname.toLowerCase();
   const env = await resolveRuntimeEnv();
 
   if (pathname.startsWith('/api/admin')) {

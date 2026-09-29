@@ -2,6 +2,14 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## 2.3.1 - 2026-09-29
+
+Security fix. Update your fork now.
+
+### Fixed
+
+- The status page checked sign-in on the admin API only when the request path was in lowercase. With the same path in other letter cases, anyone could read, add, change and delete maintenance windows without signing in. Every path is now checked the same way, whatever its case.
+
 ## 2.3.0 - 2026-09-28
 
 ### Added

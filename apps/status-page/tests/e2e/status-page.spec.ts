@@ -351,8 +351,19 @@ test('public API exposes seeded status, maintenance, badges, and CORS', async ({
   expect(optionsResponse.headers()['access-control-allow-origin']).toBe('*');
   expect(optionsResponse.headers()['access-control-allow-methods']).toContain('GET');
 
-  const unauthorizedAdminResponse = await request.get('/api/admin/maintenances');
-  expect(unauthorizedAdminResponse.status()).toBe(401);
+  // The router matches paths in any letter case, so the admin gate must too.
+  for (const path of [
+    '/api/admin/maintenances',
+    '/API/ADMIN/MAINTENANCES',
+    '/api/Admin/maintenances',
+  ]) {
+    const unauthorizedAdminResponse = await request.get(path);
+    expect(unauthorizedAdminResponse.status(), path).toBe(401);
+  }
+  const unauthorizedAdminWrite = await request.delete(
+    '/API/admin/maintenances?id=e2e-active-maintenance',
+  );
+  expect(unauthorizedAdminWrite.status()).toBe(401);
 
   const forbiddenCrossOriginWrite = await request.post('/api/admin/maintenances', {
     headers: {
