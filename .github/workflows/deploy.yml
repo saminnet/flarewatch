@@ -83,6 +83,7 @@ jobs:
       group: deploy-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: quality
     # Only this job gets the token: the quality job installs and runs third-party code.
     env:

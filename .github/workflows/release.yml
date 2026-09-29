@@ -38,3 +38,8 @@ jobs:
           fi
 
           gh release create "$TAG" --title "$TAG" --notes-file "$NOTES"
+
+      - name: Rebuild flarewatch.app
+        env:
+          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: gh workflow run deploy.yml --repo saminnet/flarewatch-app
