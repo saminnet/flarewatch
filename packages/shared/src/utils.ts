@@ -140,8 +140,12 @@ export function validateHttpStatusAndBody(
 /** A keyword must appear this early: a monitored site must not be able to exhaust the Worker's memory. */
 const MAX_KEYWORD_BODY_BYTES = 1024 * 1024;
 
-async function readTextUpTo(response: Response, maxBytes: number): Promise<string> {
-  const reader = response.body?.getReader();
+/** A Request or a Response. */
+type WithBody = Pick<Body, 'body'>;
+
+/** Stops at maxBytes and cancels the rest, for a body whose size we do not control. */
+export async function readTextUpTo(message: WithBody, maxBytes: number): Promise<string> {
+  const reader = message.body?.getReader();
   if (!reader) return '';
   const decoder = new TextDecoder();
   let text = '';
@@ -157,9 +161,9 @@ async function readTextUpTo(response: Response, maxBytes: number): Promise<strin
   return text + decoder.decode();
 }
 
-/** JSON from a service whose response size we do not control. Throws past maxBytes. */
-export async function readJsonUpTo(response: Response, maxBytes: number): Promise<unknown> {
-  const text = await readTextUpTo(response, maxBytes + 1);
+/** JSON from a sender whose body size we do not control. Throws past maxBytes. */
+export async function readJsonUpTo(message: WithBody, maxBytes: number): Promise<unknown> {
+  const text = await readTextUpTo(message, maxBytes + 1);
   if (new TextEncoder().encode(text).byteLength > maxBytes) {
     throw new Error(`response is over ${maxBytes} bytes`);
   }

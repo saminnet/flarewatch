@@ -73,6 +73,8 @@ describe('notification templates', () => {
     );
     expect(body('googlechat')).toContain('‹users/all›');
     expect(body('googlechat')).not.toContain('<users/all>');
+    expect(body('teams')).toContain('⟦log in⟧(https://evil.example)');
+    expect(body('teams')).not.toContain('[log in]');
   });
 
   it('ntfy template maps status to priority and tags', () => {

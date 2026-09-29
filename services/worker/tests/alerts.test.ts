@@ -442,6 +442,48 @@ describe('alert state', () => {
     expect(d.alerts()).toEqual([]);
   });
 
+  it('alerts again when a monitor fails soon after its recovery alert', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    await d.run(T + 60);
+    d.down('api');
+    await d.run(T + 120);
+
+    expect(d.alerts()).toEqual(['api down', 'api up', 'api down']);
+  });
+
+  it('waits a full grace period again when a monitor fails soon after recovering', async () => {
+    const d = deployment([pull('api')], { gracePeriod: 2 });
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    await d.run(T + 60);
+    d.down('api');
+    await d.run(T + 180);
+    await d.run(T + 240);
+    expect(d.alerts()).toEqual([]);
+
+    await d.run(T + 300);
+    expect(d.alerts()).toEqual(['api down']);
+  });
+
+  it('sends at most five error changes per outage', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api', 'error 0');
+    await d.run(T);
+    d.alerts();
+
+    for (let i = 1; i <= 8; i++) {
+      d.down('api', `error ${i}`);
+      await d.run(T + i * 60);
+    }
+
+    expect(d.lastSent()).toMatchObject({ reason: 'error 5' });
+    expect(d.alerts()).toHaveLength(5);
+  });
+
   it('sends one down alert with the latest error when it becomes due on an error change', async () => {
     const d = deployment([pull('api')], { gracePeriod: 1 });
     d.down('api', 'Timeout');
@@ -734,6 +776,23 @@ describe('webhooks in the FLAREWATCH_WEBHOOKS secret', () => {
     expect(logged.join('\n')).toMatch(/webhook 2\.template/);
     expect(logged.join('\n')).toMatch(/webhook 3\.headers/);
     expect(logged.join('\n')).not.toMatch(/T0SECRET|two\.example\.com/);
+  });
+
+  it('alerts through a webhook whose timeout is out of range, with the default timeout', async () => {
+    const logged = logErrors();
+    const secret = JSON.stringify([
+      { url: 'https://one.example.com', timeout: 120_000 },
+      { url: 'https://two.example.com', timeout: 0 },
+    ]);
+    const d = deployment([pull('api')], { webhook: [] }, secret);
+    d.down('api');
+
+    await d.run(T);
+
+    expect(d.deliveredTo().sort()).toEqual(['one.example.com', 'two.example.com']);
+    expect(logged).toHaveLength(2);
+    expect(logged.join('\n')).toMatch(/webhook 1\.timeout.*default/);
+    expect(logged.join('\n')).toMatch(/webhook 2\.timeout.*default/);
   });
 
   it('keeps alerting the config webhook when the secret is not JSON', async () => {

@@ -51,6 +51,14 @@ describe('normalizeMaintenanceUpdates', () => {
   it('checks ordering against the epoch as an end', () => {
     expect(normalizeMaintenanceUpdates({ end: 0 }, current)).toBeNull();
   });
+
+  it('rejects monitors that are not all ids instead of widening to every monitor', () => {
+    expect(normalizeMaintenanceUpdates({ monitors: [123] }, current)).toBeNull();
+    expect(normalizeMaintenanceUpdates({ monitors: ['api', ''] }, current)).toBeNull();
+    expect(normalizeMaintenanceUpdates({ monitors: [] }, current)).toStrictEqual({
+      monitors: undefined,
+    });
+  });
 });
 
 describe('POST /api/admin/maintenances', () => {
@@ -78,6 +86,32 @@ describe('POST /api/admin/maintenances', () => {
     });
     expect(badEnd.status).toBe(400);
 
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('rejects monitors that are not all ids with 400 without writing', async () => {
+    const put = vi.fn(async () => {});
+    const kv = { get: vi.fn(async () => null), put };
+    globalThis.__env__ = { FLAREWATCH_STATE: kv as typeof kv & KVNamespace };
+
+    const response = await getPostHandler()({
+      request: postRequest({ body: 'Maintenance', start: '2026-01-01T00:00:00Z', monitors: [1] }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('rejects a body over 64 KiB with 400 without writing', async () => {
+    const put = vi.fn(async () => {});
+    const kv = { get: vi.fn(async () => null), put };
+    globalThis.__env__ = { FLAREWATCH_STATE: kv as typeof kv & KVNamespace };
+
+    const response = await getPostHandler()({
+      request: postRequest({ body: 'x'.repeat(65 * 1024), start: '2026-01-01T00:00:00Z' }),
+    });
+
+    expect(response.status).toBe(400);
     expect(put).not.toHaveBeenCalled();
   });
 });

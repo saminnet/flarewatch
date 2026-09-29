@@ -271,4 +271,44 @@ describe('auth middleware caching', () => {
     await expect(renderPage('flarewatch_admin_session=forged')).resolves.toBe('public, max-age=60');
     await expect(renderPage()).resolves.toBe('public, max-age=60');
   });
+
+  it('keeps admin API answers to scripts out of shared caches', async () => {
+    vi.stubGlobal('__env__', {
+      FLAREWATCH_ADMIN_BASIC_AUTH: await buildAuthSecret('ops', 's3cret'),
+      LOGIN_RATE_LIMIT: { limit: async () => ({ success: true }) },
+    });
+
+    const { response } = call('/api/admin/maintenances', {
+      headers: { Authorization: `Basic ${btoa('ops:s3cret')}` },
+    });
+
+    expect(((await response) as Response).headers.get('Cache-Control')).toBe('private, no-store');
+  });
+});
+
+describe('auth middleware framing', () => {
+  const { visibility } = pageConfig;
+  afterEach(() => {
+    pageConfig.visibility = visibility;
+  });
+
+  const frameAncestors = async (pathname: string) =>
+    ((await call(pathname).response) as Response).headers.get('Content-Security-Policy');
+
+  it('lets other sites frame the embed only', async () => {
+    vi.stubGlobal('__env__', {});
+
+    await expect(frameAncestors('/')).resolves.toBe("frame-ancestors 'none'");
+    await expect(frameAncestors('/login')).resolves.toBe("frame-ancestors 'none'");
+    await expect(frameAncestors('/api/admin/maintenances')).resolves.toBe("frame-ancestors 'none'");
+    await expect(frameAncestors('/embed/demo_example')).resolves.toBeNull();
+    await expect(frameAncestors('/Embed/demo_example')).resolves.toBeNull();
+  });
+
+  it('forbids framing the sign-in redirect of a private page', async () => {
+    pageConfig.visibility = 'private';
+    vi.stubGlobal('__env__', { FLAREWATCH_ADMIN_BASIC_AUTH: 'configured' });
+
+    await expect(frameAncestors('/')).resolves.toBe("frame-ancestors 'none'");
+  });
 });

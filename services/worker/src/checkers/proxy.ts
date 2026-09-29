@@ -10,6 +10,7 @@ import {
   getErrorMessage,
   isJsonObject,
   readJsonUpTo,
+  readTextUpTo,
 } from '@flarewatch/shared';
 
 const log = createLogger('Proxy');
@@ -69,7 +70,7 @@ export async function checkExternalProxy(
     if (!response.ok) {
       // The body goes to the owner's logs only: the error is public, and a proxy
       // can echo the token or the monitor config it was sent.
-      const body = await response.text();
+      const body = await readTextUpTo(response, 4096);
       const token = env?.FLAREWATCH_PROXY_TOKEN;
       log.warn('Proxy failed', {
         status: response.status,

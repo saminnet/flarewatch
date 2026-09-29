@@ -79,6 +79,64 @@ describe('MonitorHub incidents', () => {
     expect(incident?.error[1]).toBe('err-901');
   });
 
+  it('reopens the last incident when the monitor fails within 15 minutes of recovering', () => {
+    const { hub } = createHub();
+    for (let i = 0; i < 1440; i++) {
+      hub.record(T0 + i * 60, [check('api', i % 2 === 0 ? down() : up())]);
+    }
+
+    expect(hub.view().monitors.api).toMatchObject({
+      status: 'up',
+      incidents: [{ start: [T0], error: ['Unavailable'], end: T0 + 1439 * 60 }],
+    });
+  });
+
+  it('opens a new incident when the monitor fails more than 15 minutes after recovering', () => {
+    const { hub } = createHub();
+    hub.record(T0, [check('api', down('Timeout'))]);
+    hub.record(T0 + 60, [check('api', up())]);
+
+    const [update] = hub.record(T0 + 60 + 15 * 60 + 1, [check('api', down('HTTP 502'))]).updates;
+
+    expect(update).toMatchObject({ changeType: 'down', incidentStartTime: T0 + 60 + 15 * 60 + 1 });
+    expect(hub.view().monitors.api?.incidents).toEqual([
+      { start: [T0], error: ['Timeout'], end: T0 + 60 },
+      { start: [T0 + 60 + 15 * 60 + 1], error: ['HTTP 502'] },
+    ]);
+  });
+
+  it('adds a segment when a reopened incident fails with a new error', () => {
+    const { hub } = createHub();
+    hub.record(T0, [check('api', down('Timeout'))]);
+    hub.record(T0 + 60, [check('api', up())]);
+
+    const [update] = hub.record(T0 + 120, [check('api', down('HTTP 502'))]).updates;
+
+    expect(update).toMatchObject({
+      changeType: 'down',
+      statusChanged: true,
+      incidentStartTime: T0,
+    });
+    expect(hub.view().monitors.api?.incidents).toEqual([
+      { start: [T0, T0 + 120], error: ['Timeout', 'HTTP 502'] },
+    ]);
+  });
+
+  it('keeps a monitor’s newest 1,000 closed incidents', () => {
+    const { hub } = createHub();
+    const gap = 17 * 60;
+    for (let i = 0; i < 1002; i++) {
+      hub.record(T0 + i * gap, [check('api', down(`err-${i}`))]);
+      hub.record(T0 + i * gap + 60, [check('api', up())]);
+    }
+    hub.record(T0 + 1002 * gap, [check('api', down('err-1002'))]);
+
+    const incidents = hub.view().monitors.api?.incidents ?? [];
+    expect(incidents).toHaveLength(1001);
+    expect(incidents[0]?.error).toEqual(['err-2']);
+    expect(incidents[1000]).toEqual({ start: [T0 + 1002 * gap], error: ['err-1002'] });
+  });
+
   it('keeps an open incident and drops closed ones 90 days after they end', () => {
     const { hub } = createHub();
     hub.record(T0, [check('old', down()), check('open', down())]);
@@ -314,7 +372,9 @@ describe('MonitorHub after an upgrade from 2.x', () => {
     hub.record(T0, [check('api', up())]);
     // Rewind to the schema 2.x left behind, with its import rows.
     db.exec(`
-      DELETE FROM _migrations WHERE id = 4;
+      DELETE FROM _migrations WHERE id >= 4;
+      ALTER TABLE incidents DROP COLUMN reopened_at;
+      ALTER TABLE incidents DROP COLUMN error_alerts;
       INSERT INTO meta (key, value) VALUES ('v1_import', '1'), ('v1_import_marked', '1');
     `);
 

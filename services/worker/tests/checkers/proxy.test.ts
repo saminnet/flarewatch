@@ -94,6 +94,19 @@ describe('checkExternalProxy', () => {
     expect(JSON.stringify(result.result)).toContain('over 1048576 bytes');
   });
 
+  it('stops reading a proxy error answer that never ends', async () => {
+    const chunk = new TextEncoder().encode(' '.repeat(64 * 1024));
+    fetchMock.mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>({ pull: (c) => c.enqueue(chunk) }), {
+        status: 503,
+      }),
+    );
+
+    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
+
+    expect(result).toEqual({ location: 'ERROR', result: { ok: false, error: 'Proxy HTTP 503' } });
+  });
+
   it('keeps the proxy response body out of the public error', async () => {
     fetchMock.mockResolvedValue(
       new Response('Authorization: Bearer proxy-secret', { status: 503 }),

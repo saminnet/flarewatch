@@ -4,6 +4,7 @@ import {
   type Maintenance,
   type MaintenanceConfig,
   isNonEmptyString,
+  readJsonUpTo,
 } from '@flarewatch/shared';
 import { deleteMaintenance, fetchHubView, saveMaintenance } from '@/lib/hub';
 import { forgetCachedView } from '@/lib/kv';
@@ -13,6 +14,22 @@ function jsonError(message: string, status: number): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+const MAX_BODY_BYTES = 64 * 1024;
+
+/** The JSON body, or null when it is not JSON or is over MAX_BODY_BYTES. */
+function readBody(request: Request): Promise<unknown> {
+  return readJsonUpTo(request, MAX_BODY_BYTES).catch(() => null);
+}
+
+/**
+ * Monitor ids, deduplicated; undefined for every monitor. Null when an entry is no id:
+ * dropping it could empty the list, which would widen the window to every monitor.
+ */
+function parseMonitors(value: unknown[]): string[] | undefined | null {
+  if (!value.every(isNonEmptyString)) return null;
+  return value.length > 0 ? Array.from(new Set(value)) : undefined;
 }
 
 function generateMaintenanceId(): string {
@@ -43,16 +60,15 @@ function normalizeMaintenanceInput(input: unknown): MaintenanceConfig | null {
   const color =
     typeof input.color === 'string' && input.color.trim() ? input.color.trim() : undefined;
 
-  const monitors = Array.isArray(input.monitors)
-    ? input.monitors.filter(isNonEmptyString)
-    : undefined;
+  const monitors = Array.isArray(input.monitors) ? parseMonitors(input.monitors) : undefined;
+  if (monitors === null) return null;
 
   return {
     title,
     body,
     start: new Date(startMs).toISOString(),
     end: endMs !== undefined ? new Date(endMs).toISOString() : undefined,
-    monitors: monitors && monitors.length > 0 ? Array.from(new Set(monitors)) : undefined,
+    monitors,
     color,
   };
 }
@@ -98,8 +114,9 @@ export function normalizeMaintenanceUpdates(
     if (input.monitors === null) {
       updates.monitors = undefined;
     } else if (Array.isArray(input.monitors)) {
-      const monitors = input.monitors.filter(isNonEmptyString);
-      updates.monitors = monitors.length ? Array.from(new Set(monitors)) : undefined;
+      const monitors = parseMonitors(input.monitors);
+      if (monitors === null) return null;
+      updates.monitors = monitors;
     } else {
       return null;
     }
@@ -157,8 +174,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
 
       POST: async ({ request }: { request: Request }) => {
         try {
-          const body: unknown = await request.json();
-          const input = normalizeMaintenanceInput(body);
+          const input = normalizeMaintenanceInput(await readBody(request));
 
           if (!input) {
             return jsonError('Invalid maintenance payload', 400);
@@ -184,7 +200,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
 
       PUT: async ({ request }: { request: Request }) => {
         try {
-          const payload = parseMaintenancePayload(await request.json());
+          const payload = parseMaintenancePayload(await readBody(request));
 
           if (!payload) {
             return jsonError('id is required', 400);
@@ -222,7 +238,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
 
       DELETE: async ({ request }: { request: Request }) => {
         try {
-          const payload = parseMaintenancePayload(await request.json());
+          const payload = parseMaintenancePayload(await readBody(request));
 
           if (!payload) {
             return jsonError('id is required', 400);

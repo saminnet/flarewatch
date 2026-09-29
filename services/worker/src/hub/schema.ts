@@ -34,6 +34,12 @@ const MIGRATIONS: string[][] = [
   ],
   // Bookkeeping from the 1.x import, which 3.0 removed.
   [`DELETE FROM meta WHERE key IN ('v1_import', 'v1_import_marked')`],
+  // When a flap last reopened the incident, where its grace period restarts,
+  // and how many error-change alerts it has sent.
+  [
+    `ALTER TABLE incidents ADD COLUMN reopened_at INTEGER`,
+    `ALTER TABLE incidents ADD COLUMN error_alerts INTEGER NOT NULL DEFAULT 0`,
+  ],
 ];
 
 export function migrate(sql: Sql): void {

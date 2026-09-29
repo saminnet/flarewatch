@@ -66,7 +66,7 @@ To keep the whole page to yourself, set `visibility: 'private'` in `packages/con
 | Setting           | Does                                                           |
 | ----------------- | -------------------------------------------------------------- |
 | `title`           | Page and tab title.                                            |
-| `logo`, `favicon` | Image URLs.                                                    |
+| `logo`, `favicon` | Image URLs, paths or `data:image/` URLs.                       |
 | `links`           | Footer links, like `{ label: 'GitHub', link: 'https://...' }`. |
 | `group`           | Monitor groups, like `{ APIs: ['api', 'auth'] }`.              |
 | `visibility`      | `'private'` for a [private page](#private-page).               |

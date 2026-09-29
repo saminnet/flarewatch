@@ -12,7 +12,9 @@ export function teamsTemplate(ctx: TemplateContext): TemplateOutput {
   ];
 
   if (!ctx.isUp && ctx.reason) {
-    facts.push({ title: 'Reason', value: stripControlChars(ctx.reason) });
+    // Cards render Markdown with no escape, so the brackets of a [text](url) link become look-alikes.
+    const reason = stripControlChars(ctx.reason).replaceAll('[', '⟦').replaceAll(']', '⟧');
+    facts.push({ title: 'Reason', value: reason });
   }
 
   const alsoDown = alsoDownList(ctx);

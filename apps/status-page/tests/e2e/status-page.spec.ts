@@ -814,6 +814,16 @@ test('embed route renders seeded monitor status and variants', async ({ page, re
   expect(clientErrors).toEqual([]);
 });
 
+test('another site can frame the embed but not the status page', async ({ page, baseURL }) => {
+  await page.setContent(
+    `<iframe id="embed" src="${baseURL}/embed/demo_example"></iframe>
+     <iframe id="page" src="${baseURL}/"></iframe>`,
+  );
+
+  await expect(page.frameLocator('#embed').getByText('Example Domain')).toBeVisible();
+  await expect(page.frameLocator('#page').getByRole('banner')).toHaveCount(0);
+});
+
 test.describe.serial('operator maintenance lifecycle', () => {
   test.skip(
     Boolean(process.env.PLAYWRIGHT_BASE_URL),

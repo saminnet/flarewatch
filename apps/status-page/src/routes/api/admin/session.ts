@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { isJsonObject, type JsonValue } from '@flarewatch/shared';
+import { isJsonObject, readJsonUpTo, type JsonValue } from '@flarewatch/shared';
 import {
   clearedSessionCookie,
   clientIp,
@@ -32,7 +32,8 @@ export const Route = createFileRoute('/api/admin/session')({
           return jsonResponse({ error: 'Admin access not configured' }, 404);
         }
 
-        const body: unknown = await request.json().catch(() => null);
+        // Read before the rate limit, so capped: anyone can send it.
+        const body: unknown = await readJsonUpTo(request, 4096).catch(() => null);
         if (!isJsonObject(body)) {
           return jsonResponse({ error: 'Invalid JSON body' }, 400);
         }

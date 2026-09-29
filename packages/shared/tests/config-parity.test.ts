@@ -20,12 +20,90 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
   ['ftp url rejected for GET', { monitors: [{ ...monitor, target: 'ftp://example.com' }] }, false],
   [
     'unknown monitor fields ignored',
-    { monitors: [{ ...monitor, timeout: 'not-a-number', expectedCodes: 'nope' }] },
+    { monitors: [{ ...monitor, tooltip: 5, expectedCodes: 'nope' }] },
+    true,
+  ],
+  ['monitor timeout of a minute', { monitors: [{ ...monitor, timeout: 60_000 }] }, true],
+  ['monitor timeout over a minute', { monitors: [{ ...monitor, timeout: 60_001 }] }, false],
+  ['monitor timeout of zero', { monitors: [{ ...monitor, timeout: 0 }] }, false],
+  ['monitor timeout as a string', { monitors: [{ ...monitor, timeout: '5000' }] }, false],
+  ['monitor link to a URL', { monitors: [{ ...monitor, link: 'https://a.com/x' }] }, true],
+  ['monitor link turned off', { monitors: [{ ...monitor, link: false }] }, true],
+  [
+    'javascript: monitor link rejected',
+    { monitors: [{ ...monitor, link: 'javascript:alert(1)' }] },
+    false,
+  ],
+  [
+    'heartbeat javascript: link rejected',
+    {
+      monitors: [
+        {
+          id: 'job',
+          name: 'Job',
+          method: 'HEARTBEAT',
+          periodSeconds: 60,
+          graceSeconds: 0,
+          link: ' javascript:alert(1)',
+        },
+      ],
+    },
+    false,
+  ],
+  [
+    'page links to URLs and paths',
+    {
+      monitors: [],
+      statusPage: {
+        links: [
+          { label: 'Home', link: 'https://example.com' },
+          { label: 'About', link: '/about', highlight: true },
+        ],
+      },
+    },
+    true,
+  ],
+  [
+    'javascript: page link rejected',
+    { monitors: [], statusPage: { links: [{ label: 'x', link: 'java\tscript:alert(1)' }] } },
+    false,
+  ],
+  [
+    'javascript: poweredByUrl rejected',
+    { monitors: [], statusPage: { poweredByUrl: 'javascript:alert(1)' } },
+    false,
+  ],
+  [
+    'data: image favicon and logo accepted',
+    {
+      monitors: [],
+      statusPage: { favicon: 'data:image/png;base64,AAAA', logo: '/logo.svg' },
+    },
+    true,
+  ],
+  [
+    'data: html logo rejected',
+    { monitors: [], statusPage: { logo: 'data:text/html,<script>alert(1)</script>' } },
+    false,
+  ],
+  [
+    'webhook timeout over a minute',
+    { monitors: [], notification: { webhook: { url: 'https://a.com', timeout: 60_001 } } },
+    false,
+  ],
+  [
+    'webhook timeout of zero',
+    { monitors: [], notification: { webhook: { url: 'https://a.com', timeout: 0 } } },
+    false,
+  ],
+  [
+    'webhook timeout of a minute',
+    { monitors: [], notification: { webhook: { url: 'https://a.com', timeout: 60_000 } } },
     true,
   ],
   ['extra top-level keys ignored', { monitors: [], somethingElse: 42 }, true],
   ['statusPage title must be a string', { monitors: [], statusPage: { title: 5 } }, false],
-  ['statusPage other fields ignored', { monitors: [], statusPage: { links: 'nope' } }, true],
+  ['statusPage other fields ignored', { monitors: [], statusPage: { theme: 42 } }, true],
   ['statusPage private visibility', { monitors: [], statusPage: { visibility: 'private' } }, true],
   // A typo must not silently leave a private page public.
   ['statusPage unknown visibility', { monitors: [], statusPage: { visibility: 'Private' } }, false],
@@ -132,6 +210,14 @@ const maintenanceCases: Array<[string, unknown, boolean]> = [
   ['NaN end rejected', { ...maintenanceBase, end: NaN }, false],
   ['boolean end rejected', { ...maintenanceBase, end: true }, false],
   ['numeric end accepted', { ...maintenanceBase, end: 9 }, true],
+  ['unparseable start rejected', { ...maintenanceBase, start: 'soon' }, false],
+  ['unparseable end rejected', { ...maintenanceBase, end: '2026-13-45' }, false],
+  ['end before start rejected', { ...maintenanceBase, start: 10, end: 5 }, false],
+  [
+    'string end after string start accepted',
+    { ...maintenanceBase, start: '2026-01-01T10:00:00Z', end: '2026-01-01T12:00:00Z' },
+    true,
+  ],
   ['monitors must be strings', { ...maintenanceBase, monitors: [1] }, false],
   ['colour must be a string', { ...maintenanceBase, color: 1 }, false],
   ['extra keys ignored', { ...maintenanceBase, whatever: {} }, true],

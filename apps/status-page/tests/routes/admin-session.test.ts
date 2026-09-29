@@ -42,6 +42,15 @@ describe('POST /api/admin/session body guard', () => {
       expect(response.status).toBe(400);
     }
   });
+
+  it('rejects a body over 4 KiB with 400 before touching KV', async () => {
+    globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: 'e2e-admin:secret' };
+    const body = JSON.stringify({ username: 'e2e-admin', password: 'x'.repeat(5000) });
+
+    const response = await getPostHandler()({ request: postRequest(body) });
+
+    expect(response.status).toBe(400);
+  });
 });
 
 describe('POST /api/admin/session login rate limit', () => {

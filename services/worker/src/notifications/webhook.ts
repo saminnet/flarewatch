@@ -8,6 +8,7 @@ import {
   createLogger,
   getErrorMessage,
   isJsonObject,
+  readTextUpTo,
   toHeaders,
 } from '@flarewatch/shared';
 import { getTemplate } from './templates';
@@ -118,6 +119,21 @@ function appendFormValue(target: URLSearchParams, key: string, value: JsonValue)
   target.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
 }
 
+/**
+ * Text bound for the logs, without the webhook's URL or header values, which often carry its
+ * secret. A short header value is no secret and masking it would garble the text.
+ */
+function redact(text: string, webhook: Webhook, finalUrl: string): string {
+  const masked = [finalUrl, webhook.url].reduce(
+    (result, secret) => result.replaceAll(secret, '<webhook URL>'),
+    text,
+  );
+  return Object.values(webhook.headers ?? {})
+    .flatMap((value) => [String(value), String(value).split(' ').pop() ?? ''])
+    .filter((secret) => secret.length >= 8)
+    .reduce((result, secret) => result.replaceAll(secret, '<header>'), masked);
+}
+
 export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook): TemplateContext {
   const { monitor, isUp, incidentStartTime, currentTime, reason, timeZone } = ctx;
   const formatter = createDateFormatter(timeZone);
@@ -212,7 +228,7 @@ export class WebhookNotifier {
       });
 
       if (!response.ok) {
-        const body = await response.text();
+        const body = redact(await readTextUpTo(response, 4096), webhook, finalUrl);
         log.info('Failed', { status: response.status, body: body.slice(0, 200) });
         return {
           success: false,
@@ -224,11 +240,8 @@ export class WebhookNotifier {
       log.info('Success', { status: response.status });
       return { success: true, statusCode: response.status };
     } catch (error) {
-      // A fetch error can quote the URL, and a webhook URL often carries its secret.
-      const message = [finalUrl, url].reduce(
-        (text, secret) => text.replaceAll(secret, '<webhook URL>'),
-        getErrorMessage(error),
-      );
+      // A fetch error can quote the URL.
+      const message = redact(getErrorMessage(error), webhook, finalUrl);
       log.error('Error', { error: message });
       return { success: false, error: message };
     }

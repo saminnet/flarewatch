@@ -28,14 +28,37 @@ const MONITOR_METHODS = new Set<string>([...PULL_METHODS, 'HEARTBEAT']);
 const HEARTBEAT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_HEARTBEAT_PERIOD_SECONDS = 2_678_400;
 const MAX_HEARTBEAT_GRACE_SECONDS = 604_800;
+/** A check or delivery may not outlast the minute between check runs. */
+const MAX_TIMEOUT_MS = 60_000;
 
-function isValidHttpUrl(value: string): boolean {
+/** With a base, a path on that site passes too. */
+function isValidHttpUrl(value: string, base?: string): boolean {
   try {
-    const url = new URL(value);
+    const url = new URL(value, base);
     return url.protocol === 'http:' || url.protocol === 'https:';
   } catch {
     return false;
   }
+}
+
+/** A URL the page renders as a link: never javascript: or another scheme a click would run. */
+function pageLink(field: string) {
+  const error = `${field} must be an http(s) URL or a path`;
+  return z
+    .string({ error })
+    .check(z.refine((value) => isValidHttpUrl(value, 'https://page.invalid'), { error }));
+}
+
+function pageImage(field: string) {
+  const error = `${field} must be an http(s) URL, a path or a data:image URL`;
+  return z
+    .string({ error })
+    .check(
+      z.refine(
+        (value) => isValidHttpUrl(value, 'https://page.invalid') || /^data:image\//i.test(value),
+        { error },
+      ),
+    );
 }
 
 function isValidHostPort(value: string): boolean {
@@ -92,19 +115,31 @@ type SchemaOutput<T, Depth extends number = 4> = Depth extends 0
   ? unknown
   : { [K in keyof T]: SchemaOutput<T[K], Prev[Depth]> | undefined };
 
-const timestamp = z.union([z.string(), z.number()]);
+const toTime = (value: string | number) => new Date(value).getTime();
 
-const maintenanceSchema: z.ZodMiniType<SchemaOutput<Maintenance>> = z.object({
-  id: z.string().check(z.minLength(1)),
-  body: z.string().check(z.minLength(1)),
-  createdAt: z.number(),
-  updatedAt: z.number(),
-  start: timestamp,
-  end: z.optional(timestamp),
-  title: z.optional(z.string()),
-  color: z.optional(z.string()),
-  monitors: z.optional(z.array(z.string())),
-});
+const timestamp = z
+  .union([z.string(), z.number()])
+  .check(z.refine((value) => !Number.isNaN(toTime(value)), { error: 'must be a date' }));
+
+const maintenanceSchema: z.ZodMiniType<SchemaOutput<Maintenance>> = z
+  .object({
+    id: z.string().check(z.minLength(1)),
+    body: z.string().check(z.minLength(1)),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+    start: timestamp,
+    end: z.optional(timestamp),
+    title: z.optional(z.string()),
+    color: z.optional(z.string()),
+    monitors: z.optional(z.array(z.string())),
+  })
+  .check(
+    z.refine(
+      (maintenance) =>
+        maintenance.end === undefined || toTime(maintenance.end) >= toTime(maintenance.start),
+      { error: 'end must not be before start' },
+    ),
+  );
 
 function nonEmptyString(field: string) {
   const error = `${field} must be a non-empty string`;
@@ -121,6 +156,11 @@ const monitorCommon = {
   name: nonEmptyString('name'),
   private: z.optional(z.boolean({ error: 'private must be a boolean' })),
   dependsOn: z.optional(z.array(z.string(), { error: 'dependsOn must be a list of monitor ids' })),
+  link: z.optional(
+    z.union([z.literal(false), pageLink('link')], {
+      error: 'link must be false or an http(s) URL or a path',
+    }),
+  ),
 };
 
 const pullMonitorSchema = z
@@ -128,6 +168,7 @@ const pullMonitorSchema = z
     ...monitorCommon,
     method: z.enum(PULL_METHODS),
     target: z.string({ error: 'target must be a string' }),
+    timeout: z.optional(intInRange('timeout', 1, MAX_TIMEOUT_MS)),
   })
   .check((ctx) => {
     const issue = targetIssue(ctx.value.method, ctx.value.target);
@@ -224,12 +265,26 @@ function loopFrom(start: string, byId: Map<string, DependencyNode>): string[] | 
 const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.object({
   title: z.optional(z.string()),
   visibility: z.optional(z.enum(['public', 'private'])),
+  links: z.optional(
+    z.array(
+      z.object({
+        link: pageLink('links[].link'),
+        label: z.string(),
+        highlight: z.optional(z.boolean()),
+      }),
+    ),
+  ),
+  favicon: z.optional(pageImage('favicon')),
+  logo: z.optional(pageImage('logo')),
+  poweredByUrl: z.optional(pageLink('poweredByUrl')),
 });
 
 const webhookMethod = z.pipe(
   z.string().check(z.toUpperCase()),
   z.enum(['GET', 'POST', 'PUT', 'PATCH']),
 );
+
+const webhookTimeout = intInRange('timeout', 1, MAX_TIMEOUT_MS);
 
 const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
   .object({
@@ -240,7 +295,7 @@ const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
     headers: z.optional(z.record(z.string(), z.union([z.string(), z.number()]))),
     payloadType: z.optional(z.enum(['param', 'json', 'x-www-form-urlencoded'])),
     payload: z.optional(z.json()),
-    timeout: z.optional(z.number()),
+    timeout: z.optional(webhookTimeout),
   })
   .check(z.refine((webhook) => isAllowedPayload(webhook.payloadType, webhook.payload)));
 
@@ -392,6 +447,15 @@ export function parseSecretWebhooks(text: string) {
   }
   const entries: unknown[] = Array.isArray(value) ? value : [value];
   entries.forEach((entry, index) => {
+    // A bad timeout falls back to the default: dropping the webhook would silence its alerts,
+    // and unlike the config, the secret has no CI check to catch it first.
+    const timeout = isJsonObject(entry) ? webhookTimeout.safeParse(entry.timeout) : undefined;
+    if (isJsonObject(entry) && entry.timeout !== undefined && timeout?.error) {
+      issues.push(
+        `webhook ${index + 1}.timeout: ${timeout.error.issues[0]?.message}; using the default`,
+      );
+      entry = { ...entry, timeout: undefined };
+    }
     const result = webhookSchema.safeParse(entry);
     // The parsed value, not the entry: parsing upper-cases the method.
     if (result.success && isWebhook(result.data)) webhooks.push(result.data);

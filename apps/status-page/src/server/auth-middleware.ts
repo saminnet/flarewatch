@@ -41,10 +41,15 @@ export async function authMiddlewareServer(
   }
 
   const result = await authorize(opts);
+  const response = result instanceof Response ? result : result.response;
+  const pathname = opts.pathname.toLowerCase();
+  // Only the embed belongs in another site's frame; a framed sign-in or admin page invites clickjacking.
+  if (!pathname.startsWith('/embed/')) {
+    response.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
+  }
+  // What a signed-in person or an admin script sees must never be stored by a shared cache.
   const env = await resolveRuntimeEnv();
-  // What a signed-in person sees must never be stored by a shared cache.
-  if ((await resolveViewer(env, opts.request)) !== 'visitor') {
-    const response = result instanceof Response ? result : result.response;
+  if (pathname.startsWith('/api/admin') || (await resolveViewer(env, opts.request)) !== 'visitor') {
     response.headers.set('Cache-Control', 'private, no-store');
   }
   return result;
@@ -100,7 +105,11 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
   ) {
     return pathname.startsWith('/api/')
       ? jsonError(404, 'Not found')
-      : Response.redirect(new URL('/login', request.url), 302);
+      : // Not Response.redirect: its headers are immutable, and the caller adds some.
+        new Response(null, {
+          status: 302,
+          headers: { Location: new URL('/login', request.url).href },
+        });
   }
 
   return next();

@@ -16,7 +16,7 @@ Monitors live in `packages/config/src/worker.ts`. [`worker.example.ts`](../packa
 }
 ```
 
-A check fails on another status code, when `responseKeyword` is missing from the first 1 MiB of the response, when `responseForbiddenKeyword` is in it, or after `timeout` milliseconds. `headers` and `body` go with the request.
+A check fails on another status code, when `responseKeyword` is missing from the first 1 MiB of the response, when `responseForbiddenKeyword` is in it, or after `timeout` milliseconds, at most 60000. `headers` and `body` go with the request.
 
 The monitor name links to its target on the status page, without any credentials or query string. Set `link: false` to hide the URL, or `link: 'https://...'` to link somewhere else.
 

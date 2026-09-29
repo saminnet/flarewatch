@@ -19,6 +19,25 @@ Once that deploy has run, merge `upstream/main` and push again. If you skip that
 - 3.0 no longer copies 1.x data from KV into the hub, and the monitor Worker has no KV binding anymore. If KV still holds 1.x data that was never copied, the deploy stops.
 - `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` is no longer read. Set `visibility: 'private'` in the page config instead. If the status page still has that secret, the deploy stops and says how to remove it, so updating never opens a private page.
 - `/admin` and `/events` no longer redirect. Use `/login` and `/history`.
+- `timeout` on a monitor or a webhook must be a whole number of milliseconds from 1 to 60000. A longer one ran into the next check run. The config check names any monitor that breaks this. A webhook in the `FLAREWATCH_WEBHOOKS` secret with such a timeout still alerts, with the default timeout, and the Worker logs why.
+- Links in the config must be http(s) URLs or paths: a monitor's `link`, `links`, `poweredByUrl`, `logo` and `favicon`. `logo` and `favicon` can also be `data:image/` URLs.
+- The admin API rejects a maintenance whose `monitors` list holds anything but monitor ids. An empty list still covers every monitor.
+
+### Changed
+
+- A monitor that fails again within 15 minutes of recovering reopens the same incident instead of starting a new one. You still get a new down alert after the full grace period, and History shows one outage.
+- Each monitor keeps its newest 1,000 closed incidents.
+- An outage sends at most 5 error-change alerts.
+
+### Security
+
+- Only `/embed` pages can be shown in a frame on another site.
+- Admin API answers to scripts that sign in with the Basic header are no longer cacheable.
+- The sign-in and maintenance endpoints stop reading a request body at 4 KiB and 64 KiB.
+- Error answers from check proxies and webhooks, and Cloudflare's trace answer, are read up to 4 KiB. The trace request has a timeout now.
+- A TCP check that times out closes its socket.
+- Webhook header values are masked in the logs.
+- Teams alerts no longer turn a monitor's error text into links.
 
 ## 2.3.1 - 2026-09-29
 

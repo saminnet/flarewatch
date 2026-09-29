@@ -194,6 +194,51 @@ describe('WebhookNotifier', () => {
     expect(options?.method).toBe('PUT');
   });
 
+  it('keeps the webhook URL and headers out of logs when a failed response echoes them', async () => {
+    const url = 'https://hooks.example.com/services/SECRET-PATH';
+    fetchMock.mockResolvedValue(
+      new Response(`bad request to ${url} with Bearer header-secret-token`, { status: 400 }),
+    );
+    const logged: unknown[] = [];
+    const spies = (['info', 'warn', 'error'] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line)),
+    );
+
+    const notifier = new WebhookNotifier(
+      {
+        url,
+        headers: { Authorization: 'Bearer header-secret-token' },
+        payloadType: 'json',
+        payload: {},
+      },
+      fetchMock,
+    );
+    await notifier.send(createNotificationContext(), 'hello');
+    for (const spy of spies) spy.mockRestore();
+
+    expect(JSON.stringify(logged)).toContain('bad request to');
+    expect(JSON.stringify(logged)).not.toContain('SECRET-PATH');
+    expect(JSON.stringify(logged)).not.toContain('header-secret-token');
+  });
+
+  it('stops reading a failed webhook response that never ends', async () => {
+    const chunk = new TextEncoder().encode(' '.repeat(64 * 1024));
+    fetchMock.mockResolvedValue(
+      new Response(new ReadableStream<Uint8Array>({ pull: (c) => c.enqueue(chunk) }), {
+        status: 500,
+      }),
+    );
+
+    const notifier = new WebhookNotifier(
+      { url: 'https://hooks.example.com/webhook', payloadType: 'json', payload: {} },
+      fetchMock,
+    );
+
+    expect(await notifier.send(createNotificationContext(), 'hello')).toEqual([
+      { success: false, statusCode: 500, error: 'HTTP 500' },
+    ]);
+  });
+
   it('returns success=false when webhook responds with non-2xx', async () => {
     fetchMock.mockResolvedValue(new Response('fail', { status: 500 }));
 

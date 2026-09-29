@@ -33,6 +33,12 @@ export const MAX_ALERT_ATTEMPTS = 10;
  * Longer than a cron run can last (15 minutes), so the run that made it is gone.
  */
 const ALERT_CLAIM_SECONDS = 20 * 60;
+/** A failure this soon after recovering reopens the incident, so a flapping target adds no rows. */
+const FLAP_SECONDS = 15 * 60;
+/** Closed incidents kept per monitor, however many fit in the retention window. */
+const MAX_CLOSED_INCIDENTS = 1000;
+/** Error-change alerts per incident, so a target whose error keeps changing cannot spam. */
+const MAX_ERROR_ALERTS = 5;
 
 /** A check monitor's result, or a heartbeat monitor, which the hub evaluates from its pings. */
 export type CheckRecord =
@@ -76,6 +82,8 @@ type IncidentRow = {
   end_at: number | null;
   alert: 'pending' | 'sending' | 'sent' | 'failed' | 'silent';
   alert_claimed_at: number | null;
+  reopened_at: number | null;
+  error_alerts: number;
 };
 
 /** Reads kept until the next write, so page traffic between check runs reads no rows. */
@@ -224,7 +232,7 @@ export class MonitorHub extends DurableObject<Env> {
     const openNow = new Map(
       this.sql
         .exec<IncidentRow>(
-          `SELECT id, monitor_id, starts, errors, end_at, alert, alert_claimed_at
+          `SELECT id, monitor_id, starts, errors, end_at, alert, alert_claimed_at, reopened_at, error_alerts
            FROM incidents WHERE end_at IS NULL`,
         )
         .map((row) => [row.monitor_id, row]),
@@ -265,7 +273,7 @@ export class MonitorHub extends DurableObject<Env> {
         const grace = monitor.method === 'HEARTBEAT' ? 0 : policy.gracePeriodSeconds;
         // One run's wait lets a dependency that fails a run later cover this monitor.
         const held = (monitor.dependsOn?.length ?? 0) > 0 && change?.changeType === 'down';
-        if (quiet || held || now - start < grace) continue;
+        if (quiet || held || now - (row.reopened_at ?? start) < grace) continue;
         // Claimed so an overlapping run skips it, until confirmAlerts hears how delivery went.
         this.sql.exec(
           "UPDATE incidents SET alert = 'sending', alert_claimed_at = ? WHERE id = ?",
@@ -286,8 +294,10 @@ export class MonitorHub extends DurableObject<Env> {
         row.alert === 'sent' &&
         change?.changeType === 'error' &&
         !quiet &&
-        !policy.skipErrorChanges
+        !policy.skipErrorChanges &&
+        row.error_alerts < MAX_ERROR_ALERTS
       ) {
+        this.sql.exec('UPDATE incidents SET error_alerts = error_alerts + 1 WHERE id = ?', row.id);
         alerts.push({
           monitorId: monitor.id,
           incident: row.id,
@@ -390,11 +400,26 @@ export class MonitorHub extends DurableObject<Env> {
     }
 
     if (!open) {
+      const [recent] = this.sql.exec<IncidentRow>(
+        `SELECT id, starts, errors FROM incidents
+         WHERE monitor_id = ? AND end_at >= ? ORDER BY id DESC LIMIT 1`,
+        monitorId,
+        now - FLAP_SECONDS,
+      );
+      if (recent) return this.reopen(monitorId, recent, result.error, now);
       this.sql.exec(
         'INSERT INTO incidents (monitor_id, starts, errors) VALUES (?, ?, ?)',
         monitorId,
         JSON.stringify([now]),
         JSON.stringify([result.error]),
+      );
+      this.sql.exec(
+        `DELETE FROM incidents WHERE monitor_id = ? AND end_at IS NOT NULL AND id <= (
+           SELECT id FROM incidents WHERE monitor_id = ? AND end_at IS NOT NULL
+           ORDER BY id DESC LIMIT 1 OFFSET ?)`,
+        monitorId,
+        monitorId,
+        MAX_CLOSED_INCIDENTS,
       );
       return {
         monitorId,
@@ -406,23 +431,49 @@ export class MonitorHub extends DurableObject<Env> {
       };
     }
 
-    const { incident } = open;
-    const changed = incident.error[incident.error.length - 1] !== result.error;
-    if (changed) {
+    const segments = addSegment(open.incident, result.error, now);
+    if (segments) {
       this.sql.exec(
         'UPDATE incidents SET starts = ?, errors = ? WHERE id = ?',
-        JSON.stringify(capSegments([...incident.start, now])),
-        JSON.stringify(capSegments([...incident.error, result.error])),
+        segments.starts,
+        segments.errors,
         open.id,
       );
     }
     return {
       monitorId,
-      statusChanged: changed,
-      changeType: changed ? 'error' : 'none',
+      statusChanged: segments !== null,
+      changeType: segments ? 'error' : 'none',
       isUp: false,
       incidentStartTime,
       error: result.error,
+    };
+  }
+
+  /**
+   * The down alert is due again unless it is still waiting to go out: the
+   * outage it covered ended. The grace period restarts at the reopen.
+   */
+  private reopen(monitorId: string, row: IncidentRow, error: string, now: number): IncidentUpdate {
+    const incident = toIncident(row);
+    const segments = addSegment(incident, error, now);
+    this.sql.exec(
+      `UPDATE incidents SET end_at = NULL, reopened_at = ?, starts = ?, errors = ?, error_alerts = 0,
+         alert_attempts = CASE WHEN alert IN ('pending', 'sending') THEN alert_attempts ELSE 0 END,
+         alert = CASE WHEN alert IN ('pending', 'sending') THEN alert ELSE 'pending' END
+       WHERE id = ?`,
+      now,
+      segments?.starts ?? row.starts,
+      segments?.errors ?? row.errors,
+      row.id,
+    );
+    return {
+      monitorId,
+      statusChanged: true,
+      changeType: 'down',
+      isUp: false,
+      incidentStartTime: incident.start[0] ?? now,
+      error,
     };
   }
 
@@ -524,6 +575,15 @@ export class MonitorHub extends DurableObject<Env> {
     }
     return samples;
   }
+}
+
+/** The incident's segments with `error` starting at `now`, or null when that is already its error. */
+function addSegment(incident: Incident, error: string, now: number) {
+  if (incident.error[incident.error.length - 1] === error) return null;
+  return {
+    starts: JSON.stringify(capSegments([...incident.start, now])),
+    errors: JSON.stringify(capSegments([...incident.error, error])),
+  };
 }
 
 function recoveryAlert(monitorId: string, incident: number, start: number, at?: number): Alert {

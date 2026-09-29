@@ -14,25 +14,33 @@ import {
 
 const log = createLogger('TCP');
 
-class TcpChecker implements MonitorChecker {
+type Connect = (address: {
+  hostname: string;
+  port: number;
+}) => Promise<{ opened: Promise<unknown>; close(): Promise<void> }>;
+
+async function connectSocket(address: { hostname: string; port: number }) {
+  // Avoids a cloudflare:sockets bundling issue.
+  const { connect } = await import(/* webpackIgnore: true */ 'cloudflare:sockets');
+  return connect(address);
+}
+
+export class TcpChecker implements MonitorChecker {
+  constructor(private readonly connect: Connect = connectSocket) {}
+
   async check(target: MonitorTarget): Promise<CheckResult> {
     const startTime = performance.now();
     const timeout = target.timeout ?? DEFAULT_HTTP_TIMEOUT;
 
     try {
       const { hostname, port } = parseTcpTarget(target.target);
+      const socket = await this.connect({ hostname, port });
 
-      // Avoids a cloudflare:sockets bundling issue.
-      const { connect } = await import(/* webpackIgnore: true */ 'cloudflare:sockets');
-
-      const socket = connect({
-        hostname,
-        port,
-      });
-
-      await withTimeout(socket.opened, timeout);
-
-      await socket.close();
+      try {
+        await withTimeout(socket.opened, timeout);
+      } finally {
+        await socket.close().catch(() => {});
+      }
 
       const latency = Math.round(performance.now() - startTime);
       log.info('Connected', { name: target.name, hostname, port, latency });
