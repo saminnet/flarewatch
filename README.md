@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://flarewatch.app">Website</a> ·
   <a href="https://demo.flarewatch.app">Live demo</a> ·
   <a href="docs/deploy.md">Deploy</a> ·
   <a href="#docs">Docs</a>
@@ -30,9 +31,9 @@
 
 ## Deploy
 
-1. Fork this repo.
-2. Add two repository secrets, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. The [deploy guide](docs/deploy.md) lists the token permissions.
-3. List your monitors in `packages/config/src/worker.ts`.
+1. Fork this repo, then enable workflows in your fork's **Actions** tab.
+2. Add two repository secrets, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. The [deploy guide](docs/deploy.md) lists the token permissions. Other secrets are optional.
+3. List your monitors and alerts in `packages/config/src/worker.ts`. Page settings, like the title, are in `packages/config/src/public.ts`.
 4. Push to `main`. GitHub Actions tests and deploys both Workers, then prints your status page URL.
 5. To pick up new releases, [update your fork](docs/deploy.md#update-your-fork).
 

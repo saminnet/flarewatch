@@ -4,7 +4,15 @@ FlareWatch deploys from GitHub Actions into your own Cloudflare account. The fir
 
 ## 1. Fork the repo
 
-Fork [saminnet/flarewatch](https://github.com/saminnet/flarewatch) and leave GitHub Actions on.
+Fork [saminnet/flarewatch](https://github.com/saminnet/flarewatch). GitHub turns workflows off in a new fork, so open the fork's **Actions** tab and select **I understand my workflows, go ahead and enable them**. Until you do, pushes to the fork don't deploy.
+
+With the GitHub CLI:
+
+```bash
+gh repo fork saminnet/flarewatch --clone --default-branch-only
+```
+
+Then enable workflows in the **Actions** tab as above.
 
 ## 2. Create a Cloudflare API token
 
@@ -24,7 +32,7 @@ Your account ID is under **Workers & Pages > Account details**.
 
 ## 3. Add secrets to your fork
 
-In your fork, open **Settings > Secrets and variables > Actions**.
+In your fork, open **Settings > Secrets and variables > Actions**. Only the first two are required. The rest turn on optional features.
 
 | Secret                        | What it's for                                                                                 |
 | ----------------------------- | --------------------------------------------------------------------------------------------- |
@@ -36,6 +44,13 @@ In your fork, open **Settings > Secrets and variables > Actions**.
 | `HEARTBEAT_SECRET`            | [Heartbeat](monitors.md#heartbeats) ping URLs. Any long random string.                        |
 | `FLAREWATCH_PROXY_TOKEN`      | A [check proxy](monitors.md#other-regions-and-private-networks).                              |
 | `FLAREWATCH_WEBHOOKS`         | [Alert webhooks](alerts.md) you keep out of git, as JSON.                                     |
+
+With the GitHub CLI, each command prompts for the value:
+
+```bash
+gh secret set CLOUDFLARE_ACCOUNT_ID --repo <you>/flarewatch
+gh secret set CLOUDFLARE_API_TOKEN --repo <you>/flarewatch
+```
 
 Make the password secret from a username and password, and paste the whole output as the value:
 
@@ -58,7 +73,7 @@ The repo ships demo monitors, so a first deploy shows a working page. Replace th
 
 ## 5. Push to main
 
-The workflow runs the checks and tests. It then creates or reuses a KV namespace called `flarewatch-state` for sign-in sessions and deploys the monitor Worker, then the status page. The run summary shows the page URL, usually `https://flarewatch.<your-subdomain>.workers.dev`.
+The workflow runs the checks and tests. Follow it in the **Actions** tab, or with `gh run watch --repo <you>/flarewatch`. It then creates or reuses a KV namespace called `flarewatch-state` for sign-in sessions and deploys the monitor Worker, then the status page. The run summary shows the page URL, usually `https://flarewatch.<your-subdomain>.workers.dev`.
 
 Secrets are uploaded right after each deploy, so sign-in can take a few seconds to work on the very first one.
 
@@ -86,7 +101,7 @@ See Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/plat
 
 New releases land in [saminnet/flarewatch](https://github.com/saminnet/flarewatch). Read the [changelog](../CHANGELOG.md) for breaking changes before you update.
 
-Most updates happen on GitHub. Open your fork, select **Sync fork**, then **Update branch**.
+Most updates happen on GitHub. Open your fork, select **Sync fork**, then **Update branch**. With the GitHub CLI, `gh repo sync <you>/flarewatch` does the same.
 
 Your config lives in `packages/config`, and releases change those files too. When a release changes the same part of a file as you did, GitHub can't sync and offers a pull request instead. Merge from a clone of your fork:
 
@@ -101,7 +116,7 @@ Git lists each file in conflict. In `worker.ts`, `public.ts` and `access.ts`, ke
 
 Don't pick the option in the **Sync fork** menu that discards your commits, and don't run `gh repo sync --force`. Both throw away your config. Your secrets are safe either way: they live in the repo settings, not in git.
 
-A push to `main` starts the deploy, as in step 5. If a sync on GitHub didn't start it, run **CI and Deploy** from the **Actions** tab.
+A push to `main` starts the deploy, as in step 5. If a sync on GitHub didn't start it, run **CI and Deploy** from the **Actions** tab, or `gh workflow run "CI and Deploy" --repo <you>/flarewatch`.
 
 ## Upgrading from 1.x
 
