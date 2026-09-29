@@ -88,4 +88,4 @@ vp exec --filter status-page -- wrangler deploy --config dist/server/wrangler.js
 
 The status page deploys from `dist/server/wrangler.json`, which the build generates from `wrangler.jsonc`.
 
-Coming from a Pulumi deploy from before 1.0? Follow [the 1.1.0 migration guide](https://github.com/saminnet/flarewatch/blob/v1.1.0/DEVELOPMENT.md#migrating-from-pulumi) first.
+If you deployed with Pulumi before 1.0, first follow [the 1.1.0 migration guide](https://github.com/saminnet/flarewatch/blob/v1.1.0/DEVELOPMENT.md#migrating-from-pulumi). Then follow [Upgrading from 1.x](docs/deploy.md#upgrading-from-1x).

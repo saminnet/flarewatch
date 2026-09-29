@@ -21,7 +21,7 @@ Webhook URLs usually contain a secret, and a fork of a public repo is public too
 [{ "url": "https://hooks.slack.com/services/...", "template": "slack" }]
 ```
 
-Each deploy copies the secret to the monitor Worker. It alerts these webhooks as well as the ones in `worker.ts`. Tokens in `headers` or `options` can go in the secret too. The Worker skips a broken entry and logs why. The others still alert.
+Each deploy copies the secret to the monitor Worker. It alerts these webhooks as well as the ones in `worker.ts`. Tokens in `headers` or `options` can go in the secret too. The Worker skips a broken entry and logs why. The others still alert. If an entry has a `timeout` out of range, the Worker uses the default timeout. The entry still alerts.
 
 A monitor in an active [maintenance window](status-page.md#maintenance) doesn't alert. If it's still down when the window ends, it alerts then.
 
@@ -47,7 +47,7 @@ A monitor that fails again within 15 minutes of recovering reopens the same outa
 
 If no webhook accepts a down alert, FlareWatch tries it again on each check run, up to 10 times. After that it stops alerting about that outage. Recovery alerts and error changes are sent once, without retries. An outage sends at most 5 error changes.
 
-A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced. The same goes for an outage already open when you upgrade to 2.2: it stays silent until it ends, recovery included.
+A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced. The same goes for an outage already open when you upgrade from a release before 2.2: it stays silent until it ends, recovery included.
 
 ## Channels
 

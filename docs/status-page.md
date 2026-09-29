@@ -82,6 +82,8 @@ To keep the whole page to yourself, set `visibility: 'private'` in `packages/con
 | `/api/badge?id=<monitor>` | Badge data for shields.io. `label`, `up`, `down`, `colorUp` and `colorDown` change it. |
 | `/embed/<monitor>`        | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`.     |
 
+Other sites can show `/embed` in a frame. All other pages refuse to load in a frame. This stops other sites from framing your sign-in page.
+
 The badge route returns JSON for [shields.io's endpoint badge](https://shields.io/badges/endpoint-badge), not an image. Pass it to shields.io, URL-encoded:
 
 ```md
