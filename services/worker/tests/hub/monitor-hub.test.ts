@@ -306,3 +306,22 @@ describe('MonitorHub after an upgrade from a release without alert tracking', ()
     ]);
   });
 });
+
+describe('MonitorHub after an upgrade from 2.x', () => {
+  it('drops the 1.x import bookkeeping and keeps the rest', () => {
+    const db = new DatabaseSync(':memory:');
+    const { hub } = createHub({}, db);
+    hub.record(T0, [check('api', up())]);
+    // Rewind to the schema 2.x left behind, with its import rows.
+    db.exec(`
+      DELETE FROM _migrations WHERE id = 4;
+      INSERT INTO meta (key, value) VALUES ('v1_import', '1'), ('v1_import_marked', '1');
+    `);
+
+    const upgraded = createHub({}, db).hub;
+
+    const keys = db.prepare('SELECT key FROM meta ORDER BY key').all();
+    expect(keys).toEqual([{ key: 'last_update' }]);
+    expect(upgraded.view().lastUpdate).toBe(T0);
+  });
+});

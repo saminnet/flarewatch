@@ -88,7 +88,7 @@ export async function readVisitorSnapshot(): Promise<Snapshot> {
 
 /** A private-only page serves the visitor snapshot only to someone signed in, for their Visitor view. */
 export const getVisitorSnapshot = createServerFn({ method: 'GET' }).handler(async () => {
-  if (isPrivateOnly(getConfig(), await resolveRuntimeEnv()) && !(await getPrincipal())) {
+  if (isPrivateOnly(getConfig()) && !(await getPrincipal())) {
     throw new Error('Not authenticated');
   }
   return readVisitorSnapshot();
@@ -120,7 +120,7 @@ export const getMonitorLatency = createServerFn({ method: 'GET' })
   .handler(async ({ data }): Promise<LatencySample[]> => {
     const config = getConfig();
     const principal = await getPrincipal();
-    if (!principal && isPrivateOnly(config, await resolveRuntimeEnv())) return [];
+    if (!principal && isPrivateOnly(config)) return [];
     if (!canReadLatency(config, data.id, principal)) return [];
     return logAndFallback(fetchLatency(data.id), 'Error fetching latency:', []);
   });

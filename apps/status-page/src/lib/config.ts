@@ -12,14 +12,9 @@ export const getConfig = createServerOnlyFn((): RuntimeConfig => ({
   statusPage: pageConfig,
 }));
 
-/**
- * Visitors get only the sign-in page. A site Basic Auth secret left over from
- * before private-only existed keeps the page closed instead of opening it.
- */
-export function isPrivateOnly(config: RuntimeConfig, env: Cloudflare.Env): boolean {
-  return (
-    config.statusPage?.visibility === 'private' || Boolean(env.FLAREWATCH_STATUS_PAGE_BASIC_AUTH)
-  );
+/** Visitors get only the sign-in page. */
+export function isPrivateOnly(config: RuntimeConfig): boolean {
+  return config.statusPage?.visibility === 'private';
 }
 
 /** What the page shell renders; safe to send to anyone, including visitors of a private page. */

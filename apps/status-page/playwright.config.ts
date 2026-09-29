@@ -9,7 +9,7 @@ const privateBaseURL = `http://127.0.0.1:${privatePort}`;
 const e2eServer = (variant: 'public' | 'private', listenPort: number) =>
   [
     `FLAREWATCH_E2E=${variant} vp build`,
-    `FLAREWATCH_E2E=${variant} node --experimental-strip-types scripts/seed-e2e-kv.ts`,
+    `FLAREWATCH_E2E=${variant} node --experimental-strip-types scripts/seed-e2e.ts`,
     `vp exec wrangler dev --local --config .wrangler/e2e/${variant}/build/server/e2e-wrangler.json --config .wrangler/e2e/${variant}/worker-wrangler.json --env-file .wrangler/e2e.dev.vars --port ${listenPort} --persist-to .wrangler/e2e/${variant}/state`,
   ].join(' && ');
 

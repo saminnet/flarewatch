@@ -275,50 +275,6 @@ export type StatusView = {
 /** What the status page reads from the hub in one call. */
 export type HubView = StatusView & { maintenances: Maintenance[] };
 
-export type MonitorState = {
-  /** Unix timestamp (seconds) */
-  lastUpdate: number;
-  overallUp: number;
-  overallDown: number;
-  overallLate?: number;
-  /** Unix timestamp (seconds) of the first check per monitor */
-  startedAt: Record<string, number>;
-  incident: Record<
-    string,
-    {
-      /** Unix timestamps (seconds). One per error segment. */
-      start: number[];
-      /** Unix timestamp (seconds). Undefined if it's still open. */
-      end?: number | undefined;
-      error: string[];
-    }[]
-  >;
-  latency: Record<
-    string,
-    {
-      recent: {
-        loc: string;
-        ping: number;
-        /** Unix timestamp (seconds) */
-        time: number;
-      }[];
-    }
-  >;
-  sslCertificates?: Record<
-    string,
-    {
-      /** Unix timestamp (seconds) */
-      expiryDate: number;
-      daysUntilExpiry: number;
-      issuer?: string;
-      subject?: string;
-      /** Unix timestamp (seconds) */
-      lastCheck: number;
-    }
-  >;
-  heartbeat?: Record<string, HeartbeatState>;
-};
-
 export interface SSLCertificateInfo {
   /** Unix timestamp (seconds) */
   expiryDate: number;

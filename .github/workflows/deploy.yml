@@ -156,16 +156,18 @@ jobs:
           echo "KV_NAMESPACE_ID=$KV_NAMESPACE_ID" >> "$GITHUB_ENV"
           echo "KV namespace: $KV_NAMESPACE_TITLE ($KV_NAMESPACE_ID)"
 
+      - name: Check the upgrade path from older releases
+        run: scripts/check-upgrade.sh "$KV_NAMESPACE_ID"
+
       - name: Inject KV namespace id
         shell: bash
         run: |
           set -euo pipefail
 
           PLACEHOLDER="__FLAREWATCH_STATE_KV_NAMESPACE_ID__"
-          sed -i "s/$PLACEHOLDER/$KV_NAMESPACE_ID/g" services/worker/wrangler.toml
           sed -i "s/$PLACEHOLDER/$KV_NAMESPACE_ID/g" apps/status-page/wrangler.jsonc
 
-          if grep -R "$PLACEHOLDER" services/worker/wrangler.toml apps/status-page/wrangler.jsonc; then
+          if grep "$PLACEHOLDER" apps/status-page/wrangler.jsonc; then
             echo "KV namespace placeholder was not fully replaced"
             exit 1
           fi

@@ -59,12 +59,6 @@ Scripts can manage windows through `/api/admin/maintenances` (`GET`, `POST`, `PU
 
 To keep the whole page to yourself, set `visibility: 'private'` in `packages/config/src/public.ts`. Visitors then get only the sign-in page. The dashboard, History, monitor pages, embeds, badges and the JSON API are closed to them. Heartbeat pings keep working.
 
-This replaces the `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` secret from 1.x. While that secret is still set, the page stays private. Once you've set `visibility`, delete it:
-
-```bash
-vp exec --filter status-page -- wrangler secret delete FLAREWATCH_STATUS_PAGE_BASIC_AUTH
-```
-
 ## Page settings
 
 `packages/config/src/public.ts`:

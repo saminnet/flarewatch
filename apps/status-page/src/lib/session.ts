@@ -30,7 +30,7 @@ export const getSessionServerFn = createServerFn({ method: 'GET' }).handler(
       canSignIn: isSignInConfigured(env),
       passwordSignIn: Boolean(secret),
       providers: (accessConfig.providers ?? []).map(({ id, name }) => ({ id, name })),
-      privateOnly: isPrivateOnly(getConfig(), env),
+      privateOnly: isPrivateOnly(getConfig()),
     };
   },
 );

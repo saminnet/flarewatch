@@ -27,7 +27,7 @@ cd apps/status-page && vp exec playwright test
 | `packages/shared`   | Types and helpers both Workers use.                           |
 | `.github/workflows` | CI and the deploy workflow.                                   |
 
-The monitor Worker keeps incidents, latency, heartbeat pings and maintenance windows in the hub, a SQLite Durable Object in `services/worker/src/hub`. The status page reads and edits it through its `MONITOR_WORKER` service binding. KV (`FLAREWATCH_STATE`) holds sign-in sessions. The hub also reads a 1.x deployment's data from KV, once, on its first start.
+The monitor Worker keeps incidents, latency, heartbeat pings and maintenance windows in the hub, a SQLite Durable Object in `services/worker/src/hub`. The status page reads and edits it through its `MONITOR_WORKER` service binding. KV (`FLAREWATCH_STATE`) holds sign-in sessions.
 
 ## Run it locally
 
@@ -77,9 +77,10 @@ GitHub Actions deploys normally (see [docs/deploy.md](docs/deploy.md)). To deplo
 vp exec --filter worker -- wrangler kv namespace create flarewatch-state
 ```
 
-Put the namespace ID in place of `__FLAREWATCH_STATE_KV_NAMESPACE_ID__` in `services/worker/wrangler.toml` and `apps/status-page/wrangler.jsonc`. Then:
+Put the namespace ID in place of `__FLAREWATCH_STATE_KV_NAMESPACE_ID__` in `apps/status-page/wrangler.jsonc`. Then check that an older install can take this release, and deploy:
 
 ```bash
+scripts/check-upgrade.sh <namespace-id>
 vp exec --filter worker -- wrangler deploy --config wrangler.toml
 vp run --filter status-page build
 vp exec --filter status-page -- wrangler deploy --config dist/server/wrangler.json

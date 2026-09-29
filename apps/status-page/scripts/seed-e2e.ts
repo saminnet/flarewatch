@@ -1,19 +1,18 @@
-import { execFileSync } from 'node:child_process';
-import { cpSync, rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { HeartbeatRun, HeartbeatState, Maintenance, MonitorState } from '@flarewatch/shared';
+import type { HeartbeatRun, HeartbeatState, Maintenance } from '@flarewatch/shared';
 import { formatUtcShort, isJsonObject } from '@flarewatch/shared/utils';
+import type { HubFixture } from '../../../services/worker/tests/e2e/hub-fixture.ts';
 import { privateMonitor } from '../tests/e2e/config/worker.ts';
 
-// Seeds 1.x-format KV state, which the hub imports on its first start, so the
-// browser tests also cover the 1.x upgrade path. Copies the FLAREWATCH_E2E build
-// out of dist, so the public and private instances each keep theirs.
+// Writes the hub fixture that the monitor Worker's test entry loads into an
+// empty hub. Copies the FLAREWATCH_E2E build out of dist, so the public and
+// private instances each keep theirs.
 const variant = process.env.FLAREWATCH_E2E === 'private' ? 'private' : 'public';
 const appDir = process.cwd();
 const variantDir = path.join(appDir, '.wrangler/e2e', variant);
 const buildDir = path.join(variantDir, 'build');
-const persistDir = path.join(variantDir, 'state');
-const fixtureDir = path.join(variantDir, 'fixtures');
+const fixturePath = path.join(variantDir, 'hub-fixture.json');
 const envFilePath = path.join(appDir, '.wrangler/e2e.dev.vars');
 const configPath = path.join(buildDir, 'server/wrangler.json');
 const e2eConfigPath = path.join(buildDir, 'server/e2e-wrangler.json');
@@ -31,39 +30,8 @@ const MINUTE_SECONDS = 60;
 const HOUR_SECONDS = 60 * MINUTE_SECONDS;
 const DAY_SECONDS = 24 * HOUR_SECONDS;
 
-function writeFixture(name: string, value: unknown): string {
-  const filePath = path.join(fixtureDir, name);
-  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
-  return filePath;
-}
-
-function wranglerKvPut(key: string, fixturePath: string): void {
-  execFileSync(
-    'vp',
-    [
-      'exec',
-      'wrangler',
-      'kv',
-      'key',
-      'put',
-      key,
-      '--path',
-      fixturePath,
-      '--binding',
-      'FLAREWATCH_STATE',
-      '--local',
-      '--persist-to',
-      persistDir,
-      '--config',
-      e2eConfigPath,
-    ],
-    { cwd: appDir, stdio: 'inherit' },
-  );
-}
-
 rmSync(variantDir, { recursive: true, force: true });
 cpSync(path.join(appDir, 'dist'), buildDir, { recursive: true });
-mkdirSync(fixtureDir, { recursive: true });
 
 const parsedWranglerConfig: unknown = JSON.parse(readFileSync(configPath, 'utf8'));
 if (!isJsonObject(parsedWranglerConfig)) {
@@ -85,21 +53,17 @@ const wranglerConfig = {
 
 writeFileSync(e2eConfigPath, `${JSON.stringify(wranglerConfig, null, 2)}\n`);
 
-// The monitoring worker runs next to the status page in the same wrangler dev
-// process. It shares the KV namespace, so its hub imports the seeded 1.x state
-// on first start, and it uses the e2e monitors. No cron: the data stays fixed.
-const kvNamespaces = Array.isArray(parsedWranglerConfig.kv_namespaces)
-  ? parsedWranglerConfig.kv_namespaces
-  : [];
+// The monitor Worker runs next to the status page in the same wrangler dev
+// process, with the e2e monitors. No cron: the data stays fixed.
 const workerConfig = {
   name: 'flarewatch-worker',
-  main: path.join(repoDir, 'services/worker/src/index.ts'),
+  main: path.join(repoDir, 'services/worker/tests/e2e/entry.ts'),
   compatibility_date: '2025-11-17',
-  kv_namespaces: kvNamespaces,
   durable_objects: { bindings: [{ name: 'MONITOR_HUB', class_name: 'MonitorHub' }] },
   migrations: [{ tag: 'v1', new_sqlite_classes: ['MonitorHub'] }],
   alias: {
     '@flarewatch/config/worker': path.join(appDir, 'tests/e2e/config/worker.ts'),
+    '@flarewatch/e2e-hub-fixture': fixturePath,
   },
 };
 writeFileSync(workerConfigPath, `${JSON.stringify(workerConfig, null, 2)}\n`);
@@ -120,8 +84,8 @@ const compactorSuccess = compactorFail - DAY_SECONDS;
 const compactorDeadline = compactorSuccess + DAY_SECONDS + 30 * MINUTE_SECONDS;
 
 // Full 90-run shape for screenshots and e2e: ok x80, miss, ok x5, late,
-// ok x2, fail, one run per day ending at the fail. The miss is stored in
-// state.misses (cron-detected) and merges with the ping runs in the view.
+// ok x2, fail, one run per day ending at the fail. The miss is stored in the
+// heartbeat's misses (cron-detected) and merges with the ping runs in the view.
 const compactorOutcomes: HeartbeatRun['outcome'][] = [
   ...Array<HeartbeatRun['outcome']>(80).fill('ok'),
   'miss',
@@ -204,85 +168,12 @@ const heartbeatState = {
 const shipperError = `No heartbeat since ${formatUtcShort(shipperSuccess)} (expected by ${formatUtcShort(shipperDeadline)})`;
 const compactorError = 'Job reported failure';
 
-const latency = (base: number, loc: string) => ({
-  recent: Array.from({ length: 12 }, (_, index) => ({
+const latency = (base: number, loc: string) =>
+  Array.from({ length: 12 }, (_, index) => ({
     loc,
     ping: base + ((index * 13) % 37),
     time: nowSec - (11 - index) * 10 * MINUTE_SECONDS,
-  })),
-});
-
-const state: MonitorState = {
-  lastUpdate: nowSec,
-  // The 1.x format needs these; the hub ignores them and counts from statuses.
-  overallUp: 0,
-  overallDown: 0,
-  startedAt: {
-    demo_example: startedAt,
-    demo_cloudflare_trace: startedAt,
-    demo_cloudflare_status: startedAt,
-    demo_cloudflare_docs: startedAt,
-    demo_one_dns_trace: startedAt,
-    demo_github_status: startedAt,
-    [privateMonitor.id]: startedAt,
-    demo_nightly_backup: startedAt,
-    demo_hourly_report: startedAt,
-    demo_index_rebuild: startedAt,
-    demo_log_shipper: startedAt,
-    demo_nightly_compactor: startedAt,
-    demo_private_backup: startedAt,
-  },
-  incident: {
-    demo_example: [],
-    demo_cloudflare_trace: [],
-    demo_cloudflare_status: [
-      {
-        start: [incidentStart],
-        end: undefined,
-        error: ['Synthetic E2E outage'],
-      },
-    ],
-    demo_cloudflare_docs: [],
-    demo_one_dns_trace: [],
-    demo_github_status: [],
-    [privateMonitor.id]: [
-      {
-        start: [incidentStart],
-        end: undefined,
-        error: ['Synthetic private outage'],
-      },
-    ],
-    demo_nightly_backup: [],
-    demo_hourly_report: [],
-    demo_weekly_prune: [],
-    demo_index_rebuild: [],
-    demo_log_shipper: [
-      {
-        start: [shipperDeadline],
-        end: undefined,
-        error: [shipperError],
-      },
-    ],
-    demo_nightly_compactor: [
-      {
-        start: [compactorFail],
-        end: undefined,
-        error: [compactorError],
-      },
-    ],
-    demo_private_backup: [],
-  },
-  latency: {
-    demo_example: latency(42, 'HEL'),
-    demo_cloudflare_trace: { recent: [] },
-    demo_cloudflare_status: latency(210, 'SFO'),
-    demo_cloudflare_docs: latency(28, 'AMS'),
-    demo_one_dns_trace: latency(12, 'ZRH'),
-    demo_github_status: latency(95, 'IAD'),
-    [privateMonitor.id]: latency(88, 'FRA'),
-  },
-  heartbeat: heartbeatState,
-};
+  }));
 
 const maintenances: Maintenance[] = [
   {
@@ -320,5 +211,39 @@ const maintenances: Maintenance[] = [
   },
 ];
 
-wranglerKvPut('state', writeFixture('state.json', state));
-wranglerKvPut('maintenances', writeFixture('maintenances.json', maintenances));
+const fixture: HubFixture = {
+  lastUpdate: nowSec,
+  startedAt: {
+    demo_example: startedAt,
+    demo_cloudflare_trace: startedAt,
+    demo_cloudflare_status: startedAt,
+    demo_cloudflare_docs: startedAt,
+    demo_one_dns_trace: startedAt,
+    demo_github_status: startedAt,
+    [privateMonitor.id]: startedAt,
+    demo_nightly_backup: startedAt,
+    demo_hourly_report: startedAt,
+    demo_index_rebuild: startedAt,
+    demo_log_shipper: startedAt,
+    demo_nightly_compactor: startedAt,
+    demo_private_backup: startedAt,
+  },
+  incidents: {
+    demo_cloudflare_status: [{ start: [incidentStart], error: ['Synthetic E2E outage'] }],
+    [privateMonitor.id]: [{ start: [incidentStart], error: ['Synthetic private outage'] }],
+    demo_log_shipper: [{ start: [shipperDeadline], error: [shipperError] }],
+    demo_nightly_compactor: [{ start: [compactorFail], error: [compactorError] }],
+  },
+  latency: {
+    demo_example: latency(42, 'HEL'),
+    demo_cloudflare_status: latency(210, 'SFO'),
+    demo_cloudflare_docs: latency(28, 'AMS'),
+    demo_one_dns_trace: latency(12, 'ZRH'),
+    demo_github_status: latency(95, 'IAD'),
+    [privateMonitor.id]: latency(88, 'FRA'),
+  },
+  heartbeats: heartbeatState,
+  maintenances,
+};
+
+writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`);

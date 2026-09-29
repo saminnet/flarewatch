@@ -32,6 +32,8 @@ const MIGRATIONS: string[][] = [
     `ALTER TABLE incidents ADD COLUMN alert_claimed_at INTEGER`,
     `UPDATE incidents SET alert = 'silent'`,
   ],
+  // Bookkeeping from the 1.x import, which 3.0 removed.
+  [`DELETE FROM meta WHERE key IN ('v1_import', 'v1_import_marked')`],
 ];
 
 export function migrate(sql: Sql): void {

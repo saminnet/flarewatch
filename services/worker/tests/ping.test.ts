@@ -11,7 +11,6 @@ import type { Env } from '../src/env';
 import Worker, { runChecks } from '../src/index';
 import { deriveHeartbeatToken } from '../src/ping';
 import { createHub, hubNamespace } from './helpers/hub';
-import { asKv, createKv } from './helpers/kv';
 import type { PingKind } from '../src/hub/heartbeat';
 import { createWorkerDeps } from './helpers/worker-deps';
 
@@ -40,7 +39,6 @@ function token(id: string = heartbeat.id): Promise<string> {
 
 function createEnv(extra: Partial<Env> = {}): Env {
   return {
-    FLAREWATCH_STATE: asKv(createKv()),
     MONITOR_HUB: hubNamespace(hub),
     HEARTBEAT_SECRET: SECRET,
     ...extra,

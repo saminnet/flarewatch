@@ -1,8 +1,6 @@
 import type { MonitorHub } from './hub/monitor-hub';
 
 export interface Env {
-  /** Read once, by the hub's 1.x import. */
-  FLAREWATCH_STATE?: KVNamespace;
   MONITOR_HUB?: DurableObjectNamespace<MonitorHub>;
   /** Sent as `Authorization: Bearer <token>` on every external proxy check. */
   FLAREWATCH_PROXY_TOKEN?: string;

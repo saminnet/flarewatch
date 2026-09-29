@@ -122,9 +122,7 @@ A push to `main` starts the deploy, as in step 5. If a sync on GitHub didn't sta
 
 ## Upgrading from 1.x
 
-Remove `kvWriteCooldownMinutes` from `worker.ts` if you set it, then push. On its first run, the new version copies your uptime history, heartbeat runs and maintenance windows from KV into the hub. It leaves the 1.x data in KV as it was, so you can still go back to 1.x, and adds one key, `imported_to_hub`, with the time of the copy.
-
-A later major version will drop this copy step. Its deploy checks for `imported_to_hub` first, so if you're on 1.x, deploy a 2.x release before you jump further ahead.
+3.0 can't read 1.x data. Update to 2.3.1 first and follow [its upgrade steps](https://github.com/saminnet/flarewatch/blob/v2.3.1/docs/deploy.md#upgrading-from-1x), which copy your history across. Then update to the latest release. The 3.0.0 entry in the [changelog](../CHANGELOG.md) has the git commands. If you skip that step, the deploy stops and says so.
 
 ## Uninstall
 

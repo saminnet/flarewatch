@@ -2,6 +2,24 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## 3.0.0 - 2026-10-19
+
+3.0 removes the code that moved 1.x installs onto 2.x. On 2.x, update as usual. If you're still on 1.x, update to 2.3.1 first, from a clone of your fork with `upstream` set up as in [Update your fork](docs/deploy.md#update-your-fork):
+
+```bash
+git fetch upstream --tags
+git merge v2.3.1
+git push
+```
+
+Once that deploy has run, merge `upstream/main` and push again. If you skip that step, the deploy stops and says so.
+
+### Breaking changes
+
+- 3.0 no longer copies 1.x data from KV into the hub, and the monitor Worker has no KV binding anymore. If KV still holds 1.x data that was never copied, the deploy stops.
+- `FLAREWATCH_STATUS_PAGE_BASIC_AUTH` is no longer read. Set `visibility: 'private'` in the page config instead. If the status page still has that secret, the deploy stops and says how to remove it, so updating never opens a private page.
+- `/admin` and `/events` no longer redirect. Use `/login` and `/history`.
+
 ## 2.3.1 - 2026-09-29
 
 ### Security

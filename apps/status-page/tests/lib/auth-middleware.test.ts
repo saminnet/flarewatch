@@ -91,12 +91,6 @@ describe('auth middleware private-only pages', () => {
     await expect(outcome('/')).resolves.toBe('next');
     await expect(outcome('/api/data')).resolves.toBe('next');
   });
-
-  it('keeps a page closed while the old site Basic Auth secret is still set', async () => {
-    privateEnv({ FLAREWATCH_STATUS_PAGE_BASIC_AUTH: 'admin:secret' }, 'public');
-
-    await expect(outcome('/')).resolves.toBe('302 https://status.test/login');
-  });
 });
 
 describe('auth middleware admin sessions', () => {

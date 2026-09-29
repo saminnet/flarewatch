@@ -19,8 +19,6 @@ export async function resolveRuntimeEnv(): Promise<Cloudflare.Env> {
   // KV and service bindings exist solely in the Workers runtime or the test shim.
   const processEnv = globalThis.process?.env;
   const env: Cloudflare.Env = {};
-  const siteAuth = processEnv?.FLAREWATCH_STATUS_PAGE_BASIC_AUTH;
-  if (siteAuth) env.FLAREWATCH_STATUS_PAGE_BASIC_AUTH = siteAuth;
   const adminAuth = processEnv?.FLAREWATCH_ADMIN_BASIC_AUTH;
   if (adminAuth) env.FLAREWATCH_ADMIN_BASIC_AUTH = adminAuth;
   return env;

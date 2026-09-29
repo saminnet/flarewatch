@@ -6,7 +6,6 @@ import {
   type HeartbeatState,
   type LatencySample,
   type Maintenance,
-  type MonitorState,
   type NotificationConfig,
   type PageConfig,
   type RuntimeConfig,
@@ -345,29 +344,6 @@ const incidentSchema = z.object({
 
 const latencySampleSchema = z.object({ loc: z.string(), ping: z.number(), time: z.number() });
 
-const monitorStateSchema: z.ZodMiniType<SchemaOutput<MonitorState>> = z.object({
-  lastUpdate: z.number(),
-  overallUp: z.number(),
-  overallDown: z.number(),
-  overallLate: z.optional(z.number()),
-  startedAt: z.record(z.string(), z.number()),
-  incident: z.record(z.string(), z.array(incidentSchema)),
-  latency: z.record(z.string(), z.object({ recent: z.array(latencySampleSchema) })),
-  sslCertificates: z.optional(
-    z.record(
-      z.string(),
-      z.object({
-        expiryDate: z.number(),
-        daysUntilExpiry: z.number(),
-        lastCheck: z.number(),
-        issuer: z.optional(z.string()),
-        subject: z.optional(z.string()),
-      }),
-    ),
-  ),
-  heartbeat: z.optional(z.record(z.string(), heartbeatStateSchema)),
-});
-
 const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
   lastUpdate: z.number(),
   maintenances: z.array(maintenanceSchema),
@@ -384,7 +360,6 @@ const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
 });
 
 export const isValidMaintenance = asTypeGuard<Maintenance>(maintenanceSchema);
-export const isMonitorState = asTypeGuard<MonitorState>(monitorStateSchema);
 
 export function configIssues(value: unknown): string[] {
   const result = runtimeConfigSchema.safeParse(value);

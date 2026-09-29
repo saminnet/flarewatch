@@ -21,7 +21,6 @@ import {
 import type { Env } from '../env';
 import { applyPing, evaluateHeartbeat, withMisses, type PingKind } from './heartbeat';
 import { capSegments } from './incident-segments';
-import { importV1 } from './import-v1';
 import { migrate } from './schema';
 import { durableObjectSql, type Sql } from './sql';
 
@@ -118,7 +117,6 @@ export class MonitorHub extends DurableObject<Env> {
     super(ctx, env);
     this.sql = durableObjectSql(ctx.storage);
     migrate(this.sql);
-    void ctx.blockConcurrencyWhile(() => importV1(this.sql, env.FLAREWATCH_STATE));
   }
 
   /**

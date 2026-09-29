@@ -9,9 +9,6 @@ compatibility_flags = []
 workers_dev = false
 preview_urls = false
 
-# CI creates/adopts the flarewatch-state namespace and replaces this placeholder before deploy.
-kv_namespaces = [{ binding = "FLAREWATCH_STATE", id = "__FLAREWATCH_STATE_KV_NAMESPACE_ID__" }]
-
 # The hub stores monitor state in SQLite. Wrangler creates it on the first deploy.
 [[durable_objects.bindings]]
 name = "MONITOR_HUB"

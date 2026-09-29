@@ -767,10 +767,6 @@ test('history route filters by type, monitor, and invalid month fallback', async
   await expect(page.getByText('E2E active maintenance')).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).not.toBeVisible();
 
-  await page.goto('/events?type=maintenance');
-  await expect(page).toHaveURL(/\/history\?type=maintenance/);
-  await expect(page.getByText('E2E active maintenance')).toBeVisible();
-
   await page.goto(`/history?type=maintenance&month=${upcomingMonth}`);
   await expect(page.getByText('E2E upcoming maintenance')).toBeVisible();
 
@@ -826,8 +822,7 @@ test.describe.serial('operator maintenance lifecycle', () => {
 
   test('signs in, manages maintenance on History, and signs out', async ({ page }) => {
     const clientErrors = collectClientErrors(page);
-    await page.goto('/admin');
-    await expect(page).toHaveURL(/\/login$/);
+    await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 
     // Form controls work only after hydration, so retry the first submit.
