@@ -4,7 +4,9 @@ FlareWatch deploys from GitHub Actions into your own Cloudflare account. The fir
 
 ## 1. Fork the repo
 
-Fork [saminnet/flarewatch](https://github.com/saminnet/flarewatch). GitHub turns workflows off in a new fork, so open the fork's **Actions** tab and select **I understand my workflows, go ahead and enable them**. Until you do, pushes to the fork don't deploy.
+Fork [saminnet/flarewatch](https://github.com/saminnet/flarewatch). Your fork deploys from your GitHub account, with your secrets.
+
+GitHub turns workflows off in a new fork. Open the fork's **Actions** tab and click **I understand my workflows, go ahead and enable them**. Nothing deploys until you do.
 
 With the GitHub CLI:
 
@@ -12,7 +14,7 @@ With the GitHub CLI:
 gh repo fork saminnet/flarewatch --clone --default-branch-only
 ```
 
-Then enable workflows in the **Actions** tab as above.
+Then turn on workflows in the **Actions** tab.
 
 ## 2. Create a Cloudflare API token
 
