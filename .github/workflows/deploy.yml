@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7.0.0
@@ -45,6 +45,7 @@ jobs:
         run: vp run test
 
       - name: Restore browser cache
+        if: ${{ github.event_name == 'pull_request' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
@@ -53,15 +54,17 @@ jobs:
             ${{ runner.os }}-playwright-
 
       - name: Install Chromium for browser tests
+        if: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 10
-        run: vp exec --filter status-page -- playwright install --with-deps --only-shell chromium
+        run: vp exec --filter status-page -- playwright install --only-shell chromium
 
       - name: Run status page browser tests
+        if: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 10
         run: vp exec --filter status-page -- playwright test
 
       - name: Upload browser test artifacts
-        if: ${{ failure() }}
+        if: ${{ github.event_name == 'pull_request' && failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-${{ github.sha }}
@@ -82,7 +85,7 @@ jobs:
     concurrency:
       group: deploy-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     needs: quality
     # Only this job gets the token: the quality job installs and runs third-party code.

@@ -11,7 +11,7 @@ jobs:
   release:
     # Forks keep their own tags; only the upstream repo publishes releases.
     if: ${{ github.repository == 'saminnet/flarewatch' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7.0.0
@@ -42,4 +42,4 @@ jobs:
       - name: Rebuild flarewatch.app
         env:
           GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
-        run: gh workflow run deploy.yml --repo saminnet/flarewatch-app
+        run: gh workflow run deploy.yml --repo saminnet/flarewatch-app --ref main
