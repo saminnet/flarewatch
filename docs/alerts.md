@@ -1,6 +1,6 @@
 # Alerts
 
-FlareWatch sends a message when a monitor goes down and again when it comes back up. Set the channels in `notification.webhook` in `packages/config/src/worker.ts`. Each entry needs a `url` and a `template`, and FlareWatch writes the message for you.
+FlareWatch sends a message when a monitor goes down and again when it comes back up. Set the channels in `notification.webhook` in `packages/config/src/worker.ts`. Each entry needs a `url`. Give it a `template` and FlareWatch writes the message for you, or write the payload yourself as in [Anything else](#anything-else).
 
 ```ts
 notification: {
@@ -23,7 +23,7 @@ Webhook URLs usually contain a secret, and a fork of a public repo is public too
 
 Each deploy copies the secret to the monitor Worker. It alerts these webhooks as well as the ones in `worker.ts`. Tokens in `headers` or `options` can go in the secret too. The Worker skips a broken entry and logs why. The others still alert. If an entry has a `timeout` out of range, the Worker uses the default timeout. The entry still alerts.
 
-A monitor in an active [maintenance window](status-page.md#maintenance) doesn't alert. If it's still down when the window ends, it alerts then.
+A monitor in an active [maintenance window](status-page.md#maintenance) sends no down alert. If it's still down when the window ends, it alerts then. An outage that alerted before the window still sends its recovery.
 
 ## Dependencies
 
@@ -47,7 +47,7 @@ A monitor that fails again within 15 minutes of recovering reopens the same outa
 
 If no webhook accepts a down alert, FlareWatch tries it again on each check run, up to 10 times. After that it stops alerting about that outage. Recovery alerts and error changes are sent once, without retries. An outage sends at most 5 error changes.
 
-A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced. The same goes for an outage already open when you upgrade from a release before 2.2: it stays silent until it ends, recovery included.
+A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced.
 
 ## Channels
 
@@ -67,8 +67,6 @@ A recovery alert only follows a down alert that went out. If you remove every we
 | `mattermost`, `rocketchat` | Incoming webhook URL                                                                               |                                                                          |
 | `text`                     | Any URL that takes a plain text body                                                               |                                                                          |
 
-Email through Resend is sent once, with no retry.
-
 ## Anything else
 
 Leave out `template` and write the payload yourself. `$MSG` is replaced with the message. This reaches Signal, WhatsApp or SMS through a gateway such as CallMeBot or Twilio.
@@ -85,9 +83,9 @@ Leave out `template` and write the payload yourself. `$MSG` is replaced with the
 
 ## Settings
 
-| Setting                       | Does                                                    |
-| ----------------------------- | ------------------------------------------------------- |
-| `gracePeriod`                 | Minutes a monitor stays down before the alert goes out. |
-| `timeZone`                    | Time zone for times in messages. Defaults to UTC.       |
-| `skipNotificationIds`         | Monitor IDs that never alert.                           |
-| `skipErrorChangeNotification` | Don't alert again when a down monitor's error changes.  |
+| Setting                       | Does                                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `gracePeriod`                 | Minutes a check monitor stays down before the alert goes out. Heartbeats use their own `graceSeconds`. |
+| `timeZone`                    | Time zone for times in messages. Defaults to UTC.                                                      |
+| `skipNotificationIds`         | Monitor IDs that never alert.                                                                          |
+| `skipErrorChangeNotification` | Don't alert again when a down monitor's error changes.                                                 |

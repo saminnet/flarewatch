@@ -6,7 +6,7 @@
 
 <p align="center">
   A self-hosted uptime monitor and status page that runs free on Cloudflare Workers.<br />
-  Fork it, edit one config file, and push. There's no server to look after.
+  Fork it, edit the config, and push. There's no server to look after.
 </p>
 
 <p align="center">

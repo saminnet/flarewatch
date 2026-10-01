@@ -56,18 +56,9 @@ The status page renders on the server, then React hydrates it in the browser. Di
 - Format dates in UTC with the helpers in `src/lib/date.ts` or `formatUtcShort`.
 - Gate browser-only code (`localStorage`, `window`) on `useHydrated()`.
 
-## Release
+## Changelog
 
-A pull request that changes behavior adds its entry to `CHANGELOG.md`, under a dated heading for the next version such as `## 2.3.0 - 2026-10-12`. That section becomes the GitHub release notes, so write it for someone upgrading. A short paragraph before the first `###` reads as the intro.
-
-After it merges, tag `main` and push the tag:
-
-```bash
-git tag -s v2.3.0 -m v2.3.0
-git push origin v2.3.0
-```
-
-The Release workflow publishes that version's changelog section as the release, with relative links pointed at the tagged files. It fails when the section is missing or its heading has no date.
+A pull request that changes behavior adds an entry to `CHANGELOG.md` under the next version. Write it for someone upgrading.
 
 ## Deploy by hand
 
@@ -87,5 +78,3 @@ vp exec --filter status-page -- wrangler deploy --config dist/server/wrangler.js
 ```
 
 The status page deploys from `dist/server/wrangler.json`, which the build generates from `wrangler.jsonc`.
-
-If you deployed with Pulumi before 1.0, first follow [the 1.1.0 migration guide](https://github.com/saminnet/flarewatch/blob/v1.1.0/DEVELOPMENT.md#migrating-from-pulumi). Then follow [Upgrading from 1.x](docs/deploy.md#upgrading-from-1x).

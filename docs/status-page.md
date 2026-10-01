@@ -17,7 +17,7 @@ As the operator, the same pages show you everything:
 
 The account menu has a **Visitor view** switch that shows the page the way visitors see it.
 
-Without a password or a provider, `/login` says sign-in isn't set up. In local development you are always signed in.
+Without a password or a provider, `/login` says sign-in isn't set up. On the dev server (`vp run dev-status-page`) with no sign-in set up, you are always signed in as the operator.
 
 ## Sign in with a provider
 
@@ -51,7 +51,7 @@ Pocket ID sends your groups when the client asks for them, so `group:` rules fol
 
 ## Maintenance
 
-Sign in and open History to plan a maintenance window: a title, a start, an optional end, and the monitors it covers. The dashboard shows active and upcoming windows, and covered monitors don't alert while a window is active. History keeps incidents and ended windows for 90 days.
+Sign in and open History to plan a maintenance window: a description, a start, and optionally a title, an end and the monitors it covers. The dashboard shows active and upcoming windows, and covered monitors send no down alerts while a window is active. History keeps incidents and ended windows for 90 days, and at most 1,000 past incidents per monitor.
 
 Scripts can manage windows through `/api/admin/maintenances` (`GET`, `POST`, `PUT`, `DELETE`) with the same username and password in a Basic `Authorization` header. Each such call counts against the sign-in limit of 5 per minute per IP, like password attempts and provider sign-ins.
 

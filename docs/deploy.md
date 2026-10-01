@@ -96,7 +96,7 @@ A personal or small-team page costs nothing. These are the free tier limits that
 | 1,000 KV writes/day                 | Sign-ins.                                                   |
 | 5 cron triggers per account         | FlareWatch uses one.                                        |
 
-Every check run is saved in the hub, the monitor Worker's Durable Object, so the charts get a sample every minute. The status page reuses what it read from the hub for 20 seconds, so a busy page doesn't cost a hub request per view. Page traffic is the limit you're most likely to reach.
+Every check run is saved in the hub, the monitor Worker's Durable Object, so the charts get a sample every minute. For visitors, the status page reuses what it read from the hub for 20 seconds, so a busy page doesn't cost a hub request per view. Page traffic is the limit you're most likely to reach.
 
 See Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
 

@@ -48,6 +48,8 @@ Each status has a solid colour for icons and text, a background, and a border:
 | Maintenance | `--status-maintenance` | `--status-maintenance-bg` | `--status-maintenance-border` |
 | No data     | `--status-unknown`     | `--status-unknown-bg`     | `--status-unknown-border`     |
 
+Text in the down and degraded colours uses `--status-down-text` and `--status-degraded-text`. In light mode they default to a darker shade, so the text stays readable.
+
 A maintenance window with its own severity colour uses that colour instead of the maintenance tokens.
 
 ## What isn't supported

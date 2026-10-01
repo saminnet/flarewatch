@@ -58,7 +58,7 @@ A heartbeat watches a job that reports in, like a backup, a cron script or a CI 
 }
 ```
 
-Each heartbeat has a ping URL, `https://<your-status-page>/ping/<id>/<token>`. When you're signed in, the monitor's page has a button that copies it. The token comes from the `HEARTBEAT_SECRET` secret. To compute it yourself:
+Each heartbeat has a ping URL, `https://<your-status-page>/ping/<id>/<token>`. Signed in as the operator, you can copy it from the monitor's page. The token comes from the `HEARTBEAT_SECRET` secret. To compute it yourself:
 
 ```bash
 printf 'v1:%s' "nightly-backup" \
@@ -79,7 +79,7 @@ Ping only on success:
 ./backup.sh && curl -fsS "https://status.example.com/ping/nightly-backup/<token>"
 ```
 
-Or send the exit code, so a failure shows up right away:
+Or send the exit code, so a failure shows at the next check instead of after the grace period:
 
 ```bash
 ./backup.sh; curl -fsS "https://status.example.com/ping/nightly-backup/<token>/$?"

@@ -5,7 +5,7 @@ FlareWatch checks websites and background jobs from Cloudflare Workers and shows
 ## People
 
 **Operator**:
-Someone who signs in and can change things: maintenance windows, ping URLs. The person who deploys FlareWatch is one, through the password or a provider.
+Someone who signs in and can change things: maintenance windows. Only an operator can copy a heartbeat's ping URL. The person who deploys FlareWatch is one, through the password or a provider.
 _Avoid_: Admin, user, owner
 
 **Member**:
