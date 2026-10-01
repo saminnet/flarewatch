@@ -51,7 +51,7 @@ Pocket ID sends your groups when the client asks for them, so `group:` rules fol
 
 ## Maintenance
 
-Sign in and open History to plan a maintenance window: a title, a start, an optional end, and the monitors it covers. The dashboard shows active and upcoming windows, and covered monitors don't alert while a window is active.
+Sign in and open History to plan a maintenance window: a title, a start, an optional end, and the monitors it covers. The dashboard shows active and upcoming windows, and covered monitors don't alert while a window is active. History keeps incidents and ended windows for 90 days.
 
 Scripts can manage windows through `/api/admin/maintenances` (`GET`, `POST`, `PUT`, `DELETE`) with the same username and password in a Basic `Authorization` header. Each such call counts against the sign-in limit of 5 per minute per IP, like password attempts and provider sign-ins.
 

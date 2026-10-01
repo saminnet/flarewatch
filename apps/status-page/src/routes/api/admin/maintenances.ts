@@ -6,7 +6,7 @@ import {
   isNonEmptyString,
   readJsonUpTo,
 } from '@flarewatch/shared';
-import { deleteMaintenance, fetchHubView, saveMaintenance } from '@/lib/hub';
+import { deleteMaintenance, fetchMaintenances, saveMaintenance } from '@/lib/hub';
 import { forgetCachedView } from '@/lib/kv';
 
 function jsonError(message: string, status: number): Response {
@@ -164,7 +164,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
     handlers: {
       GET: async () => {
         try {
-          const { maintenances } = await fetchHubView();
+          const maintenances = await fetchMaintenances();
           return Response.json(maintenances);
         } catch (error) {
           console.error('Error listing maintenances:', error);
@@ -206,7 +206,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
             return jsonError('id is required', 400);
           }
 
-          const { maintenances } = await fetchHubView();
+          const maintenances = await fetchMaintenances();
           const current = maintenances.find((m) => m.id === payload.id);
 
           if (!current) {

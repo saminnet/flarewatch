@@ -312,6 +312,15 @@ describe('worker', () => {
 });
 
 describe('hub routes for the status page', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW_SECONDS * 1000));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const fetchRoute = (env: Env, path: string) =>
     Worker.fetch(new Request(`https://internal${path}`), env, {} as ExecutionContext, {
       checkMonitor: checkMonitorMock,
@@ -333,6 +342,19 @@ describe('hub routes for the status page', () => {
 
     await expect(view.json()).resolves.toEqual(hub.view());
     await expect(latency.json()).resolves.toEqual([{ ping: 42, loc: 'SFO', time: NOW_SECONDS }]);
+  });
+
+  it('serves the maintenance windows alone, oldest start first', async () => {
+    const late = createMaintenance({
+      id: 'late',
+      start: new Date(NOW_SECONDS * 1000).toISOString(),
+    });
+    const early = createMaintenance({ id: 'early' });
+    const { env } = createEnv([late, early]);
+
+    const response = await fetchRoute(env, '/maintenances');
+
+    await expect(response.json()).resolves.toEqual([early, late]);
   });
 
   it('saves a valid maintenance window under its own id and deletes it once', async () => {

@@ -1,6 +1,7 @@
 import {
   isHubView,
   isLatencySamples,
+  isValidMaintenance,
   type HubView,
   type LatencySample,
   type Maintenance,
@@ -25,6 +26,15 @@ export async function fetchHubView(): Promise<HubView> {
   const view = await fromMonitorWorker('/view');
   if (!isHubView(view)) throw new Error('Monitor worker sent an invalid view');
   return view;
+}
+
+/** Oldest start first. */
+export async function fetchMaintenances(): Promise<Maintenance[]> {
+  const maintenances = await fromMonitorWorker('/maintenances');
+  if (!Array.isArray(maintenances) || !maintenances.every(isValidMaintenance)) {
+    throw new Error('Monitor worker sent invalid maintenances');
+  }
+  return maintenances;
 }
 
 export async function saveMaintenance(maintenance: Maintenance): Promise<void> {

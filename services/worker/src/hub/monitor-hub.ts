@@ -24,7 +24,8 @@ import { capSegments } from './incident-segments';
 import { migrate } from './schema';
 import { durableObjectSql, type Sql } from './sql';
 
-const INCIDENT_RETENTION_SECONDS = 90 * 24 * 60 * 60;
+/** How long History keeps closed incidents and ended maintenance windows. */
+const HISTORY_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
 /** Failed deliveries of one down alert before the hub stops trying. */
 export const MAX_ALERT_ATTEMPTS = 10;
@@ -86,8 +87,7 @@ type IncidentRow = {
   error_alerts: number;
 };
 
-/** Reads kept until the next write, so page traffic between check runs reads no rows. */
-type CachedReads = { view?: HubView; latency?: Map<string, LatencySample[]> };
+type Samples = Record<string, [number, string]>;
 
 const startsSchema = z.array(z.number());
 const errorsSchema = z.array(z.string());
@@ -119,7 +119,15 @@ function readHeartbeat(row: MonitorRow | undefined): HeartbeatState | null {
  */
 export class MonitorHub extends DurableObject<Env> {
   private readonly sql: Sql;
-  private reads: CachedReads = {};
+  /** Kept until the next write, so page traffic between check runs reads no rows. */
+  private cachedView: HubView | undefined;
+  /**
+   * Kept until a check run changes an incident: the table holds 90 days of
+   * history, and most runs change nothing in it.
+   */
+  private incidents: Map<string, Incident[]> | undefined;
+  /** Kept up to date by each check run, so a chart does not read 12 hours of samples a minute. */
+  private latencySamples: Map<string, LatencySample[]> | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -136,8 +144,14 @@ export class MonitorHub extends DurableObject<Env> {
     records: CheckRecord[],
     policy?: AlertPolicy,
   ): { updates: IncidentUpdate[]; alerts: Alert[] } {
-    this.reads = {};
-    return this.sql.transaction(() => {
+    const samples: Samples = {};
+    const result = this.sql.transaction(() => {
+      const [last] = this.sql.exec<{ value: string }>(
+        "SELECT value FROM meta WHERE key = 'last_update'",
+      );
+      // A run that outlasted a later one would put older results over newer ones.
+      if (last && now < Number(last.value)) return { updates: [], alerts: [] };
+      this.cachedView = undefined;
       const rows = new Map(
         this.sql
           .exec<MonitorRow>('SELECT id, started_at, heartbeat FROM monitors')
@@ -153,9 +167,9 @@ export class MonitorHub extends DurableObject<Env> {
             { id: row.id, incident: toIncident(row), alert: row.alert },
           ]),
       );
-      const samples: Record<string, [number, string]> = {};
       const updates: IncidentUpdate[] = [];
-      const activeMaintenances = this.maintenances().filter((maintenance) =>
+      const maintenances = this.maintenances();
+      const activeMaintenances = maintenances.filter((maintenance) =>
         isMaintenanceActive(maintenance, now * 1000),
       );
 
@@ -201,7 +215,41 @@ export class MonitorHub extends DurableObject<Env> {
         );
       }
       this.sql.exec('DELETE FROM samples WHERE at < ?', now - LATENCY_RETENTION_SECONDS);
-      this.sql.exec('DELETE FROM incidents WHERE end_at < ?', now - INCIDENT_RETENTION_SECONDS);
+
+      // A run lists every configured monitor. One that left the config ends its
+      // outage now, and its row goes once retention below has removed its incidents.
+      const configured = new Set(records.map(({ monitor }) => monitor.id));
+      const orphaned = [...open].filter(([monitorId]) => !configured.has(monitorId));
+      for (const [, { id }] of orphaned) {
+        this.sql.exec('UPDATE incidents SET end_at = ? WHERE id = ?', now, id);
+      }
+
+      const expired = this.sql.exec(
+        'DELETE FROM incidents WHERE end_at < ? RETURNING id',
+        now - HISTORY_RETENTION_SECONDS,
+      );
+      for (const id of rows.keys()) {
+        if (configured.has(id)) continue;
+        this.sql.exec(
+          `DELETE FROM monitors WHERE id = ?
+           AND NOT EXISTS (SELECT 1 FROM incidents WHERE monitor_id = ?)`,
+          id,
+          id,
+        );
+      }
+      // Of the results, only a status change writes an incident row.
+      if (
+        expired.length > 0 ||
+        orphaned.length > 0 ||
+        updates.some(({ statusChanged }) => statusChanged)
+      ) {
+        this.incidents = undefined;
+      }
+      for (const { id, end } of maintenances) {
+        if (end && new Date(end).getTime() < (now - HISTORY_RETENTION_SECONDS) * 1000) {
+          this.sql.exec('DELETE FROM maintenances WHERE id = ?', id);
+        }
+      }
       this.sql.exec(
         `INSERT INTO meta (key, value) VALUES ('last_update', ?)
          ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
@@ -212,6 +260,34 @@ export class MonitorHub extends DurableObject<Env> {
         : [];
       return { updates, alerts };
     });
+    this.addLatency(now, samples);
+    return result;
+  }
+
+  /**
+   * Brings the cached samples to what the table now holds, as a fresh read
+   * would. record() takes no run older than the last, so `now` sorts last.
+   */
+  private addLatency(now: number, samples: Samples): void {
+    const cached = this.latencySamples;
+    if (!cached) return;
+    // A second run in the same second replaced the first one's samples.
+    if ([...cached.values()].some((list) => (list[list.length - 1]?.time ?? 0) >= now)) {
+      this.latencySamples = undefined;
+      return;
+    }
+    const cutoff = now - LATENCY_RETENTION_SECONDS;
+    for (const [id, list] of cached) {
+      cached.set(
+        id,
+        list.filter(({ time }) => time >= cutoff),
+      );
+    }
+    for (const [id, [ping, loc]] of Object.entries(samples)) {
+      const list = cached.get(id) ?? [];
+      list.push({ ping, loc, time: now });
+      cached.set(id, list);
+    }
   }
 
   /**
@@ -346,7 +422,7 @@ export class MonitorHub extends DurableObject<Env> {
 
   /** Records a job's ping. Its status changes at the next check run. */
   ping(monitor: HeartbeatMonitor, kind: PingKind, now: number, message?: string): void {
-    this.reads = {};
+    this.cachedView = undefined;
     this.sql.transaction(() => {
       const [row] = this.sql.exec<MonitorRow>(
         'SELECT id, started_at, heartbeat FROM monitors WHERE id = ?',
@@ -478,22 +554,15 @@ export class MonitorHub extends DurableObject<Env> {
   }
 
   view(): HubView {
-    this.reads.view ??= this.readView();
-    return this.reads.view;
+    this.cachedView ??= this.readView();
+    return this.cachedView;
   }
 
   private readView(): HubView {
     const [meta] = this.sql.exec<{ value: string }>(
       "SELECT value FROM meta WHERE key = 'last_update'",
     );
-    const incidents = new Map<string, Incident[]>();
-    for (const row of this.sql.exec<IncidentRow>(
-      'SELECT id, monitor_id, starts, errors, end_at FROM incidents ORDER BY id',
-    )) {
-      const list = incidents.get(row.monitor_id) ?? [];
-      list.push(toIncident(row));
-      incidents.set(row.monitor_id, list);
-    }
+    const incidents = (this.incidents ??= this.readIncidents());
     const [sampleRow] = this.sql.exec<{ at: number; data: string }>(
       'SELECT at, data FROM samples ORDER BY at DESC LIMIT 1',
     );
@@ -522,6 +591,18 @@ export class MonitorHub extends DurableObject<Env> {
     };
   }
 
+  private readIncidents(): Map<string, Incident[]> {
+    const incidents = new Map<string, Incident[]>();
+    for (const row of this.sql.exec<IncidentRow>(
+      'SELECT id, monitor_id, starts, errors, end_at FROM incidents ORDER BY id',
+    )) {
+      const list = incidents.get(row.monitor_id) ?? [];
+      list.push(toIncident(row));
+      incidents.set(row.monitor_id, list);
+    }
+    return incidents;
+  }
+
   /** Oldest start first. */
   maintenances(): Maintenance[] {
     return parseMaintenances(
@@ -532,7 +613,7 @@ export class MonitorHub extends DurableObject<Env> {
   }
 
   putMaintenance(maintenance: Maintenance): void {
-    this.reads = {};
+    this.cachedView = undefined;
     this.sql.exec(
       `INSERT INTO maintenances (id, data) VALUES (?, ?)
        ON CONFLICT (id) DO UPDATE SET data = excluded.data`,
@@ -542,7 +623,7 @@ export class MonitorHub extends DurableObject<Env> {
   }
 
   deleteMaintenance(id: string): boolean {
-    this.reads = {};
+    this.cachedView = undefined;
     const [row] = this.sql.exec<{ id: string }>(
       'DELETE FROM maintenances WHERE id = ? RETURNING id',
       id,
@@ -550,30 +631,29 @@ export class MonitorHub extends DurableObject<Env> {
     return row !== undefined;
   }
 
-  /** Oldest first. */
-  latency(monitorId: string): LatencySample[] {
-    this.reads.latency ??= this.readLatency();
-    return this.reads.latency.get(monitorId) ?? [];
+  /** The last 12 hours before `now`, oldest first. */
+  latency(monitorId: string, now: number): LatencySample[] {
+    this.latencySamples ??= this.readLatency();
+    // Check runs delete old samples, so this matters only once they stop.
+    const cutoff = now - LATENCY_RETENTION_SECONDS;
+    return (this.latencySamples.get(monitorId) ?? []).filter(({ time }) => time >= cutoff);
   }
 
   /** Every monitor's samples in one scan, so asking for each monitor costs no more rows. */
   private readLatency(): Map<string, LatencySample[]> {
-    const samples = new Map<string, LatencySample[]>();
-    for (const { at, id, ping, loc } of this.sql.exec<{
-      at: number;
-      id: string;
-      ping: number | null;
-      loc: string | null;
-    }>(
-      `SELECT s.at, j.key AS id, json_extract(j.value, '$[0]') AS ping, json_extract(j.value, '$[1]') AS loc
-       FROM samples s, json_each(s.data) j ORDER BY s.at`,
+    const byMonitor = new Map<string, LatencySample[]>();
+    // Parsed here, not with json_each: SQLite counts every JSON entry it expands as a row read.
+    for (const { at, data } of this.sql.exec<{ at: number; data: string }>(
+      'SELECT at, data FROM samples ORDER BY at',
     )) {
-      if (typeof ping !== 'number' || typeof loc !== 'string') continue;
-      const list = samples.get(id) ?? [];
-      list.push({ ping, loc, time: at });
-      samples.set(id, list);
+      const samples = sampleSchema.safeParse(parseJson(data)).data ?? {};
+      for (const [id, [ping, loc]] of Object.entries(samples)) {
+        const list = byMonitor.get(id) ?? [];
+        list.push({ ping, loc, time: at });
+        byMonitor.set(id, list);
+      }
     }
-    return samples;
+    return byMonitor;
   }
 }
 

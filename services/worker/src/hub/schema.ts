@@ -40,6 +40,12 @@ const MIGRATIONS: string[][] = [
     `ALTER TABLE incidents ADD COLUMN reopened_at INTEGER`,
     `ALTER TABLE incidents ADD COLUMN error_alerts INTEGER NOT NULL DEFAULT 0`,
   ],
+  // Check runs look up open, expired and one monitor's incidents. Without these
+  // each lookup reads the whole history, and the free plan allows 5 million rows read a day.
+  [
+    `CREATE INDEX incidents_end_at ON incidents (end_at)`,
+    `CREATE INDEX incidents_monitor_end ON incidents (monitor_id, end_at)`,
+  ],
 ];
 
 export function migrate(sql: Sql): void {

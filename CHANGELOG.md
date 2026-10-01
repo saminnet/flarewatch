@@ -2,6 +2,19 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## 3.1.0 - 2026-10-01
+
+### Changed
+
+- Each check run reads about a dozen rows from the hub instead of every stored incident, so a long history no longer eats into the free plan's 5 million rows read a day. Page views and response-time charts read only what changed since the last check run.
+- History drops a maintenance window 90 days after it ends, the same as incidents.
+- A monitor you remove from the config gets its open outage closed. Its history goes after 90 days, like any other.
+
+### Fixed
+
+- A check run that finished after a newer one no longer overwrites the newer results.
+- Response-time charts show only the last 12 hours, even when check runs have stopped.
+
 ## 3.0.0 - 2026-09-30
 
 3.0 removes the code that moved 1.x installs onto 2.x. On 2.x, update as usual. If you're still on 1.x, update to 2.3.1 first, from a clone of your fork with `upstream` set up as in [Update your fork](docs/deploy.md#update-your-fork):

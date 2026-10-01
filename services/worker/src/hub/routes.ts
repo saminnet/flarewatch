@@ -14,9 +14,12 @@ export async function handleHubRequest(request: Request, env: Env): Promise<Resp
   if (pathname === '/view' && method === 'GET') {
     return Response.json(await getHub(env).view());
   }
+  if (pathname === '/maintenances' && method === 'GET') {
+    return Response.json(await getHub(env).maintenances());
+  }
   if (pathname.startsWith('/latency/') && method === 'GET') {
     const id = decodeURIComponent(pathname.slice('/latency/'.length));
-    return Response.json(await getHub(env).latency(id));
+    return Response.json(await getHub(env).latency(id, Math.floor(Date.now() / 1000)));
   }
   if (!pathname.startsWith(MAINTENANCE_PREFIX)) return null;
 

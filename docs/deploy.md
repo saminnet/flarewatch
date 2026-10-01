@@ -91,6 +91,7 @@ A personal or small-team page costs nothing. These are the free tier limits that
 | ----------------------------------- | ----------------------------------------------------------- |
 | 100,000 Worker requests/day         | Page views, API calls and heartbeat pings.                  |
 | 100,000 Durable Object requests/day | Check runs (1,440 a day), page views, API calls and pings.  |
+| 5 million rows read/day             | Check runs (about 18,000 a day) and page views.             |
 | 100,000 rows written/day            | Check runs (about 4,300 a day), incidents, pings and edits. |
 | 1,000 KV writes/day                 | Sign-ins.                                                   |
 | 5 cron triggers per account         | FlareWatch uses one.                                        |
