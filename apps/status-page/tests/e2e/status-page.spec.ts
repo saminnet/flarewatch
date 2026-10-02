@@ -923,6 +923,57 @@ test.describe.serial('operator maintenance lifecycle', () => {
     expect((await page.request.get('/')).headers()['cache-control']).not.toBe('private, no-store');
     expect(clientErrors).toEqual([]);
   });
+
+  test('repeats a maintenance window weekly from History', async ({ page }) => {
+    const clientErrors = collectClientErrors(page);
+    await page.goto('/login');
+    await page.getByRole('link', { name: 'Continue with Test ID' }).click();
+    await page.getByRole('link', { name: 'operator@e2e.test' }).click();
+    await page.getByRole('link', { name: 'History' }).click();
+
+    await page.getByRole('button', { name: 'Add maintenance window' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Add maintenance window' });
+    await dialog.getByLabel('Title').fill('E2E weekly maintenance');
+    await dialog.getByLabel('Description').fill('Repeats on Mondays and Wednesdays.');
+    const month = new Date().toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+    await dialog.getByRole('button', { name: 'Select start date' }).click();
+    await page.getByRole('button', { name: new RegExp(`${month} 15th`) }).click();
+    await dialog.getByRole('combobox', { name: 'Repeat' }).click();
+    await page.getByRole('option', { name: 'Every week' }).click();
+
+    await expect(dialog.getByText('A repeating window needs an end')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await dialog.getByRole('button', { name: 'Select end date' }).click();
+    await page.getByRole('button', { name: new RegExp(`${month} 16th`) }).click();
+    await dialog.getByRole('button', { name: 'Monday' }).click();
+    await dialog.getByRole('button', { name: 'Wednesday' }).click();
+    const created = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/admin/maintenances') &&
+        response.request().method() === 'POST',
+    );
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    const response = await created;
+    expect(response.status()).toBe(201);
+    expect(await response.json()).toMatchObject({ repeat: { every: 'week', weekdays: [1, 3] } });
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByText('Every week on Mon, Wed').first()).toBeVisible();
+
+    await page.getByRole('button', { name: 'Delete E2E weekly maintenance' }).first().click();
+    const deleted = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/admin/maintenances') &&
+        response.request().method() === 'DELETE',
+    );
+    await page
+      .getByRole('dialog', { name: 'Delete maintenance window' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+    expect((await deleted).status()).toBe(204);
+    await expect(page.getByText('E2E weekly maintenance')).toHaveCount(0);
+    expect(clientErrors).toEqual([]);
+  });
 });
 
 test.describe('provider sign-in', () => {

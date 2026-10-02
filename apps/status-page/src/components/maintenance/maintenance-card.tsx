@@ -1,8 +1,14 @@
-import { IconAlertTriangle, IconCalendar, IconClock } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCalendar, IconClock, IconRepeat } from '@tabler/icons-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { Maintenance } from '@flarewatch/shared';
-import { formatTimeUntil, formatDateRange, getMaintenanceColors } from '@/lib/maintenance';
+import { nextMaintenanceOccurrence, type Maintenance } from '@flarewatch/shared';
+import {
+  describeRepeat,
+  formatTimeUntil,
+  formatDateRange,
+  getMaintenanceColors,
+  occurrenceDates,
+} from '@/lib/maintenance';
 
 interface MaintenanceCardProps {
   maintenance: Maintenance;
@@ -17,9 +23,10 @@ export function MaintenanceCard({
   nowMs,
   variant,
 }: MaintenanceCardProps) {
+  const occurrence = nextMaintenanceOccurrence(maintenance, nowMs);
+  if (!occurrence) return null;
   const colors = getMaintenanceColors(maintenance.color);
-  const start = new Date(maintenance.start);
-  const end = maintenance.end ? new Date(maintenance.end) : null;
+  const { start, end } = occurrenceDates(occurrence);
   const now = new Date(nowMs);
   const isActive = variant === 'active';
   const Icon = isActive ? IconAlertTriangle : IconCalendar;
@@ -64,6 +71,12 @@ export function MaintenanceCard({
           {isActive && end && (
             <span className="text-status-degraded font-medium">
               {`Ends in ${formatTimeUntil(end, now)}`}
+            </span>
+          )}
+          {maintenance.repeat && (
+            <span className="flex items-center gap-1">
+              <IconRepeat className="size-3.5" />
+              {describeRepeat(maintenance.repeat)}
             </span>
           )}
         </div>

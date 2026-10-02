@@ -14,6 +14,7 @@ import {
   type HubView,
   type Webhook,
 } from './types';
+import { isNormalizedMaintenance, normalizeMaintenance } from './maintenance';
 import { isJsonObject, isNonEmptyString, isSecureUrl, jsonPathKeys } from './utils';
 
 const PULL_METHODS = [
@@ -117,31 +118,21 @@ type SchemaOutput<T, Depth extends number = 4> = Depth extends 0
   ? unknown
   : { [K in keyof T]: SchemaOutput<T[K], Prev[Depth]> | undefined };
 
-const toTime = (value: string | number) => new Date(value).getTime();
+/** The record to store: its id and times plus the window as normalizeMaintenance returns it. */
+export function toStoredMaintenance(value: unknown): Maintenance | null {
+  if (!isJsonObject(value) || !isNonEmptyString(value.id)) return null;
+  const { createdAt, updatedAt } = value;
+  if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) return null;
+  if (typeof updatedAt !== 'number' || !Number.isFinite(updatedAt)) return null;
+  const result = normalizeMaintenance(value);
+  if ('error' in result) return null;
+  return { ...result.value, id: value.id, createdAt, updatedAt };
+}
 
-const timestamp = z
-  .union([z.string(), z.number()])
-  .check(z.refine((value) => !Number.isNaN(toTime(value)), { error: 'must be a date' }));
-
-const maintenanceSchema: z.ZodMiniType<SchemaOutput<Maintenance>> = z
-  .object({
-    id: z.string().check(z.minLength(1)),
-    body: z.string().check(z.minLength(1)),
-    createdAt: z.number(),
-    updatedAt: z.number(),
-    start: timestamp,
-    end: z.optional(timestamp),
-    title: z.optional(z.string()),
-    color: z.optional(z.string()),
-    monitors: z.optional(z.array(z.string())),
-  })
-  .check(
-    z.refine(
-      (maintenance) =>
-        maintenance.end === undefined || toTime(maintenance.end) >= toTime(maintenance.start),
-      { error: 'end must not be before start' },
-    ),
-  );
+/** A stored window, already normalized: one that is not would reach the schedule maths raw. */
+export function isValidMaintenance(value: unknown): value is Maintenance {
+  return toStoredMaintenance(value) !== null && isNormalizedMaintenance(value);
+}
 
 function nonEmptyString(field: string) {
   const error = `${field} must be a non-empty string`;
@@ -503,7 +494,7 @@ const latencySampleSchema = z.object({ loc: z.string(), ping: z.number(), time: 
 
 const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
   lastUpdate: z.number(),
-  maintenances: z.array(maintenanceSchema),
+  maintenances: z.array(z.custom<Maintenance>(isValidMaintenance)),
   monitors: z.record(
     z.string(),
     z.object({
@@ -515,8 +506,6 @@ const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
     }),
   ),
 });
-
-export const isValidMaintenance = asTypeGuard<Maintenance>(maintenanceSchema);
 
 export function configIssues(value: unknown): string[] {
   const result = runtimeConfigSchema.safeParse(value);

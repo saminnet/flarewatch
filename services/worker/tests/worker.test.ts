@@ -427,6 +427,31 @@ describe('hub routes for the status page', () => {
     expect(hub.view().maintenances).toEqual([]);
   });
 
+  it('stores a window as normalized, with a padded time zone trimmed and a blank one as UTC', async () => {
+    const { hub, env } = createEnv();
+    const put = (id: string, timeZone: string) =>
+      Worker.fetch(
+        new Request(`https://internal/maintenances/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            ...createMaintenance({ id }),
+            end: new Date(NOW_SECONDS * 1000).toISOString(),
+            repeat: { every: 'day', timeZone },
+          }),
+        }),
+        env,
+        {} as ExecutionContext,
+      );
+
+    expect((await put('padded', ' Europe/Berlin ')).status).toBe(204);
+    expect((await put('blank', '')).status).toBe(204);
+
+    expect(hub.view().maintenances.map(({ id, repeat }) => [id, repeat])).toEqual([
+      ['blank', { every: 'day' }],
+      ['padded', { every: 'day', timeZone: 'Europe/Berlin' }],
+    ]);
+  });
+
   it('refuses an id whose percent-encoding is malformed', async () => {
     const { env } = createEnv();
     const send = (method: string, path: string) =>

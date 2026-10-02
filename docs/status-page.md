@@ -58,6 +58,60 @@ Sign in and open History to plan a maintenance window: a description, a start, a
 
 Scripts can manage windows through `/api/admin/maintenances` (`GET`, `POST`, `PUT`, `DELETE`) with the same username and password in a Basic `Authorization` header. Each such call counts against the sign-in limit of 5 per minute per IP, like password attempts and provider sign-ins.
 
+### Repeating windows
+
+A window can repeat every day, week or month. Its start and end set the first run and how long each run lasts, up to 24 hours. Every run starts at the same clock time as the first, in the window's time zone. In the form, pick a **Repeat** option. Its date pickers are in UTC, so pick the UTC time of the first run. Scripts send a `repeat` object.
+
+A backup at 03:00 Berlin time every night, half an hour long:
+
+```json
+{
+  "body": "Nightly backup",
+  "start": "2026-10-05T01:00:00Z",
+  "end": "2026-10-05T01:30:00Z",
+  "repeat": { "every": "day", "timeZone": "Europe/Berlin" }
+}
+```
+
+It runs at 01:00 UTC until the clocks go back on 25 October, then at 02:00 UTC. In Berlin it's 03:00 either way.
+
+Patching on Tuesdays and Thursdays at 22:00 UTC, until the end of the year:
+
+```json
+{
+  "body": "OS patches",
+  "start": "2026-10-06T22:00:00Z",
+  "end": "2026-10-06T23:00:00Z",
+  "repeat": { "every": "week", "weekdays": [2, 4], "until": "2026-12-31T23:59:59Z" }
+}
+```
+
+A database upgrade on the 31st of each month:
+
+```json
+{
+  "body": "Database upgrade",
+  "start": "2026-10-31T04:00:00Z",
+  "end": "2026-10-31T06:00:00Z",
+  "repeat": { "every": "month", "dayOfMonth": 31 }
+}
+```
+
+Months with fewer than 31 days get no run, so this one skips November and runs again on 31 December.
+
+| Field        | Does                                                                                          |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| `every`      | `day`, `week` or `month`.                                                                     |
+| `weekdays`   | Weekly only. Days from 0 (Sunday) to 6 (Saturday). Defaults to the start's weekday.           |
+| `dayOfMonth` | Monthly only. 1 to 31. Defaults to the start's day. Months without that day are skipped.      |
+| `until`      | No run starts after this. Without it, the window repeats until you delete it.                 |
+| `timeZone`   | The zone the clock time follows, like `Europe/Berlin` or `America/New_York`. Defaults to UTC. |
+
+- The first run is on the start's day if the rule includes that day. If it doesn't, say a Monday start with `weekdays: [3]`, the first run is the next day the rule includes.
+- When the clocks go forward and skip a run's start time, that run starts at the moment they jump. A 02:30 run starts at 03:00 that night. When the clocks go back and 02:30 comes twice, the run starts at the first one.
+- The dashboard shows the current or next run. History lists each run in its month. Covered monitors send no down alerts during a run.
+- History keeps a repeating window until 90 days after its `until`. One without `until` stays until you delete it.
+
 ## Private page
 
 To keep the whole page to yourself, set `visibility: 'private'` in `packages/config/src/public.ts`. Visitors then get only the sign-in page. The dashboard, History, monitor pages, embeds, badges and the JSON API are closed to them. Heartbeat pings keep working.

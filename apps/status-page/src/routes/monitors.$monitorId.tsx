@@ -92,12 +92,13 @@ function MonitorHistory({
     state,
     monitors: snapshot.monitors,
     maintenances: snapshot.maintenances,
-    // Incidents are kept for the same 90 days; the far end keeps every upcoming window.
+    // Incidents are kept for the same 90 days; the far end keeps every window's next run.
     monthStart: new Date(nowMs - UPTIME_DAYS * TIME_MS.DAY),
     monthEnd: new Date(8.64e15),
     nowMs,
     selectedMonitor: monitorId,
     eventType: 'all',
+    nextRunOnly: true,
   });
   const events = [...pinned, ...timeline];
 
@@ -128,7 +129,7 @@ function MonitorHistory({
                 <IncidentCard key={`incident-${event.start}`} event={event} />
               ) : (
                 <MaintenanceEventCard
-                  key={`maintenance-${event.maintenance.id}`}
+                  key={`maintenance-${event.maintenance.id}-${event.occurrence.start}`}
                   event={event}
                   monitors={snapshot.monitors}
                   nowMs={nowMs}

@@ -1,9 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 import {
   isJsonObject,
+  type JsonObject,
   type Maintenance,
   type MaintenanceConfig,
   isNonEmptyString,
+  normalizeMaintenance,
   readJsonUpTo,
 } from '@flarewatch/shared';
 import { deleteMaintenance, fetchMaintenances, saveMaintenance } from '@/lib/monitor-worker';
@@ -23,134 +25,41 @@ function readBody(request: Request): Promise<unknown> {
   return readJsonUpTo(request, MAX_BODY_BYTES).catch(() => null);
 }
 
-/**
- * Monitor ids, deduplicated; undefined for every monitor. Null when an entry is no id:
- * dropping it could empty the list, which would widen the window to every monitor.
- */
-function parseMonitors(value: unknown[]): string[] | undefined | null {
-  if (!value.every(isNonEmptyString)) return null;
-  return value.length > 0 ? Array.from(new Set(value)) : undefined;
-}
-
 function generateMaintenanceId(): string {
   return `maint_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
-function parseDateMs(value: unknown): number | null {
-  if (typeof value !== 'string' && typeof value !== 'number') return null;
-  const ms = new Date(value).getTime();
-  return Number.isFinite(ms) ? ms : null;
+const FIELDS = ['title', 'body', 'start', 'end', 'monitors', 'color', 'repeat'] as const;
+
+type Field = (typeof FIELDS)[number];
+
+/** The fields the input sets, over `base`. Null clears a field. */
+function withInput(base: Partial<MaintenanceConfig>, input: JsonObject) {
+  const set = FIELDS.filter((field) => input[field] !== undefined);
+  return { ...base, ...Object.fromEntries(set.map((field) => [field, input[field] ?? undefined])) };
 }
 
-function normalizeMaintenanceInput(input: unknown): MaintenanceConfig | null {
-  if (!isJsonObject(input)) return null;
-
-  const body = typeof input.body === 'string' ? input.body.trim() : '';
-  if (!body) return null;
-
-  const startMs = parseDateMs(input.start);
-  if (startMs === null) return null;
-
-  const endMs = input.end !== undefined ? parseDateMs(input.end) : undefined;
-  if (endMs === null) return null;
-  if (endMs !== undefined && endMs < startMs) return null;
-
-  const title =
-    typeof input.title === 'string' && input.title.trim() ? input.title.trim() : undefined;
-  const color =
-    typeof input.color === 'string' && input.color.trim() ? input.color.trim() : undefined;
-
-  const monitors = Array.isArray(input.monitors) ? parseMonitors(input.monitors) : undefined;
-  if (monitors === null) return null;
-
-  return {
-    title,
-    body,
-    start: new Date(startMs).toISOString(),
-    end: endMs !== undefined ? new Date(endMs).toISOString() : undefined,
-    monitors,
-    color,
-  };
+function copyField<K extends Field>(
+  to: Partial<MaintenanceConfig>,
+  from: MaintenanceConfig,
+  field: K,
+): void {
+  to[field] = from[field];
 }
 
-function parseNullableString(
-  value: unknown,
-): { valid: true; value: string | undefined } | { valid: false } {
-  if (value === null) return { valid: true, value: undefined };
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return { valid: true, value: trimmed || undefined };
-  }
-  return { valid: false };
-}
-
+/** The fields to change, checked as the whole window they make with `current`. */
 export function normalizeMaintenanceUpdates(
   input: unknown,
   current: Maintenance,
 ): Partial<MaintenanceConfig> | null {
   if (!isJsonObject(input)) return null;
+  const result = normalizeMaintenance(withInput(current, input));
+  if ('error' in result) return null;
 
   const updates: Partial<MaintenanceConfig> = {};
-
-  if (input.title !== undefined) {
-    const result = parseNullableString(input.title);
-    if (!result.valid) return null;
-    updates.title = result.value;
+  for (const field of FIELDS) {
+    if (input[field] !== undefined) copyField(updates, result.value, field);
   }
-
-  if (input.body !== undefined) {
-    const body = typeof input.body === 'string' ? input.body.trim() : '';
-    if (!body) return null;
-    updates.body = body;
-  }
-
-  if (input.color !== undefined) {
-    const result = parseNullableString(input.color);
-    if (!result.valid) return null;
-    updates.color = result.value;
-  }
-
-  if (input.monitors !== undefined) {
-    if (input.monitors === null) {
-      updates.monitors = undefined;
-    } else if (Array.isArray(input.monitors)) {
-      const monitors = parseMonitors(input.monitors);
-      if (monitors === null) return null;
-      updates.monitors = monitors;
-    } else {
-      return null;
-    }
-  }
-
-  const currentStartMs = parseDateMs(current.start);
-  if (currentStartMs === null) return null;
-
-  const currentEndMs = current.end === undefined ? undefined : parseDateMs(current.end);
-  if (currentEndMs === null) return null;
-
-  let nextStartMs = currentStartMs;
-  if (input.start !== undefined) {
-    const parsed = parseDateMs(input.start);
-    if (parsed === null) return null;
-    nextStartMs = parsed;
-    updates.start = new Date(parsed).toISOString();
-  }
-
-  let nextEndMs = currentEndMs;
-  if (input.end !== undefined) {
-    if (input.end === null) {
-      nextEndMs = undefined;
-      updates.end = undefined;
-    } else {
-      const parsed = parseDateMs(input.end);
-      if (parsed === null) return null;
-      nextEndMs = parsed;
-      updates.end = new Date(parsed).toISOString();
-    }
-  }
-
-  if (nextEndMs !== undefined && nextEndMs < nextStartMs) return null;
-
   return updates;
 }
 
@@ -174,15 +83,16 @@ export const Route = createFileRoute('/api/admin/maintenances')({
 
       POST: async ({ request }: { request: Request }) => {
         try {
-          const input = normalizeMaintenanceInput(await readBody(request));
+          const body = await readBody(request);
+          const result = normalizeMaintenance(isJsonObject(body) ? withInput({}, body) : body);
 
-          if (!input) {
-            return jsonError('Invalid maintenance payload', 400);
+          if ('error' in result) {
+            return jsonError(`Invalid maintenance payload: ${result.error}`, 400);
           }
 
           const now = Date.now();
           const maintenance: Maintenance = {
-            ...input,
+            ...result.value,
             id: generateMaintenanceId(),
             createdAt: now,
             updatedAt: now,

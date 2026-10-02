@@ -203,7 +203,7 @@ export function HistoryPage() {
               </h3>
               {pinned.map((event) => (
                 <MaintenanceEventCard
-                  key={`maintenance-${event.maintenance.id}`}
+                  key={`maintenance-${event.maintenance.id}-${event.occurrence.start}`}
                   event={event}
                   monitors={monitors}
                   nowMs={nowMs}
@@ -224,7 +224,7 @@ export function HistoryPage() {
                   />
                 ) : (
                   <MaintenanceEventCard
-                    key={`maintenance-${event.maintenance.id}`}
+                    key={`maintenance-${event.maintenance.id}-${event.occurrence.start}`}
                     event={event}
                     monitors={monitors}
                     nowMs={nowMs}

@@ -3,6 +3,7 @@ import * as z from 'zod/mini';
 import {
   coversMonitor,
   isMaintenanceActive,
+  maintenanceExpiresAt,
   parseHeartbeatSignal,
   parseMaintenances,
   type Maintenance,
@@ -179,9 +180,10 @@ export class MonitorHub extends DurableObject<Env> {
           this.sql.exec('DELETE FROM monitors WHERE id = ?', id);
         }
       }
-      for (const { id, end } of maintenances) {
-        if (end && new Date(end).getTime() < (now - HISTORY_RETENTION_SECONDS) * 1000) {
-          this.sql.exec('DELETE FROM maintenances WHERE id = ?', id);
+      for (const maintenance of maintenances) {
+        const expiresAt = maintenanceExpiresAt(maintenance);
+        if (expiresAt !== undefined && expiresAt < (now - HISTORY_RETENTION_SECONDS) * 1000) {
+          this.sql.exec('DELETE FROM maintenances WHERE id = ?', maintenance.id);
         }
       }
       this.sql.exec(

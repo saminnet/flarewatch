@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import type { Maintenance } from '@flarewatch/shared';
 import {
   compareByStart,
+  describeRepeat,
   filterMaintenances,
   formatDateRange,
   formatTimeUntil,
@@ -112,5 +113,41 @@ describe('maintenance helpers', () => {
       'api',
     ]);
     expect(resolveAffectedMonitors(undefined, monitors)).toEqual([]);
+  });
+
+  it('sorts repeating windows by their current or next run', () => {
+    const daily = {
+      ...maintenance('daily', '2026-05-01T10:00:00.000Z', '2026-05-01T11:00:00.000Z'),
+      repeat: { every: 'day' as const },
+    };
+    const tuesdays = {
+      ...maintenance('tuesdays', '2026-05-05T11:00:00.000Z', '2026-05-05T13:00:00.000Z'),
+      repeat: { every: 'week' as const },
+    };
+    const ended = {
+      ...maintenance('ended', '2026-05-01T10:00:00.000Z', '2026-05-01T11:00:00.000Z'),
+      repeat: { every: 'day' as const, until: '2026-06-01T10:00:00.000Z' },
+    };
+    const oneOff = maintenance('one-off', '2026-06-10T09:00:00.000Z', '2026-06-10T09:30:00.000Z');
+
+    const result = filterMaintenances([daily, tuesdays, ended, oneOff], { nowMs: now });
+
+    expect(result.active.map((m) => m.id)).toEqual(['tuesdays']);
+    expect(result.upcoming.map((m) => m.id)).toEqual(['one-off', 'daily']);
+    expect(result.past.map((m) => m.id)).toEqual(['ended']);
+    expect(getMaintenanceStatus(daily, now)).toBe('upcoming');
+  });
+
+  it('describes a repeat rule', () => {
+    expect(describeRepeat({ every: 'day' })).toBe('Every day');
+    expect(describeRepeat({ every: 'month', dayOfMonth: 31 })).toBe('Every month on day 31');
+    expect(
+      describeRepeat({
+        every: 'week',
+        weekdays: [1, 4],
+        timeZone: 'Europe/Berlin',
+        until: '2026-07-01T10:00:00.000Z',
+      }),
+    ).toBe('Every week on Mon, Thu, Europe/Berlin time, until Jul 1, 10:00 UTC');
   });
 });

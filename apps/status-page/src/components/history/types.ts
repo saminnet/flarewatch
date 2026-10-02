@@ -1,4 +1,4 @@
-import type { Maintenance } from '@flarewatch/shared';
+import type { Maintenance, Occurrence } from '@flarewatch/shared';
 
 export type IncidentEvent = {
   type: 'incident';
@@ -12,6 +12,7 @@ export type IncidentEvent = {
 export type MaintenanceEvent = {
   type: 'maintenance';
   maintenance: Maintenance;
+  occurrence: Occurrence;
 };
 
 export type TimelineEvent = IncidentEvent | MaintenanceEvent;

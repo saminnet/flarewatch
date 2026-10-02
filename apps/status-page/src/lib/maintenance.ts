@@ -1,30 +1,33 @@
-import { formatUtcShort, isMaintenanceActive, type Maintenance } from '@flarewatch/shared';
+import {
+  formatUtcShort,
+  nextMaintenanceOccurrence,
+  occurrencePhase,
+  type Maintenance,
+  type MaintenanceRepeat,
+  type Occurrence,
+} from '@flarewatch/shared';
 import { TIME_MS, UPCOMING_MAINTENANCE_DAYS } from './constants';
 import { formatUtc, formatDuration, getDateKey } from './date';
 
-function isMaintenanceUpcoming(
-  maintenance: Maintenance,
-  now = Date.now(),
-  daysAhead = UPCOMING_MAINTENANCE_DAYS,
-): boolean {
-  const startMs = new Date(maintenance.start).getTime();
-  const futureMs = now + daysAhead * TIME_MS.DAY;
-  return startMs > now && startMs <= futureMs;
-}
-
-function isMaintenancePast(maintenance: Maintenance, now = Date.now()): boolean {
-  const endMs = maintenance.end ? new Date(maintenance.end).getTime() : undefined;
-  return endMs !== undefined && endMs <= now;
-}
-
+/** Of the given run, by default the window's current or next one. */
 export function getMaintenanceStatus(
   maintenance: Maintenance,
-  now = Date.now(),
+  now: number,
+  occurrence = nextMaintenanceOccurrence(maintenance, now),
 ): 'active' | 'upcoming' | 'scheduled' | 'past' {
-  if (isMaintenanceActive(maintenance, now)) return 'active';
-  if (isMaintenancePast(maintenance, now)) return 'past';
-  if (isMaintenanceUpcoming(maintenance, now)) return 'upcoming';
-  return 'scheduled';
+  if (!occurrence) return 'past';
+  const phase = occurrencePhase(occurrence, now);
+  if (phase !== 'upcoming') return phase;
+  return occurrence.start <= now + UPCOMING_MAINTENANCE_DAYS * TIME_MS.DAY
+    ? 'upcoming'
+    : 'scheduled';
+}
+
+export function occurrenceDates(occurrence: Occurrence) {
+  return {
+    start: new Date(occurrence.start),
+    end: occurrence.end === Infinity ? null : new Date(occurrence.end),
+  };
 }
 
 interface FilteredMaintenances {
@@ -37,6 +40,13 @@ export function compareByStart(a: Maintenance, b: Maintenance): number {
   return new Date(a.start).getTime() - new Date(b.start).getTime();
 }
 
+type Dated = { maintenance: Maintenance; start: number };
+
+function byStart(list: Dated[]): Maintenance[] {
+  return list.sort((a, b) => a.start - b.start).map(({ maintenance }) => maintenance);
+}
+
+/** Active and upcoming by their current or next run, past newest first. */
 export function filterMaintenances(
   maintenances: Maintenance[],
   options?: { upcomingDays?: number; nowMs?: number },
@@ -44,25 +54,54 @@ export function filterMaintenances(
   const now = options?.nowMs ?? Date.now();
   const upcomingDays = options?.upcomingDays ?? UPCOMING_MAINTENANCE_DAYS;
 
-  const active: Maintenance[] = [];
-  const upcoming: Maintenance[] = [];
+  const active: Dated[] = [];
+  const upcoming: Dated[] = [];
   const past: Maintenance[] = [];
 
-  for (const m of maintenances) {
-    if (isMaintenanceActive(m, now)) {
-      active.push(m);
-    } else if (isMaintenancePast(m, now)) {
-      past.push(m);
-    } else if (isMaintenanceUpcoming(m, now, upcomingDays)) {
-      upcoming.push(m);
+  for (const maintenance of maintenances) {
+    const next = nextMaintenanceOccurrence(maintenance, now);
+    if (!next) {
+      past.push(maintenance);
+    } else if (next.start <= now) {
+      active.push({ maintenance, start: next.start });
+    } else if (next.start <= now + upcomingDays * TIME_MS.DAY) {
+      upcoming.push({ maintenance, start: next.start });
     }
   }
 
-  active.sort(compareByStart);
-  upcoming.sort(compareByStart);
-  past.sort((a, b) => compareByStart(b, a)); // newest first
+  past.sort((a, b) => compareByStart(b, a));
+  return { active: byStart(active), upcoming: byStart(upcoming), past };
+}
 
-  return { active, upcoming, past };
+export const WEEKDAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
+
+export const REPEAT_OPTIONS = [
+  { value: '', label: 'Does not repeat' },
+  { value: 'day', label: 'Every day' },
+  { value: 'week', label: 'Every week' },
+  { value: 'month', label: 'Every month' },
+] as const;
+
+/** Like "Every week on Mon, Thu, Europe/Berlin time, until Jul 1, 10:00 UTC". */
+export function describeRepeat(repeat: MaintenanceRepeat): string {
+  let text = `Every ${repeat.every}`;
+  if (repeat.every === 'week' && repeat.weekdays) {
+    text += ` on ${repeat.weekdays.map((day) => WEEKDAY_NAMES[day]?.slice(0, 3)).join(', ')}`;
+  }
+  if (repeat.every === 'month' && repeat.dayOfMonth) text += ` on day ${repeat.dayOfMonth}`;
+  if (repeat.timeZone && repeat.timeZone !== 'UTC') text += `, ${repeat.timeZone} time`;
+  if (repeat.until !== undefined) {
+    text += `, until ${formatUtcShort(new Date(repeat.until).getTime() / 1000)}`;
+  }
+  return text;
 }
 
 export function formatTimeUntil(date: Date, now = new Date()): string {

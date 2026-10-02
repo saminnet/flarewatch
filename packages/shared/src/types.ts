@@ -49,6 +49,22 @@ type PageConfigLink = {
   highlight?: boolean;
 };
 
+/**
+ * Repeats the window from its start and end, which must be at most 24 hours apart. Each run
+ * starts at the start's wall-clock time in `timeZone`.
+ */
+export type MaintenanceRepeat = {
+  every: 'day' | 'week' | 'month';
+  /** Weekly only: 0 is Sunday. Defaults to the start's weekday. */
+  weekdays?: number[];
+  /** Monthly only: 1 to 31. Defaults to the start's day; months without that day are skipped. */
+  dayOfMonth?: number;
+  /** No run starts after this. Without it the window repeats for good. */
+  until?: number | string;
+  /** An IANA time zone, like Europe/Berlin. Defaults to UTC. */
+  timeZone?: string;
+};
+
 export type MaintenanceConfig = {
   monitors?: string[];
   title?: string;
@@ -56,6 +72,7 @@ export type MaintenanceConfig = {
   start: number | string;
   end?: number | string;
   color?: string;
+  repeat?: MaintenanceRepeat;
 };
 
 export type Maintenance = MaintenanceConfig & {

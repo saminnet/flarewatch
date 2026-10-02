@@ -443,4 +443,88 @@ describe('status projection', () => {
       result.timeline.map((event) => event.type === 'maintenance' && event.maintenance.id),
     ).toEqual(['active']);
   });
+
+  it('lists each run of a repeating window in its month and pins only the current one', () => {
+    const weekly: Maintenance = {
+      ...maintenance('weekly', '2026-05-04T02:00:00.000Z', '2026-05-04T03:00:00.000Z'),
+      repeat: { every: 'week' },
+    };
+
+    const result = projectTimeline({
+      state: createState(),
+      monitors: [publicMonitor('api', 'API')],
+      maintenances: [weekly],
+      monthStart: new Date('2026-06-01T00:00:00.000Z'),
+      monthEnd: new Date('2026-06-30T23:59:59.999Z'),
+      nowMs: Date.parse('2026-06-15T02:30:00.000Z'),
+      eventType: 'all',
+    });
+
+    const starts = (events: typeof result.timeline) =>
+      events.map((event) =>
+        event.type === 'maintenance' ? new Date(event.occurrence.start).toISOString() : null,
+      );
+    expect(starts(result.pinned)).toEqual(['2026-06-15T02:00:00.000Z']);
+    expect(starts(result.timeline)).toEqual([
+      '2026-06-29T02:00:00.000Z',
+      '2026-06-22T02:00:00.000Z',
+      '2026-06-08T02:00:00.000Z',
+      '2026-06-01T02:00:00.000Z',
+    ]);
+  });
+
+  it('lists past runs and only the next one when the range has no real end', () => {
+    const daily: Maintenance = {
+      ...maintenance('daily', '2026-06-01T10:00:00.000Z', '2026-06-01T11:00:00.000Z'),
+      repeat: { every: 'day' },
+    };
+    const later = maintenance('later', '2026-09-01T00:00:00.000Z', '2026-09-01T01:00:00.000Z');
+
+    const result = projectTimeline({
+      state: createState(),
+      monitors: [publicMonitor('api', 'API')],
+      maintenances: [daily, later],
+      monthStart: new Date('2026-03-12T12:00:00.000Z'),
+      monthEnd: new Date(8.64e15),
+      nowMs: Date.parse('2026-06-10T12:00:00.000Z'),
+      eventType: 'all',
+      nextRunOnly: true,
+    });
+
+    const runs = [...result.pinned, ...result.timeline].map((event) =>
+      event.type === 'maintenance'
+        ? `${event.maintenance.id} ${new Date(event.occurrence.start).toISOString()}`
+        : null,
+    );
+    expect(runs.slice(0, 3)).toEqual([
+      'daily 2026-06-11T10:00:00.000Z',
+      'later 2026-09-01T00:00:00.000Z',
+      'daily 2026-06-10T10:00:00.000Z',
+    ]);
+    expect(runs.at(-1)).toBe('daily 2026-06-01T10:00:00.000Z');
+    expect(runs).toHaveLength(12);
+  });
+
+  it('projects a repeating window with an unknown zone as UTC instead of throwing', () => {
+    const unknownZone: Maintenance = {
+      ...maintenance('mars', '2026-06-01T10:00:00.000Z', '2026-06-01T11:00:00.000Z'),
+      repeat: { every: 'week', timeZone: 'Mars/Olympus' },
+    };
+
+    const result = projectTimeline({
+      state: createState(),
+      monitors: [publicMonitor('api', 'API')],
+      maintenances: [unknownZone],
+      monthStart: new Date('2026-06-01T00:00:00.000Z'),
+      monthEnd: new Date('2026-06-14T23:59:59.999Z'),
+      nowMs: Date.parse('2026-06-20T00:00:00.000Z'),
+      eventType: 'all',
+    });
+
+    expect(
+      result.timeline.map((event) =>
+        event.type === 'maintenance' ? new Date(event.occurrence.start).toISOString() : null,
+      ),
+    ).toEqual(['2026-06-08T10:00:00.000Z', '2026-06-01T10:00:00.000Z']);
+  });
 });

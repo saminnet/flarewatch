@@ -534,6 +534,53 @@ describe('MonitorHub maintenance windows', () => {
     expect(hub.view().maintenances.map(({ id }) => id)).toEqual(['open', 'recent']);
   });
 
+  it('deletes a repeating window 90 days after its until and never one without', () => {
+    const { hub } = createHub();
+    const daily = (id: string, start: number, until?: number) => ({
+      ...window(id, start, start + 3600),
+      repeat: {
+        every: 'day' as const,
+        ...(until !== undefined && { until: new Date(until * 1000).toISOString() }),
+      },
+    });
+    hub.putMaintenance(daily('ended', T0 - 180 * DAY, T0 - 91 * DAY));
+    hub.putMaintenance(daily('recent', T0 - 150 * DAY, T0 - 90 * DAY));
+    hub.putMaintenance(daily('forever', T0 - 200 * DAY));
+
+    hub.record(T0, [check('api', up())]);
+
+    expect(hub.view().maintenances.map(({ id }) => id)).toEqual(['forever', 'recent']);
+  });
+
+  it('neither throws on nor uses a stored row with a zone that is not normalized', () => {
+    const { hub } = createHub();
+    const nightly = (id: string, timeZone: string) => ({
+      ...window(id, T0 - 10 * DAY - 60, T0 - 10 * DAY + 60, ['db']),
+      repeat: { every: 'day' as const, timeZone },
+    });
+    hub.putMaintenance(nightly('padded', ' Europe/Berlin '));
+    hub.putMaintenance(nightly('unknown', 'Mars/Olympus'));
+
+    const run = hub.record(T0, [check('db', down())], POLICY);
+
+    expect(run.alerts.map(({ monitorId }) => monitorId)).toEqual(['db']);
+    expect(hub.view().maintenances).toEqual([]);
+  });
+
+  it("holds back alerts during a repeating window's run, not between runs", () => {
+    const { hub } = createHub();
+    hub.putMaintenance({
+      ...window('nightly', T0 - 10 * DAY - 60, T0 - 10 * DAY + 60, ['db']),
+      repeat: { every: 'day' },
+    });
+
+    const inside = hub.record(T0, [check('db', down())], POLICY);
+    const afterRun = hub.record(T0 + 60, [check('db', down('Other'))], POLICY);
+
+    expect(inside.alerts).toEqual([]);
+    expect(afterRun.alerts.map(({ monitorId }) => monitorId)).toEqual(['db']);
+  });
+
   it('holds back alerts inside a window that covers the monitor, up to its end', () => {
     const { hub } = createHub();
     hub.putMaintenance(window('db-only', T0 - 60, T0 + 60, ['db']));

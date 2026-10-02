@@ -1,4 +1,10 @@
-import { coversMonitor, type Maintenance, type StatusView } from '@flarewatch/shared';
+import {
+  coversMonitor,
+  maintenanceOccurrences,
+  nextMaintenanceOccurrence,
+  type Maintenance,
+  type StatusView,
+} from '@flarewatch/shared';
 import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/history/types';
 import type { PublicMonitor } from '@/lib/public-view';
 import { getMaintenanceStatus } from '@/lib/maintenance';
@@ -35,6 +41,8 @@ type TimelineProjectionInput = {
   nowMs: number;
   selectedMonitor?: string | undefined;
   eventType?: TimelineEventType | undefined;
+  /** Of a window's future runs, list only the next one: for a range with no real end. */
+  nextRunOnly?: boolean | undefined;
 };
 
 type TimelineProjection = {
@@ -43,9 +51,7 @@ type TimelineProjection = {
 };
 
 function getEventStartMs(event: TimelineEvent): number {
-  return event.type === 'incident'
-    ? event.start * SECOND_MS
-    : new Date(event.maintenance.start).getTime();
+  return event.type === 'incident' ? event.start * SECOND_MS : event.occurrence.start;
 }
 
 export function projectPublicData(
@@ -138,23 +144,18 @@ function projectMaintenanceEvents(
   maintenances: Maintenance[],
   monthStart: Date,
   monthEnd: Date,
+  nowMs: number,
+  nextRunOnly: boolean,
 ): MaintenanceEvent[] {
-  const events: MaintenanceEvent[] = [];
-  const monthStartMs = monthStart.getTime();
-  const monthEndMs = monthEnd.getTime();
-
-  for (const maintenance of maintenances) {
-    const start = new Date(maintenance.start);
-    const end = maintenance.end ? new Date(maintenance.end) : null;
-    const startTime = start.getTime();
-    const endTime = end?.getTime() ?? Infinity;
-
-    if (endTime >= monthStartMs && startTime <= monthEndMs) {
-      events.push({ type: 'maintenance', maintenance });
-    }
-  }
-
-  return events;
+  return maintenances.flatMap((maintenance) => {
+    const next = nextMaintenanceOccurrence(maintenance, nowMs);
+    const to = nextRunOnly
+      ? Math.min(monthEnd.getTime(), next?.start ?? nowMs)
+      : monthEnd.getTime();
+    return maintenanceOccurrences(maintenance, monthStart.getTime(), to).map(
+      (occurrence): MaintenanceEvent => ({ type: 'maintenance', maintenance, occurrence }),
+    );
+  });
 }
 
 export function projectTimeline(input: TimelineProjectionInput): TimelineProjection {
@@ -169,6 +170,8 @@ export function projectTimeline(input: TimelineProjectionInput): TimelineProject
     input.maintenances,
     input.monthStart,
     input.monthEnd,
+    input.nowMs,
+    input.nextRunOnly ?? false,
   );
   let events: TimelineEvent[] = [...incidentEvents, ...maintenanceEvents];
 
@@ -195,8 +198,12 @@ export function projectTimeline(input: TimelineProjectionInput): TimelineProject
   if ((input.eventType ?? 'all') === 'all') {
     for (const event of sortedEvents) {
       if (event.type === 'maintenance') {
-        const status = getMaintenanceStatus(event.maintenance, input.nowMs);
-        if (status === 'active' || status === 'upcoming') {
+        const { maintenance, occurrence } = event;
+        const status = getMaintenanceStatus(maintenance, input.nowMs, occurrence);
+        // A repeating window pins its current or next run; its later runs stay in the timeline.
+        const isNext =
+          nextMaintenanceOccurrence(maintenance, input.nowMs)?.start === occurrence.start;
+        if (isNext && (status === 'active' || status === 'upcoming')) {
           pinned.push(event);
           continue;
         }

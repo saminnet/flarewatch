@@ -221,6 +221,27 @@ const maintenanceCases: Array<[string, unknown, boolean]> = [
   ],
   ['monitors must be strings', { ...maintenanceBase, monitors: [1] }, false],
   ['colour must be a string', { ...maintenanceBase, color: 1 }, false],
+  [
+    'repeating window accepted',
+    { ...maintenanceBase, end: 3_600_003, repeat: { every: 'week', weekdays: [1] } },
+    true,
+  ],
+  [
+    'repeating window without an end rejected',
+    { ...maintenanceBase, repeat: { every: 'day' } },
+    false,
+  ],
+  [
+    'padded time zone rejected',
+    { ...maintenanceBase, end: 9, repeat: { every: 'day', timeZone: ' Europe/Berlin ' } },
+    false,
+  ],
+  [
+    'blank time zone rejected',
+    { ...maintenanceBase, end: 9, repeat: { every: 'day', timeZone: '' } },
+    false,
+  ],
+  ['padded body rejected', { ...maintenanceBase, body: ' b ' }, false],
   ['extra keys ignored', { ...maintenanceBase, whatever: {} }, true],
   ['not an object', 7, false],
 ];

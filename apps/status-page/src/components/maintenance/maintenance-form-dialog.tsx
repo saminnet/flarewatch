@@ -7,6 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DateTimePicker } from '@/components/ui/datetime-picker';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -15,7 +22,12 @@ import {
 } from '@/components/ui/dialog';
 import type { Maintenance } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
-import { SEVERITY_OPTIONS, getMaintenanceColors } from '@/lib/maintenance';
+import {
+  REPEAT_OPTIONS,
+  SEVERITY_OPTIONS,
+  WEEKDAY_NAMES,
+  getMaintenanceColors,
+} from '@/lib/maintenance';
 import {
   toMaintenanceConfig,
   toMaintenancePatch,
@@ -38,7 +50,7 @@ export function MaintenanceFormDialog({
   monitors,
   onClose,
 }: MaintenanceFormDialogProps) {
-  const { formData, updateField, toggleMonitor, isEndBeforeStart, isValid } =
+  const { formData, updateField, toggleMonitor, toggleWeekday, error, isValid } =
     useMaintenanceForm(maintenance);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -122,11 +134,103 @@ export function MaintenanceFormDialog({
                 placeholder="Select end date"
                 clearLabel="Clear"
               />
-              {isEndBeforeStart && (
-                <p className="mt-1 text-xs text-destructive">End must be after start</p>
-              )}
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="repeat" className="text-xs text-muted-foreground">
+                Repeat
+              </Label>
+              <Select
+                value={formData.repeat}
+                onValueChange={(value) =>
+                  updateField(
+                    'repeat',
+                    REPEAT_OPTIONS.find((option) => option.value === value)?.value ?? '',
+                  )
+                }
+              >
+                <SelectTrigger id="repeat" className="w-full">
+                  <SelectValue>
+                    {REPEAT_OPTIONS.find((option) => option.value === formData.repeat)?.label}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {REPEAT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {formData.repeat && (
+              <div>
+                <Label className="text-xs text-muted-foreground">Until</Label>
+                <DateTimePicker
+                  value={formData.until}
+                  onChange={(date) => updateField('until', date)}
+                  placeholder="Repeats for good"
+                  clearLabel="Clear"
+                />
+              </div>
+            )}
+          </div>
+
+          {formData.repeat === 'week' && (
+            <fieldset>
+              <legend className="text-xs text-muted-foreground">On</legend>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {WEEKDAY_NAMES.map((name, day) => (
+                  <Badge
+                    key={name}
+                    variant={formData.weekdays.includes(day) ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                    onClick={() => toggleWeekday(day)}
+                    render={<button type="button" aria-label={name} />}
+                    aria-pressed={formData.weekdays.includes(day)}
+                  >
+                    {name.slice(0, 3)}
+                  </Badge>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
+          {formData.repeat && (
+            <div className="grid grid-cols-2 gap-4">
+              {formData.repeat === 'month' && (
+                <div>
+                  <Label htmlFor="day-of-month" className="text-xs text-muted-foreground">
+                    Day of the month
+                  </Label>
+                  <Input
+                    id="day-of-month"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={formData.dayOfMonth}
+                    onChange={(e) => updateField('dayOfMonth', e.target.value)}
+                    placeholder="The start's day"
+                  />
+                </div>
+              )}
+              <div>
+                <Label htmlFor="time-zone" className="text-xs text-muted-foreground">
+                  Time zone
+                </Label>
+                <Input
+                  id="time-zone"
+                  value={formData.timeZone}
+                  onChange={(e) => updateField('timeZone', e.target.value)}
+                  placeholder="UTC"
+                />
+              </div>
+            </div>
+          )}
+
+          {error && <p className="text-xs text-destructive">{error}</p>}
 
           <fieldset>
             <legend className="text-xs text-muted-foreground">Severity</legend>

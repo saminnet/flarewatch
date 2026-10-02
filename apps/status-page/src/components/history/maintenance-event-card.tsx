@@ -1,4 +1,4 @@
-import { IconPencil, IconTool, IconTrash } from '@tabler/icons-react';
+import { IconPencil, IconRepeat, IconTool, IconTrash } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -6,8 +6,10 @@ import { MaintenanceStatusBadge } from '@/components/maintenance/status-badge';
 import type { PublicMonitor } from '@/lib/public-view';
 import { cn } from '@/lib/utils';
 import {
+  describeRepeat,
   getMaintenanceStatus,
   getMaintenanceColors,
+  occurrenceDates,
   resolveAffectedMonitors,
 } from '@/lib/maintenance';
 import { DateRange } from './date-range';
@@ -29,10 +31,9 @@ export function MaintenanceEventCard({
   onEdit,
   onDelete,
 }: MaintenanceEventCardProps) {
-  const { maintenance } = event;
-  const startDate = new Date(maintenance.start);
-  const endDate = maintenance.end ? new Date(maintenance.end) : null;
-  const status = getMaintenanceStatus(maintenance, nowMs);
+  const { maintenance, occurrence } = event;
+  const { start: startDate, end: endDate } = occurrenceDates(occurrence);
+  const status = getMaintenanceStatus(maintenance, nowMs, occurrence);
 
   const affectedMonitors = resolveAffectedMonitors(maintenance.monitors, monitors);
   const colors = getMaintenanceColors(maintenance.color);
@@ -52,6 +53,12 @@ export function MaintenanceEventCard({
       <AlertDescription className="mt-1.5">
         <p className="text-foreground">{maintenance.body}</p>
         <DateRange start={startDate} end={endDate} noEndLabel="Until further notice" />
+        {maintenance.repeat && (
+          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+            <IconRepeat className="size-3.5" />
+            {describeRepeat(maintenance.repeat)}
+          </p>
+        )}
 
         {affectedMonitors.length > 0 && (
           <div className="mt-2">

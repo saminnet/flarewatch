@@ -1,5 +1,10 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { isValidMaintenance, type Maintenance, type MaintenanceConfig } from '@flarewatch/shared';
+import {
+  isValidMaintenance,
+  type Maintenance,
+  type MaintenanceConfig,
+  type MaintenanceRepeat,
+} from '@flarewatch/shared';
 import { compareByStart } from '../maintenance';
 import type { Snapshot } from '../public-view';
 import { qk } from './keys';
@@ -40,6 +45,7 @@ export type MaintenanceUpdatePatch = {
   end: string | null;
   monitors: string[] | null;
   color: string | null;
+  repeat?: MaintenanceRepeat | null;
 };
 
 async function requestOk(path: string, init: RequestInit): Promise<Response> {

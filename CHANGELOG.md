@@ -13,6 +13,7 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 - **Check now** on a check monitor's page, for the operator. It runs that monitor's check once and shows the result there, without saving it. Scripts can do the same through `POST /api/admin/check`.
 - `confirmVia` checks a failing monitor once more from a second place, such as your own flarewatch-proxy or a Globalping probe, and records that result. A blip on one network path no longer opens an incident. See [Confirm from a second place](docs/monitors.md#confirm-from-a-second-place).
 - `responseHeaderEquals` checks response headers, and `responseJsonPath` with `responseJsonValue` checks one value in a JSON response. See [Monitors](docs/monitors.md#websites-and-apis).
+- Maintenance windows can repeat every day, week or month, on chosen weekdays or a day of the month, until a date or for good. Each run keeps its clock time in the time zone you pick, across daylight saving changes. The dashboard shows the current or next run, History lists every run, and alerts pause during each one. See [Repeating windows](docs/status-page.md#repeating-windows).
 
 ### Changed
 
@@ -24,6 +25,7 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 - A fallback or confirmation check, or an extra Globalping poll, runs only while the run has subrequests to spare under the free plan's 50, after the hub's calls and one request per alert webhook. No check sends a request after the run's 55 seconds.
 - A `TCP_PING` monitor with `expectedCodes`, `responseKeyword`, `responseForbiddenKeyword`, `responseJsonPath`, `responseHeaderEquals` or `sslCheckEnabled` now fails. Before, it passed on the connection alone.
 - `checkProxy: 'worker://...'` is gone. Remove it from your config.
+- The admin API rejects a maintenance window with a title, color or monitor list of the wrong type. Before, it dropped the field, and a `monitors` value that wasn't a list covered every monitor. A rejected window's error now says what's wrong. `null` leaves a field out when you create a window, as it already cleared one when you update it.
 
 ## 3.2.0 - 2026-10-02
 
