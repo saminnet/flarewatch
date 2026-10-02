@@ -81,7 +81,7 @@
   <path class="optional" d="M170 270 V318" />
   <rect class="panel optional-box" x="40" y="318" width="260" height="110" rx="10"/>
   <text class="eyebrow" x="62" y="346">OPTIONAL</text>
-  <text class="body" x="62" y="374">Check from other regions</text>
+  <text class="body" x="62" y="374">Check or confirm from other regions</text>
   <text class="body" x="62" y="396">or private networks</text>
   <text class="small" x="62" y="418">Globalping or your own proxy</text>
 

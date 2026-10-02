@@ -63,6 +63,24 @@ _Avoid_: Public monitor
 A monitor only operators and members see, or an audience whose page group holds it. It is still checked, and it never appears in visitor responses: pages, API, badges or embeds.
 _Avoid_: Hidden monitor, internal monitor
 
+**Degraded**:
+What the page shows for a check monitor that is up but slower than its `maxLatencyMs`, or a heartbeat monitor that is late. Not an incident: no alert, and uptime is unchanged.
+_Avoid_: Slow, warning, yellow
+
+**Confirmation**:
+A second attempt from another location, set by `confirmVia`, after a check fails. Its result is the one recorded.
+_Avoid_: Retry, re-check
+
+**Check now**:
+An operator action that runs one check monitor's check at once and shows the result. Nothing is recorded.
+_Avoid_: Manual check, test run
+
+## Alerts
+
+**Reminder**:
+A repeat of a down alert while the monitor stays down, every `reminderEveryChecks` check runs. Per monitor, off by default.
+_Avoid_: Resend, nag, escalation
+
 ## History
 
 **History**:
@@ -70,7 +88,7 @@ The page that lists incidents and maintenance windows by month, at `/history`.
 _Avoid_: Events page, timeline
 
 **Maintenance window**:
-A planned period, with start, end and affected monitors, that the operator adds on History. The only thing editable at runtime.
+A planned period, with start, end and affected monitors, that the operator adds on History. It can repeat daily, weekly or monthly in a chosen time zone; each run is an occurrence. The only thing editable at runtime.
 _Avoid_: Maintenance event, scheduled maintenance
 
 **Incident**:
