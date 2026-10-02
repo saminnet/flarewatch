@@ -3,7 +3,7 @@ import { IconFlame } from '@tabler/icons-react';
 import type { PageConfig } from '@flarewatch/shared';
 import { ThemeToggle } from '@/components/theme-toggle';
 import type { ThemePreference } from '@/lib/theme-server';
-import { DEFAULT_POWERED_BY_URL, PAGE_CONTAINER_CLASSES } from '@/lib/constants';
+import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 interface FooterProps {
@@ -13,7 +13,6 @@ interface FooterProps {
 }
 
 export function Footer({ config, theme = 'system', showSignIn }: FooterProps) {
-  const poweredByUrl = config?.poweredByUrl ?? DEFAULT_POWERED_BY_URL;
   const linkClass = 'text-muted-foreground hover:text-foreground';
 
   return (
@@ -25,7 +24,7 @@ export function Footer({ config, theme = 'system', showSignIn }: FooterProps) {
             <span>
               Powered by{' '}
               <a
-                href={poweredByUrl}
+                href="https://github.com/saminnet/flarewatch"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-medium text-foreground hover:underline"

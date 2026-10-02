@@ -11,7 +11,7 @@ const effectiveArgs = args[0] === '--' ? args.slice(1) : args;
 const [username, password, extra] = effectiveArgs;
 
 if (!username || !password || extra !== undefined) {
-  console.error('Usage: pnpm auth:secret -- <username> <password>');
+  console.error('Usage: vp run auth:secret -- <username> <password>');
   process.exit(1);
 }
 

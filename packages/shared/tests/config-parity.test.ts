@@ -70,11 +70,6 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
     false,
   ],
   [
-    'javascript: poweredByUrl rejected',
-    { monitors: [], statusPage: { poweredByUrl: 'javascript:alert(1)' } },
-    false,
-  ],
-  [
     'data: image favicon and logo accepted',
     {
       monitors: [],

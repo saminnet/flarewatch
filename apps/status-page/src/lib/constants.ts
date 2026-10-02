@@ -53,8 +53,6 @@ export const AUTH = {
   SESSION_TTL_SECONDS: 60 * 60 * 24 * 14,
 } as const;
 
-export const DEFAULT_POWERED_BY_URL = 'https://github.com/saminnet/flarewatch';
-
 // Colors resolve from the `--status-*` theme tokens; "unknown" uses `-bg` so empty data stays muted.
 export const STATUS_COLORS = {
   up: 'bg-status-operational',

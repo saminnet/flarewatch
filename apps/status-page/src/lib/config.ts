@@ -18,14 +18,11 @@ export function isPrivateOnly(config: RuntimeConfig): boolean {
 }
 
 /** What the page shell renders; safe to send to anyone, including visitors of a private page. */
-export type PageBranding = Pick<
-  PageConfig,
-  'title' | 'favicon' | 'logo' | 'links' | 'poweredByUrl' | 'themeVars'
->;
+export type PageBranding = Pick<PageConfig, 'title' | 'favicon' | 'logo' | 'links'>;
 
 export const getConfigServerFn = createServerFn({ method: 'GET' }).handler(
   async (): Promise<{ statusPage: PageBranding }> => {
-    const { title, favicon, logo, links, poweredByUrl, themeVars } = getConfig().statusPage ?? {};
-    return { statusPage: { title, favicon, logo, links, poweredByUrl, themeVars } };
+    const { title, favicon, logo, links } = getConfig().statusPage ?? {};
+    return { statusPage: { title, favicon, logo, links } };
   },
 );

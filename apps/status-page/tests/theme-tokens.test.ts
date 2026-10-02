@@ -1,13 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vite-plus/test';
-import { SUPPORTED_THEME_TOKENS } from '@flarewatch/shared';
 
 /**
- * The default stylesheet must define every supported status token,
- * in both light (:root) and dark (.dark), and register a Tailwind color alias so
- * `bg-/text-/border-status-*` utilities resolve. This is the runtime side of the
- * theme contract self-hosters can hand-edit.
+ * The stylesheet must define every status token in both light (:root) and dark (.dark),
+ * and register a Tailwind color alias so `bg-/text-/border-status-*` utilities resolve.
  */
 const css = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8');
 
@@ -21,7 +18,25 @@ const rootBlock = block(':root');
 const darkBlock = block('\\.dark');
 const themeBlock = block('@theme inline');
 
-const statusTokens = SUPPORTED_THEME_TOKENS.filter((token) => token.startsWith('status-'));
+const statusTokens = [
+  'status-degraded',
+  'status-degraded-bg',
+  'status-degraded-border',
+  'status-degraded-text',
+  'status-down',
+  'status-down-bg',
+  'status-down-border',
+  'status-down-text',
+  'status-maintenance',
+  'status-maintenance-bg',
+  'status-maintenance-border',
+  'status-operational',
+  'status-operational-bg',
+  'status-operational-border',
+  'status-unknown',
+  'status-unknown-bg',
+  'status-unknown-border',
+];
 
 describe('default theme tokens', () => {
   it('defines every status token in :root and .dark', () => {
@@ -36,12 +51,6 @@ describe('default theme tokens', () => {
       expect(themeBlock, `@theme inline missing --color-${token}`).toContain(
         `--color-${token}: var(--${token})`,
       );
-    }
-  });
-
-  it('defines every base contract token in :root', () => {
-    for (const token of SUPPORTED_THEME_TOKENS) {
-      expect(rootBlock, `:root missing --${token}`).toContain(`--${token}:`);
     }
   });
 });

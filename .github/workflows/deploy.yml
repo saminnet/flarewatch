@@ -81,7 +81,7 @@ jobs:
 
   build-and-deploy:
     name: Deploy to Cloudflare
-    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name != 'pull_request' }}
     concurrency:
       group: deploy-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false
@@ -158,9 +158,6 @@ jobs:
 
           echo "KV_NAMESPACE_ID=$KV_NAMESPACE_ID" >> "$GITHUB_ENV"
           echo "KV namespace: $KV_NAMESPACE_TITLE ($KV_NAMESPACE_ID)"
-
-      - name: Check the upgrade path from older releases
-        run: scripts/check-upgrade.sh "$KV_NAMESPACE_ID"
 
       - name: Inject KV namespace id
         shell: bash

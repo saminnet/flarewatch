@@ -128,7 +128,8 @@ To keep the whole page to yourself, set `visibility: 'private'` in `packages/con
 | `group`           | Monitor groups, like `{ APIs: ['api', 'auth'] }`.                     |
 | `visibility`      | `'private'` for a [private page](#private-page).                      |
 | `apiCorsOrigins`  | Origins allowed to call the JSON API. Defaults to any.                |
-| `themeVars`       | Colour overrides. See [Theming](theming.md).                          |
+
+Colours and the corner radius are CSS variables at the top of [`apps/status-page/src/styles.css`](../apps/status-page/src/styles.css), in a `:root` block for light mode and a `.dark` block for dark mode. Edit them there.
 
 ## Statuses
 

@@ -5,10 +5,6 @@ export type PageConfig = {
   favicon?: string;
   logo?: string;
   apiCorsOrigins?: string[];
-  poweredByUrl?: string;
-  theme?: string;
-  customCss?: string;
-  themeVars?: string;
   /** 'private' shows visitors only the sign-in page. Defaults to 'public'. */
   visibility?: 'public' | 'private';
 };

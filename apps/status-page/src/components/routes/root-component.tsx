@@ -10,7 +10,6 @@ import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { VisitorViewBar } from '@/components/visitor-view-bar';
 import { getThemeInitScript } from '@/lib/theme-server';
-import { sanitizeThemeVars } from '@flarewatch/shared';
 
 const rootRoute = getRouteApi('__root__');
 
@@ -28,7 +27,6 @@ export function RootComponent() {
   const isDark = theme === 'dark';
   const title = statusPage?.title || 'FlareWatch';
   const favicon = statusPage?.favicon;
-  const themeVars = sanitizeThemeVars(statusPage?.themeVars);
 
   return (
     <html
@@ -51,8 +49,6 @@ export function RootComponent() {
           </>
         )}
         <HeadContent />
-
-        {themeVars && <style>{themeVars}</style>}
       </head>
       <body className="flex min-h-full flex-col bg-background font-sans text-foreground antialiased">
         {embedTheme === undefined ? (

@@ -381,12 +381,8 @@ const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.strictObject
     ),
     favicon: z.optional(pageImage('favicon')),
     logo: z.optional(pageImage('logo')),
-    poweredByUrl: z.optional(pageLink('poweredByUrl')),
     group: z.optional(z.record(z.string(), z.array(z.string()))),
     apiCorsOrigins: z.optional(z.array(z.string())),
-    theme: z.optional(z.string()),
-    customCss: z.optional(z.string()),
-    themeVars: z.optional(z.string()),
   },
   unknownFieldError,
 );

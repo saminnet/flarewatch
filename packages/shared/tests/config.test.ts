@@ -58,10 +58,6 @@ describe('config validation', () => {
         favicon: '/favicon.png',
         logo: 'https://example.com/logo.svg',
         apiCorsOrigins: ['https://status.example.com'],
-        poweredByUrl: 'https://example.com',
-        theme: 'ocean',
-        customCss: 'body { margin: 0; }',
-        themeVars: '--background: #fff;',
       },
     });
 
@@ -73,6 +69,24 @@ describe('config validation', () => {
 
     expect(issues).toHaveLength(1);
     expect(issues[0]).toContain('titel');
+  });
+
+  it('rejects the removed theme, customCss, themeVars and poweredByUrl fields', () => {
+    const issues = configIssues({
+      monitors: [],
+      statusPage: {
+        theme: 'ocean',
+        customCss: 'body { margin: 0; }',
+        themeVars: '--ring: #fff;',
+        poweredByUrl: 'https://example.com',
+      },
+    });
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('theme');
+    expect(issues[0]).toContain('customCss');
+    expect(issues[0]).toContain('themeVars');
+    expect(issues[0]).toContain('poweredByUrl');
   });
 
   it('rejects an SVG data image and accepts a PNG one', () => {

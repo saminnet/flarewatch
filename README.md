@@ -60,7 +60,6 @@ Nothing, for a personal or small-team page. FlareWatch uses two Workers, a Durab
 - [Monitors](docs/monitors.md): websites, TCP ports, heartbeats, private monitors, proxies
 - [Alerts](docs/alerts.md): every channel and its setup
 - [Status page](docs/status-page.md): sign-in, maintenance, private pages, API, embeds
-- [Theming](docs/theming.md): colours and corner radius
 - [Development](DEVELOPMENT.md): working on FlareWatch itself
 
 MIT licensed. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
