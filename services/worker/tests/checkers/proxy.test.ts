@@ -3,6 +3,7 @@ import type { Fetcher, MonitorTarget } from '@flarewatch/shared';
 import { checkExternalProxy } from '../../src/checkers/proxy';
 
 const fetchMock = vi.fn<Fetcher>();
+const PROXY_URL = 'https://proxy.example.com/check';
 
 function createTarget(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   return {
@@ -20,19 +21,6 @@ describe('checkExternalProxy', () => {
     fetchMock.mockReset();
   });
 
-  it('returns a failure when the proxy URL is not configured', async () => {
-    const target = createTarget();
-    delete target.checkProxy;
-
-    const result = await checkExternalProxy(target, undefined, fetchMock);
-
-    expect(result).toEqual({
-      location: 'ERROR',
-      result: { ok: false, error: 'Proxy URL is not configured' },
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
   it('posts the monitor with authorization and its configured timeout', async () => {
     const proxyResult = {
       location: 'FRA',
@@ -43,6 +31,7 @@ describe('checkExternalProxy', () => {
 
     const result = await checkExternalProxy(
       target,
+      PROXY_URL,
       { FLAREWATCH_PROXY_TOKEN: 'test-token' },
       fetchMock,
     );
@@ -57,9 +46,31 @@ describe('checkExternalProxy', () => {
         'Content-Type': 'application/json',
         Authorization: 'Bearer test-token',
       },
-      body: JSON.stringify(target),
+      body: JSON.stringify({
+        id: 'test-monitor',
+        name: 'Test Monitor',
+        method: 'GET',
+        target: 'https://example.com',
+        timeout: 1234,
+      }),
       timeout: 1234,
     });
+  });
+
+  it('never sends the proxy a Globalping token', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ location: 'FRA', result: { ok: true, latency: 1 } })),
+    );
+
+    await checkExternalProxy(
+      createTarget({ checkProxy: 'globalping://TOKEN-1234', confirmVia: PROXY_URL }),
+      PROXY_URL,
+      undefined,
+      fetchMock,
+    );
+
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBeTypeOf('string');
+    expect(fetchMock.mock.calls[0]?.[1]?.body).not.toContain('TOKEN-1234');
   });
 
   it('uses the default timeout and omits authorization without a token', async () => {
@@ -70,7 +81,7 @@ describe('checkExternalProxy', () => {
       ),
     );
 
-    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
+    const result = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'FRA',
@@ -87,7 +98,7 @@ describe('checkExternalProxy', () => {
       new Response(new ReadableStream<Uint8Array>({ pull: (c) => c.enqueue(chunk) })),
     );
 
-    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
+    const result = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
 
     expect(result.location).toBe('ERROR');
     expect(result.result.ok).toBe(false);
@@ -102,7 +113,7 @@ describe('checkExternalProxy', () => {
       }),
     );
 
-    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
+    const result = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
 
     expect(result).toEqual({ location: 'ERROR', result: { ok: false, error: 'Proxy HTTP 503' } });
   });
@@ -112,7 +123,7 @@ describe('checkExternalProxy', () => {
       new Response('Authorization: Bearer proxy-secret', { status: 503 }),
     );
 
-    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
+    const result = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'ERROR',
@@ -129,7 +140,12 @@ describe('checkExternalProxy', () => {
       vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line)),
     );
 
-    await checkExternalProxy(createTarget(), { FLAREWATCH_PROXY_TOKEN: 'proxy-secret' }, fetchMock);
+    await checkExternalProxy(
+      createTarget(),
+      PROXY_URL,
+      { FLAREWATCH_PROXY_TOKEN: 'proxy-secret' },
+      fetchMock,
+    );
     for (const spy of spies) spy.mockRestore();
 
     expect(JSON.stringify(logged)).toContain('Bearer <proxy token>');
@@ -147,7 +163,7 @@ describe('checkExternalProxy', () => {
   ])('rejects an invalid proxy response %#', async (proxyResult) => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify(proxyResult), { status: 200 }));
 
-    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
+    const result = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'ERROR',
@@ -162,7 +178,7 @@ describe('checkExternalProxy', () => {
     };
     fetchMock.mockResolvedValue(new Response(JSON.stringify(proxyResult), { status: 200 }));
 
-    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
+    const result = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
 
     expect(result).toEqual(proxyResult);
   });
@@ -170,7 +186,7 @@ describe('checkExternalProxy', () => {
   it('returns a failure when the proxy request throws', async () => {
     fetchMock.mockRejectedValue(new Error('network unavailable'));
 
-    const result = await checkExternalProxy(createTarget(), undefined, fetchMock);
+    const result = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
 
     expect(result).toEqual({
       location: 'ERROR',

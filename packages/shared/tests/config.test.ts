@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { configIssues } from '../src/config';
-import type { JsonValue, RuntimeConfig } from '../src/types';
+import type { JsonValue, PullMonitor, RuntimeConfig } from '../src/types';
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 
@@ -18,13 +18,8 @@ function createRuntimeConfig(overrides: Partial<RuntimeConfig> = {}): RuntimeCon
   };
 }
 
-interface MonitorOverrides {
-  id?: unknown;
-  name?: unknown;
-  method?: unknown;
-  target?: unknown;
-  maxLatencyMs?: unknown;
-}
+/** Any monitor field, of any type, plus a misspelt one. */
+type MonitorOverrides = { [K in keyof PullMonitor | 'expectdCodes']?: JsonValue | undefined };
 
 function createConfigWithMonitor(monitor: MonitorOverrides) {
   return {
@@ -213,6 +208,63 @@ describe('config validation', () => {
     expect(configIssues({ monitors: [monitor, { ...monitor }] })).toContain(
       'monitor "duplicate": id must be unique',
     );
+  });
+
+  it('accepts every documented monitor field', () => {
+    const config = createConfigWithMonitor({
+      tooltip: 'Our API',
+      hideLatencyChart: true,
+      expectedCodes: [200, 204],
+      timeout: 5000,
+      headers: { Authorization: 'Bearer x', 'X-Retry': 2 },
+      body: '{}',
+      method: 'POST',
+      responseKeyword: 'ok',
+      responseForbiddenKeyword: 'error',
+      responseJsonPath: '$.data[0].status',
+      responseJsonValue: null,
+      responseHeaderEquals: { 'Cache-Control': 'no-store' },
+      checkProxy: 'https://proxy.example.com/check',
+      checkProxyFallback: true,
+      confirmVia: 'globalping://TOKEN?magic=fra',
+      sslCheckEnabled: true,
+      sslCheckDaysBeforeExpiry: 14,
+      sslIgnoreSelfSigned: false,
+      link: false,
+      private: true,
+    });
+
+    expect(configIssues(config)).toEqual([]);
+  });
+
+  it.each([
+    [{ expectdCodes: [200] }, 'unknown field "expectdCodes"'],
+    [{ expectedCodes: [200, 'x'] }, 'expectedCodes must be an integer from 100 to 599'],
+    [{ responseJsonPath: 'status', responseJsonValue: 'ok' }, 'responseJsonPath must be a path'],
+    [{ responseJsonPath: '$.status' }, 'responseJsonPath and responseJsonValue go together'],
+    [{ responseJsonValue: 'ok' }, 'responseJsonPath and responseJsonValue go together'],
+    [
+      { responseJsonPath: '$.a', responseJsonValue: { ok: true } },
+      'responseJsonValue must be a string, number, boolean or null',
+    ],
+    [{ responseHeaderEquals: { 'Bad Name': 'x' } }, 'responseHeaderEquals: bad header name'],
+    [{ responseHeaderEquals: { 'X-A': 1 } }, 'responseHeaderEquals values must be strings'],
+    [{ checkProxy: 'worker://local' }, 'checkProxy must be an http(s) URL or globalping://<token>'],
+    [{ checkProxy: 'globalping://' }, 'checkProxy must be an http(s) URL or globalping://<token>'],
+    [{ pingProtocol: 'udp' }, "pingProtocol must be 'tcp' or 'icmp'"],
+    [{ confirmVia: 'worker://local' }, 'confirmVia must be an http(s) URL or globalping://<token>'],
+    [
+      { checkProxy: 'globalping://T?magic=fra', confirmVia: 'globalping://T?magic=fra' },
+      'confirmVia must be another place than checkProxy',
+    ],
+  ])('rejects the monitor field %j and names the rule', (overrides, rule) => {
+    expect(configIssues(createConfigWithMonitor(overrides)).join('\n')).toContain(rule);
+  });
+
+  it('never quotes a check location, which can hold a token', () => {
+    const issues = configIssues(createConfigWithMonitor({ checkProxy: 'globalping:/TOKEN-1234' }));
+    expect(issues).not.toEqual([]);
+    expect(issues.join('\n')).not.toContain('TOKEN-1234');
   });
 
   describe('dependsOn', () => {

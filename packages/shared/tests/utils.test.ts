@@ -7,6 +7,7 @@ import {
   toHeaders,
   withTimeout,
   validateHttpResponse,
+  jsonPathKeys,
   parseTcpTarget,
   success,
   failure,
@@ -358,6 +359,162 @@ describe('validateHttpResponse', () => {
       expect(text).not.toHaveBeenCalled();
     });
   });
+});
+
+describe('response assertions', () => {
+  function createMonitor(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
+    return { id: 'test', name: 'Test', method: 'GET', target: 'https://example.com', ...overrides };
+  }
+
+  const json = (value: unknown, headers?: HeadersInit) =>
+    new Response(JSON.stringify(value), headers ? { headers } : {});
+
+  const unreadable = () =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        pull: () => {
+          throw new Error('body read must not happen');
+        },
+      }),
+      { headers: { 'X-Mode': 'live' } },
+    );
+
+  describe('responseJsonPath', () => {
+    const at = (responseJsonPath: string, responseJsonValue: MonitorTarget['responseJsonValue']) =>
+      createMonitor({ responseJsonPath, responseJsonValue });
+
+    it.each([
+      ['a nested string', { a: { b: [{ c: 'ok' }] } }, '$.a.b[0].c', 'ok'],
+      ['a number', { count: 3 }, '$.count', 3],
+      ['a boolean', { up: false }, '$.up', false],
+      ['null', { error: null }, '$.error', null],
+      ['the whole document', true, '$', true],
+      ['an index at the root', ['x', 'y'], '$[1]', 'y'],
+    ])('passes on %s that equals the value', async (_case, body, path, value) => {
+      await expect(validateHttpResponse(at(path, value), json(body))).resolves.toBeNull();
+    });
+
+    it.each([
+      ['a string that looks like the number', { count: '3' }, '$.count', 3],
+      ['a number for a string', { count: 3 }, '$.count', '3'],
+      ['a string for a boolean', { up: 'true' }, '$.up', true],
+      ['an object', { a: { b: 1 } }, '$.a', 'ok'],
+    ])('fails on %s, without quoting the response', async (_case, body, path, value) => {
+      const error = await validateHttpResponse(at(path, value), json(body));
+      expect(error).toBe(`JSON value at ${path} is not ${JSON.stringify(value)}`);
+    });
+
+    it.each([
+      ['a missing key', { a: {} }, '$.a.b'],
+      ['an index past the end', { a: [1] }, '$.a[1]'],
+      ['a key inside a string', { a: 'text' }, '$.a.length'],
+      ['an index into an object', { a: { 0: 'x' } }, '$.a[0]'],
+      ['a key into an array', { a: [1] }, '$.a.length'],
+      ['an inherited property', {}, '$.constructor'],
+      ['null where an object should be', { a: null }, '$.a.b'],
+    ])('reports %s as not found', async (_case, body, path) => {
+      await expect(validateHttpResponse(at(path, 'x'), json(body))).resolves.toBe(
+        `JSON path ${path} not found in response`,
+      );
+    });
+
+    it('never quotes the value it found', async () => {
+      const error = await validateHttpResponse(
+        at('$.status', 'ok'),
+        json({ status: 'token-1234' }),
+      );
+      expect(error).not.toContain('token-1234');
+    });
+
+    it('fails on a body that is not JSON, without quoting it', async () => {
+      const error = await validateHttpResponse(
+        at('$.status', 'ok'),
+        new Response('<html>token-1234</html>'),
+      );
+      expect(error).toBe('Response is not valid JSON');
+    });
+
+    it('stops reading a body that never ends', async () => {
+      const chunk = new TextEncoder().encode(' '.repeat(64 * 1024));
+      const endless = new ReadableStream<Uint8Array>({ pull: (c) => c.enqueue(chunk) });
+
+      await expect(validateHttpResponse(at('$.status', 'ok'), new Response(endless))).resolves.toBe(
+        'Response is too large to check $.status',
+      );
+    });
+
+    it('checks a body a probe already read', async () => {
+      const monitor = at('$.status', 'ok');
+      await expect(
+        validateHttpResponse(monitor, { status: 200, body: '{"status":"ok"}' }),
+      ).resolves.toBeNull();
+      await expect(
+        validateHttpResponse(monitor, { status: 200, body: '{"status":"down"}' }),
+      ).resolves.toBe('JSON value at $.status is not "ok"');
+    });
+
+    it('returns the status error without reading the body', async () => {
+      const response = new Response(unreadable().body, { status: 503 });
+      await expect(validateHttpResponse(at('$.a', 1), response)).resolves.toBe(
+        'Expected 2xx status, got 503',
+      );
+    });
+  });
+
+  describe('responseHeaderEquals', () => {
+    it('matches header names in any case and values exactly', async () => {
+      const monitor = createMonitor({ responseHeaderEquals: { 'cache-control': 'no-store' } });
+
+      await expect(
+        validateHttpResponse(monitor, json({}, { 'Cache-Control': 'no-store' })),
+      ).resolves.toBeNull();
+      await expect(
+        validateHttpResponse(monitor, json({}, { 'Cache-Control': 'No-Store' })),
+      ).resolves.toBe('Header "cache-control" does not have the expected value');
+    });
+
+    it('fails on a missing header', async () => {
+      const monitor = createMonitor({ responseHeaderEquals: { 'X-Version': '2' } });
+      await expect(validateHttpResponse(monitor, json({}))).resolves.toBe(
+        'Header "X-Version" not found in response',
+      );
+    });
+
+    it('never quotes the value it found', async () => {
+      const monitor = createMonitor({ responseHeaderEquals: { 'X-Token': 'expected' } });
+      const error = await validateHttpResponse(monitor, json({}, { 'X-Token': 'secret-1234' }));
+      expect(error).not.toContain('secret-1234');
+    });
+
+    it('fails on headers before reading the body', async () => {
+      const monitor = createMonitor({
+        responseHeaderEquals: { 'X-Mode': 'maintenance' },
+        responseKeyword: 'ok',
+      });
+      await expect(validateHttpResponse(monitor, unreadable())).resolves.toBe(
+        'Header "X-Mode" does not have the expected value',
+      );
+    });
+  });
+});
+
+describe('jsonPathKeys', () => {
+  it.each([
+    ['$', []],
+    ['$.a', ['a']],
+    ['$.a.b[0].c', ['a', 'b', 0, 'c']],
+    ['$[2][10]', [2, 10]],
+    ['$.user-id', ['user-id']],
+  ])('reads %s', (path, keys) => {
+    expect(jsonPathKeys(path)).toEqual(keys);
+  });
+
+  it.each(['', 'a.b', '$.', '$..a', '$.a[', '$.a[-1]', '$.a[x]', "$['a']", '$a'])(
+    'rejects %j',
+    (path) => {
+      expect(jsonPathKeys(path)).toBeNull();
+    },
+  );
 });
 
 describe('parseTcpTarget', () => {

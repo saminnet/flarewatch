@@ -1,6 +1,7 @@
 import { createLogger, failure, type CheckResultWithLocation } from '@flarewatch/shared';
 import type { Env } from './env';
 import type { WorkerDeps } from './index';
+import { runBudget } from './checkers';
 
 const log = createLogger('CheckNow');
 
@@ -39,7 +40,7 @@ export async function handleCheckNow(
 
   let check: CheckResultWithLocation;
   try {
-    check = await deps.checkMonitor(monitor, { env });
+    check = await deps.checkMonitor(monitor, { env, budget: runBudget([monitor], 0) });
   } catch (error) {
     log.error('Check now failed', { monitor: monitor.id, error: String(error) });
     check = {

@@ -53,6 +53,15 @@ export const workerConfig: WorkerConfig = {
     //   checkProxy: 'globalping://YOUR_GLOBALPING_TOKEN?magic=fra&ipVersion=4',
     // },
 
+    // Check again from your own flarewatch-proxy before an outage opens
+    // {
+    //   id: 'site',
+    //   name: 'Website',
+    //   method: 'GET',
+    //   target: 'https://example.com',
+    //   confirmVia: 'https://your-proxy.example.com/check', // or 'globalping://TOKEN?magic=fra'
+    // },
+
     // TCP port check (runs from the Worker; a proxy is only needed for private networks)
     // {
     //   id: 'database',
@@ -111,8 +120,7 @@ export const workerConfig: WorkerConfig = {
     //   target: 'https://example.com',
     //   sslCheckEnabled: true,
     //   sslCheckDaysBeforeExpiry: 14,
-    //   checkProxy: 'https://your-proxy.example.com/check',
-    //   checkProxyFallback: true, // Optional: try a direct check if the proxy fails
+    //   checkProxy: 'https://your-proxy.example.com/check', // No checkProxyFallback: the Worker can't see the certificate
     // },
   ],
 

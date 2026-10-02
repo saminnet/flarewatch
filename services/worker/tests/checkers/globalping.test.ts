@@ -4,6 +4,11 @@ import { GlobalPingChecker } from '../../src/checkers/globalping';
 
 const fetchMock = vi.fn<Fetcher>();
 const checker = new GlobalPingChecker(fetchMock);
+const check = (monitor: MonitorTarget) =>
+  checker.check(monitor, monitor.checkProxy ?? '', {
+    deadline: Date.now() + 55_000,
+    subrequests: 10,
+  });
 
 function createMonitor(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   return {
@@ -58,7 +63,7 @@ describe('GlobalPingChecker', () => {
   it('parses proxy settings and builds an HTTP measurement request', async () => {
     mockCompletedMeasurement(finishedHttpMeasurement());
 
-    const result = await checker.check(
+    const result = await check(
       createMonitor({
         method: 'OPTIONS',
         target: 'https://example.com:8443/health?ready=1',
@@ -115,7 +120,7 @@ describe('GlobalPingChecker', () => {
       ],
     });
 
-    const result = await checker.check(
+    const result = await check(
       createMonitor({
         method: 'TCP_PING',
         target: 'example.com:8443',
@@ -139,36 +144,13 @@ describe('GlobalPingChecker', () => {
     });
   });
 
-  it('returns an error for an unsupported HTTP method', async () => {
-    const result = await checker.check(createMonitor({ method: 'POST' }));
-
-    expect(result).toEqual({
-      location: 'ERROR',
-      result: {
-        ok: false,
-        error: 'GlobalPing: Method POST not supported with GlobalPing (only GET, HEAD, OPTIONS)',
-      },
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('returns an error when an HTTP monitor has a body', async () => {
-    const result = await checker.check(createMonitor({ body: '{"hello":"world"}' }));
-
-    expect(result).toEqual({
-      location: 'ERROR',
-      result: { ok: false, error: 'GlobalPing: Custom body not supported with GlobalPing' },
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
   it('polls until the measurement is no longer in progress', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ id: 'measurement-1' }, 202))
       .mockResolvedValueOnce(jsonResponse({ status: 'in-progress', results: [] }))
       .mockResolvedValueOnce(jsonResponse(finishedHttpMeasurement()));
 
-    const resultPromise = checker.check(createMonitor());
+    const resultPromise = check(createMonitor());
     await vi.advanceTimersByTimeAsync(1000);
     const result = await resultPromise;
 
@@ -189,7 +171,7 @@ describe('GlobalPingChecker', () => {
         Promise.resolve(jsonResponse({ status: 'in-progress', results: [] })),
       );
 
-    const resultPromise = checker.check(createMonitor({ timeout: 500 }));
+    const resultPromise = check(createMonitor({ timeout: 500 }));
     await vi.advanceTimersByTimeAsync(3000);
     const result = await resultPromise;
 
@@ -202,6 +184,22 @@ describe('GlobalPingChecker', () => {
       },
     });
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('checks a JSON value in the body the probe reports', async () => {
+    const monitor = createMonitor({ responseJsonPath: '$.status', responseJsonValue: 'ok' });
+
+    mockCompletedMeasurement(finishedHttpMeasurement({ rawBody: '{"status":"ok"}' }));
+    expect(await check(monitor)).toEqual({
+      location: 'FI/Helsinki',
+      result: { ok: true, latency: 13 },
+    });
+
+    mockCompletedMeasurement(finishedHttpMeasurement({ rawBody: '{"status":"down"}' }));
+    expect(await check(monitor)).toEqual({
+      location: 'FI/Helsinki',
+      result: { ok: false, error: 'JSON value at $.status is not "ok"', latency: 13 },
+    });
   });
 
   it('returns parsed TLS certificate information', async () => {
@@ -218,7 +216,7 @@ describe('GlobalPingChecker', () => {
       }),
     );
 
-    const result = await checker.check(createMonitor());
+    const result = await check(createMonitor());
 
     expect(result).toEqual({
       location: 'FI/Helsinki',
@@ -245,7 +243,7 @@ describe('GlobalPingChecker', () => {
       }),
     );
 
-    const result = await checker.check(
+    const result = await check(
       createMonitor({ sslCheckEnabled: true, sslCheckDaysBeforeExpiry: 14 }),
     );
 
@@ -266,7 +264,7 @@ describe('GlobalPingChecker', () => {
       }),
     );
 
-    const result = await checker.check(createMonitor());
+    const result = await check(createMonitor());
 
     expect(result).toEqual({
       location: 'FI/Helsinki',
@@ -285,7 +283,7 @@ describe('GlobalPingChecker', () => {
       }),
     );
 
-    const result = await checker.check(createMonitor({ sslIgnoreSelfSigned: true }));
+    const result = await check(createMonitor({ sslIgnoreSelfSigned: true }));
 
     expect(result).toEqual({ location: 'FI/Helsinki', result: { ok: true, latency: 13 } });
   });
@@ -293,7 +291,7 @@ describe('GlobalPingChecker', () => {
   it('returns location ERROR when an unexpected request failure is caught', async () => {
     fetchMock.mockRejectedValue(new Error('service unavailable'));
 
-    const result = await checker.check(createMonitor());
+    const result = await check(createMonitor());
 
     expect(result).toEqual({
       location: 'ERROR',
@@ -307,7 +305,7 @@ describe('GlobalPingChecker', () => {
       results: [{ probe: { country: 'FI' }, result: { status: 'finished', statusCode: 200 } }],
     });
 
-    const result = await checker.check(createMonitor());
+    const result = await check(createMonitor());
 
     expect(result).toEqual({
       location: 'ERROR',
@@ -324,7 +322,7 @@ describe('GlobalPingChecker', () => {
       .mockResolvedValueOnce(jsonResponse({ id: 'measurement-1' }, 202))
       .mockResolvedValueOnce(new Response(endless));
 
-    const result = await checker.check(createMonitor());
+    const result = await check(createMonitor());
 
     expect(result).toEqual({
       location: 'ERROR',
@@ -335,7 +333,7 @@ describe('GlobalPingChecker', () => {
   it('fails the check when measurement creation returns no id', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ notAnId: true }, 202));
 
-    const result = await checker.check(createMonitor());
+    const result = await check(createMonitor());
 
     expect(result).toEqual({
       location: 'ERROR',
@@ -349,7 +347,7 @@ describe('GlobalPingChecker', () => {
   it('uses the API error message on rejection', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: { message: 'Invalid token' } }, 401));
 
-    const result = await checker.check(createMonitor());
+    const result = await check(createMonitor());
 
     expect(result).toEqual({
       location: 'ERROR',
@@ -360,7 +358,7 @@ describe('GlobalPingChecker', () => {
   it('falls back to the status code when the error payload is malformed', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse('nope', 429));
 
-    const result = await checker.check(createMonitor());
+    const result = await check(createMonitor());
 
     expect(result).toEqual({
       location: 'ERROR',

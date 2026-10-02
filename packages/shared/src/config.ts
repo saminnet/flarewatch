@@ -9,11 +9,12 @@ import {
   type Maintenance,
   type NotificationConfig,
   type PageConfig,
+  type PullMonitor,
   type RuntimeConfig,
   type HubView,
   type Webhook,
 } from './types';
-import { isJsonObject, isNonEmptyString, isSecureUrl } from './utils';
+import { isJsonObject, isNonEmptyString, isSecureUrl, jsonPathKeys } from './utils';
 
 const PULL_METHODS = [
   'GET',
@@ -164,21 +165,115 @@ const monitorCommon = {
   ),
 };
 
-const pullMonitorSchema = z
-  .looseObject({
-    ...monitorCommon,
-    method: z.enum(PULL_METHODS),
-    target: z.string({ error: 'target must be a string' }),
-    timeout: z.optional(intInRange('timeout', 1, MAX_TIMEOUT_MS)),
-    maxLatencyMs: z.optional(
-      z
-        .int({ error: 'maxLatencyMs must be a positive integer' })
-        .check(z.gte(1, { error: 'maxLatencyMs must be a positive integer' })),
+function optionalString(field: string) {
+  return z.optional(z.string({ error: `${field} must be a string` }));
+}
+
+function optionalBoolean(field: string) {
+  return z.optional(z.boolean({ error: `${field} must be a boolean` }));
+}
+
+/** Where a check runs. The message never quotes the value: a Globalping URL holds a token. */
+function checkLocation(field: string) {
+  const error = `${field} must be an http(s) URL or globalping://<token>`;
+  return z
+    .string({ error })
+    .check(
+      z.refine(
+        (value) =>
+          value.startsWith('globalping://')
+            ? Boolean(URL.parse(value)?.hostname)
+            : isValidHttpUrl(value),
+        { error },
+      ),
+    );
+}
+
+/** RFC 9110 token characters; Headers.get throws on anything else. */
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+const pullMonitorShape = {
+  ...monitorCommon,
+  method: z.enum(PULL_METHODS),
+  target: z.string({ error: 'target must be a string' }),
+  tooltip: optionalString('tooltip'),
+  hideLatencyChart: optionalBoolean('hideLatencyChart'),
+  expectedCodes: z.optional(
+    z.array(intInRange('expectedCodes', 100, 599), {
+      error: 'expectedCodes must be a list of status codes',
+    }),
+  ),
+  timeout: z.optional(intInRange('timeout', 1, MAX_TIMEOUT_MS)),
+  maxLatencyMs: z.optional(
+    z
+      .int({ error: 'maxLatencyMs must be a positive integer' })
+      .check(z.gte(1, { error: 'maxLatencyMs must be a positive integer' })),
+  ),
+  headers: z.optional(
+    z.record(z.string(), z.union([z.string(), z.number()]), {
+      error: 'headers must map names to strings or numbers',
+    }),
+  ),
+  body: optionalString('body'),
+  responseKeyword: optionalString('responseKeyword'),
+  responseForbiddenKeyword: optionalString('responseForbiddenKeyword'),
+  responseJsonPath: z.optional(
+    z.string({ error: 'responseJsonPath must be a string' }).check(
+      z.refine((path) => jsonPathKeys(path) !== null, {
+        error: 'responseJsonPath must be a path like $.a.b[0].c',
+      }),
     ),
+  ),
+  responseJsonValue: z.optional(
+    z.union([z.string(), z.number(), z.boolean(), z.null()], {
+      error: 'responseJsonValue must be a string, number, boolean or null',
+    }),
+  ),
+  responseHeaderEquals: z.optional(
+    z
+      .record(z.string(), z.string({ error: 'responseHeaderEquals values must be strings' }), {
+        error: 'responseHeaderEquals must map header names to strings',
+      })
+      .check(
+        z.refine((headers) => Object.keys(headers).every((name) => HEADER_NAME.test(name)), {
+          error: 'responseHeaderEquals: bad header name',
+        }),
+      ),
+  ),
+  checkProxy: z.optional(checkLocation('checkProxy')),
+  checkProxyFallback: optionalBoolean('checkProxyFallback'),
+  confirmVia: z.optional(checkLocation('confirmVia')),
+  pingProtocol: z.optional(
+    z.enum(['tcp', 'icmp'], { error: "pingProtocol must be 'tcp' or 'icmp'" }),
+  ),
+  sslCheckEnabled: optionalBoolean('sslCheckEnabled'),
+  sslCheckDaysBeforeExpiry: z.optional(intInRange('sslCheckDaysBeforeExpiry', 0, 3650)),
+  sslIgnoreSelfSigned: optionalBoolean('sslIgnoreSelfSigned'),
+} satisfies Record<keyof PullMonitor, z.ZodMiniType>;
+
+/** Strict, so a misspelt field fails the config instead of being ignored. */
+const pullMonitorSchema = z
+  .strictObject(pullMonitorShape, {
+    error: (issue) =>
+      issue.code === 'unrecognized_keys'
+        ? `unknown field ${issue.keys.map((key) => JSON.stringify(key)).join(', ')}`
+        : undefined,
   })
   .check((ctx) => {
-    const issue = targetIssue(ctx.value.method, ctx.value.target);
-    if (issue) ctx.issues.push({ code: 'custom', message: issue, input: ctx.value });
+    const { method, target, responseJsonPath, responseJsonValue, checkProxy, confirmVia } =
+      ctx.value;
+    const issues = [
+      targetIssue(method, target),
+      (responseJsonPath === undefined) !== (responseJsonValue === undefined)
+        ? 'responseJsonPath and responseJsonValue go together'
+        : null,
+      confirmVia !== undefined && confirmVia === checkProxy
+        ? 'confirmVia must be another place than checkProxy'
+        : null,
+    ];
+    for (const message of issues) {
+      if (message) ctx.issues.push({ code: 'custom', message, input: ctx.value });
+    }
   });
 
 const heartbeatMonitorSchema = z.looseObject({

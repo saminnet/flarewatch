@@ -43,19 +43,15 @@ function isProxyCheckResponse(value: unknown): value is CheckResultWithLocation 
 
 export async function checkExternalProxy(
   target: MonitorTarget,
+  url: string,
   env?: ProxyEnv,
   fetcher: Fetcher = fetchWithTimeout,
 ): Promise<CheckResultWithLocation> {
-  if (!target.checkProxy) {
-    return {
-      location: 'ERROR',
-      result: failure('Proxy URL is not configured'),
-    };
-  }
-
+  // The other place may be Globalping, and its URL holds a token the proxy has no use for.
+  const { checkProxy: _checkProxy, confirmVia: _confirmVia, ...monitor } = target;
   try {
     const timeout = target.timeout ?? DEFAULT_HTTP_TIMEOUT;
-    const response = await fetcher(target.checkProxy, {
+    const response = await fetcher(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -63,7 +59,7 @@ export async function checkExternalProxy(
           ? { Authorization: `Bearer ${env.FLAREWATCH_PROXY_TOKEN}` }
           : {}),
       },
-      body: JSON.stringify(target),
+      body: JSON.stringify(monitor),
       timeout,
     });
 

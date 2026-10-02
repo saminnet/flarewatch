@@ -103,42 +103,34 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T
   }
 }
 
-interface HttpValidationConfig {
-  expectedCodes?: number[] | undefined;
-  responseKeyword?: string | undefined;
-  responseForbiddenKeyword?: string | undefined;
+/** A body is read this far and no further: a monitored site must not be able to exhaust the Worker's memory. */
+const MAX_BODY_BYTES = 1024 * 1024;
+
+const JSON_PATH = /^\$(?:\.[^.[\]]+|\[\d+\])*$/;
+
+/** The keys of a `$.a.b[0].c` path, or null when the path is not in that syntax. */
+export function jsonPathKeys(path: string): (string | number)[] | null {
+  if (!JSON_PATH.test(path)) return null;
+  return [...path.matchAll(/\.([^.[\]]+)|\[(\d+)\]/g)].map(
+    ([, key, index]) => key ?? Number(index),
+  );
 }
 
-export function validateHttpStatusAndBody(
-  status: number,
-  body: string | undefined,
-  config: HttpValidationConfig,
-): string | null {
-  const { expectedCodes, responseKeyword, responseForbiddenKeyword } = config;
-
-  if (expectedCodes) {
-    if (!expectedCodes.includes(status)) {
-      return `Expected status ${expectedCodes.join('|')}, got ${status}`;
-    }
-  } else if (status < 200 || status > 299) {
-    return `Expected 2xx status, got ${status}`;
-  }
-
-  if (body !== undefined) {
-    if (responseKeyword && !body.includes(responseKeyword)) {
-      return `Required keyword "${responseKeyword}" not found in response`;
-    }
-
-    if (responseForbiddenKeyword && body.includes(responseForbiddenKeyword)) {
-      return `Forbidden keyword "${responseForbiddenKeyword}" found in response`;
+/** The value at these keys, or undefined when one is missing. Never reads inherited properties. */
+function valueAt(document: unknown, keys: (string | number)[]): unknown {
+  let value = document;
+  for (const key of keys) {
+    if (typeof key === 'number') {
+      if (!Array.isArray(value)) return undefined;
+      const items: unknown[] = value;
+      value = items[key];
+    } else {
+      if (!isJsonObject(value) || !Object.hasOwn(value, key)) return undefined;
+      value = value[key];
     }
   }
-
-  return null;
+  return value;
 }
-
-/** A keyword must appear this early: a monitored site must not be able to exhaust the Worker's memory. */
-const MAX_KEYWORD_BODY_BYTES = 1024 * 1024;
 
 /** A Request or a Response. */
 type WithBody = Pick<Body, 'body'>;
@@ -170,25 +162,69 @@ export async function readJsonUpTo(message: WithBody, maxBytes: number): Promise
   return JSON.parse(text);
 }
 
+/** What a check saw: a Response, or a status and body that a remote probe reported. */
+export interface HttpReply {
+  status: number;
+  headers?: Headers;
+  /** A stream is read up to the body cap; a string is taken as it is. */
+  body: WithBody['body'] | string;
+}
+
+/** The first way the reply fails the monitor's assertions, or null. Never quotes the response. */
 export async function validateHttpResponse(
   monitor: MonitorTarget,
-  response: Response,
+  reply: HttpReply,
 ): Promise<string | null> {
-  const { expectedCodes, responseKeyword, responseForbiddenKeyword } = monitor;
+  const { expectedCodes, responseKeyword, responseForbiddenKeyword, responseJsonPath } = monitor;
+  const { status } = reply;
 
-  // Status first: it avoids reading the body.
-  const statusError = validateHttpStatusAndBody(response.status, undefined, { expectedCodes });
-  if (statusError) {
-    return statusError;
+  if (expectedCodes) {
+    if (!expectedCodes.includes(status)) {
+      return `Expected status ${expectedCodes.join('|')}, got ${status}`;
+    }
+  } else if (status < 200 || status > 299) {
+    return `Expected 2xx status, got ${status}`;
   }
 
-  if (responseKeyword || responseForbiddenKeyword) {
-    const body = await readTextUpTo(response, MAX_KEYWORD_BODY_BYTES);
-    return validateHttpStatusAndBody(response.status, body, {
-      expectedCodes,
-      responseKeyword,
-      responseForbiddenKeyword,
-    });
+  for (const [name, expected] of Object.entries(monitor.responseHeaderEquals ?? {})) {
+    const actual = reply.headers?.get(name);
+    if (actual == null) return `Header "${name}" not found in response`;
+    if (actual !== expected) return `Header "${name}" does not have the expected value`;
+  }
+
+  // Status and headers first: they avoid reading the body.
+  if (!responseKeyword && !responseForbiddenKeyword && responseJsonPath === undefined) return null;
+  const body =
+    typeof reply.body === 'string'
+      ? reply.body
+      : await readTextUpTo({ body: reply.body }, MAX_BODY_BYTES);
+
+  if (responseKeyword && !body.includes(responseKeyword)) {
+    return `Required keyword "${responseKeyword}" not found in response`;
+  }
+
+  if (responseForbiddenKeyword && body.includes(responseForbiddenKeyword)) {
+    return `Forbidden keyword "${responseForbiddenKeyword}" found in response`;
+  }
+
+  if (responseJsonPath !== undefined) {
+    // A body that fills the cap may have been cut short, and a cut body is not the JSON sent.
+    if (new TextEncoder().encode(body).byteLength >= MAX_BODY_BYTES) {
+      return `Response is too large to check ${responseJsonPath}`;
+    }
+    const keys = jsonPathKeys(responseJsonPath);
+    if (!keys) return `responseJsonPath ${responseJsonPath} is not a $.a.b[0] path`;
+    let document: unknown;
+    try {
+      document = JSON.parse(body);
+    } catch {
+      return 'Response is not valid JSON';
+    }
+    const value = valueAt(document, keys);
+    if (value === undefined) return `JSON path ${responseJsonPath} not found in response`;
+    if (value !== monitor.responseJsonValue) {
+      return `JSON value at ${responseJsonPath} is not ${JSON.stringify(monitor.responseJsonValue)}`;
+    }
   }
 
   return null;

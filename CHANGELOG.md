@@ -4,17 +4,26 @@ All notable changes to FlareWatch will be documented in this file.
 
 ## Unreleased
 
+Your config's monitors are now checked field by field. A misspelt or unknown field, or a field of the wrong type, fails the unit tests and stops the deploy. Before, FlareWatch ignored it.
+
 ### Added
 
 - Set `maxLatencyMs` on a website or API monitor to show it as degraded while its last check is slower than that. It sends no alert, opens no incident and doesn't change uptime. A maintenance window that covers the monitor keeps it up.
 - `/api/data` gives each monitor a `status`: `up`, `degraded`, `down`, `pending` or `running`.
 - **Check now** on a check monitor's page, for the operator. It runs that monitor's check once and shows the result there, without saving it. Scripts can do the same through `POST /api/admin/check`.
+- `confirmVia` checks a failing monitor once more from a second place, such as your own flarewatch-proxy or a Globalping probe, and records that result. A blip on one network path no longer opens an incident. See [Confirm from a second place](docs/monitors.md#confirm-from-a-second-place).
+- `responseHeaderEquals` checks response headers, and `responseJsonPath` with `responseJsonValue` checks one value in a JSON response. See [Monitors](docs/monitors.md#websites-and-apis).
 
 ### Changed
 
 - A late job's badge says `DEGRADED` in yellow instead of `UP`. The badge's `degraded` and `colorDegraded` parameters change that.
 - Embeds show late, pending and running jobs the way the dashboard does.
 - A job that starts again while its outage is still open shows as down until it succeeds, on its row as in the banner and the API.
+- A monitor that asks its check location for something it can't do now fails with an error that names the setting, and the unit tests fail on it before deploy. Before, `sslCheckEnabled` on a check from the Worker, or on a proxy check with `checkProxyFallback`, passed without looking at the certificate, and `pingProtocol: 'icmp'` outside Globalping quietly ran a TCP check. See the table in [Monitors](docs/monitors.md#other-regions-and-private-networks).
+- Every check ends within 55 seconds of the check run's start. A longer `timeout` is cut to what is left.
+- A fallback or confirmation check, or an extra Globalping poll, runs only while the run has subrequests to spare under the free plan's 50, after the hub's calls and one request per alert webhook. No check sends a request after the run's 55 seconds.
+- A `TCP_PING` monitor with `expectedCodes`, `responseKeyword`, `responseForbiddenKeyword`, `responseJsonPath`, `responseHeaderEquals` or `sslCheckEnabled` now fails. Before, it passed on the connection alone.
+- `checkProxy: 'worker://...'` is gone. Remove it from your config.
 
 ## 3.2.0 - 2026-10-02
 

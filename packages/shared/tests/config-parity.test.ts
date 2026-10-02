@@ -18,11 +18,10 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
     false,
   ],
   ['ftp url rejected for GET', { monitors: [{ ...monitor, target: 'ftp://example.com' }] }, false],
-  [
-    'unknown monitor fields ignored',
-    { monitors: [{ ...monitor, tooltip: 5, expectedCodes: 'nope' }] },
-    true,
-  ],
+  // A misspelt or mistyped field must fail the deploy, not be ignored.
+  ['monitor field of the wrong type', { monitors: [{ ...monitor, tooltip: 5 }] }, false],
+  ['expectedCodes not a list', { monitors: [{ ...monitor, expectedCodes: 'nope' }] }, false],
+  ['misspelt monitor field', { monitors: [{ ...monitor, expectedCode: [200] }] }, false],
   ['monitor timeout of a minute', { monitors: [{ ...monitor, timeout: 60_000 }] }, true],
   ['monitor timeout over a minute', { monitors: [{ ...monitor, timeout: 60_001 }] }, false],
   ['monitor timeout of zero', { monitors: [{ ...monitor, timeout: 0 }] }, false],

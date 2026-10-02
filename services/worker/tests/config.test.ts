@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import { configIssues } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
+import { planIssues } from '../src/checkers';
 
 describe('packages/config', () => {
   it('is valid, so a broken config fails CI instead of deploying', () => {
@@ -13,6 +14,15 @@ describe('packages/config', () => {
         notification: workerConfig.notification,
       }),
     ).toEqual([]);
+  });
+
+  it('asks each check location only for what it can do', () => {
+    const issues = workerConfig.monitors.flatMap((monitor) =>
+      monitor.method === 'HEARTBEAT'
+        ? []
+        : planIssues(monitor).map((issue) => `monitor "${monitor.id}": ${issue}`),
+    );
+    expect(issues).toEqual([]);
   });
 });
 

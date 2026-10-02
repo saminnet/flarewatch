@@ -32,7 +32,9 @@ const backup: AdminMonitor = {
 const state: StatusView = { lastUpdate: 0, monitors: {} };
 
 function renderDetail(monitor: AdminMonitor, operator: boolean) {
-  renderWithProviders(<MonitorDetail monitor={monitor} state={state} operator={operator} />);
+  renderWithProviders(
+    <MonitorDetail monitor={monitor} state={state} maintenances={[]} operator={operator} />,
+  );
 }
 
 /** The status page answers POST /api/admin/check with this. */
@@ -113,7 +115,7 @@ describe('Check now on the monitor page', () => {
           <button type="button" onClick={() => setMonitor(docs)}>
             Open Docs
           </button>
-          <MonitorDetail monitor={monitor} state={state} operator />
+          <MonitorDetail monitor={monitor} state={state} maintenances={[]} operator />
         </>
       );
     }

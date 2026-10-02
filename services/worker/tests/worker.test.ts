@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import {
   type Fetcher,
   type Maintenance,
-  type Monitor,
   type MonitorTarget,
   type NotificationConfig,
   type WorkerConfig,
 } from '@flarewatch/shared';
 import type { Env } from '../src/env';
 import Worker, { runChecks, type WorkerDeps } from '../src/index';
-import { WebhookNotifier } from '../src/notifications/webhook';
+import { createNotifier, WebhookNotifier } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
+import { createWorkerDeps } from './helpers/worker-deps';
 
 const checkMonitorMock = vi.fn<WorkerDeps['checkMonitor']>();
 const getEdgeLocationMock = vi.fn<WorkerDeps['getEdgeLocation']>();
@@ -95,6 +95,74 @@ describe('scheduled handler', () => {
     await Worker.scheduled({} as ScheduledEvent, env, {} as ExecutionContext);
 
     expect(hub.view().lastUpdate).toBeGreaterThan(0);
+  });
+});
+
+describe('subrequests per check run', () => {
+  const PROXY = 'https://proxy.example.com/check';
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const HOOK = 'https://hooks.example.com/alert';
+
+  /** Fetches and hub calls in one run of 45 monitors that confirm through a proxy. */
+  async function countSubrequests(failing: number, notification?: NotificationConfig) {
+    const monitors = Array.from({ length: 45 }, (_, i) => ({
+      ...createMonitor(`m${i}`),
+      confirmVia: PROXY,
+    }));
+    const down = new Set(monitors.slice(0, failing).map((monitor) => monitor.target));
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url === PROXY) {
+        return Response.json({ location: 'FRA', result: { ok: false, error: 'down' } });
+      }
+      return new Response('ok', { status: down.has(url) ? 503 : 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { hub, env } = createEnv();
+    const record = vi.spyOn(hub, 'record');
+    const confirmAlerts = vi.spyOn(hub, 'confirmAlerts');
+
+    await runChecks(env, {
+      ...createWorkerDeps({ monitors, ...(notification && { notification }) }),
+      createNotifier,
+    });
+
+    const hubCalls = record.mock.calls.length + confirmAlerts.mock.calls.length;
+    return {
+      // The edge-location lookup adds one on a cold isolate; the test deps answer it without a fetch.
+      total: fetchMock.mock.calls.length + hubCalls + 1,
+      hubCalls,
+      confirmations: fetchMock.mock.calls.filter(([input]) => input === PROXY).length,
+      alerts: fetchMock.mock.calls.filter(([input]) => input === HOOK).length,
+    };
+  }
+
+  it('stays under 50 with 10 of 45 monitors failing', async () => {
+    const { total, hubCalls, confirmations } = await countSubrequests(10);
+
+    expect(hubCalls).toBe(1);
+    expect(confirmations).toBeGreaterThan(0);
+    expect(total).toBeLessThan(50);
+  });
+
+  it('leaves each webhook a request that confirmations cannot spend', async () => {
+    const { confirmations, alerts } = await countSubrequests(4, { webhook: { url: HOOK } });
+
+    // 45 checks, the hub's record and alert confirmation, a cold edge lookup and one webhook.
+    expect(45 + confirmations + 2 + 1 + 1).toBeLessThanOrEqual(50);
+    expect(alerts).toBeGreaterThan(0);
+  });
+
+  it('spends nothing on confirmations while every monitor is up', async () => {
+    const { total, confirmations } = await countSubrequests(0);
+
+    expect(confirmations).toBe(0);
+    expect(total).toBe(45 + 1 + 1);
   });
 });
 
@@ -284,30 +352,6 @@ describe('worker', () => {
   it('throws when the MONITOR_HUB binding is missing', async () => {
     const { MONITOR_HUB: _hub, ...env } = createEnv().env;
     await expect(runScheduled(env)).rejects.toThrow('MONITOR_HUB binding not found');
-  });
-
-  describe('check execution', () => {
-    it('records a crashed check as down without aborting the run', async () => {
-      const rejectedMonitor = createMonitor('rejected');
-      const healthyMonitor = createMonitor('healthy');
-      workerConfigMock.monitors = [rejectedMonitor, healthyMonitor];
-      checkMonitorMock.mockImplementation(async (monitor: Monitor) => {
-        if (monitor.id === rejectedMonitor.id) {
-          throw new Error('Check crashed');
-        }
-        return { location: 'SFO', result: { ok: true, latency: 10 } };
-      });
-      const { hub, env } = createEnv();
-
-      await runScheduled(env);
-
-      const { monitors } = hub.view();
-      expect(monitors.healthy?.status).toBe('up');
-      expect(monitors.rejected).toMatchObject({
-        status: 'down',
-        incidents: [{ error: ['Check failed: Error: Check crashed'] }],
-      });
-    });
   });
 });
 

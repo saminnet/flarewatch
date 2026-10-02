@@ -1,7 +1,6 @@
 import {
   type CheckContext,
   createLogger,
-  failure,
   type CheckResultWithLocation,
   type MonitorTarget,
   parseSecretWebhooks,
@@ -15,7 +14,7 @@ import { getHub, type Env } from './env';
 import { handleHubRequest } from './hub/routes';
 import { handlePing, handlePingUrl } from './ping';
 import { getEdgeLocation } from './utils/location';
-import { checkMonitor } from './checkers';
+import { checkMonitor, runBudget } from './checkers';
 import {
   createNotifier,
   formatNotificationMessage,
@@ -81,20 +80,18 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const hub = getHub(env);
 
   const currentTime = Math.floor(Date.now() / 1000);
-  const notifier = deps.createNotifier(
-    alertWebhooks(config.notification?.webhook, env.FLAREWATCH_WEBHOOKS),
-  );
+  const webhooks = alertWebhooks(config.notification?.webhook, env.FLAREWATCH_WEBHOOKS);
+  const notifier = deps.createNotifier(webhooks);
 
+  const ctx: CheckContext = {
+    env,
+    budget: runBudget(config.monitors, [webhooks ?? []].flat().length),
+  };
   const records = await Promise.all(
     config.monitors.map(async (monitor): Promise<CheckRecord> => {
       if (monitor.method === 'HEARTBEAT') return { monitor };
       log.info('Checking monitor', { name: monitor.name });
-      try {
-        return { monitor, check: await deps.checkMonitor(monitor, { env }) };
-      } catch (error) {
-        log.error('Check failed', { monitor: monitor.id, error: String(error) });
-        return { monitor, check: { location, result: failure(`Check failed: ${String(error)}`) } };
-      }
+      return { monitor, check: await deps.checkMonitor(monitor, ctx) };
     }),
   );
 

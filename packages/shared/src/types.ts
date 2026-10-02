@@ -96,8 +96,18 @@ export type PullMonitor = {
   body?: string;
   responseKeyword?: string;
   responseForbiddenKeyword?: string;
+  /** A path like `$.a.b[0].c` into the JSON body; the value there must equal `responseJsonValue`. */
+  responseJsonPath?: string;
+  responseJsonValue?: string | number | boolean | null;
+  /** Response headers that must be present with exactly these values. Names ignore case. */
+  responseHeaderEquals?: Record<string, string>;
   checkProxy?: string;
   checkProxyFallback?: boolean;
+  /**
+   * Another place to check from, in `checkProxy`'s formats. When the check fails, it runs once
+   * more from here, and this result is the one recorded.
+   */
+  confirmVia?: string;
   pingProtocol?: 'tcp' | 'icmp';
   sslCheckEnabled?: boolean;
   sslCheckDaysBeforeExpiry?: number;
@@ -304,12 +314,21 @@ export interface CheckResultWithLocation {
   result: CheckResult;
 }
 
+/** What one check run can still spend. Every monitor in the run shares one. */
+export interface RunBudget {
+  /** Unix timestamp (ms) by which every check has ended. */
+  deadline: number;
+  /** Subrequests left for extra attempts: a fallback or a confirmation. Spent as each starts. */
+  subrequests: number;
+}
+
 export interface CheckContext {
   /**
    * Worker bindings a checker may need. Kept structural and narrow so shared
    * does not depend on the worker's Env type.
    */
   env: { FLAREWATCH_PROXY_TOKEN?: string };
+  budget: RunBudget;
 }
 
 export interface MonitorChecker {

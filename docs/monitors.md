@@ -21,6 +21,27 @@ A check fails on another status code, when `responseKeyword` is missing from the
 
 `maxLatencyMs` marks a slow site. When the last check took longer than that many milliseconds, the page shows the monitor as degraded until a check comes in under it. It sends no alert, opens no incident and doesn't change uptime. While a maintenance window covers the monitor, it shows as up.
 
+To check more than a keyword:
+
+```ts
+{
+  id: 'api',
+  name: 'API',
+  method: 'GET',
+  target: 'https://example.com/health',
+  responseHeaderEquals: { 'Content-Type': 'application/json' },
+  responseJsonPath: '$.checks[0].status',
+  responseJsonValue: 'pass',
+}
+```
+
+- `responseHeaderEquals` lists headers the response must have, with exactly these values. Header names ignore case; values don't.
+- `responseJsonPath` points into a JSON response, and the value there must equal `responseJsonValue`: the same string, number, `true`, `false` or `null`. `"3"` doesn't equal `3`. Paths use dots for keys and brackets for list items: `$.a.b[0].c`. `$` is the whole response. Set both fields or neither.
+
+The check fails when the response isn't JSON, is 1 MiB or larger, or has nothing at the path. The error names the header or path, never what the response held, because errors show on the status page.
+
+A field FlareWatch doesn't know, such as a misspelt `expectedCode`, fails the config.
+
 The monitor name links to its target on the status page, without any credentials or query string. Set `link: false` to hide the URL, or `link: 'https://...'` to link somewhere else.
 
 ## TCP ports
@@ -29,7 +50,7 @@ The monitor name links to its target on the status page, without any credentials
 { id: 'db', name: 'Database', method: 'TCP_PING', target: 'db.example.com:5432' }
 ```
 
-The Worker opens a TCP connection to the host and port.
+The Worker opens a TCP connection to the host and port. A connection is all it checks, so `expectedCodes`, the keyword and JSON settings, `responseHeaderEquals` and `sslCheckEnabled` fail a `TCP_PING` monitor's config.
 
 ## Private monitors
 
@@ -38,6 +59,8 @@ The Worker opens a TCP connection to the host and port.
 ## Dependencies
 
 `dependsOn: ['proxy']` tells FlareWatch the monitor reaches its target through another one. While that one is down, this one doesn't alert. See [Alerts](alerts.md#dependencies).
+
+To stop one network path from raising an outage, use [`confirmVia`](#confirm-from-a-second-place) instead.
 
 ## Groups
 
@@ -110,5 +133,36 @@ By default the Worker runs each check itself. `checkProxy` runs it somewhere els
 When the proxy fails, the check fails. Set `checkProxyFallback: true` to fall back to a direct check.
 
 For certificate expiry, set `sslCheckEnabled: true` and `sslCheckDaysBeforeExpiry: 14`. This needs Globalping or a proxy, because the Worker can't see the certificate.
+
+Not every place can run every check:
+
+| Setting                | From the Worker | Globalping                   | External proxy |
+| ---------------------- | --------------- | ---------------------------- | -------------- |
+| `method`               | any             | GET, HEAD, OPTIONS, TCP_PING | any            |
+| `body`                 | yes             | no                           | yes            |
+| `sslCheckEnabled`      | no              | yes                          | yes            |
+| `pingProtocol: 'icmp'` | no              | yes                          | no             |
+| `responseHeaderEquals` | yes             | no                           | no             |
+| `responseJsonPath`     | yes             | yes                          | no             |
+
+A monitor that asks a place for something it can't do fails on every check, with an error that names the setting, such as `sslCheckEnabled is not supported by a direct check`. This counts the fallback too: `sslCheckEnabled` with `checkProxyFallback: true` fails, because the fallback runs from the Worker. The unit tests run the same rules on your config, so the deploy stops before such a monitor goes live.
+
+### Confirm from a second place
+
+`confirmVia` names a second place to check from, in the same formats as `checkProxy`. When a check fails, FlareWatch runs it once more from there, straight away, and records that result and its location. The monitor goes down only when the second place sees it down too. A check that passes costs nothing extra.
+
+```ts
+{
+  id: 'site',
+  name: 'Website',
+  method: 'GET',
+  target: 'https://example.com',
+  confirmVia: 'https://your-proxy.example.com/check',
+}
+```
+
+This is how to use your own [flarewatch-proxy](https://github.com/saminnet/flarewatch-proxy) as a second vantage point: a blip between Cloudflare and your site no longer opens an incident unless the proxy sees it too. `confirmVia: 'globalping://<token>?magic=fra'` does the same from a Globalping probe. `confirmVia` must name a different place than `checkProxy`, and the table above applies to it too.
+
+The free plan allows a check run 50 subrequests. Each check is one, a Globalping check two plus one per extra poll, and the hub and each alert webhook need their own. A confirmation, a `checkProxyFallback` check or an extra Globalping poll runs only while the run has some to spare, so with many monitors failing at once, the later ones keep their first result. FlareWatch holds back one request per webhook, which covers the first alert of a run; with many monitors going down in the same minute, later alerts can still go over the limit.
 
 A site in the same Cloudflare zone as the monitor Worker also needs a proxy. Cloudflare sends a Worker's requests for its own zone straight to the origin, so a direct check gets a 503 even when the site is up.

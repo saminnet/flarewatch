@@ -1,5 +1,6 @@
 import {
   fetchWithTimeout,
+  type RunBudget,
   type CheckResultWithLocation,
   type Fetcher,
   type MonitorChecker,
@@ -12,7 +13,7 @@ import { globalPingChecker } from './globalping';
 
 /** GlobalPing reports the probe's own location, so it does not implement `MonitorChecker`. */
 interface LocatedChecker {
-  check(target: MonitorTarget): Promise<CheckResultWithLocation>;
+  check(target: MonitorTarget, url: string, budget: RunBudget): Promise<CheckResultWithLocation>;
 }
 
 /**
