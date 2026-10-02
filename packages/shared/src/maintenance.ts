@@ -196,7 +196,7 @@ function optionalText(value: unknown): string | undefined | null {
 }
 
 /** The zone's canonical name, or undefined when the runtime does not know it. */
-function knownZone(timeZone: string): string | undefined {
+export function knownZone(timeZone: string): string | undefined {
   try {
     return zoneFormat(timeZone).resolvedOptions().timeZone;
   } catch {

@@ -14,7 +14,7 @@ import {
   type HubView,
   type Webhook,
 } from './types';
-import { isNormalizedMaintenance, normalizeMaintenance } from './maintenance';
+import { isNormalizedMaintenance, knownZone, normalizeMaintenance } from './maintenance';
 import { isJsonObject, isNonEmptyString, isSecureUrl, jsonPathKeys } from './utils';
 
 const PULL_METHODS = [
@@ -167,6 +167,11 @@ const monitorCommon = {
     }),
   ),
 };
+
+function timeZone(field: string) {
+  const error = `${field} must be an IANA time zone name such as Europe/Helsinki`;
+  return z.string({ error }).check(z.refine((value) => knownZone(value) !== undefined, { error }));
+}
 
 function optionalString(field: string) {
   return z.optional(z.string({ error: `${field} must be a string` }));
@@ -417,7 +422,7 @@ const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
 
 const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.object({
   webhook: z.optional(z.union([webhookSchema, z.array(webhookSchema)])),
-  timeZone: z.optional(z.string()),
+  timeZone: z.optional(timeZone('timeZone')),
   gracePeriod: z.optional(z.number()),
   skipNotificationIds: z.optional(z.array(z.string())),
   skipErrorChangeNotification: z.optional(z.boolean()),

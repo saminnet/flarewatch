@@ -20,17 +20,21 @@ type ProxyEnv = {
   FLAREWATCH_PROXY_TOKEN?: string;
 };
 
+/** A latency that is not a finite, non-negative number would poison the hour's shared sample row. */
+function isLatency(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
 function isCheckResult(value: unknown): value is CheckResult {
   if (!isJsonObject(value)) return false;
 
   if (value.ok === true) {
-    return typeof value.latency === 'number';
+    return isLatency(value.latency);
   }
 
   if (value.ok === false) {
     return (
-      typeof value.error === 'string' &&
-      (value.latency === undefined || typeof value.latency === 'number')
+      typeof value.error === 'string' && (value.latency === undefined || isLatency(value.latency))
     );
   }
 
@@ -84,6 +88,11 @@ export async function checkExternalProxy(
       };
     }
 
+    // A proxy can echo the token it was sent, and a failed result's text is public.
+    const token = env?.FLAREWATCH_PROXY_TOKEN;
+    if (!data.result.ok && token) {
+      data.result.error = data.result.error.replaceAll(token, '<proxy token>');
+    }
     return data;
   } catch (error) {
     return {

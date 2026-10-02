@@ -100,7 +100,7 @@ Leave out `template` and write the payload yourself. `$MSG` is replaced with the
 | Setting                       | Does                                                                                                                  |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `gracePeriod`                 | Minutes a check monitor stays down before the alert goes out. Heartbeats use their own `graceSeconds`.                |
-| `timeZone`                    | Time zone for times in messages. Defaults to UTC.                                                                     |
+| `timeZone`                    | Time zone for times in messages, an IANA name such as `Europe/Helsinki`. Defaults to UTC.                             |
 | `skipNotificationIds`         | Monitor IDs that never alert.                                                                                         |
 | `skipErrorChangeNotification` | Don't alert again when a down monitor's error changes.                                                                |
 | `reminderEveryChecks`         | Set on a monitor, not here. Check runs between reminders while it stays down. See [Reminders](monitors.md#reminders). |

@@ -183,6 +183,43 @@ describe('checkExternalProxy', () => {
     expect(result).toEqual(proxyResult);
   });
 
+  it('rejects a proxy result whose latency is not a finite, non-negative number', async () => {
+    for (const body of [
+      '{"location":"FRA","result":{"ok":true,"latency":1e400}}',
+      '{"location":"FRA","result":{"ok":true,"latency":-1}}',
+      '{"location":"FRA","result":{"ok":false,"error":"slow","latency":1e400}}',
+    ]) {
+      fetchMock.mockResolvedValue(new Response(body, { status: 200 }));
+
+      const result = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
+
+      expect(result).toEqual({
+        location: 'ERROR',
+        result: { ok: false, error: 'Proxy returned invalid response' },
+      });
+    }
+  });
+
+  it('keeps the proxy token out of a failed result the proxy reports', async () => {
+    const proxyResult = {
+      location: 'LHR',
+      result: { ok: false, error: 'upstream refused Bearer proxy-secret', latency: 12 },
+    };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(proxyResult), { status: 200 }));
+
+    const result = await checkExternalProxy(
+      createTarget(),
+      PROXY_URL,
+      { FLAREWATCH_PROXY_TOKEN: 'proxy-secret' },
+      fetchMock,
+    );
+
+    expect(result).toEqual({
+      location: 'LHR',
+      result: { ok: false, error: 'upstream refused Bearer <proxy token>', latency: 12 },
+    });
+  });
+
   it('returns a failure when the proxy request throws', async () => {
     fetchMock.mockRejectedValue(new Error('network unavailable'));
 

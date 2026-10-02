@@ -440,6 +440,18 @@ describe('config validation', () => {
     });
   });
 
+  describe('timeZone', () => {
+    it.each(['UTC', 'Europe/Helsinki', 'America/New_York'])('accepts %s', (timeZone) => {
+      expect(configIssues(createRuntimeConfig({ notification: { timeZone } }))).toEqual([]);
+    });
+
+    it.each(['Europe/Helsinkii', 'Helsinki', 'GMT+2', ''])('rejects %s', (timeZone) => {
+      expect(configIssues(createRuntimeConfig({ notification: { timeZone } }))).toEqual([
+        'notification.timeZone: timeZone must be an IANA time zone name such as Europe/Helsinki',
+      ]);
+    });
+  });
+
   describe('webhook monitors', () => {
     const monitors = [
       { id: 'api', name: 'API', method: 'GET', target: 'https://api.example.com' },
