@@ -48,8 +48,9 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
     `CREATE INDEX incidents_monitor_end ON incidents (monitor_id, end_at)`,
   ],
   // Moves what 3.1.0 kept into the new tables once: the last 12 hours of
-  // samples, skipping an hour too large for the 2 MB row limit, and every
-  // incident into the lists.
+  // samples, skipping an hour over 1.9 MB, and every incident into the lists.
+  // The bound dates from the docs' 2 MB row limit; the measured limit is 8 MB,
+  // but a shipped step never changes.
   [
     `CREATE TABLE incident_lists (
       monitor_id TEXT NOT NULL,
@@ -60,7 +61,7 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
     `ALTER TABLE incidents ADD COLUMN up_since INTEGER`,
     `CREATE TABLE latency (hour INTEGER PRIMARY KEY, data TEXT NOT NULL)`,
     // The size filter is a subquery: in HAVING it would run after json_group_object
-    // had built the oversized value and failed on the 2 MB string limit.
+    // had built the oversized value and failed on the string limit.
     `INSERT INTO latency (hour, data)
      SELECT at / 3600, json_group_object(CAST(at AS TEXT), json(data)) FROM samples
      WHERE json_valid(data) AND at >= (SELECT MAX(at) FROM samples) - 12 * 3600

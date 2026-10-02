@@ -15,10 +15,12 @@ const MAX_INCIDENT_SEGMENTS = 100;
 /** With the segment cap, bounds how many list parts a monitor's history can fill. */
 const MAX_ERROR_CHARS = 500;
 /**
- * JSON characters per list part. A UTF-16 unit takes at most 3 bytes in UTF-8,
- * so a part stays under the 2 MB row limit.
+ * JSON characters per list part. A capped history fits one part. A UTF-16 unit
+ * takes at most 3 bytes in UTF-8, so a part stays under 6 MB: an 8 MB value
+ * stored in production on 2026-10-02 and a 10 MB one failed, whatever the
+ * Durable Objects docs say about 2 MB.
  */
-const PART_CHARS = 500_000;
+const PART_CHARS = 2_000_000;
 /** Rows importHistory reads per query, and ids per delete: a query binds at most 100 values. */
 const IMPORT_PAGE = 100;
 

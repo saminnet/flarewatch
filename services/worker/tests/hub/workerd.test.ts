@@ -161,7 +161,8 @@ describe('MonitorHub in workerd row budgets', () => {
   });
   /** The monitor whose history spans two incident_lists parts. */
   const LONG = 'm5';
-  // incidents.ts starts a new part past 500,000 JSON characters.
+  // 3.2.0 started a new part past 500,000 JSON characters, so a hub it wrote
+  // can hold a history in two parts.
   const PART_CHARS = 500_000;
 
   /**
@@ -421,8 +422,8 @@ describe('MonitorHub in workerd storage sizes', () => {
       // The Durable Objects docs still say 2 MB.
       expect(await largest('incident_lists')).toBeLessThanOrEqual(8_000_000);
       expect(await largest('latency')).toBeLessThanOrEqual(8_000_000);
-      // incidents.ts keeps a part to 500,000 characters, at most 3 bytes each.
-      expect(await largest('incident_lists')).toBeLessThanOrEqual(1_500_000);
+      // incidents.ts keeps a part to 2,000,000 characters, at most 3 bytes each.
+      expect(await largest('incident_lists')).toBeLessThanOrEqual(6_000_000);
       await evict(hub);
       const incidents = (await view(hub)).body.monitors.api?.incidents ?? [];
       expect(closed(incidents).length).toBeLessThanOrEqual(1000);
@@ -463,6 +464,6 @@ describe('MonitorHub in workerd storage sizes', () => {
     const [parts] = await sql.exec(
       "SELECT count(*) AS n FROM incident_lists WHERE monitor_id = 'api'",
     );
-    expect(parts?.n).toBeGreaterThan(1);
+    expect(parts?.n).toBe(1);
   }, 120_000);
 });

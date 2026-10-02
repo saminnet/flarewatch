@@ -15,7 +15,7 @@ The hub moves your history to its new storage once, when it first starts after t
 
 ### Fixed
 
-- A page view reads two rows per monitor from the hub, plus a few, however long your history is. In 3.1.0 most page views still read every stored incident, because the hub forgets what it kept in memory a few seconds after each request.
+- A page view reads one row per monitor from the hub, plus a few, however long your history is. In 3.1.0 most page views still read every stored incident, because the hub forgets what it kept in memory a few seconds after each request.
 - A response-time chart reads 13 rows instead of 721.
 - A new incident reads a few dozen rows instead of up to 2,000 for a monitor with a long history.
 - A monitor you change from a heartbeat to a regular check no longer stays down because of the job's last state.
