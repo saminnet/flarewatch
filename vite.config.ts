@@ -135,6 +135,7 @@ export default defineConfig({
             { auto: true },
             '!services/worker/node_modules/.vite/**',
             '!services/worker/node_modules/.vite-temp/**',
+            '!services/worker/tests/workerd/.wrangler/**',
           ],
         },
       },

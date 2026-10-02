@@ -1,0 +1,12 @@
+# The hub alone, on the deployed compatibility date, for tests that drive it in workerd through wrangler's test harness.
+name = "flarewatch-hub-under-test"
+main = "entry.ts"
+compatibility_date = "2026-09-30"
+
+[[durable_objects.bindings]]
+name = "MONITOR_HUB"
+class_name = "MonitorHub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MonitorHub"]
