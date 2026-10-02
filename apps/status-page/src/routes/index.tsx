@@ -52,11 +52,7 @@ function DashboardPage() {
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="space-y-3">
-        <OverallStatus
-          state={state}
-          monitorCount={monitors.length}
-          jobCount={monitors.filter((monitor) => monitor.method === 'HEARTBEAT').length}
-        />
+        <OverallStatus monitors={monitors} state={state} maintenances={maintenances} />
 
         <MaintenanceAlerts
           maintenances={maintenances}
@@ -69,6 +65,7 @@ function DashboardPage() {
           <MonitorList
             monitors={monitors}
             state={state}
+            maintenances={maintenances}
             groups={groups}
             uiPrefs={uiPrefs}
             operator={audience === 'operator'}

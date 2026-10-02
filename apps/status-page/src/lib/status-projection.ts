@@ -2,12 +2,14 @@ import { coversMonitor, type Maintenance, type StatusView } from '@flarewatch/sh
 import type { IncidentEvent, MaintenanceEvent, TimelineEvent } from '@/components/history/types';
 import type { PublicMonitor } from '@/lib/public-view';
 import { getMaintenanceStatus } from '@/lib/maintenance';
-import { countStatuses, getLatestLatency, getMonitorError, isMonitorUp } from '@/lib/uptime';
+import { countStatuses, monitorState, type MonitorState } from '@/lib/monitor-state';
+import { getLatestLatency, getMonitorError } from '@/lib/uptime';
 
 const SECOND_MS = 1000;
 
 type PublicDataMonitor = {
   up: boolean;
+  status: MonitorState;
   latency: number | null;
   location: string | null;
   message: string;
@@ -20,7 +22,7 @@ type PublicDataProjection = {
   monitors: Record<string, PublicDataMonitor>;
 };
 
-type BadgeStatusProjection = { status: 'unknown' } | { status: 'known'; up: boolean };
+type BadgeStatusProjection = { status: 'unknown' | 'up' | 'degraded' | 'down' };
 
 type TimelineEventType = 'incident' | 'maintenance' | 'all';
 
@@ -49,35 +51,43 @@ function getEventStartMs(event: TimelineEvent): number {
 export function projectPublicData(
   monitors: PublicMonitor[],
   state: StatusView,
+  maintenances: Maintenance[],
 ): PublicDataProjection {
   const projectedMonitors: Record<string, PublicDataMonitor> = {};
 
   for (const monitor of monitors) {
     const latestLatency = getLatestLatency(monitor.id, state);
-    const up = isMonitorUp(monitor.id, state);
+    const status = monitorState(monitor, state, maintenances);
+    const up = status !== 'down';
     const error = getMonitorError(monitor.id, state);
 
     projectedMonitors[monitor.id] = {
       up,
+      status,
       latency: latestLatency?.ping ?? null,
       location: latestLatency?.loc ?? null,
       message: up ? 'OK' : (error ?? 'Unknown error'),
     };
   }
 
-  const { up, late, down } = countStatuses(state);
+  const { up, late, slow, down } = countStatuses(monitors, state, maintenances);
   return {
-    up: up + late,
+    up: up + late + slow,
     down,
     updatedAt: state.lastUpdate,
     monitors: projectedMonitors,
   };
 }
 
-/** Unknown until the monitor's first check result. */
-export function projectBadgeStatus(monitorId: string, state: StatusView): BadgeStatusProjection {
-  if (state.monitors[monitorId]?.startedAt === undefined) return { status: 'unknown' };
-  return { status: 'known', up: isMonitorUp(monitorId, state) };
+/** Unknown until the monitor's first check result. Pending and running jobs show as up. */
+export function projectBadgeStatus(
+  monitor: PublicMonitor,
+  state: StatusView,
+  maintenances: Maintenance[],
+): BadgeStatusProjection {
+  if (state.monitors[monitor.id]?.startedAt === undefined) return { status: 'unknown' };
+  const shown = monitorState(monitor, state, maintenances);
+  return { status: shown === 'down' || shown === 'degraded' ? shown : 'up' };
 }
 
 function projectIncidentEvents(

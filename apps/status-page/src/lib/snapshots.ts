@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import type { HubView, LatencySample } from '@flarewatch/shared';
 import { INITIAL_TRIGGER_RETRY_MS } from '@/lib/constants';
 import { getConfig, isPrivateOnly } from '@/lib/config';
-import { fetchHubView, fetchLatency } from '@/lib/hub';
+import { fetchHubView, fetchLatency, triggerCheckRun } from '@/lib/monitor-worker';
 import { getPrincipal, requireMember, requireOperator } from '@/lib/operator.server';
 import {
   canReadLatency,
@@ -11,28 +11,9 @@ import {
   visitorSnapshot,
   type Snapshot,
 } from '@/lib/public-view';
-import { resolveRuntimeEnv } from '@/lib/runtime-env';
 
 let initialTriggerPromise: Promise<boolean> | null = null;
 let lastTriggerAttempt = 0;
-
-async function performTrigger(): Promise<boolean> {
-  const env = await resolveRuntimeEnv();
-  const monitorWorker = env.MONITOR_WORKER;
-  if (!monitorWorker || typeof monitorWorker.fetch !== 'function') return false;
-
-  try {
-    const response = await monitorWorker.fetch('https://internal/trigger', { method: 'POST' });
-    if (!response.ok) {
-      console.warn('Failed to trigger initial check', { status: response.status });
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.warn('Failed to trigger initial check', { error: String(error) });
-    return false;
-  }
-}
 
 async function triggerInitialCheck(): Promise<boolean> {
   const now = Date.now();
@@ -41,7 +22,7 @@ async function triggerInitialCheck(): Promise<boolean> {
   }
 
   lastTriggerAttempt = now;
-  initialTriggerPromise = performTrigger();
+  initialTriggerPromise = triggerCheckRun();
   return initialTriggerPromise;
 }
 

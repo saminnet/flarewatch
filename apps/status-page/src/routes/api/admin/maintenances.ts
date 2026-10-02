@@ -6,8 +6,8 @@ import {
   isNonEmptyString,
   readJsonUpTo,
 } from '@flarewatch/shared';
-import { deleteMaintenance, fetchMaintenances, saveMaintenance } from '@/lib/hub';
-import { forgetCachedView } from '@/lib/kv';
+import { deleteMaintenance, fetchMaintenances, saveMaintenance } from '@/lib/monitor-worker';
+import { forgetCachedView } from '@/lib/snapshots';
 
 function jsonError(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), {

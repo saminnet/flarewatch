@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { readVisitorSnapshot } from '@/lib/kv';
+import { readVisitorSnapshot } from '@/lib/snapshots';
 import { getCorsHeaders } from '@/lib/cors';
 import { getConfig } from '@/lib/config';
 

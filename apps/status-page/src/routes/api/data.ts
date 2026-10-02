@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { readVisitorSnapshot } from '@/lib/kv';
+import { readVisitorSnapshot } from '@/lib/snapshots';
 import { getCorsHeaders } from '@/lib/cors';
 import { getConfig } from '@/lib/config';
 import { projectPublicData } from '@/lib/status-projection';
@@ -11,7 +11,7 @@ export const Route = createFileRoute('/api/data')({
         const config = getConfig();
         const corsHeaders = getCorsHeaders(request, config.statusPage?.apiCorsOrigins);
         try {
-          const { monitors, state } = await readVisitorSnapshot();
+          const { monitors, state, maintenances } = await readVisitorSnapshot();
 
           if (!state) {
             return new Response(JSON.stringify({ error: 'No data available' }), {
@@ -20,7 +20,7 @@ export const Route = createFileRoute('/api/data')({
             });
           }
 
-          return Response.json(projectPublicData(monitors, state), {
+          return Response.json(projectPublicData(monitors, state, maintenances), {
             headers: corsHeaders,
           });
         } catch (error) {

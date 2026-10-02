@@ -11,12 +11,14 @@ import { StatusBar } from '@/components/status-bar';
 import { RowBars, barsSummary } from '@/components/row-bars';
 import { StatusIcon } from '@/components/status-icon';
 import { RunStrip } from '@/components/run-strip';
+import { CheckNow } from '@/components/check-now';
 import { CopyPingUrlButton } from '@/components/copy-ping-url-button';
 import { getHeartbeatPingUrl } from '@/lib/heartbeat-ping-url';
-import type { LatencySample, StatusView } from '@flarewatch/shared';
+import type { LatencySample, Maintenance, StatusView } from '@flarewatch/shared';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import type { AdminMonitor } from '@/lib/public-view';
 import { deriveHeartbeat, type HeartbeatView } from '@/lib/heartbeat';
+import { monitorState, type MonitorState } from '@/lib/monitor-state';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { formatCadence, formatDuration } from '@/lib/date';
 import { formatUptimeDisplay, generateDailyStatus } from '@/lib/uptime';
@@ -31,10 +33,15 @@ const PHASE_STATUS_LABELS: Record<HeartbeatStatus, string> = {
   down: 'overdue',
 };
 
-const PHASE_BADGE_CLASS: Record<HeartbeatStatus, string> = {
+const CHECK_STATUS_LABELS: Partial<Record<MonitorState, string>> = {
+  down: 'not operational',
+  degraded: 'responding slowly',
+};
+
+const STATE_BADGE_CLASS: Record<MonitorState, string> = {
   up: 'text-status-operational border-status-operational',
   running: 'text-status-operational border-status-operational',
-  late: 'text-status-degraded-text border-status-degraded',
+  degraded: 'text-status-degraded-text border-status-degraded',
   down: 'text-status-down-text border-status-down',
   pending: 'text-muted-foreground border-border',
 };
@@ -209,20 +216,20 @@ function HeartbeatBody({
 function rowLabel({
   name,
   heartbeat,
-  isUp,
+  shown,
   uptime,
 }: {
   name: string;
   heartbeat: HeartbeatView | null;
-  isUp: boolean;
+  shown: MonitorState;
   uptime: string;
 }): string {
   if (!heartbeat) {
-    const status = isUp ? 'operational' : 'not operational';
+    const status = CHECK_STATUS_LABELS[shown] ?? 'operational';
     return `${name}, ${status}, ${uptime}`;
   }
 
-  const status = PHASE_STATUS_LABELS[heartbeat.phase];
+  const status = PHASE_STATUS_LABELS[shown === 'down' ? 'down' : heartbeat.phase];
   if (heartbeat.lastRunSec === undefined || heartbeat.deadlineSec === undefined) {
     return `${name}, ${status}, ${uptime}`;
   }
@@ -234,11 +241,13 @@ function MonitorSubLines({
   error,
   heartbeat,
   latency,
+  slowOverMs,
   operator,
 }: {
   error: string | null;
   heartbeat: HeartbeatView | null;
   latency: { ping: number; loc: string } | null;
+  slowOverMs: number | undefined;
   operator: boolean;
 }) {
   const lateDeadline = heartbeat?.phase === 'late' ? heartbeat.deadlineSec : undefined;
@@ -269,6 +278,11 @@ function MonitorSubLines({
           Running late, expected by <UtcTime sec={lateDeadline} />
         </p>
       )}
+      {slowOverMs !== undefined && (
+        <p className="text-xs text-status-degraded-text mt-0.5">
+          {`Slow response, over ${slowOverMs}ms`}
+        </p>
+      )}
       {runningStart !== undefined && (
         <p className="text-xs text-muted-foreground mt-0.5">
           Running since <UtcTime sec={runningStart} />
@@ -285,7 +299,7 @@ function MonitorSubLines({
           )
         : latency && (
             <div className="@min-[641px]:hidden mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{latency.ping}ms</span>
+              <span className={cn('font-medium', latencyClass(slowOverMs))}>{latency.ping}ms</span>
               <span>{latency.loc}</span>
             </div>
           )}
@@ -335,18 +349,24 @@ function MonitorHeading({ monitor, detail }: { monitor: AdminMonitor; detail: bo
   );
 }
 
+function latencyClass(slowOverMs: number | undefined): string {
+  return slowOverMs === undefined ? 'text-foreground' : 'text-status-degraded-text';
+}
+
 function LatencyMeta({
   isProxy,
   latency,
+  slowOverMs,
 }: {
   isProxy?: boolean;
   latency: { ping: number; loc: string };
+  slowOverMs: number | undefined;
 }) {
   const coloLabel = formatColoLabel(latency.loc);
 
   return (
     <div className="hidden @min-[641px]:flex items-center gap-1.5 text-right whitespace-nowrap">
-      <span className="text-sm font-medium text-foreground">{latency.ping}ms</span>
+      <span className={cn('text-sm font-medium', latencyClass(slowOverMs))}>{latency.ping}ms</span>
       {isProxy ? (
         <span className="text-xs text-muted-foreground">{latency.loc}</span>
       ) : (
@@ -374,6 +394,7 @@ function LatencyMeta({
 interface MonitorViewProps {
   monitor: AdminMonitor;
   state: StatusView;
+  maintenances: Maintenance[];
   operator?: boolean;
 }
 
@@ -384,12 +405,15 @@ interface MonitorViewProps {
 function MonitorSummary({
   monitor,
   state,
+  maintenances,
   operator = false,
   detail,
   history,
 }: MonitorViewProps & { detail: boolean; history?: string }) {
-  const { isUp, uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
+  const { uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
+  const shown = monitorState(monitor, state, maintenances);
   const heartbeat = deriveHeartbeat(monitor, state);
+  const slowOverMs = !heartbeat && shown === 'degraded' ? monitor.maxLatencyMs : undefined;
   const hasStarted = state.monitors[monitor.id]?.startedAt !== undefined;
   const uptimeDisplay = formatUptimeDisplay(uptimePercent, hasStarted, 2);
 
@@ -398,7 +422,7 @@ function MonitorSummary({
       variant="outline"
       className={cn(
         'font-mono',
-        heartbeat ? PHASE_BADGE_CLASS[heartbeat.phase] : cn(statusColor.text, statusColor.border),
+        heartbeat ? STATE_BADGE_CLASS[shown] : cn(statusColor.text, statusColor.border),
       )}
     >
       {uptimeDisplay}
@@ -415,11 +439,11 @@ function MonitorSummary({
           to="/monitors/$monitorId"
           params={{ monitorId: monitor.id }}
           className="absolute inset-0 z-10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
-          aria-label={`${rowLabel({ name: monitor.name, heartbeat, isUp, uptime: uptimeDisplay })}, ${history}`}
+          aria-label={`${rowLabel({ name: monitor.name, heartbeat, shown, uptime: uptimeDisplay })}, ${history}`}
         />
       )}
       <div className="shrink-0 mt-0.5">
-        <StatusIcon isUp={isUp} phase={heartbeat?.phase} />
+        <StatusIcon state={shown} />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -428,9 +452,10 @@ function MonitorSummary({
         </div>
 
         <MonitorSubLines
-          error={!isUp && error ? error : null}
+          error={shown === 'down' && error ? error : null}
           heartbeat={heartbeat}
           latency={latency}
+          slowOverMs={slowOverMs}
           operator={operator}
         />
       </div>
@@ -442,7 +467,9 @@ function MonitorSummary({
                 <HeartbeatMeta heartbeat={heartbeat} />
               </div>
             )
-          : latency && <LatencyMeta isProxy={monitor.isProxy} latency={latency} />}
+          : latency && (
+              <LatencyMeta isProxy={monitor.isProxy} latency={latency} slowOverMs={slowOverMs} />
+            )}
 
         {heartbeat ? (
           <Tooltip>
@@ -462,7 +489,7 @@ function MonitorSummary({
 }
 
 /** One line in the monitor list; the whole row opens the monitor's page. */
-export function MonitorRow({ monitor, state, operator }: MonitorViewProps) {
+export function MonitorRow({ monitor, state, maintenances, operator }: MonitorViewProps) {
   const heartbeat = deriveHeartbeat(monitor, state);
   const days = generateDailyStatus(monitor.id, state);
   return (
@@ -473,6 +500,7 @@ export function MonitorRow({ monitor, state, operator }: MonitorViewProps) {
       <MonitorSummary
         monitor={monitor}
         state={state}
+        maintenances={maintenances}
         operator={operator}
         detail={false}
         history={barsSummary(days, heartbeat)}
@@ -485,6 +513,7 @@ export function MonitorRow({ monitor, state, operator }: MonitorViewProps) {
 export function MonitorDetail({
   monitor,
   state,
+  maintenances,
   latency = [],
   operator = false,
 }: MonitorViewProps & { latency?: LatencySample[] }) {
@@ -493,7 +522,13 @@ export function MonitorDetail({
   return (
     <Card className="@container p-0">
       <div className="px-4 pt-4">
-        <MonitorSummary monitor={monitor} state={state} operator={operator} detail />
+        <MonitorSummary
+          monitor={monitor}
+          state={state}
+          maintenances={maintenances}
+          operator={operator}
+          detail
+        />
         {operator && monitor.method === 'HEARTBEAT' && (
           <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
             <CopyPingUrlButton
@@ -503,6 +538,9 @@ export function MonitorDetail({
             />
             Ping URL for your job
           </div>
+        )}
+        {operator && monitor.method !== 'HEARTBEAT' && (
+          <CheckNow key={monitor.id} monitorId={monitor.id} />
         )}
       </div>
 

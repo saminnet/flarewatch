@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/accordion';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { MonitorRow } from '@/components/monitor-card';
-import type { StatusView, PageConfigGroup } from '@flarewatch/shared';
+import type { Maintenance, StatusView, PageConfigGroup } from '@flarewatch/shared';
 import type { AdminMonitor } from '@/lib/public-view';
 import { setUiPrefsServerFn, type UiPrefs } from '@/lib/ui-prefs-server';
 import { qk } from '@/lib/query/keys';
@@ -32,6 +32,7 @@ interface MonitorGroup {
 interface MonitorListProps {
   monitors: AdminMonitor[];
   state: StatusView;
+  maintenances: Maintenance[];
   groups?: PageConfigGroup;
   uiPrefs?: UiPrefs;
   operator?: boolean;
@@ -42,6 +43,7 @@ interface MonitorListProps {
 export function MonitorList({
   monitors,
   state,
+  maintenances,
   groups,
   uiPrefs,
   operator,
@@ -69,7 +71,13 @@ export function MonitorList({
     return (
       <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
         {rows.map((monitor) => (
-          <MonitorRow key={monitor.id} monitor={monitor} state={state} operator={operator} />
+          <MonitorRow
+            key={monitor.id}
+            monitor={monitor}
+            state={state}
+            maintenances={maintenances}
+            operator={operator}
+          />
         ))}
       </div>
     );

@@ -2,6 +2,20 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Set `maxLatencyMs` on a website or API monitor to show it as degraded while its last check is slower than that. It sends no alert, opens no incident and doesn't change uptime. A maintenance window that covers the monitor keeps it up.
+- `/api/data` gives each monitor a `status`: `up`, `degraded`, `down`, `pending` or `running`.
+- **Check now** on a check monitor's page, for the operator. It runs that monitor's check once and shows the result there, without saving it. Scripts can do the same through `POST /api/admin/check`.
+
+### Changed
+
+- A late job's badge says `DEGRADED` in yellow instead of `UP`. The badge's `degraded` and `colorDegraded` parameters change that.
+- Embeds show late, pending and running jobs the way the dashboard does.
+- A job that starts again while its outage is still open shows as down until it succeeds, on its row as in the banner and the API.
+
 ## 3.2.0 - 2026-10-02
 
 The hub moves your history to its new storage once, when it first starts after the update. You can't roll back to 3.1.0 afterwards.

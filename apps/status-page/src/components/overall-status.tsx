@@ -2,15 +2,16 @@ import { IconCircleCheck, IconAlertTriangle, IconCircleX, IconRefresh } from '@t
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { formatUtcShort, type StatusView } from '@flarewatch/shared';
-import { countStatuses, getOverallStatus } from '@/lib/uptime';
+import { formatUtcShort, type Maintenance, type StatusView } from '@flarewatch/shared';
+import { countStatuses, getOverallStatus } from '@/lib/monitor-state';
+import type { PublicMonitor } from '@/lib/public-view';
 import { useAutoRefresh } from '@/lib/hooks/use-auto-refresh';
 import { cn } from '@/lib/utils';
 
 interface OverallStatusProps {
+  monitors: PublicMonitor[];
   state: StatusView;
-  monitorCount: number;
-  jobCount: number;
+  maintenances: Maintenance[];
 }
 
 const statusConfig = {
@@ -40,9 +41,12 @@ const statusConfig = {
   },
 };
 
-export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusProps) {
-  const { up, late, down } = countStatuses(state);
-  const status = getOverallStatus({ up, late, down });
+export function OverallStatus({ monitors, state, maintenances }: OverallStatusProps) {
+  const counts = countStatuses(monitors, state, maintenances);
+  const { up, late, slow, down } = counts;
+  const monitorCount = monitors.length;
+  const jobCount = monitors.filter((monitor) => monitor.method === 'HEARTBEAT').length;
+  const status = getOverallStatus(counts);
   const { currentTime, isStale, willRefreshSoon, refreshCountdown } = useAutoRefresh({
     lastUpdate: state.lastUpdate,
   });
@@ -56,7 +60,11 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
     if (status !== 'degraded') return [config.title];
 
     if (down === 0) {
-      return ['Some jobs are running late', `(${late} out of ${jobCount})`];
+      if (slow === 0) return ['Some jobs are running late', `(${late} out of ${jobCount})`];
+      if (late === 0) {
+        return ['Some systems are slow', `(${slow} out of ${monitorCount - jobCount})`];
+      }
+      return ['Some systems are degraded', `(${late + slow} out of ${monitorCount})`];
     }
     return ['Some systems are down', `(${down} out of ${monitorCount})`];
   }
@@ -92,7 +100,9 @@ export function OverallStatus({ state, monitorCount, jobCount }: OverallStatusPr
               )}
             </h2>
             <Badge variant={config.badgeVariant} className="shrink-0">
-              {late > 0 ? `${up} up / ${late} late / ${down} down` : `${up} up / ${down} down`}
+              {[`${up} up`, late > 0 && `${late} late`, slow > 0 && `${slow} slow`, `${down} down`]
+                .filter(Boolean)
+                .join(' / ')}
             </Badge>
           </div>
 

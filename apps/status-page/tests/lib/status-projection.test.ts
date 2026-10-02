@@ -22,6 +22,10 @@ function publicMonitor(id: string, name = id): PublicMonitor {
   return { id, method: 'GET', name };
 }
 
+function jobMonitor(id: string): PublicMonitor {
+  return { id, method: 'HEARTBEAT', name: id };
+}
+
 function maintenance(id: string, start: string, end?: string, monitors?: string[]): Maintenance {
   return {
     id,
@@ -47,7 +51,7 @@ describe('status projection', () => {
     });
 
     expect(
-      projectPublicData([publicMonitor('api', 'API'), publicMonitor('web', 'Web')], state),
+      projectPublicData([publicMonitor('api', 'API'), publicMonitor('web', 'Web')], state, []),
     ).toEqual({
       up: 1,
       down: 1,
@@ -55,12 +59,14 @@ describe('status projection', () => {
       monitors: {
         api: {
           up: true,
+          status: 'up',
           latency: 42,
           location: 'SFO',
           message: 'OK',
         },
         web: {
           up: false,
+          status: 'down',
           latency: 120,
           location: 'FRA',
           message: 'Timeout',
@@ -77,13 +83,14 @@ describe('status projection', () => {
       },
     });
 
-    expect(projectPublicData([publicMonitor('web', 'Web')], state)).toEqual({
+    expect(projectPublicData([publicMonitor('web', 'Web')], state, [])).toEqual({
       up: 0,
       down: 1,
       updatedAt: 1_789_000_000,
       monitors: {
         web: {
           up: false,
+          status: 'down',
           latency: null,
           location: null,
           message: 'Unknown error',
@@ -92,31 +99,50 @@ describe('status projection', () => {
     });
   });
 
-  it('counts late, pending and running jobs as up in public data', () => {
+  it('counts late, pending and running jobs as up in public data and names their state', () => {
     const state = createState({
       api: { status: 'up' },
-      late: { status: 'late' },
-      pending: { status: 'pending' },
-      running: { status: 'running' },
+      late: { status: 'late', heartbeat: { status: 'late' } },
+      pending: { status: 'pending', heartbeat: { status: 'pending' } },
+      running: { status: 'running', heartbeat: { status: 'running' } },
       web: { status: 'down', incidents: [{ start: [1_788_999_000], error: ['Timeout'] }] },
     });
+    const projected = projectPublicData(
+      [
+        publicMonitor('api'),
+        jobMonitor('late'),
+        jobMonitor('pending'),
+        jobMonitor('running'),
+        publicMonitor('web'),
+      ],
+      state,
+      [],
+    );
 
+    expect(projected).toMatchObject({ up: 4, down: 1 });
     expect(
-      projectPublicData(
-        ['api', 'late', 'pending', 'running', 'web'].map((id) => publicMonitor(id)),
-        state,
+      Object.fromEntries(
+        Object.entries(projected.monitors).map(([id, m]) => [id, [m.up, m.status]]),
       ),
-    ).toMatchObject({ up: 4, down: 1 });
+    ).toEqual({
+      api: [true, 'up'],
+      late: [true, 'degraded'],
+      pending: [true, 'pending'],
+      running: [true, 'running'],
+      web: [false, 'down'],
+    });
   });
 
   it('projects badge status as unknown when the monitor has no state', () => {
-    expect(projectBadgeStatus('api', createState())).toEqual({ status: 'unknown' });
+    expect(projectBadgeStatus(publicMonitor('api'), createState(), [])).toEqual({
+      status: 'unknown',
+    });
   });
 
   it('projects badge status as unknown until the monitor has its first check result', () => {
     const state = createState({ api: { status: 'up' } });
 
-    expect(projectBadgeStatus('api', state)).toEqual({ status: 'unknown' });
+    expect(projectBadgeStatus(publicMonitor('api'), state, [])).toEqual({ status: 'unknown' });
   });
 
   it('projects badge status as known once the monitor has a check result', () => {
@@ -130,8 +156,8 @@ describe('status projection', () => {
       web: { status: 'up', startedAt: 1_788_999_000 },
     });
 
-    expect(projectBadgeStatus('api', state)).toEqual({ status: 'known', up: false });
-    expect(projectBadgeStatus('web', state)).toEqual({ status: 'known', up: true });
+    expect(projectBadgeStatus(publicMonitor('api'), state, [])).toEqual({ status: 'down' });
+    expect(projectBadgeStatus(publicMonitor('web'), state, [])).toEqual({ status: 'up' });
   });
 
   it('projects a heartbeat badge from heartbeat state, which carries no latency', () => {
@@ -139,18 +165,49 @@ describe('status projection', () => {
 
     expect(
       projectBadgeStatus(
-        'job',
+        jobMonitor('job'),
         createState({
           job: { status: 'up', startedAt: 1_788_999_000, incidents, heartbeat: { status: 'up' } },
         }),
+        [],
       ),
-    ).toEqual({ status: 'known', up: true });
+    ).toEqual({ status: 'up' });
     expect(
       projectBadgeStatus(
-        'job',
+        jobMonitor('job'),
         createState({ job: { status: 'pending', incidents, heartbeat: { status: 'pending' } } }),
+        [],
       ),
     ).toEqual({ status: 'unknown' });
+  });
+
+  it('projects a check slower than its maxLatencyMs as degraded but still up', () => {
+    const slow: PublicMonitor = { ...publicMonitor('api'), maxLatencyMs: 500 };
+    const state = createState({
+      api: { startedAt: 1_788_000_000, latest: { loc: 'FRA', ping: 900, time: 1_789_000_000 } },
+    });
+
+    expect(projectPublicData([slow], state, [])).toEqual({
+      up: 1,
+      down: 0,
+      updatedAt: 1_789_000_000,
+      monitors: {
+        api: { up: true, status: 'degraded', latency: 900, location: 'FRA', message: 'OK' },
+      },
+    });
+    expect(projectBadgeStatus(slow, state, [])).toEqual({ status: 'degraded' });
+
+    const window = [maintenance('m1', '2026-09-09T00:00:00.000Z', undefined, ['api'])];
+    expect(projectPublicData([slow], state, window).monitors.api?.status).toBe('up');
+    expect(projectBadgeStatus(slow, state, window)).toEqual({ status: 'up' });
+  });
+
+  it('projects a late job badge as degraded and a running job badge as up', () => {
+    const job = (status: 'late' | 'running') =>
+      createState({ job: { status, startedAt: 1_788_999_000, heartbeat: { status } } });
+
+    expect(projectBadgeStatus(jobMonitor('job'), job('late'), [])).toEqual({ status: 'degraded' });
+    expect(projectBadgeStatus(jobMonitor('job'), job('running'), [])).toEqual({ status: 'up' });
   });
 
   it('orders incident and maintenance timeline events by start descending', () => {

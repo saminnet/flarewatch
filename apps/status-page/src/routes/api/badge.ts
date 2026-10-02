@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { readVisitorSnapshot } from '@/lib/kv';
+import { readVisitorSnapshot } from '@/lib/snapshots';
 import { projectBadgeStatus } from '@/lib/status-projection';
 
 type BadgePayload = {
@@ -31,7 +31,7 @@ export const Route = createFileRoute('/api/badge')({
       GET: async ({ request }: { request: Request }) => {
         try {
           const url = new URL(request.url);
-          const { monitors, state } = await readVisitorSnapshot();
+          const { monitors, state, maintenances } = await readVisitorSnapshot();
 
           const defaultMonitorId = monitors[0]?.id;
           const monitorId = url.searchParams.get('id') ?? defaultMonitorId;
@@ -41,6 +41,8 @@ export const Route = createFileRoute('/api/badge')({
           const downMsg = url.searchParams.get('down') ?? 'DOWN';
           const colorUp = url.searchParams.get('colorUp') ?? 'brightgreen';
           const colorDown = url.searchParams.get('colorDown') ?? 'red';
+          const degradedMsg = url.searchParams.get('degraded') ?? 'DEGRADED';
+          const colorDegraded = url.searchParams.get('colorDegraded') ?? 'yellow';
 
           if (!monitorId) {
             return new Response(JSON.stringify(errorBadge(label, 'no-monitor')), {
@@ -49,7 +51,8 @@ export const Route = createFileRoute('/api/badge')({
             });
           }
 
-          if (!monitors.some((monitor) => monitor.id === monitorId)) {
+          const monitor = monitors.find((candidate) => candidate.id === monitorId);
+          if (!monitor) {
             return new Response(JSON.stringify(errorBadge(label, 'unknown')), {
               status: 404,
               headers: jsonHeaders,
@@ -63,7 +66,7 @@ export const Route = createFileRoute('/api/badge')({
             });
           }
 
-          const projected = projectBadgeStatus(monitorId, state);
+          const projected = projectBadgeStatus(monitor, state, maintenances);
           if (projected.status === 'unknown') {
             return new Response(JSON.stringify(errorBadge(label, 'unknown')), {
               status: 404,
@@ -71,12 +74,13 @@ export const Route = createFileRoute('/api/badge')({
             });
           }
 
-          const badge: BadgePayload = {
-            schemaVersion: 1,
-            label,
-            message: projected.up ? upMsg : downMsg,
-            color: projected.up ? colorUp : colorDown,
+          const looks: Record<typeof projected.status, [message: string, color: string]> = {
+            up: [upMsg, colorUp],
+            degraded: [degradedMsg, colorDegraded],
+            down: [downMsg, colorDown],
           };
+          const [message, color] = looks[projected.status];
+          const badge: BadgePayload = { schemaVersion: 1, label, message, color };
 
           return new Response(JSON.stringify(badge), { headers: jsonHeaders });
         } catch (error) {

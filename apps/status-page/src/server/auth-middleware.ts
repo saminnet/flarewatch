@@ -57,8 +57,8 @@ export async function authMiddlewareServer(
 
 async function authorize(opts: RequestServerOptions<any, any>): Promise<MiddlewareResult> {
   const { request, next } = opts;
-  // The router matches routes in any letter case, so every gate here must too.
-  const pathname = opts.pathname.toLowerCase();
+  // The router matches routes in any letter case and with a trailing slash, so every gate here must too.
+  const pathname = opts.pathname.toLowerCase().replace(/\/+$/, '');
   const env = await resolveRuntimeEnv();
 
   if (pathname.startsWith('/api/admin')) {
@@ -82,6 +82,13 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
       return next();
     }
 
+    // A check-now call is an outbound check, maybe a paid Globalping one, so it
+    // counts for every caller, signed in or not. Once: the Basic branch skips it.
+    const countsEveryCall = pathname === '/api/admin/check';
+    if (countsEveryCall && (await overSignInLimit(env, request))) {
+      return jsonError(429, 'Too many attempts');
+    }
+
     if ((await resolveViewer(env, request)) === 'operator') {
       return next();
     }
@@ -91,7 +98,9 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
     const adminCreds = env.FLAREWATCH_ADMIN_BASIC_AUTH;
     const authorization = request.headers.get('Authorization');
     if (adminCreds && authorization) {
-      if (await overSignInLimit(env, request)) return jsonError(429, 'Too many attempts');
+      if (!countsEveryCall && (await overSignInLimit(env, request))) {
+        return jsonError(429, 'Too many attempts');
+      }
       if (await verifyBasicAuthHeader(adminCreds, authorization)) return next();
     }
 

@@ -1,5 +1,5 @@
 import type { HeartbeatRun, HeartbeatStatus, StatusView } from '@flarewatch/shared';
-import { HEARTBEAT_RUN_HISTORY, isJsonObject } from '@flarewatch/shared';
+import { HEARTBEAT_RUN_HISTORY } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
 
 export type HeartbeatView = {
@@ -89,19 +89,4 @@ export function deriveHeartbeat(
     ...(message && { message }),
     ...(mergedRuns.length > 0 && { runs: mergedRuns }),
   };
-}
-
-/** Asks the monitoring worker for a monitor's ping URL; null when unbound or the id is unknown. */
-export async function fetchPingUrl(
-  monitorWorker: Cloudflare.Env['MONITOR_WORKER'],
-  origin: string,
-  id: string,
-): Promise<string | null> {
-  if (!monitorWorker || typeof monitorWorker.fetch !== 'function') return null;
-
-  const response = await monitorWorker.fetch(`${origin}/ping-url/${encodeURIComponent(id)}`);
-  if (!response.ok) return null;
-
-  const body: unknown = await response.json();
-  return isJsonObject(body) && typeof body.url === 'string' ? body.url : null;
 }

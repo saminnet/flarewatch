@@ -2,13 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test'
 import type { MonitorView, StatusView } from '@flarewatch/shared';
 import {
   calculateUptimePercent,
-  countStatuses,
   generateAggregateDailyStatus,
   generateDailyStatus,
-  isMonitorUp,
   getMonitorError,
   getLatestLatency,
-  getOverallStatus,
 } from '@/lib/uptime';
 
 function view(
@@ -193,43 +190,6 @@ describe('uptime utilities', () => {
     });
   });
 
-  describe('isMonitorUp', () => {
-    it('returns true when there are no incidents', () => {
-      expect(isMonitorUp('test', view({ test: { status: 'up' } }))).toBe(true);
-    });
-
-    it('returns true when last incident is closed', () => {
-      const state = view({
-        test: { status: 'up', incidents: [{ start: [1000], end: 2000, error: ['Error'] }] },
-      });
-
-      expect(isMonitorUp('test', state)).toBe(true);
-    });
-
-    it('returns false when the monitor is down with an open incident', () => {
-      const state = view({
-        test: {
-          status: 'down',
-          incidents: [{ start: [1000], end: undefined, error: ['Error'] }],
-        },
-      });
-
-      expect(isMonitorUp('test', state)).toBe(false);
-    });
-
-    it('treats late, pending and running jobs as up', () => {
-      const state = view({
-        late: { status: 'late' },
-        pending: { status: 'pending' },
-        running: { status: 'running' },
-      });
-
-      expect(isMonitorUp('late', state)).toBe(true);
-      expect(isMonitorUp('pending', state)).toBe(true);
-      expect(isMonitorUp('running', state)).toBe(true);
-    });
-  });
-
   describe('getMonitorError', () => {
     it('returns null when there are no incidents', () => {
       expect(getMonitorError('test', view({ test: {} }))).toBeNull();
@@ -266,43 +226,6 @@ describe('uptime utilities', () => {
       const state = view({ test: { latest: { loc: 'EU', ping: 120, time: 2 } } });
 
       expect(getLatestLatency('test', state)).toEqual({ loc: 'EU', ping: 120, time: 2 });
-    });
-  });
-
-  describe('countStatuses', () => {
-    it('counts pending and running as up and keeps late apart from up and down', () => {
-      const state = view({
-        up: { status: 'up' },
-        pending: { status: 'pending' },
-        running: { status: 'running' },
-        late: { status: 'late' },
-        down: { status: 'down', incidents: [{ start: [1000], error: ['Error'] }] },
-        down2: { status: 'down', incidents: [{ start: [1000], error: ['Error'] }] },
-      });
-
-      expect(countStatuses(state)).toEqual({ up: 3, late: 1, down: 2 });
-    });
-  });
-
-  describe('getOverallStatus', () => {
-    it('returns operational when all monitors are up', () => {
-      expect(getOverallStatus({ up: 3, late: 0, down: 0 })).toBe('operational');
-    });
-
-    it('returns degraded when a heartbeat monitor is late and none are down', () => {
-      expect(getOverallStatus({ up: 3, late: 1, down: 0 })).toBe('degraded');
-    });
-
-    it('returns degraded when some monitors are down', () => {
-      expect(getOverallStatus({ up: 2, late: 0, down: 1 })).toBe('degraded');
-    });
-
-    it('returns degraded when the only monitors not down are late', () => {
-      expect(getOverallStatus({ up: 0, late: 1, down: 2 })).toBe('degraded');
-    });
-
-    it('returns down when all monitors are down', () => {
-      expect(getOverallStatus({ up: 0, late: 0, down: 3 })).toBe('down');
     });
   });
 });

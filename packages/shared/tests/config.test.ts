@@ -23,6 +23,7 @@ interface MonitorOverrides {
   name?: unknown;
   method?: unknown;
   target?: unknown;
+  maxLatencyMs?: unknown;
 }
 
 function createConfigWithMonitor(monitor: MonitorOverrides) {
@@ -106,6 +107,10 @@ describe('config validation', () => {
     [{ name: '' }, 'name must be a non-empty string'],
     [{ method: 42 }, 'method must be a string'],
     [{ target: undefined }, 'target must be a string'],
+    [{ maxLatencyMs: 0 }, 'maxLatencyMs must be a positive integer'],
+    [{ maxLatencyMs: -100 }, 'maxLatencyMs must be a positive integer'],
+    [{ maxLatencyMs: 1.5 }, 'maxLatencyMs must be a positive integer'],
+    [{ maxLatencyMs: '500' }, 'maxLatencyMs must be a positive integer'],
   ])('rejects a malformed monitor %j and names the rule', (overrides, rule) => {
     const config = createConfigWithMonitor(overrides);
 
@@ -182,6 +187,7 @@ describe('config validation', () => {
     [{ id: 'a'.repeat(65) }, 'HEARTBEAT id'],
     [{ target: 'https://example.com' }, 'must not define target'],
     [{ checkProxy: 'https://proxy.example.com' }, 'must not define checkProxy'],
+    [{ maxLatencyMs: 500 }, 'must not define maxLatencyMs'],
   ])('rejects an invalid HEARTBEAT monitor %j', (overrides, rule) => {
     const monitor = {
       id: 'backup',

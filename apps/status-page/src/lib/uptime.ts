@@ -51,10 +51,6 @@ export function calculateUptimePercent(monitorId: string, state: StatusView): nu
   return Math.max(0, Math.min(100, uptimePercent));
 }
 
-export function isMonitorUp(monitorId: string, state: StatusView): boolean {
-  return state.monitors[monitorId]?.status !== 'down';
-}
-
 export function getMonitorError(monitorId: string, state: StatusView): string | null {
   const incidents = state.monitors[monitorId]?.incidents;
   const lastIncident = incidents?.[incidents.length - 1];
@@ -75,29 +71,6 @@ export function formatUptimeDisplay(
     return `${uptimePercent.toFixed(decimals)}%`;
   }
   return hasStarted ? 'Starting...' : 'Pending';
-}
-
-export type StatusCounts = { up: number; late: number; down: number };
-
-/** Down means an open incident; late jobs are counted apart from up. */
-export function countStatuses(state: StatusView): StatusCounts {
-  const counts: StatusCounts = { up: 0, late: 0, down: 0 };
-  for (const { status } of Object.values(state.monitors)) {
-    if (status === 'down') counts.down++;
-    else if (status === 'late') counts.late++;
-    else counts.up++;
-  }
-  return counts;
-}
-
-export function getOverallStatus({
-  up,
-  late,
-  down,
-}: StatusCounts): 'operational' | 'degraded' | 'down' {
-  if (down === 0) return late > 0 ? 'degraded' : 'operational';
-  if (up + late > 0) return 'degraded';
-  return 'down';
 }
 
 export type DayStatus = 'up' | 'down' | 'partial' | 'unknown';

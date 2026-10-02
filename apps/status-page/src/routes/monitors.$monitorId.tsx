@@ -38,7 +38,7 @@ function MonitorPage() {
   const { monitorId } = Route.useParams();
   const audience = useAudience();
   const { data: snapshot } = useSuspenseQuery(snapshotQuery(audience));
-  const { monitors, state } = snapshot;
+  const { monitors, state, maintenances } = snapshot;
   const nowMs = useNow({ serverTime: Route.useLoaderData().loaderNowMs });
   const monitor = monitors.find((candidate) => candidate.id === monitorId);
   const { data: latency } = useQuery({
@@ -61,6 +61,7 @@ function MonitorPage() {
         <MonitorDetail
           monitor={monitor}
           state={state}
+          maintenances={maintenances}
           latency={latency}
           operator={audience === 'operator'}
         />

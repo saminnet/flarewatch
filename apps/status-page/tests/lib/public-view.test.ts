@@ -7,7 +7,7 @@ import {
   toAdminMonitors,
   visitorSnapshot,
 } from '@/lib/public-view';
-import { countStatuses } from '@/lib/uptime';
+import { countStatuses } from '@/lib/monitor-state';
 
 const config: RuntimeConfig = {
   monitors: [
@@ -94,6 +94,45 @@ const state: StatusView = {
 };
 
 describe('publicView', () => {
+  it('carries maxLatencyMs for a check and nothing more of its config', () => {
+    const view = publicView(
+      {
+        monitors: [
+          {
+            id: 'api',
+            name: 'API',
+            method: 'GET',
+            target: 'https://api.example.com/health',
+            maxLatencyMs: 800,
+            headers: { Authorization: 'secret' },
+            timeout: 5000,
+          },
+          { id: 'fast', name: 'Fast', method: 'GET', target: 'https://fast.example.com' },
+        ],
+      },
+      null,
+    );
+
+    expect(view.monitors).toEqual([
+      {
+        id: 'api',
+        name: 'API',
+        method: 'GET',
+        link: 'https://api.example.com/health',
+        isProxy: false,
+        maxLatencyMs: 800,
+      },
+      {
+        id: 'fast',
+        name: 'Fast',
+        method: 'GET',
+        link: 'https://fast.example.com/',
+        isProxy: false,
+      },
+    ]);
+    expect(view.monitors[1]).not.toHaveProperty('maxLatencyMs');
+  });
+
   it('links to a target without its credentials or query string', () => {
     const view = publicView(
       {
@@ -332,14 +371,18 @@ describe('snapshots', () => {
       },
     };
 
-    expect(countStatuses(operatorSnapshot(config, counted, []).state!)).toEqual({
+    const operator = operatorSnapshot(config, counted, []);
+    const visitor = visitorSnapshot(config, counted, []);
+    expect(countStatuses(operator.monitors, operator.state!, [])).toEqual({
       up: 1,
       late: 1,
+      slow: 0,
       down: 1,
     });
-    expect(countStatuses(visitorSnapshot(config, counted, []).state!)).toEqual({
+    expect(countStatuses(visitor.monitors, visitor.state!, [])).toEqual({
       up: 1,
       late: 1,
+      slow: 0,
       down: 0,
     });
   });

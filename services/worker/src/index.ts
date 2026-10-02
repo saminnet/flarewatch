@@ -10,6 +10,7 @@ import {
 } from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
 
+import { CHECK_NOW_PREFIX, handleCheckNow } from './check-now';
 import { getHub, type Env } from './env';
 import { handleHubRequest } from './hub/routes';
 import { handlePing, handlePingUrl } from './ping';
@@ -178,17 +179,20 @@ const Worker = {
   ): Promise<Response> {
     const url = new URL(request.url);
 
-    // Internal binding only; add a secret check if this worker is ever routed publicly.
+    // Every route trusts its caller: only the status page's MONITOR_WORKER binding
+    // reaches this worker (workers_dev and preview_urls off, no routes; a test
+    // holds wrangler.toml to that). Routing it publicly needs an auth check first.
     if (url.pathname === '/trigger' && request.method === 'POST') {
       ctx.waitUntil(runChecks(env, deps));
       return Response.json({ success: true, message: 'Check triggered' }, { status: 202 });
+    }
+    if (url.pathname.startsWith(CHECK_NOW_PREFIX) && request.method === 'POST') {
+      return handleCheckNow(request, env, deps);
     }
 
     const hubResponse = await handleHubRequest(request, env);
     if (hubResponse) return hubResponse;
 
-    // Ping routes and /ping-url are only reachable through the MONITOR_WORKER
-    // service binding; the worker has no public ingress (workers_dev = false).
     if (url.pathname.startsWith('/ping/')) {
       return handlePing(request, env, deps.staticConfig);
     }

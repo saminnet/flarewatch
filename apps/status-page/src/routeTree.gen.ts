@@ -20,6 +20,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as EmbedMonitorIdRouteImport } from './routes/embed.$monitorId'
 import { Route as MonitorsMonitorIdRouteImport } from './routes/monitors.$monitorId'
 import { Route as PingSplatRouteImport } from './routes/ping.$'
+import { Route as ApiAdminCheckRouteImport } from './routes/api/admin/check'
 import { Route as ApiAdminMaintenancesRouteImport } from './routes/api/admin/maintenances'
 import { Route as ApiAdminSessionRouteImport } from './routes/api/admin/session'
 
@@ -78,6 +79,11 @@ const PingSplatRoute = PingSplatRouteImport.update({
   path: '/ping/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminCheckRoute = ApiAdminCheckRouteImport.update({
+  id: '/api/admin/check',
+  path: '/api/admin/check',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminMaintenancesRoute = ApiAdminMaintenancesRouteImport.update({
   id: '/api/admin/maintenances',
   path: '/api/admin/maintenances',
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
+  '/api/admin/check': typeof ApiAdminCheckRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
   '/api/admin/session': typeof ApiAdminSessionRoute
 }
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
+  '/api/admin/check': typeof ApiAdminCheckRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
   '/api/admin/session': typeof ApiAdminSessionRoute
 }
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
+  '/api/admin/check': typeof ApiAdminCheckRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
   '/api/admin/session': typeof ApiAdminSessionRoute
 }
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
+    | '/api/admin/check'
     | '/api/admin/maintenances'
     | '/api/admin/session'
   fileRoutesByTo: FileRoutesByTo
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
+    | '/api/admin/check'
     | '/api/admin/maintenances'
     | '/api/admin/session'
   id:
@@ -179,6 +190,7 @@ export interface FileRouteTypes {
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
+    | '/api/admin/check'
     | '/api/admin/maintenances'
     | '/api/admin/session'
   fileRoutesById: FileRoutesById
@@ -195,6 +207,7 @@ export interface RootRouteChildren {
   EmbedMonitorIdRoute: typeof EmbedMonitorIdRoute
   MonitorsMonitorIdRoute: typeof MonitorsMonitorIdRoute
   PingSplatRoute: typeof PingSplatRoute
+  ApiAdminCheckRoute: typeof ApiAdminCheckRoute
   ApiAdminMaintenancesRoute: typeof ApiAdminMaintenancesRoute
   ApiAdminSessionRoute: typeof ApiAdminSessionRoute
 }
@@ -278,6 +291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PingSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/check': {
+      id: '/api/admin/check'
+      path: '/api/admin/check'
+      fullPath: '/api/admin/check'
+      preLoaderRoute: typeof ApiAdminCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/maintenances': {
       id: '/api/admin/maintenances'
       path: '/api/admin/maintenances'
@@ -307,6 +327,7 @@ const rootRouteChildren: RootRouteChildren = {
   EmbedMonitorIdRoute: EmbedMonitorIdRoute,
   MonitorsMonitorIdRoute: MonitorsMonitorIdRoute,
   PingSplatRoute: PingSplatRoute,
+  ApiAdminCheckRoute: ApiAdminCheckRoute,
   ApiAdminMaintenancesRoute: ApiAdminMaintenancesRoute,
   ApiAdminSessionRoute: ApiAdminSessionRoute,
 }

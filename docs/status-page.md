@@ -13,7 +13,10 @@ As the operator, the same pages show you everything:
 
 - private monitors, with a Private badge
 - the ping URL of each heartbeat
+- a **Check now** button on each check monitor's page
 - buttons to add, edit and delete maintenance windows on History
+
+**Check now** runs that monitor's check once and shows the result under the button: up or down, the response time, where it ran from, and the error if it failed. It saves nothing. The page, History and alerts still show the last scheduled check run until the next one. Each press counts against the sign-in limit of 5 per minute per IP, because each one sends a real request to the target, or a Globalping or proxy call.
 
 The account menu has a **Visitor view** switch that shows the page the way visitors see it.
 
@@ -73,16 +76,50 @@ To keep the whole page to yourself, set `visibility: 'private'` in `packages/con
 | `apiCorsOrigins`  | Origins allowed to call the JSON API. Defaults to any.         |
 | `themeVars`       | Colour overrides. See [Theming](theming.md).                   |
 
+## Statuses
+
+Every monitor shows one status. Its row, the banner, the JSON API, badges and embeds all agree.
+
+| Status     | Means                                                                     |
+| ---------- | ------------------------------------------------------------------------- |
+| `up`       | Working.                                                                  |
+| `degraded` | A job is late, or a site's last check was slower than its `maxLatencyMs`. |
+| `down`     | It has an open incident.                                                  |
+| `pending`  | No result yet, or a job that hasn't pinged yet.                           |
+| `running`  | A job has started and hasn't finished.                                    |
+
+Only down counts against uptime.
+
 ## API, badges and embeds
 
-| URL                       | Returns                                                                                |
-| ------------------------- | -------------------------------------------------------------------------------------- |
-| `/api/data`               | Current status of every public monitor, as JSON.                                       |
-| `/api/maintenances`       | Maintenance windows, as JSON.                                                          |
-| `/api/badge?id=<monitor>` | Badge data for shields.io. `label`, `up`, `down`, `colorUp` and `colorDown` change it. |
-| `/embed/<monitor>`        | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`.     |
+| URL                       | Returns                                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/data`               | Current status of every public monitor, as JSON. Each has `up` and a `status` from [above](#statuses).                                    |
+| `/api/maintenances`       | Maintenance windows, as JSON.                                                                                                             |
+| `/api/badge?id=<monitor>` | Badge data for shields.io: up, degraded or down. `label`, `up`, `degraded`, `down`, `colorUp`, `colorDegraded` and `colorDown` change it. |
+| `/embed/<monitor>`        | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`.                                                        |
 
 Other sites can show `/embed` in a frame. All other pages refuse to load in a frame. This stops other sites from framing your sign-in page.
+
+### Admin endpoints
+
+These need the operator's sign-in: the session cookie, or the password sign-in's username and password in a Basic `Authorization` header. Each Basic call counts against the sign-in limit of 5 per minute per IP, and so does every check-now call, signed in or not. Answers are never cached.
+
+| URL                       | Does                                                                                               |
+| ------------------------- | -------------------------------------------------------------------------------------------------- |
+| `/api/admin/maintenances` | Lists, adds, edits and deletes [maintenance windows](#maintenance).                                |
+| `/api/admin/check`        | `POST {"id": "<monitor>"}` runs that check monitor once and returns the result, without saving it. |
+
+```bash
+curl -fsS -u 'admin:your-password' -H 'Content-Type: application/json' \
+  -d '{"id": "api"}' https://status.example.com/api/admin/check
+```
+
+```json
+{ "location": "FRA", "result": { "ok": true, "latency": 87 } }
+```
+
+A failed check has `"ok": false` and an `error`. An unknown id gets a 404. A heartbeat id gets a 400, because a heartbeat has no check to run.
 
 The badge route returns JSON for [shields.io's endpoint badge](https://shields.io/badges/endpoint-badge), not an image. Pass it to shields.io, URL-encoded:
 

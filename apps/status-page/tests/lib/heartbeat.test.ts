@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vite-plus/test';
+import { describe, expect, it } from 'vite-plus/test';
 import type { HeartbeatState, StatusView } from '@flarewatch/shared';
-import { deriveHeartbeat, fetchPingUrl, mergeHeartbeatRuns, runLatenessSec } from '@/lib/heartbeat';
+import { deriveHeartbeat, mergeHeartbeatRuns, runLatenessSec } from '@/lib/heartbeat';
 
 const PERIOD = 3600;
 const GRACE = 300;
@@ -248,30 +248,5 @@ describe('runLatenessSec', () => {
     expect(runLatenessSec(runs, 1, period, grace)).toBe(0);
     expect(runLatenessSec([{ at: RUN_AT, outcome: 'late' }], 0, period, grace)).toBe(0);
     expect(runLatenessSec(runs, 1, undefined, grace)).toBe(0);
-  });
-});
-
-const ORIGIN = 'https://status.test';
-
-describe('fetchPingUrl', () => {
-  it('returns the ping URL built by the monitoring worker', async () => {
-    const fetch = vi.fn<Fetcher['fetch']>(async () =>
-      Response.json({ url: 'https://status.test/ping/backup/t0k3n' }),
-    );
-
-    const url = await fetchPingUrl({ fetch, connect: vi.fn() }, ORIGIN, 'backup');
-
-    expect(url).toBe('https://status.test/ping/backup/t0k3n');
-    expect(fetch).toHaveBeenCalledWith('https://status.test/ping-url/backup');
-  });
-
-  it('returns null when the monitoring worker is not bound', async () => {
-    await expect(fetchPingUrl(undefined, ORIGIN, 'backup')).resolves.toBeNull();
-  });
-
-  it('returns null when the monitoring worker rejects the id', async () => {
-    const fetch = vi.fn<Fetcher['fetch']>(async () => new Response('Not Found', { status: 404 }));
-
-    await expect(fetchPingUrl({ fetch, connect: vi.fn() }, ORIGIN, 'ghost')).resolves.toBeNull();
   });
 });

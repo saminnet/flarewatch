@@ -8,15 +8,19 @@ import {
 } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
 
-/** Renders `ui` inside the query and router contexts the app's hooks read. */
-export function renderWithProviders(ui: ReactNode) {
+/** `ui` inside the query and router contexts the app's hooks read. */
+export function withProviders(ui: ReactNode) {
   const router = createRouter({
     routeTree: createRootRoute(),
     history: createMemoryHistory(),
   });
-  return render(
+  return (
     <QueryClientProvider client={new QueryClient()}>
       <RouterContextProvider router={router}>{ui}</RouterContextProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+}
+
+export function renderWithProviders(ui: ReactNode) {
+  return render(withProviders(ui));
 }

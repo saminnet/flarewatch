@@ -208,6 +208,7 @@ test('a row opens the monitor page with its history and chart', async ({ page })
   await expect(page.getByRole('heading', { name: 'Last 90 days' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Response times (ms)' })).toBeVisible();
   await expect(page.getByTestId('latency-chart')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check now' })).toHaveCount(0);
 
   await expect(page.getByText('No incidents or maintenance in the last 90 days.')).toBeVisible();
   await page.getByRole('link', { name: 'Full history' }).click();
@@ -671,6 +672,20 @@ test('private monitor never appears to visitors but shows to the operator with a
   await expect(
     page.getByRole('button', { name: `Copy ping URL for ${privateHeartbeat.name}` }),
   ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check now' })).toHaveCount(0);
+
+  // Check now shows one check's result and saves nothing: the card keeps the stored outage.
+  await page.goto(`/monitors/${privateId}`);
+  const checkResult = page.getByRole('status', { name: 'Check now result' });
+  // The button works only once the page has hydrated, so retry the click.
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Check now' }).click();
+    await expect(checkResult).toHaveText(/^(Up|Down)/, { timeout: 15_000 });
+  }).toPass({ timeout: 45_000 });
+  await page.reload();
+  // The first match is the card's current error; History lists the incident below it.
+  await expect(page.getByText('Synthetic private outage').first()).toHaveClass(/status-down/);
+  await expect(checkResult).toBeEmpty();
 
   // Signed-in mode is the only surface that carries the raw reported reason.
   await page.goto('/monitors/demo_nightly_compactor');
@@ -930,6 +945,11 @@ test.describe('provider sign-in', () => {
     await page.getByRole('link', { name: 'History' }).click();
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add maintenance window' })).toHaveCount(0);
+    await page.goto('/monitors/demo_private_internal');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Internal Billing API' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Check now' })).toHaveCount(0);
   });
 
   test('an audience member sees their page group and no other private monitor', async ({

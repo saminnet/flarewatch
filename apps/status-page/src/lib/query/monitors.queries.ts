@@ -4,7 +4,7 @@ import {
   getMonitorLatency,
   getOperatorSnapshot,
   getVisitorSnapshot,
-} from '@/lib/kv';
+} from '@/lib/snapshots';
 import { getUiPrefsServerFn } from '@/lib/ui-prefs-server';
 import { getConfigServerFn } from '@/lib/config';
 import { getSessionServerFn } from '@/lib/session';

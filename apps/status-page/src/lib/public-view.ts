@@ -11,6 +11,7 @@ import type { Principal } from './auth/access';
 
 export type PublicMonitor = Pick<Monitor, 'id' | 'name' | 'tooltip' | 'method'> & {
   hideLatencyChart?: boolean;
+  maxLatencyMs?: number;
   link?: string;
   isProxy?: boolean;
   periodSeconds?: number;
@@ -41,6 +42,8 @@ function toPublicMonitor(monitor: Monitor): PublicMonitor {
     link: deriveMonitorLink(monitor),
     hideLatencyChart: 'hideLatencyChart' in monitor ? monitor.hideLatencyChart : undefined,
     isProxy: 'checkProxy' in monitor && Boolean(monitor.checkProxy),
+    ...(monitor.method !== 'HEARTBEAT' &&
+      monitor.maxLatencyMs !== undefined && { maxLatencyMs: monitor.maxLatencyMs }),
     ...(monitor.method === 'HEARTBEAT' && {
       periodSeconds: monitor.periodSeconds,
       graceSeconds: monitor.graceSeconds,

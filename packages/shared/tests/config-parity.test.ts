@@ -27,6 +27,8 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
   ['monitor timeout over a minute', { monitors: [{ ...monitor, timeout: 60_001 }] }, false],
   ['monitor timeout of zero', { monitors: [{ ...monitor, timeout: 0 }] }, false],
   ['monitor timeout as a string', { monitors: [{ ...monitor, timeout: '5000' }] }, false],
+  ['monitor maxLatencyMs of one', { monitors: [{ ...monitor, maxLatencyMs: 1 }] }, true],
+  ['monitor maxLatencyMs of zero', { monitors: [{ ...monitor, maxLatencyMs: 0 }] }, false],
   ['monitor link to a URL', { monitors: [{ ...monitor, link: 'https://a.com/x' }] }, true],
   ['monitor link turned off', { monitors: [{ ...monitor, link: false }] }, true],
   [

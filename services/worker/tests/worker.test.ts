@@ -397,3 +397,56 @@ describe('hub routes for the status page', () => {
     expect((await send('DELETE', '/maintenances/%ZZ')).status).toBe(400);
   });
 });
+
+describe('trigger route for the status page', () => {
+  const deps: WorkerDeps = {
+    checkMonitor: checkMonitorMock,
+    createNotifier: createNotifierMock,
+    formatNotificationMessage: formatNotificationMessageMock,
+    getEdgeLocation: getEdgeLocationMock,
+    staticConfig: workerConfigMock,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    workerConfigMock.monitors = [createMonitor()];
+    delete workerConfigMock.notification;
+    delete workerConfigMock.callbacks;
+    getEdgeLocationMock.mockResolvedValue('SFO');
+    mockUp();
+  });
+
+  function trigger(env: Env, method: string) {
+    const pending: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (promise: Promise<unknown>) => pending.push(promise) };
+    const response = Worker.fetch(
+      new Request('https://internal/trigger', { method }),
+      env,
+      ctx as typeof ctx & ExecutionContext,
+      deps,
+    );
+    return { response, pending };
+  }
+
+  it('answers at once and records a full check run in the background', async () => {
+    const { hub, env } = createEnv();
+
+    const { response, pending } = trigger(env, 'POST');
+
+    expect((await response).status).toBe(202);
+    await Promise.all(pending);
+    expect(hub.view().lastUpdate).toBeGreaterThan(0);
+    expect(hub.view().monitors['test-monitor']?.status).toBe('up');
+  });
+
+  it('starts nothing on a GET', async () => {
+    const { hub, env } = createEnv();
+
+    const { response, pending } = trigger(env, 'GET');
+
+    expect((await response).status).toBe(404);
+    expect(pending).toEqual([]);
+    expect(checkMonitorMock).not.toHaveBeenCalled();
+    expect(hub.view().lastUpdate).toBe(0);
+  });
+});

@@ -2,6 +2,7 @@ import * as z from 'zod/mini';
 import {
   NOTIFICATION_TEMPLATES,
   type AccessConfig,
+  type CheckResultWithLocation,
   type HeartbeatSignal,
   type HeartbeatState,
   type LatencySample,
@@ -169,6 +170,11 @@ const pullMonitorSchema = z
     method: z.enum(PULL_METHODS),
     target: z.string({ error: 'target must be a string' }),
     timeout: z.optional(intInRange('timeout', 1, MAX_TIMEOUT_MS)),
+    maxLatencyMs: z.optional(
+      z
+        .int({ error: 'maxLatencyMs must be a positive integer' })
+        .check(z.gte(1, { error: 'maxLatencyMs must be a positive integer' })),
+    ),
   })
   .check((ctx) => {
     const issue = targetIssue(ctx.value.method, ctx.value.target);
@@ -185,6 +191,7 @@ const heartbeatMonitorSchema = z.looseObject({
   graceSeconds: intInRange('graceSeconds', 0, MAX_HEARTBEAT_GRACE_SECONDS),
   target: z.optional(z.never({ error: 'HEARTBEAT must not define target' })),
   checkProxy: z.optional(z.never({ error: 'HEARTBEAT must not define checkProxy' })),
+  maxLatencyMs: z.optional(z.never({ error: 'HEARTBEAT must not define maxLatencyMs' })),
 });
 
 function methodIssue(method: unknown): string {
@@ -500,6 +507,29 @@ export const isHubView = asTypeGuard<HubView>(hubViewSchema);
 const isAccessConfig = asTypeGuard<AccessConfig>(accessConfigSchema);
 const isWebhook = asTypeGuard<Webhook>(webhookSchema);
 export const isLatencySamples = asTypeGuard<LatencySample[]>(z.array(latencySampleSchema));
+
+const checkResultWithLocationSchema: z.ZodMiniType<SchemaOutput<CheckResultWithLocation>> =
+  z.object({
+    location: z.string(),
+    result: z.discriminatedUnion('ok', [
+      z.object({
+        ok: z.literal(true),
+        latency: z.number(),
+        ssl: z.exactOptional(
+          z.object({
+            expiryDate: z.number(),
+            daysUntilExpiry: z.number(),
+            issuer: z.exactOptional(z.string()),
+            subject: z.exactOptional(z.string()),
+          }),
+        ),
+      }),
+      z.object({ ok: z.literal(false), error: z.string(), latency: z.exactOptional(z.number()) }),
+    ]),
+  });
+export const isCheckResultWithLocation = asTypeGuard<CheckResultWithLocation>(
+  checkResultWithLocationSchema,
+);
 
 export function parseMaintenances(value: unknown): Maintenance[] {
   return Array.isArray(value) ? value.filter(isValidMaintenance) : [];

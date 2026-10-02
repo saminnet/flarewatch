@@ -88,6 +88,8 @@ export type PullMonitor = {
    */
   link?: string | false;
   hideLatencyChart?: boolean;
+  /** Shows the monitor as degraded while its latest response took longer than this many milliseconds. Never alerts. */
+  maxLatencyMs?: number;
   expectedCodes?: number[];
   timeout?: number;
   headers?: { [key: string]: string | number };
