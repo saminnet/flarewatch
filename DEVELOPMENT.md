@@ -68,10 +68,9 @@ GitHub Actions deploys normally (see [docs/deploy.md](docs/deploy.md)). To deplo
 vp exec --filter worker -- wrangler kv namespace create flarewatch-state
 ```
 
-Put the namespace ID in place of `__FLAREWATCH_STATE_KV_NAMESPACE_ID__` in `apps/status-page/wrangler.jsonc`. Then check that an older install can take this release, and deploy:
+Put the namespace ID in place of `__FLAREWATCH_STATE_KV_NAMESPACE_ID__` in `apps/status-page/wrangler.jsonc`, then deploy:
 
 ```bash
-scripts/check-upgrade.sh <namespace-id>
 vp exec --filter worker -- wrangler deploy --config wrangler.toml
 vp run --filter status-page build
 vp exec --filter status-page -- wrangler deploy --config dist/server/wrangler.json

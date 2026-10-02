@@ -99,18 +99,18 @@ A database upgrade on the 31st of each month:
 
 Months with fewer than 31 days get no run, so this one skips November and runs again on 31 December.
 
-| Field        | Does                                                                                          |
-| ------------ | --------------------------------------------------------------------------------------------- |
-| `every`      | `day`, `week` or `month`.                                                                     |
-| `weekdays`   | Weekly only. Days from 0 (Sunday) to 6 (Saturday). Defaults to the start's weekday.           |
-| `dayOfMonth` | Monthly only. 1 to 31. Defaults to the start's day. Months without that day are skipped.      |
-| `until`      | No run starts after this. Without it, the window repeats until you delete it.                 |
-| `timeZone`   | The zone the clock time follows, like `Europe/Berlin` or `America/New_York`. Defaults to UTC. |
+| Field        | Does                                                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `every`      | `day`, `week` or `month`.                                                                                                   |
+| `weekdays`   | Weekly only. Days from 0 (Sunday) to 6 (Saturday). Defaults to the start's weekday. A list you give needs at least one day. |
+| `dayOfMonth` | Monthly only. 1 to 31. Defaults to the start's day. Months without that day are skipped.                                    |
+| `until`      | No run starts after this. It can't be before `start`. Without it, the window repeats until you delete it.                   |
+| `timeZone`   | The zone the clock time follows, like `Europe/Berlin` or `America/New_York`. Defaults to UTC.                               |
 
 - The first run is on the start's day if the rule includes that day. If it doesn't, say a Monday start with `weekdays: [3]`, the first run is the next day the rule includes.
 - When the clocks go forward and skip a run's start time, that run starts at the moment they jump. A 02:30 run starts at 03:00 that night. When the clocks go back and 02:30 comes twice, the run starts at the first one.
 - The dashboard shows the current or next run. History lists each run in its month. Covered monitors send no down alerts during a run.
-- History keeps a repeating window until 90 days after its `until`. One without `until` stays until you delete it.
+- History keeps a repeating window for 90 days after `until` plus the length of one run. One without `until` stays until you delete it.
 
 ## Private page
 
@@ -120,20 +120,20 @@ To keep the whole page to yourself, set `visibility: 'private'` in `packages/con
 
 `packages/config/src/public.ts`:
 
-| Setting           | Does                                                                  |
-| ----------------- | --------------------------------------------------------------------- |
-| `title`           | Page and tab title.                                                   |
-| `logo`, `favicon` | Image URLs, paths or `data:image/` URLs: PNG, JPEG, GIF, WebP or ICO. |
-| `links`           | Footer links, like `{ label: 'GitHub', link: 'https://...' }`.        |
-| `group`           | Monitor groups, like `{ APIs: ['api', 'auth'] }`.                     |
-| `visibility`      | `'private'` for a [private page](#private-page).                      |
-| `apiCorsOrigins`  | Origins allowed to call the JSON API. Defaults to any.                |
+| Setting           | Does                                                                                                      |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| `title`           | Page and tab title.                                                                                       |
+| `logo`, `favicon` | Paths, `https:` URLs or `data:image/` URLs: PNG, JPEG, GIF, WebP or ICO. An `http:` URL fails the config. |
+| `links`           | Footer links, like `{ label: 'GitHub', link: 'https://...' }`.                                            |
+| `group`           | Monitor groups, like `{ APIs: ['api', 'auth'] }`.                                                         |
+| `visibility`      | `'private'` for a [private page](#private-page).                                                          |
+| `apiCorsOrigins`  | Origins allowed to call the JSON API. Defaults to any.                                                    |
 
 Colours and the corner radius are CSS variables at the top of [`apps/status-page/src/styles.css`](../apps/status-page/src/styles.css), in a `:root` block for light mode and a `.dark` block for dark mode. Edit them there.
 
 ## Statuses
 
-Every monitor shows one status. Its row, the banner, the JSON API, badges and embeds all agree.
+Every monitor shows one status. Its row, the banner, the JSON API and embeds all agree. A badge shows pending and running as up, and unknown before the monitor's first result.
 
 | Status     | Means                                                                     |
 | ---------- | ------------------------------------------------------------------------- |
@@ -147,20 +147,20 @@ Only down counts against uptime.
 
 ## API, badges and embeds
 
-| URL                       | Returns                                                                                                                                   |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/data`               | Current status of every public monitor, as JSON. Each has `up` and a `status` from [above](#statuses).                                    |
-| `/api/maintenances`       | Maintenance windows, as JSON.                                                                                                             |
-| `/api/badge?id=<monitor>` | Badge data for shields.io: up, degraded or down. `label`, `up`, `degraded`, `down`, `colorUp`, `colorDegraded` and `colorDown` change it. |
-| `/embed/<monitor>`        | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`.                                                        |
+| URL                       | Returns                                                                                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/data`               | Current status of every public monitor, as JSON. Each has a `status` from [above](#statuses), and `up`, which is false only when `status` is `down`. |
+| `/api/maintenances`       | Maintenance windows, as JSON.                                                                                                                        |
+| `/api/badge?id=<monitor>` | Badge data for shields.io: up, degraded or down. `label`, `up`, `degraded`, `down`, `colorUp`, `colorDegraded` and `colorDown` change it.            |
+| `/embed/<monitor>`        | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`.                                                                   |
 
 Other sites can show `/embed` in a frame. All other pages refuse to load in a frame. This stops other sites from framing your sign-in page.
 
-Every page sends a Content-Security-Policy header. It lets a page run scripts only from its own origin, plus the page's own inline scripts, which carry a new random nonce on each request. A script injected into the page from anywhere else doesn't run. Images may load from any `https:` address or a `data:` URL, so a logo or favicon URL in your config still works.
+Every page sends a Content-Security-Policy header. It lets a page run scripts only from its own origin, plus the page's own inline scripts, which carry a new random nonce on each request. A script injected into the page from anywhere else doesn't run. Images may load from any `https:` address or a `data:` URL, so a logo or favicon URL in your config still works. In the Vite dev server, pages also allow inline scripts and `eval`, for hot reload.
 
 ### Admin endpoints
 
-These need the operator's sign-in: the session cookie, or the password sign-in's username and password in a Basic `Authorization` header. Each Basic call counts against the sign-in limit of 5 per minute per IP, and so does every check-now call, signed in or not. Answers are never cached.
+These need the operator's sign-in: the session cookie, or the password sign-in's username and password in a Basic `Authorization` header. Each Basic call counts against the sign-in limit of 5 per minute per IP, and so does every check-now call, signed in or not. Answers are never cached. A call without the operator's sign-in gets 401. A call gets 403 when no sign-in is set up, or when a write comes from another origin. A call over the sign-in limit gets 429 with `Too many attempts`.
 
 | URL                       | Does                                                                                               |
 | ------------------------- | -------------------------------------------------------------------------------------------------- |

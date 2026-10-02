@@ -21,7 +21,7 @@ Webhook URLs usually contain a secret, and a fork of a public repo is public too
 [{ "url": "https://hooks.slack.com/services/...", "template": "slack" }]
 ```
 
-Each deploy copies the secret to the monitor Worker. It alerts these webhooks as well as the ones in `worker.ts`. Tokens in `headers` or `options` can go in the secret too. The Worker skips a broken entry and logs why. The others still alert. If an entry has a `timeout` out of range, the Worker uses the default timeout. The entry still alerts. The same goes for a field the Worker doesn't know and for a monitor ID in `monitors` that isn't in your config: the Worker logs it, ignores it and still alerts the entry.
+Each deploy copies the secret to the monitor Worker. It alerts these webhooks as well as the ones in `worker.ts`. Tokens in `headers` or `options` can go in the secret too. The Worker skips a broken entry and logs why. The others still alert. If an entry has a `timeout` out of range, the Worker uses the default timeout. The entry still alerts. The same goes for a field the Worker doesn't know: the Worker logs it, ignores it and still alerts the entry. The Worker removes a monitor ID in `monitors` that isn't in your config and logs how many it removed. If none of the listed IDs remain, the entry gets no alerts.
 
 A monitor in an active [maintenance window](status-page.md#maintenance) sends no down alert. If it's still down when the window ends, it alerts then. An outage that alerted before the window still sends its recovery.
 

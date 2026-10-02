@@ -17,9 +17,9 @@ Monitors live in `packages/config/src/worker.ts`. [`worker.example.ts`](../packa
 }
 ```
 
-A check fails on another status code, when `responseKeyword` is missing from the first 1 MiB of the response, when `responseForbiddenKeyword` is in it, or after `timeout` milliseconds, at most 60000. `headers` and `body` go with the request.
+A check fails on another status code, when `responseKeyword` is missing from the first 1 MiB of the response, when `responseForbiddenKeyword` is in it, or after `timeout` milliseconds, at most 60000. Each `expectedCodes` entry must be a whole number from 100 to 599. `headers` and `body` go with the request.
 
-`maxLatencyMs` marks a slow site. When the last check took longer than that many milliseconds, the page shows the monitor as degraded until a check comes in under it. It sends no alert, opens no incident and doesn't change uptime. While a maintenance window covers the monitor, it shows as up.
+`maxLatencyMs` marks a slow site. Set it to a whole number of milliseconds, at least 1. When the last check took longer than that, the page shows the monitor as degraded until a check comes in at or under it. It sends no alert, opens no incident and doesn't change uptime. A slow check taken while a maintenance window covered the monitor shows as up, even after the window ends.
 
 To check more than a keyword:
 
@@ -35,12 +35,12 @@ To check more than a keyword:
 }
 ```
 
-- `responseHeaderEquals` lists headers the response must have, with exactly these values. Header names ignore case; values don't.
+- `responseHeaderEquals` lists headers the response must have, with exactly these values. Header names ignore case; values don't. Names must be valid HTTP header names, so no spaces or colons, and values must be strings.
 - `responseJsonPath` points into a JSON response, and the value there must equal `responseJsonValue`: the same string, number, `true`, `false` or `null`. `"3"` doesn't equal `3`. Paths use dots for keys and brackets for list items: `$.a.b[0].c`. `$` is the whole response. Set both fields or neither.
 
 The check fails when the response isn't JSON, is 1 MiB or larger, or has nothing at the path. The error names the header or path, never what the response held, because errors show on the status page.
 
-A field FlareWatch doesn't know, such as a misspelt `expectedCode`, fails the config.
+A field FlareWatch doesn't know, such as a misspelt `expectedCode`, fails the config. The same goes for heartbeats.
 
 The monitor name links to its target on the status page, without any credentials or query string. Set `link: false` to hide the URL, or `link: 'https://...'` to link somewhere else.
 
@@ -142,7 +142,7 @@ By default the Worker runs each check itself. `checkProxy` runs it somewhere els
 
 When the proxy fails, the check fails. Set `checkProxyFallback: true` to fall back to a direct check.
 
-For certificate expiry, set `sslCheckEnabled: true` and `sslCheckDaysBeforeExpiry: 14`. This needs Globalping or a proxy, because the Worker can't see the certificate.
+For certificate expiry, set `sslCheckEnabled: true` and `sslCheckDaysBeforeExpiry: 14`. This needs Globalping or a proxy, because the Worker can't see the certificate. `sslCheckDaysBeforeExpiry` must be a whole number from 0 to 3650.
 
 Not every place can run every check:
 
@@ -159,7 +159,7 @@ A monitor that asks a place for something it can't do fails on every check, with
 
 ### Confirm from a second place
 
-`confirmVia` names a second place to check from, in the same formats as `checkProxy`. When a check fails, FlareWatch runs it once more from there, straight away, and records that result and its location. The monitor goes down only when the second place sees it down too. A check that passes costs nothing extra.
+`confirmVia` names a second place to check from, in the same formats as `checkProxy`. When a check fails, FlareWatch runs it once more from there, straight away, and records that result and its location. The monitor goes down only when the second place sees it down too. A check that passes costs nothing extra. With `checkProxyFallback`, FlareWatch tries the Worker first. Confirmation runs only if that check fails too and the run has time and subrequests left.
 
 ```ts
 {

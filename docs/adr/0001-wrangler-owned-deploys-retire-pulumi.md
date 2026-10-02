@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-07-02
-- **Deciders:** Samin Yousefnia
+- **Deciders:** @saminnet
 
 ## Context
 

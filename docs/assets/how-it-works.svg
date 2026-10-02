@@ -46,7 +46,6 @@
   <!-- Your Cloudflare account -->
   <rect class="area" x="360" y="84" width="480" height="532" rx="14"/>
   <text class="eyebrow" x="384" y="116">YOUR CLOUDFLARE ACCOUNT</text>
-  <text class="small" x="816" y="116" text-anchor="end">Free tier</text>
 
   <!-- Monitor Worker -->
   <rect class="panel" x="400" y="140" width="400" height="130" rx="10"/>
@@ -73,7 +72,7 @@
   <rect class="panel" x="40" y="140" width="260" height="130" rx="10"/>
   <text class="h" x="62" y="178">Your sites and APIs</text>
   <text class="body" x="62" y="206">Websites, APIs, servers</text>
-  <text class="small" x="62" y="240">HTTP · TCP · SSL expiry</text>
+  <text class="small" x="62" y="240">HTTP · TCP</text>
   <path class="flow" d="M400 205 H304"/>
   <text class="label" x="352" y="195" text-anchor="middle">checks</text>
 
@@ -82,7 +81,7 @@
   <rect class="panel optional-box" x="40" y="318" width="260" height="110" rx="10"/>
   <text class="eyebrow" x="62" y="346">OPTIONAL</text>
   <text class="body" x="62" y="374">Check or confirm from other regions</text>
-  <text class="body" x="62" y="396">or private networks</text>
+  <text class="body" x="62" y="396">or private networks, and SSL expiry</text>
   <text class="small" x="62" y="418">Globalping or your own proxy</text>
 
   <!-- Your scheduled jobs -->

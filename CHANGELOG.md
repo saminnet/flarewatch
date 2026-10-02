@@ -2,7 +2,11 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
-## Unreleased
+## 3.3.0 - 2026-10-03
+
+Deploys no longer check for 1.x data in KV. If you are still on 1.x, follow the 3.0.0 entry below first.
+
+You can roll back to 3.2.0 on the same storage. A repeating maintenance window then shows as a one-off on its first date, and reminders count from the rollback. Nothing is lost, and updating again restores both.
 
 Your config's monitors are now checked field by field. A misspelt or unknown field, or a field of the wrong type, fails the unit tests and stops the deploy. Before, FlareWatch ignored it.
 
@@ -13,7 +17,7 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 - **Check now** on a check monitor's page, for the operator. It runs that monitor's check once and shows the result there, without saving it. Scripts can do the same through `POST /api/admin/check`.
 - `confirmVia` checks a failing monitor once more from a second place, such as your own flarewatch-proxy or a Globalping probe, and records that result. A blip on one network path no longer opens an incident. See [Confirm from a second place](docs/monitors.md#confirm-from-a-second-place).
 - `responseHeaderEquals` checks response headers, and `responseJsonPath` with `responseJsonValue` checks one value in a JSON response. See [Monitors](docs/monitors.md#websites-and-apis).
-- Maintenance windows can repeat every day, week or month, on chosen weekdays or a day of the month, until a date or for good. Each run keeps its clock time in the time zone you pick, across daylight saving changes. The dashboard shows the current or next run, History lists every run, and alerts pause during each one. See [Repeating windows](docs/status-page.md#repeating-windows).
+- Maintenance windows can repeat every day, week or month, on chosen weekdays or a day of the month, until a date or for good. Each run keeps its clock time in the time zone you pick, across daylight saving changes. The dashboard shows the current or next run, and History lists every run. Down alerts, error changes and reminders pause during each run. An outage that alerted before the run still sends its recovery. See [Repeating windows](docs/status-page.md#repeating-windows).
 - Send a monitor's alerts to some channels only: give a webhook `monitors`, a list of monitor IDs. Leave it out and the webhook gets every monitor's alerts, as before. See [Routing](docs/alerts.md#routing).
 - Reminders while a monitor stays down: set `reminderEveryChecks` on a monitor, at least 30. See [Reminders](docs/monitors.md#reminders).
 - The status page sends a Content-Security-Policy. Scripts run only from the page's own origin or with a nonce that changes on every request. See [API, badges and embeds](docs/status-page.md#api-badges-and-embeds).
@@ -34,7 +38,9 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 - A Globalping measurement over 1 MiB fails the check, the same limit a direct check puts on a response body. Before, the limit was 4 MiB.
 - A maintenance window's description can be at most 2000 characters, its title 200, its color 64, and it can list at most 100 monitors with IDs of at most 100 characters. The hub keeps at most 100 windows and refuses a new one past that. You can still edit the ones it has, and a window saved before these limits still shows and pauses alerts.
 - The config check rejects a `statusPage` field FlareWatch doesn't know, so a misspelt one fails the deploy instead of being ignored. `theme`, `customCss`, `themeVars` and `poweredByUrl` are gone from `statusPage`. The first two did nothing. For `themeVars`, set the colours in `apps/status-page/src/styles.css` instead; the `:root` and `.dark` blocks at the top hold every variable. The footer link always points to the FlareWatch repository.
-- `logo` and `favicon` take a `data:image/` URL only for PNG, JPEG, GIF, WebP or ICO. An SVG data URL now fails the config check; use a path or URL to the SVG file instead.
+- `logo` and `favicon` take a `data:image/` URL only for PNG, JPEG, GIF, WebP or ICO. An SVG data URL now fails the config check; use a path or an `https:` URL to the SVG file instead.
+- `logo` and `favicon` take a path, an `https:` URL or a `data:image/` URL. An `http:` URL now fails the config check, because the page's Content-Security-Policy blocks images from it.
+- A heartbeat monitor with a field FlareWatch doesn't know, such as a misspelt `graceSecond`, now fails the config check, as a check monitor does. Before, FlareWatch ignored it.
 - Heartbeat pings answer 503 when the Worker has no `HEARTBEAT_RATE_LIMIT` binding. Before, they were taken without a limit. The committed `wrangler.toml` has the binding, so keep it if you edit that file.
 - A monitor's page lists maintenance windows up to a year ahead. A window that starts later shows there once it is less than a year away.
 
