@@ -15,3 +15,13 @@ export function durableObjectSql(storage: DurableObjectStorage): Sql {
     transaction: (fn) => storage.transactionSync(fn),
   };
 }
+
+/** A JSON column's value, or undefined when it is null or not JSON. */
+export function parseJson(text: string | null): unknown {
+  if (text === null) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}

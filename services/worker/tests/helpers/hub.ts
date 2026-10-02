@@ -3,11 +3,11 @@ import type { Env } from '../../src/env';
 import { MonitorHub } from '../../src/hub/monitor-hub';
 
 /** Durable Object storage over an in-memory node:sqlite database. */
-function createStorage(db: DatabaseSync, onQuery: () => void) {
+function createStorage(db: DatabaseSync, onQuery: (query: string) => void) {
   return {
     sql: {
       exec: (query: string, ...bindings: SQLInputValue[]) => {
-        onQuery();
+        onQuery(query);
         const rows = db.prepare(query).all(...bindings);
         return { toArray: () => rows };
       },
@@ -27,19 +27,25 @@ function createStorage(db: DatabaseSync, onQuery: () => void) {
   };
 }
 
+/**
+ * Past migrations, a query that would scan every incident fails the test, as
+ * when it loses its index. The workerd tests measure the rows Durable Objects bill.
+ */
 export function createHub(env: Env = {}, db = new DatabaseSync(':memory:')) {
-  let queries = 0;
-  const ctx = { storage: createStorage(db, () => queries++) };
+  let migrated = false;
+  const ctx = {
+    storage: createStorage(db, (query) => {
+      const plan = migrated ? db.prepare(`EXPLAIN QUERY PLAN ${query}`).all() : [];
+      if (plan.some(({ detail }) => /^SCAN incidents\b/.test(String(detail)))) {
+        throw new Error(`Query scans every incident: ${query}`);
+      }
+    }),
+  };
   // SAFETY: the hub touches only ctx.storage.sql.exec and ctx.storage.transactionSync,
   // which the fake implements.
   const hub = new MonitorHub(ctx as typeof ctx & DurableObjectState, env);
-  return { hub, db, queries: () => queries };
-}
-
-/** Rows inserted, updated or deleted on db since it opened. */
-export function rowsWritten(db: DatabaseSync): number {
-  const row = db.prepare('SELECT total_changes() AS n').get();
-  return Number(row?.n);
+  migrated = true;
+  return { hub, db };
 }
 
 /** A namespace whose every name resolves to this hub, standing in for the MONITOR_HUB binding. */

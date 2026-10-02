@@ -1,8 +1,9 @@
+import { Incidents } from './incidents';
 import type { Sql } from './sql';
 
 // Durable Object SQLite has no PRAGMA user_version, so applied steps are rows
 // in _migrations. Append new steps; never edit a shipped one.
-const MIGRATIONS: string[][] = [
+const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
   [
     `CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID`,
     `CREATE TABLE monitors (
@@ -46,6 +47,29 @@ const MIGRATIONS: string[][] = [
     `CREATE INDEX incidents_end_at ON incidents (end_at)`,
     `CREATE INDEX incidents_monitor_end ON incidents (monitor_id, end_at)`,
   ],
+  // Moves what 3.1.0 kept into the new tables once: the last 12 hours of
+  // samples, skipping an hour too large for the 2 MB row limit, and every
+  // incident into the lists.
+  [
+    `CREATE TABLE incident_lists (
+      monitor_id TEXT NOT NULL,
+      part INTEGER NOT NULL,
+      data TEXT NOT NULL,
+      PRIMARY KEY (monitor_id, part)
+    ) WITHOUT ROWID`,
+    `ALTER TABLE incidents ADD COLUMN up_since INTEGER`,
+    `CREATE TABLE latency (hour INTEGER PRIMARY KEY, data TEXT NOT NULL)`,
+    // The size filter is a subquery: in HAVING it would run after json_group_object
+    // had built the oversized value and failed on the 2 MB string limit.
+    `INSERT INTO latency (hour, data)
+     SELECT at / 3600, json_group_object(CAST(at AS TEXT), json(data)) FROM samples
+     WHERE json_valid(data) AND at >= (SELECT MAX(at) FROM samples) - 12 * 3600
+       AND at / 3600 IN (SELECT at / 3600 FROM samples GROUP BY at / 3600
+                         HAVING SUM(LENGTH(CAST(data AS BLOB)) + 16) <= 1900000)
+     GROUP BY at / 3600`,
+    `DELETE FROM samples`,
+    (sql) => new Incidents(sql).importHistory(),
+  ],
 ];
 
 export function migrate(sql: Sql): void {
@@ -55,7 +79,10 @@ export function migrate(sql: Sql): void {
   );
   for (let id = (row?.version ?? 0) + 1; id <= MIGRATIONS.length; id++) {
     sql.transaction(() => {
-      for (const statement of MIGRATIONS[id - 1] ?? []) sql.exec(statement);
+      for (const step of MIGRATIONS[id - 1] ?? []) {
+        if (typeof step === 'string') sql.exec(step);
+        else step(sql);
+      }
       sql.exec('INSERT INTO _migrations (id) VALUES (?)', id);
     });
   }

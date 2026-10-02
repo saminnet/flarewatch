@@ -36,15 +36,22 @@ function seed(sql: SqlStorage, f: HubFixture): void {
         end ?? null,
       );
     }
+    sql.exec(
+      'INSERT INTO incident_lists (monitor_id, part, data) VALUES (?, 0, ?)',
+      id,
+      JSON.stringify(incidents),
+    );
   }
-  const samples = new Map<number, Record<string, [number, string]>>();
+  const hours = new Map<number, Record<number, Record<string, [number, string]>>>();
   for (const [id, recent] of Object.entries(f.latency)) {
     for (const { time, ping, loc } of recent) {
-      samples.set(time, { ...samples.get(time), [id]: [ping, loc] });
+      const hour = hours.get(Math.floor(time / 3600)) ?? {};
+      hour[time] = { ...hour[time], [id]: [ping, loc] };
+      hours.set(Math.floor(time / 3600), hour);
     }
   }
-  for (const [at, data] of samples) {
-    sql.exec('INSERT INTO samples (at, data) VALUES (?, ?)', at, JSON.stringify(data));
+  for (const [hour, data] of hours) {
+    sql.exec('INSERT INTO latency (hour, data) VALUES (?, ?)', hour, JSON.stringify(data));
   }
   for (const maintenance of f.maintenances) {
     sql.exec(

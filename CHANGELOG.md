@@ -2,6 +2,23 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## 3.2.0 - 2026-10-02
+
+The hub moves your history to its new storage once, when it first starts after the update. You can't roll back to 3.1.0 afterwards.
+
+### Changed
+
+- A monitor that keeps going down and coming back up stays in one outage until it has been up for 15 minutes. The page shows it as down until then, and its recovery alert goes out then. The outage counts as ending when the monitor came back up. Before, each flip wrote several rows, and about 20 flapping monitors could use up the free plan's daily writes.
+- Error messages are stored up to their first 500 characters.
+- Each monitor keeps at most about 1 MB of incident history. Only a monitor whose long error keeps changing reaches that before 1,000 incidents.
+
+### Fixed
+
+- A page view reads two rows per monitor from the hub, plus a few, however long your history is. In 3.1.0 most page views still read every stored incident, because the hub forgets what it kept in memory a few seconds after each request.
+- A response-time chart reads 13 rows instead of 721.
+- A new incident reads a few dozen rows instead of up to 2,000 for a monitor with a long history.
+- A monitor you change from a heartbeat to a regular check no longer stays down because of the job's last state.
+
 ## 3.1.0 - 2026-10-01
 
 ### Changed

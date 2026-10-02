@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vite-plus/test';
 import type { CheckResult, HeartbeatMonitor, MonitorTarget } from '@flarewatch/shared';
 import type { AlertPolicy, CheckRecord } from '../../src/hub/monitor-hub';
-import { createHub, rowsWritten } from '../helpers/hub';
+import { createHub } from '../helpers/hub';
 
 const T0 = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const DAY = 24 * 60 * 60;
@@ -79,16 +79,75 @@ describe('MonitorHub incidents', () => {
     expect(incident?.error[1]).toBe('err-901');
   });
 
-  it('reopens the last incident when the monitor fails within 15 minutes of recovering', () => {
-    const { hub } = createHub();
+  it('keeps a flapping monitor in one incident until it stays up for 15 minutes', () => {
+    const { hub, db } = createHub();
     for (let i = 0; i < 1440; i++) {
       hub.record(T0 + i * 60, [check('api', i % 2 === 0 ? down() : up())]);
     }
+    expect(hub.view().monitors.api).toMatchObject({
+      status: 'down',
+      incidents: [{ start: [T0], error: ['Unavailable'] }],
+    });
 
+    const lastUp = T0 + 1439 * 60;
+    const held = createHub({}, db).hub.record(lastUp + 14 * 60, [check('api', up())]).updates;
+    const closed = createHub({}, db).hub.record(lastUp + 15 * 60, [check('api', up())]).updates;
+
+    expect(held).toMatchObject([{ statusChanged: false, isUp: true }]);
+    expect(closed).toMatchObject([
+      { statusChanged: true, changeType: 'up', incidentStartTime: T0 },
+    ]);
     expect(hub.view().monitors.api).toMatchObject({
       status: 'up',
-      incidents: [{ start: [T0], error: ['Unavailable'], end: T0 + 1439 * 60 }],
+      incidents: [{ start: [T0], error: ['Unavailable'], end: lastUp }],
     });
+  });
+
+  it('sends a flapping monitor’s recovery alert once it has stayed up', () => {
+    const { hub } = createHub();
+    const run = (now: number, result: CheckResult) => {
+      const { alerts } = hub.record(now, [check('api', result)], POLICY);
+      hub.confirmAlerts(alerts.map(({ incident }) => ({ incident, delivered: true })));
+      return alerts.map(({ kind, at }) => (at === undefined ? kind : `${kind} at ${at}`));
+    };
+
+    expect(run(T0, down())).toEqual(['down']);
+    expect(run(T0 + 60, up())).toEqual(['up']);
+    expect(run(T0 + 120, down())).toEqual(['down']);
+    expect(run(T0 + 180, up())).toEqual([]);
+    expect(run(T0 + 180 + 15 * 60, up())).toEqual([`up at ${T0 + 180}`]);
+  });
+
+  it('alerts a flapping monitor only once it stays down for the grace period', () => {
+    const { hub } = createHub();
+    const policy = { ...POLICY, gracePeriodSeconds: 150 };
+    const run = (now: number, result: CheckResult) =>
+      hub.record(now, [check('api', result)], policy).alerts.map(({ kind }) => kind);
+    const flaps = [down(), up(), down(), up(), down(), up(), down()].map((result, i) =>
+      run(T0 + i * 60, result),
+    );
+
+    expect(flaps.flat()).toEqual([]);
+    expect(run(T0 + 420, down())).toEqual([]);
+    expect(run(T0 + 480, down())).toEqual([]);
+    expect(run(T0 + 540, down())).toEqual(['down']);
+  });
+
+  it('restarts a recovery hold when the monitor fails with a new error', () => {
+    const { hub } = createHub();
+    hub.record(T0, [check('api', down())]);
+    hub.record(T0 + 60, [check('api', up())]);
+    hub.record(T0 + 120, [check('api', down())]);
+    hub.record(T0 + 180, [check('api', up())]);
+    hub.record(T0 + 240, [check('api', down('Other'))]);
+    hub.record(T0 + 300, [check('api', up())]);
+
+    hub.record(T0 + 180 + 15 * 60, [check('api', up())]);
+    expect(hub.view().monitors.api?.status).toBe('down');
+    hub.record(T0 + 300 + 15 * 60, [check('api', up())]);
+    expect(hub.view().monitors.api?.incidents).toEqual([
+      { start: [T0, T0 + 240], error: ['Unavailable', 'Other'], end: T0 + 300 },
+    ]);
   });
 
   it('opens a new incident when the monitor fails more than 15 minutes after recovering', () => {
@@ -129,12 +188,72 @@ describe('MonitorHub incidents', () => {
       hub.record(T0 + i * gap, [check('api', down(`err-${i}`))]);
       hub.record(T0 + i * gap + 60, [check('api', up())]);
     }
+    const closed = hub.view().monitors.api?.incidents ?? [];
+    expect(closed).toHaveLength(1000);
+    expect(closed[0]?.error).toEqual(['err-2']);
     hub.record(T0 + 1002 * gap, [check('api', down('err-1002'))]);
 
     const incidents = hub.view().monitors.api?.incidents ?? [];
     expect(incidents).toHaveLength(1001);
     expect(incidents[0]?.error).toEqual(['err-2']);
     expect(incidents[1000]).toEqual({ start: [T0 + 1002 * gap], error: ['err-1002'] });
+  });
+
+  it('keeps a history too long for one storage row', () => {
+    const { hub, db } = createHub();
+    const gap = 17 * 60;
+    const error = (i: number) => `err-${i} `.padEnd(500, 'x');
+    for (let i = 0; i < 1002; i++) {
+      hub.record(T0 + i * gap, [check('api', down(error(i)))]);
+      hub.record(T0 + i * gap + 60, [check('api', up())]);
+    }
+    hub.record(T0 + 1002 * gap, [check('api', down(error(1002)))]);
+    hub.record(T0 + 1002 * gap + 60, [check('api', down('Timeout'))]);
+
+    const incidents = createHub({}, db).hub.view().monitors.api?.incidents ?? [];
+    expect(incidents).toHaveLength(1001);
+    expect(incidents[0]).toEqual({
+      start: [T0 + 2 * gap],
+      error: [error(2)],
+      end: T0 + 2 * gap + 60,
+    });
+    expect(incidents[999]?.error).toEqual([error(1001)]);
+    expect(incidents[1000]).toEqual({
+      start: [T0 + 1002 * gap, T0 + 1002 * gap + 60],
+      error: [error(1002), 'Timeout'],
+    });
+  });
+
+  it('keeps about a megabyte of history per monitor, dropping the oldest', () => {
+    const { hub, db } = createHub();
+    const gap = 2 * 3600;
+    // 25 outages whose 500-character error changes 100 times each.
+    for (let i = 0; i < 25; i++) {
+      for (let j = 0; j < 100; j++) {
+        hub.record(T0 + i * gap + j * 60, [check('api', down(`${i}-${j} `.padEnd(500, 'x')))]);
+      }
+      hub.record(T0 + i * gap + 100 * 60, [check('api', up())]);
+    }
+
+    hub.record(T0 + 25 * gap, [check('api', down('New'))]);
+
+    const incidents = createHub({}, db).hub.view().monitors.api?.incidents ?? [];
+    expect(JSON.stringify(incidents.slice(0, -1)).length).toBeLessThanOrEqual(1_000_000);
+    expect(incidents.length).toBeGreaterThan(10);
+    expect(incidents[incidents.length - 2]?.end).toBe(T0 + 24 * gap + 100 * 60);
+    expect(incidents[incidents.length - 1]).toEqual({ start: [T0 + 25 * gap], error: ['New'] });
+  });
+
+  it('stores the first 500 characters of an error', () => {
+    const { hub } = createHub();
+    const long = 'x'.repeat(600);
+
+    const [first] = hub.record(T0, [check('api', down(long))]).updates;
+    const [same] = hub.record(T0 + 60, [check('api', down(`${long}y`))]).updates;
+
+    expect(first?.error).toBe('x'.repeat(500));
+    expect(same?.statusChanged).toBe(false);
+    expect(hub.view().monitors.api?.incidents).toEqual([{ start: [T0], error: ['x'.repeat(500)] }]);
   });
 
   it('keeps an open incident and drops closed ones 90 days after they end', () => {
@@ -201,6 +320,8 @@ describe('MonitorHub incidents', () => {
     hub.record(T0 + 240, [check('api', down('HTTP 502'))]);
     expect(incidents()).toEqual([segments]);
     hub.record(T0 + 300, [check('api', up())]);
+    expect(incidents()).toEqual([segments]);
+    hub.record(T0 + 300 + 15 * 60, [check('api', up())]);
     expect(incidents()).toEqual([{ ...segments, end: T0 + 300 }]);
     hub.record(T0 + 300 + 90 * DAY + 1, [check('api', up())]);
     expect(incidents()).toEqual([]);
@@ -225,6 +346,13 @@ describe('MonitorHub latency', () => {
     });
   });
 
+  it('keeps the first 64 characters of a location', () => {
+    const { hub } = createHub();
+    hub.record(T0, [check('api', up(1), 'x'.repeat(100))]);
+
+    expect(hub.latency('api', T0)).toEqual([{ ping: 1, loc: 'x'.repeat(64), time: T0 }]);
+  });
+
   it('returns only the asked monitor and handles ids that look like JSON paths', () => {
     const { hub } = createHub();
     hub.record(T0, [check('a.b', up(1)), check('$[0]', up(2)), check('x"y', up(3))]);
@@ -232,6 +360,21 @@ describe('MonitorHub latency', () => {
     expect(hub.latency('a.b', T0)).toEqual([{ ping: 1, loc: 'HEL', time: T0 }]);
     expect(hub.latency('$[0]', T0)).toEqual([{ ping: 2, loc: 'HEL', time: T0 }]);
     expect(hub.latency('x"y', T0)).toEqual([{ ping: 3, loc: 'HEL', time: T0 }]);
+  });
+
+  it('shows no samples for a monitor without any whose id names an object property', () => {
+    const { hub } = createHub();
+    const job: HeartbeatMonitor = {
+      id: 'constructor',
+      name: 'Job',
+      method: 'HEARTBEAT',
+      periodSeconds: 3600,
+      graceSeconds: 600,
+    };
+    hub.record(T0, [check('api', up(1)), { monitor: job }]);
+
+    expect(hub.latency('constructor', T0)).toEqual([]);
+    expect(hub.view().monitors.constructor).not.toHaveProperty('latest');
   });
 
   it('returns only the 12 hours before now once check runs have stopped', () => {
@@ -242,38 +385,6 @@ describe('MonitorHub latency', () => {
     expect(hub.latency('api', T0 + 12 * 60 * 60 + 30)).toEqual([
       { ping: 20, loc: 'HEL', time: T0 + 60 },
     ]);
-  });
-
-  it('answers as a fresh read would after each check run that follows a read', () => {
-    const { hub, db } = createHub();
-    const job: HeartbeatMonitor = {
-      id: 'job',
-      name: 'job',
-      method: 'HEARTBEAT',
-      periodSeconds: 3600,
-      graceSeconds: 600,
-    };
-    const HALF_DAY = 12 * 60 * 60;
-    hub.record(T0, [check('api', up(10))]);
-    hub.latency('api', T0);
-
-    const runs: [string, number, CheckRecord[]][] = [
-      ['a new monitor', T0 + 60, [check('api', up(20)), check('db', up(5), 'AMS')]],
-      ['a run without samples', T0 + 120, [{ monitor: job }]],
-      ['the oldest sample expires', T0 + HALF_DAY + 30, [check('api', up(30))]],
-      ['another monitor sample expires', T0 + HALF_DAY + 90, [check('db', up(6))]],
-      ['a run older than the newest', T0 + HALF_DAY + 60, [check('api', up(40))]],
-      ['a later run', T0 + HALF_DAY + 150, [check('api', up(50))]],
-      ['a second run in the same second', T0 + HALF_DAY + 150, [check('db', up(7))]],
-      ['a run after that', T0 + HALF_DAY + 210, [check('api', up(60))]],
-    ];
-    for (const [name, now, records] of runs) {
-      hub.record(now, records);
-      const fresh = createHub({}, db).hub;
-      for (const id of ['api', 'db']) {
-        expect(hub.latency(id, now), `${name}: ${id}`).toEqual(fresh.latency(id, now));
-      }
-    }
   });
 });
 
@@ -335,25 +446,20 @@ describe('MonitorHub heartbeat state', () => {
     expect(hub.view().monitors.backup?.status).toBe('up');
     expect(hub.view().monitors.backup?.heartbeat).not.toHaveProperty('message');
   });
+
+  it('forgets the job once its id becomes a checked monitor', () => {
+    const { hub } = createHub();
+    hub.ping(job, 'fail', T0, 'disk full');
+    hub.record(T0 + 1, [{ monitor: job }]);
+
+    hub.record(T0 + 60, [check('backup', up())]);
+
+    expect(hub.view().monitors.backup).toMatchObject({ status: 'up' });
+    expect(hub.view().monitors.backup).not.toHaveProperty('heartbeat');
+  });
 });
 
 describe('MonitorHub storage', () => {
-  it('writes a handful of rows per steady check run, whatever the monitor count', () => {
-    const { hub, db } = createHub();
-    const run = (now: number) =>
-      hub.record(
-        now,
-        Array.from({ length: 50 }, (_, i) => check(`m${i}`, up(i))),
-      );
-    for (let i = 0; i < 12 * 60 + 5; i++) run(T0 + i * 60);
-
-    const before = rowsWritten(db);
-    run(T0 + (12 * 60 + 5) * 60);
-
-    // sample insert, expired sample delete, last-update meta: 4,320 rows a day.
-    expect(rowsWritten(db) - before).toBeLessThanOrEqual(3);
-  });
-
   it('keeps its data when a second instance opens the same storage', () => {
     const { hub, db } = createHub();
     hub.record(T0, [check('api', down())]);
@@ -364,62 +470,21 @@ describe('MonitorHub storage', () => {
     expect(reopened.view().lastUpdate).toBe(T0);
   });
 
-  it('answers repeated reads without a query until the next write', () => {
-    const { hub, queries } = createHub();
-    hub.record(T0, [check('api', up(10))]);
-    hub.view();
-    hub.latency('api', T0);
+  it('shows every outage after hibernation', () => {
+    const { hub, db } = createHub();
+    for (let i = 0; i < 300; i++) {
+      hub.record(T0 + i * 20 * 60, [check('api', down()), check('db', up())]);
+      hub.record(T0 + i * 20 * 60 + 60, [check('api', up()), check('db', up())]);
+    }
 
-    const before = queries();
-    hub.view();
-    hub.latency('api', T0);
-    hub.latency('db', T0);
-    expect(queries()).toBe(before);
-
-    hub.record(T0 + 60, [check('api', up(20))]);
-    expect(hub.latency('api', T0 + 60).map(({ ping }) => ping)).toEqual([10, 20]);
-    expect(hub.view().maintenances).toEqual([]);
-    hub.putMaintenance({
-      id: 'm',
-      body: 'm',
-      start: '2025-01-15T12:00:00Z',
-      createdAt: 0,
-      updatedAt: 0,
-    });
-    expect(hub.view().maintenances.map(({ id }) => id)).toEqual(['m']);
+    expect(createHub({}, db).hub.view().monitors.api?.incidents).toHaveLength(300);
   });
 
-  it('reads incident history again only after a check run changes an incident', () => {
+  it('keeps a chart’s 12 hours of samples after hibernation', () => {
     const { hub, db } = createHub();
-    const job: HeartbeatMonitor = {
-      id: 'job',
-      name: 'job',
-      method: 'HEARTBEAT',
-      periodSeconds: 3600,
-      graceSeconds: 600,
-    };
-    hub.record(T0, [check('api', down())]);
-    hub.record(T0 + 60, [check('api', up())]);
-    hub.view();
-    // Written behind the hub's back, so only a fresh read of the table shows it.
-    db.exec(
-      `INSERT INTO incidents (monitor_id, starts, errors, end_at)
-       VALUES ('api', '[${T0 - DAY}]', '["Old"]', ${T0 - DAY + 60})`,
-    );
+    for (let i = 0; i <= 12 * 60; i++) hub.record(T0 + i * 60, [check('api', up(i))]);
 
-    hub.record(T0 + 120, [check('api', up())]);
-    hub.ping(job, 'success', T0 + 130);
-    hub.putMaintenance({
-      id: 'm',
-      body: 'm',
-      start: '2025-01-15T12:00:00Z',
-      createdAt: 0,
-      updatedAt: 0,
-    });
-    expect(hub.view().monitors.api?.incidents).toHaveLength(1);
-
-    hub.record(T0 + 180, [check('api', down())]);
-    expect(hub.view().monitors.api?.incidents).toHaveLength(2);
+    expect(createHub({}, db).hub.latency('api', T0 + 12 * 60 * 60)).toHaveLength(12 * 60 + 1);
   });
 
   it('reports nothing before the first check run', () => {
@@ -512,12 +577,38 @@ describe('MonitorHub after an upgrade from a release without alert tracking', ()
   });
 });
 
+/** Rewinds a new hub's storage to the schema 3.1.0 left behind. */
+function rewindTo31(db: DatabaseSync): void {
+  db.exec(`
+    DELETE FROM _migrations WHERE id >= 7;
+    DROP TABLE incident_lists;
+    DROP TABLE latency;
+    ALTER TABLE incidents DROP COLUMN up_since;
+  `);
+}
+
+function addIncident(
+  db: DatabaseSync,
+  monitorId: string,
+  starts: number[],
+  errors: string[],
+  end?: number,
+) {
+  db.prepare('INSERT INTO incidents (monitor_id, starts, errors, end_at) VALUES (?, ?, ?, ?)').run(
+    monitorId,
+    JSON.stringify(starts),
+    JSON.stringify(errors),
+    end ?? null,
+  );
+}
+
 describe('MonitorHub after an upgrade from 2.x', () => {
   it('drops the 1.x import bookkeeping and keeps the rest', () => {
     const db = new DatabaseSync(':memory:');
     const { hub } = createHub({}, db);
     hub.record(T0, [check('api', up())]);
     // Rewind to the schema 2.x left behind, with its import rows.
+    rewindTo31(db);
     db.exec(`
       DELETE FROM _migrations WHERE id >= 4;
       DROP INDEX incidents_end_at;
@@ -532,5 +623,103 @@ describe('MonitorHub after an upgrade from 2.x', () => {
     const keys = db.prepare('SELECT key FROM meta ORDER BY key').all();
     expect(keys).toEqual([{ key: 'last_update' }]);
     expect(upgraded.view().lastUpdate).toBe(T0);
+  });
+});
+
+describe('MonitorHub after an upgrade from 3.1', () => {
+  it('keeps the history, an outage still open, and the last 12 hours of latency', () => {
+    const db = new DatabaseSync(':memory:');
+    createHub({}, db).hub.record(T0, [check('api', up()), check('db', up())]);
+    rewindTo31(db);
+    addIncident(db, 'api', [T0 - 7200], ['Timeout'], T0 - 7000);
+    addIncident(db, 'api', [T0 - 3600, T0 - 3500], ['Timeout', 'HTTP 502'], T0 - 3400);
+    addIncident(db, 'db', [T0 - 300], ['Refused']);
+    // An hour of 70 runs, each 30,000 bytes: too large for one row.
+    const insert = db.prepare('INSERT INTO samples (at, data) VALUES (?, ?)');
+    for (let i = 0; i < 70; i++) {
+      insert.run(T0 - 3 * 3600 + i * 30, `{"api":[7,"${'漢'.repeat(10_000)}"]}`);
+    }
+    db.exec(`
+      INSERT INTO samples (at, data) VALUES
+        (${T0 - 13 * 3600}, '{"api":[5,"HEL"]}'),
+        (${T0 - 120}, 'not json'),
+        (${T0 - 60}, '{"api":[10,"HEL"],"db":[0,"AMS"]}'),
+        (${T0}, '{"api":[20,"HEL"]}');
+    `);
+
+    const { hub } = createHub({}, db);
+
+    expect(hub.view().monitors.api).toMatchObject({
+      status: 'up',
+      incidents: [
+        { start: [T0 - 7200], error: ['Timeout'], end: T0 - 7000 },
+        { start: [T0 - 3600, T0 - 3500], error: ['Timeout', 'HTTP 502'], end: T0 - 3400 },
+      ],
+    });
+    expect(hub.view().monitors.db).toMatchObject({
+      status: 'down',
+      incidents: [{ start: [T0 - 300], error: ['Refused'] }],
+    });
+    expect(hub.latency('api', T0)).toEqual([
+      { ping: 10, loc: 'HEL', time: T0 - 60 },
+      { ping: 20, loc: 'HEL', time: T0 },
+    ]);
+    // Older than the last 12 hours 3.1.0 kept, so not moved.
+    expect(hub.latency('api', T0 - 12 * 3600).map(({ ping }) => ping)).toEqual([10, 20]);
+    expect(db.prepare('SELECT count(*) AS n FROM samples').get()).toEqual({ n: 0 });
+
+    hub.record(T0 + 60, [check('api', up()), check('db', down('Refused'))]);
+    expect(hub.view().monitors.db?.status).toBe('down');
+    hub.record(T0 + 120, [check('api', up()), check('db', up())]);
+    expect(hub.view().monitors.db?.incidents).toEqual([
+      { start: [T0 - 300], error: ['Refused'], end: T0 + 120 },
+    ]);
+  });
+
+  it('moves the incidents it can read past one it cannot', () => {
+    const db = new DatabaseSync(':memory:');
+    createHub({}, db).hub.record(T0, [check('api', up())]);
+    rewindTo31(db);
+    db.exec(`INSERT INTO incidents (monitor_id, starts, errors, end_at)
+      VALUES ('api', 'not json', '{"broken', ${T0 - 7000})`);
+    addIncident(db, 'api', [T0 - 3600], ['Timeout'], T0 - 3400);
+
+    expect(createHub({}, db).hub.view().monitors.api?.incidents).toEqual([
+      { start: [T0 - 3600], error: ['Timeout'], end: T0 - 3400 },
+    ]);
+  });
+
+  it('keeps a monitor’s newest 1,000 closed incidents and cuts long errors', () => {
+    const db = new DatabaseSync(':memory:');
+    createHub({}, db).hub.record(T0, [check('api', up())]);
+    rewindTo31(db);
+    for (let i = 1; i <= 1005; i++)
+      addIncident(db, 'api', [T0 + i * 100], ['Timeout'], T0 + i * 100 + 50);
+    addIncident(db, 'api', [T0 + 200_000], ['x'.repeat(600)]);
+
+    const incidents = createHub({}, db).hub.view().monitors.api?.incidents ?? [];
+
+    expect(incidents).toHaveLength(1001);
+    expect(incidents[0]?.start).toEqual([T0 + 600]);
+    expect(incidents[999]?.end).toBe(T0 + 100_550);
+    expect(incidents[1000]).toEqual({ start: [T0 + 200_000], error: ['x'.repeat(500)] });
+  });
+
+  it('keeps about a megabyte of a monitor’s history, dropping the oldest', () => {
+    const db = new DatabaseSync(':memory:');
+    createHub({}, db).hub.record(T0, [check('api', up())]);
+    rewindTo31(db);
+    // 25 outages whose 500-character error changed 100 times each.
+    for (let i = 0; i < 25; i++) {
+      const starts = Array.from({ length: 100 }, (_, j) => T0 + i * 7200 + j * 60);
+      const errors = Array.from({ length: 100 }, (_, j) => `${i}-${j} `.padEnd(500, 'x'));
+      addIncident(db, 'api', starts, errors, T0 + i * 7200 + 6000);
+    }
+
+    const incidents = createHub({}, db).hub.view().monitors.api?.incidents ?? [];
+
+    expect(JSON.stringify(incidents).length).toBeLessThanOrEqual(1_000_000);
+    expect(incidents.length).toBeGreaterThan(10);
+    expect(incidents[incidents.length - 1]?.end).toBe(T0 + 24 * 7200 + 6000);
   });
 });

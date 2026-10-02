@@ -43,9 +43,9 @@ Some monitors reach their target through something else, like a reverse proxy, a
 
 Dependencies can have their own dependencies, and heartbeats can use `dependsOn` too. The config check rejects unknown ids and loops.
 
-A monitor that fails again within 15 minutes of recovering reopens the same outage, so a flapping target doesn't fill History. It still sends a new down alert, once it has been down for the whole grace period again.
+A monitor that fails again within 15 minutes of recovering reopens the same outage, so a flapping target doesn't fill History. It sends a new down alert once it has been down for the whole grace period again. A reopened outage ends only after the monitor has stayed up for 15 minutes. Its recovery alert goes out then, and the outage counts as ending when the monitor came back up.
 
-If no webhook accepts a down alert, FlareWatch tries it again on each check run, up to 10 times. After that it stops alerting about that outage. Recovery alerts and error changes are sent once, without retries. An outage sends at most 5 error changes.
+If no webhook accepts a down alert, FlareWatch tries it again on each check run, up to 10 times. After that it stops alerting about that outage. Recovery alerts and error changes are sent once, without retries. An outage sends at most 5 error changes, and 5 more each time it reopens.
 
 A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced.
 

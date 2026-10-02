@@ -382,4 +382,18 @@ describe('hub routes for the status page', () => {
     expect((await remove('/maintenances/m%201')).status).toBe(404);
     expect(hub.view().maintenances).toEqual([]);
   });
+
+  it('refuses an id whose percent-encoding is malformed', async () => {
+    const { env } = createEnv();
+    const send = (method: string, path: string) =>
+      Worker.fetch(
+        new Request(`https://internal${path}`, { method, body: method === 'PUT' ? '{}' : null }),
+        env,
+        {} as ExecutionContext,
+      );
+
+    expect((await fetchRoute(env, '/latency/%E0%A4%A')).status).toBe(400);
+    expect((await send('PUT', '/maintenances/%ZZ')).status).toBe(400);
+    expect((await send('DELETE', '/maintenances/%ZZ')).status).toBe(400);
+  });
 });

@@ -74,7 +74,7 @@ A planned period, with start, end and affected monitors, that the operator adds 
 _Avoid_: Maintenance event, scheduled maintenance
 
 **Incident**:
-A stretch of downtime FlareWatch recorded for a monitor. A failure within 15 minutes after a recovery reopens the incident. The up minutes between count as downtime.
+A stretch of downtime FlareWatch recorded for a monitor. A failure within 15 minutes after a recovery reopens the incident, and a reopened incident ends only after 15 minutes up. The up minutes between count as downtime.
 _Avoid_: Outage, event
 
 ## Storage

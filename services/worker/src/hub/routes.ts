@@ -18,12 +18,14 @@ export async function handleHubRequest(request: Request, env: Env): Promise<Resp
     return Response.json(await getHub(env).maintenances());
   }
   if (pathname.startsWith('/latency/') && method === 'GET') {
-    const id = decodeURIComponent(pathname.slice('/latency/'.length));
+    const id = decodeId(pathname.slice('/latency/'.length));
+    if (id === null) return Response.json({ error: 'Invalid id' }, { status: 400 });
     return Response.json(await getHub(env).latency(id, Math.floor(Date.now() / 1000)));
   }
   if (!pathname.startsWith(MAINTENANCE_PREFIX)) return null;
 
-  const id = decodeURIComponent(pathname.slice(MAINTENANCE_PREFIX.length));
+  const id = decodeId(pathname.slice(MAINTENANCE_PREFIX.length));
+  if (id === null) return Response.json({ error: 'Invalid id' }, { status: 400 });
   if (method === 'PUT') {
     const maintenance: unknown = await request.json().catch(() => null);
     if (!isValidMaintenance(maintenance) || maintenance.id !== id) {
@@ -37,4 +39,13 @@ export async function handleHubRequest(request: Request, env: Env): Promise<Resp
     return new Response(null, { status: deleted ? 204 : 404 });
   }
   return null;
+}
+
+/** A percent-encoded path segment, or null when its encoding is malformed. */
+function decodeId(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
 }
