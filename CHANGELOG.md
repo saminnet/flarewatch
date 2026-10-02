@@ -21,8 +21,8 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 
 - A late job's badge says `DEGRADED` in yellow instead of `UP`. The badge's `degraded` and `colorDegraded` parameters change that.
 - Embeds show late, pending and running jobs the way the dashboard does.
-- A job that starts again while its outage is still open shows as down until it succeeds, on its row as in the banner and the API.
-- A monitor that asks its check location for something it can't do now fails with an error that names the setting, and the unit tests fail on it before deploy. Before, `sslCheckEnabled` on a check from the Worker, or on a proxy check with `checkProxyFallback`, passed without looking at the certificate, and `pingProtocol: 'icmp'` outside Globalping quietly ran a TCP check. See the table in [Monitors](docs/monitors.md#other-regions-and-private-networks).
+- A job that starts again while its outage is still open shows as down until it succeeds, on its row, in the banner and in the API.
+- A monitor that asks its check location for something it can't do fails with an error that names the setting, and the unit tests fail on it before deploy. Before, `sslCheckEnabled` on a check from the Worker, or on a proxy check with `checkProxyFallback`, passed without looking at the certificate, and `pingProtocol: 'icmp'` outside Globalping quietly ran a TCP check. See the table in [Monitors](docs/monitors.md#other-regions-and-private-networks).
 - Every check ends within 55 seconds of the check run's start. A longer `timeout` is cut to what is left.
 - A fallback or confirmation check, or an extra Globalping poll, runs only while the run has subrequests to spare under the free plan's 50, after the hub's calls and one request per alert webhook. No check sends a request after the run's 55 seconds.
 - A `TCP_PING` monitor with `expectedCodes`, `responseKeyword`, `responseForbiddenKeyword`, `responseJsonPath`, `responseHeaderEquals` or `sslCheckEnabled` now fails. Before, it passed on the connection alone.

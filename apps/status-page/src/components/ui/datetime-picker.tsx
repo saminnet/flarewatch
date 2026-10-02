@@ -21,6 +21,7 @@ interface DateTimePickerProps {
   clearLabel?: string;
   className?: string;
   disabled?: boolean;
+  align?: 'start' | 'end';
 }
 
 const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
@@ -42,6 +43,7 @@ export function DateTimePicker({
   clearLabel,
   className,
   disabled,
+  align = 'start',
 }: DateTimePickerProps) {
   const [open, setOpen] = useState(false);
   const [draftHour, setDraftHour] = useState('00');
@@ -95,7 +97,7 @@ export function DateTimePicker({
           </Button>
         }
       />
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent className="w-auto p-0" align={align}>
         <Calendar
           mode="single"
           timeZone="UTC"

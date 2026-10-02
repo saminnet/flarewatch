@@ -54,8 +54,8 @@ export function MaintenanceEventCard({
         <p className="text-foreground">{maintenance.body}</p>
         <DateRange start={startDate} end={endDate} noEndLabel="Until further notice" />
         {maintenance.repeat && (
-          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-            <IconRepeat className="size-3.5" />
+          <p className="mt-1 flex items-start gap-1 text-xs text-muted-foreground">
+            <IconRepeat aria-hidden="true" className="mt-px size-3.5 shrink-0" />
             {describeRepeat(maintenance.repeat)}
           </p>
         )}

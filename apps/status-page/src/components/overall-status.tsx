@@ -117,7 +117,7 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
               <Tooltip>
                 <TooltipTrigger
                   className={cn(
-                    'flex cursor-help items-center gap-1.5 text-xs text-status-degraded',
+                    'flex cursor-help items-center gap-1.5 text-xs text-status-degraded-text',
                     !willRefreshSoon && 'animate-pulse',
                   )}
                 >

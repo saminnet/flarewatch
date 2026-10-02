@@ -16,7 +16,7 @@ As the operator, the same pages show you everything:
 - a **Check now** button on each check monitor's page
 - buttons to add, edit and delete maintenance windows on History
 
-**Check now** runs that monitor's check once and shows the result under the button: up or down, the response time, where it ran from, and the error if it failed. It saves nothing. The page, History and alerts still show the last scheduled check run until the next one. Each press counts against the sign-in limit of 5 per minute per IP, because each one sends a real request to the target, or a Globalping or proxy call.
+**Check now** runs that monitor's check once and shows the result under the button: up or down, the response time, where it ran from, and the error if it failed. It saves nothing. The page, History and alerts still show the last scheduled check run until the next one. Each press counts against the sign-in limit of 5 per minute per IP, because each one sends a real request to the target, directly or through Globalping or a proxy.
 
 The account menu has a **Visitor view** switch that shows the page the way visitors see it.
 

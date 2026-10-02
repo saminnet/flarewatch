@@ -78,7 +78,7 @@ export function EmbedPage() {
             <h3 className="font-medium text-sm text-foreground truncate">{monitor.name}</h3>
           </div>
           {shown === 'down' && error && (
-            <p className="text-xs text-status-down truncate mt-0.5">{error}</p>
+            <p className="text-xs text-status-down-text truncate mt-0.5">{error}</p>
           )}
           {shown !== 'down' && latency && (
             <p

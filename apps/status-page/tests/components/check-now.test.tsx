@@ -70,7 +70,7 @@ describe('Check now on the monitor page', () => {
     fireEvent.click(checkNowButton()!);
 
     await waitFor(() => expect(result().textContent).toContain('Up'));
-    expect(result().textContent).toContain('87 ms');
+    expect(result().textContent).toContain('87ms');
     expect(result().textContent).toContain('HEL');
     expect(result().textContent).toContain('Helsinki');
     expect(fetch).toHaveBeenCalledWith('/api/admin/check', {
@@ -89,6 +89,23 @@ describe('Check now on the monitor page', () => {
     await waitFor(() => expect(result().textContent).toContain('Down'));
     expect(result().textContent).toContain('HTTP 503');
     expect(result().textContent).toContain('FRA');
+  });
+
+  it('says it is checking while the check runs', async () => {
+    let answer: (response: Response) => void = () => {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>((resolve) => (answer = resolve))),
+    );
+    renderDetail(api, true);
+
+    fireEvent.click(checkNowButton()!);
+
+    await waitFor(() => expect(result().textContent).toBe('Checking...'));
+    expect(checkNowButton()?.hasAttribute('disabled')).toBe(true);
+    answer(Response.json({ location: 'HEL', result: { ok: true, latency: 87 } }));
+    await waitFor(() => expect(result().textContent).toContain('Up'));
+    expect(result().textContent).not.toContain('Checking');
   });
 
   it.each([

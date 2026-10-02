@@ -117,7 +117,7 @@ export function MaintenanceFormDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label className="text-xs text-muted-foreground">Start *</Label>
               <DateTimePicker
@@ -133,11 +133,12 @@ export function MaintenanceFormDialog({
                 onChange={(date) => updateField('end', date)}
                 placeholder="Select end date"
                 clearLabel="Clear"
+                align="end"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="repeat" className="text-xs text-muted-foreground">
                 Repeat
@@ -173,6 +174,7 @@ export function MaintenanceFormDialog({
                   onChange={(date) => updateField('until', date)}
                   placeholder="Repeats for good"
                   clearLabel="Clear"
+                  align="end"
                 />
               </div>
             )}
@@ -181,12 +183,12 @@ export function MaintenanceFormDialog({
           {formData.repeat === 'week' && (
             <fieldset>
               <legend className="text-xs text-muted-foreground">On</legend>
-              <div className="mt-1.5 flex flex-wrap gap-1">
+              <div className="mt-1.5 grid grid-cols-7 gap-1">
                 {WEEKDAY_NAMES.map((name, day) => (
                   <Badge
                     key={name}
                     variant={formData.weekdays.includes(day) ? 'default' : 'outline'}
-                    className="cursor-pointer"
+                    className="h-7 w-full cursor-pointer px-1 aria-[pressed=false]:hover:bg-muted"
                     onClick={() => toggleWeekday(day)}
                     render={<button type="button" aria-label={name} />}
                     aria-pressed={formData.weekdays.includes(day)}
@@ -199,7 +201,7 @@ export function MaintenanceFormDialog({
           )}
 
           {formData.repeat && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               {formData.repeat === 'month' && (
                 <div>
                   <Label htmlFor="day-of-month" className="text-xs text-muted-foreground">
@@ -234,7 +236,7 @@ export function MaintenanceFormDialog({
 
           <fieldset>
             <legend className="text-xs text-muted-foreground">Severity</legend>
-            <div className="mt-1.5 flex gap-2">
+            <div className="mt-1.5 flex flex-wrap gap-2">
               {SEVERITY_OPTIONS.map((option) => (
                 <button
                   key={option.value}

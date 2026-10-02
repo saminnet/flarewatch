@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { IconRefresh } from '@tabler/icons-react';
+import { IconCircleCheck, IconCircleX, IconRefresh } from '@tabler/icons-react';
 import type { CheckResultWithLocation } from '@flarewatch/shared';
 import { Button } from '@/components/ui/button';
 import { requestCheckNow } from '@/lib/check-now';
@@ -15,21 +15,29 @@ export function CheckNow({ monitorId }: CheckNowProps) {
   const check = useMutation({ mutationFn: () => requestCheckNow(monitorId) });
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-      <Button variant="outline" size="sm" disabled={check.isPending} onClick={() => check.mutate()}>
+    <div className="mt-3 text-sm">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={check.isPending}
+        aria-busy={check.isPending}
+        onClick={() => check.mutate()}
+      >
         <IconRefresh
+          data-icon="inline-start"
           aria-hidden="true"
           className={cn('size-4', check.isPending && 'animate-spin')}
         />
         Check now
       </Button>
-      <div
-        role="status"
-        aria-label="Check now result"
-        className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-      >
+      <div role="status" aria-label="Check now result">
+        {check.isPending && <p className="mt-2 text-xs text-muted-foreground">Checking...</p>}
         {check.isSuccess && <CheckNowResult check={check.data} />}
-        {check.isError && <span className="text-status-down-text">{check.error.message}</span>}
+        {check.isError && (
+          <p className="mt-2 text-xs text-status-down-text wrap-break-word">
+            {check.error.message}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -37,21 +45,28 @@ export function CheckNow({ monitorId }: CheckNowProps) {
 
 function CheckNowResult({ check: { location, result } }: { check: CheckResultWithLocation }) {
   const coloLabel = formatColoLabel(location);
+  const Icon = result.ok ? IconCircleCheck : IconCircleX;
   return (
-    <>
-      <span
-        className={cn(
-          'font-medium',
-          result.ok ? 'text-status-operational' : 'text-status-down-text',
+    <div className="mt-2 w-fit max-w-full rounded-md border border-border bg-muted/40 px-2.5 py-2">
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <Icon
+          aria-hidden="true"
+          className={cn(
+            'size-4 shrink-0',
+            result.ok ? 'text-status-operational' : 'text-status-down',
+          )}
+        />
+        <span className="font-medium text-foreground">{result.ok ? 'Up' : 'Down'}</span>
+        {result.latency !== undefined && (
+          <span className="font-medium tabular-nums text-foreground">{`${result.latency}ms`}</span>
         )}
-      >
-        {result.ok ? 'Up' : 'Down'}
-      </span>
-      {result.latency !== undefined && <span className="font-mono">{`${result.latency} ms`}</span>}
-      <span className="text-muted-foreground">
-        {`from ${location}${coloLabel ? ` (${coloLabel})` : ''}`}
-      </span>
-      {!result.ok && <span className="break-words text-foreground">{result.error}</span>}
-    </>
+        <span className="text-muted-foreground">
+          {`from ${location}${coloLabel ? ` (${coloLabel})` : ''}`}
+        </span>
+      </p>
+      {!result.ok && result.error && (
+        <p className="mt-1 pl-5.5 text-xs text-status-down-text wrap-break-word">{result.error}</p>
+      )}
+    </div>
   );
 }
