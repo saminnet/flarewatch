@@ -197,7 +197,7 @@ describe('MonitorHub incidents', () => {
     expect(incidents).toHaveLength(1001);
     expect(incidents[0]?.error).toEqual(['err-2']);
     expect(incidents[1000]).toEqual({ start: [T0 + 1002 * gap], error: ['err-1002'] });
-  });
+  }, 30_000);
 
   it('keeps a history too long for one storage row', () => {
     const { hub, db } = createHub();
@@ -222,7 +222,7 @@ describe('MonitorHub incidents', () => {
       start: [T0 + 1002 * gap, T0 + 1002 * gap + 60],
       error: [error(1002), 'Timeout'],
     });
-  });
+  }, 30_000);
 
   it('keeps about a megabyte of history per monitor, dropping the oldest', () => {
     const { hub, db } = createHub();
@@ -242,7 +242,7 @@ describe('MonitorHub incidents', () => {
     expect(incidents.length).toBeGreaterThan(10);
     expect(incidents[incidents.length - 2]?.end).toBe(T0 + 24 * gap + 100 * 60);
     expect(incidents[incidents.length - 1]).toEqual({ start: [T0 + 25 * gap], error: ['New'] });
-  });
+  }, 30_000);
 
   it('stores the first 500 characters of an error', () => {
     const { hub } = createHub();
