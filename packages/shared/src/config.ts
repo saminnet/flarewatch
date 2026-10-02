@@ -55,13 +55,13 @@ function pageLink(field: string) {
 }
 
 function pageImage(field: string) {
-  const error = `${field} must be an http(s) URL, a path or a data:image/png, jpeg, gif, webp or x-icon URL`;
+  const error = `${field} must be an https URL, a path or a data:image/png, jpeg, gif, webp or x-icon URL`;
   return z
     .string({ error })
     .check(
       z.refine(
         (value) =>
-          isValidHttpUrl(value, 'https://page.invalid') ||
+          URL.parse(value, 'https://page.invalid')?.protocol === 'https:' ||
           /^data:image\/(?:png|jpeg|gif|webp|x-icon)[;,]/i.test(value),
         { error },
       ),
@@ -278,18 +278,22 @@ const pullMonitorSchema = z.strictObject(pullMonitorShape, unknownFieldError).ch
   }
 });
 
-const heartbeatMonitorSchema = z.looseObject({
-  ...monitorCommon,
-  id: z
-    .string()
-    .check(z.regex(HEARTBEAT_ID, { error: 'HEARTBEAT id must match ^[A-Za-z0-9_-]{1,64}$' })),
-  method: z.literal('HEARTBEAT'),
-  periodSeconds: intInRange('periodSeconds', 60, MAX_HEARTBEAT_PERIOD_SECONDS),
-  graceSeconds: intInRange('graceSeconds', 0, MAX_HEARTBEAT_GRACE_SECONDS),
-  target: z.optional(z.never({ error: 'HEARTBEAT must not define target' })),
-  checkProxy: z.optional(z.never({ error: 'HEARTBEAT must not define checkProxy' })),
-  maxLatencyMs: z.optional(z.never({ error: 'HEARTBEAT must not define maxLatencyMs' })),
-});
+const heartbeatMonitorSchema = z.strictObject(
+  {
+    ...monitorCommon,
+    id: z
+      .string()
+      .check(z.regex(HEARTBEAT_ID, { error: 'HEARTBEAT id must match ^[A-Za-z0-9_-]{1,64}$' })),
+    method: z.literal('HEARTBEAT'),
+    periodSeconds: intInRange('periodSeconds', 60, MAX_HEARTBEAT_PERIOD_SECONDS),
+    graceSeconds: intInRange('graceSeconds', 0, MAX_HEARTBEAT_GRACE_SECONDS),
+    target: z.optional(z.never({ error: 'HEARTBEAT must not define target' })),
+    checkProxy: z.optional(z.never({ error: 'HEARTBEAT must not define checkProxy' })),
+    maxLatencyMs: z.optional(z.never({ error: 'HEARTBEAT must not define maxLatencyMs' })),
+    tooltip: optionalString('tooltip'),
+  },
+  unknownFieldError,
+);
 
 function methodIssue(method: unknown): string {
   const upper = typeof method === 'string' ? method.toUpperCase() : undefined;

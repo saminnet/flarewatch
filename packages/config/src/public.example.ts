@@ -24,6 +24,8 @@ export const pageConfig: PageConfig = {
 
   // Optional: group monitors by category; omitted shows a flat list.
   group: {
-    Demo: ['demo_example', 'demo_cloudflare_trace', 'demo_cloudflare_status'],
+    Demo: ['demo_example', 'demo_cloudflare_trace'],
+    // The group the acme audience in access.example.ts signs in to.
+    Acme: ['demo_cloudflare_status'],
   },
 };

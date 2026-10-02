@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vite-plus/test';
-import { configIssues } from '@flarewatch/shared';
+import { accessConfigIssues, configIssues } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
+import { accessConfig as accessExample } from '../../../packages/config/src/access.example';
+import { pageConfig as pageExample } from '../../../packages/config/src/public.example';
+import { workerConfig as workerExample } from '../../../packages/config/src/worker.example';
 import { planIssues } from '../src/checkers';
 
 describe('packages/config', () => {
@@ -23,6 +26,19 @@ describe('packages/config', () => {
         : planIssues(monitor).map((issue) => `monitor "${monitor.id}": ${issue}`),
     );
     expect(issues).toEqual([]);
+  });
+});
+
+describe('packages/config examples', () => {
+  it('are valid together, so a fork that copies all three deploys', () => {
+    expect([
+      ...configIssues({
+        monitors: workerExample.monitors,
+        statusPage: pageExample,
+        notification: workerExample.notification,
+      }),
+      ...accessConfigIssues(accessExample, Object.keys(pageExample.group ?? {})),
+    ]).toEqual([]);
   });
 });
 

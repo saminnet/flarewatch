@@ -100,6 +100,17 @@ describe('config validation', () => {
     ).toEqual([]);
   });
 
+  it('accepts an https or path logo and rejects an http one, which the page cannot load', () => {
+    const issues = configIssues(
+      createRuntimeConfig({ statusPage: { logo: 'http://example.com/logo.png' } }),
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('logo');
+    for (const logo of ['https://example.com/logo.png', '/logo.png']) {
+      expect(configIssues(createRuntimeConfig({ statusPage: { logo } }))).toEqual([]);
+    }
+  });
+
   it('accepts string webhook options and rejects numeric values', () => {
     const config = createRuntimeConfig({
       notification: {
@@ -246,6 +257,43 @@ describe('config validation', () => {
     };
 
     expect(configIssues({ monitors: [monitor] }).join('\n')).toContain(rule);
+  });
+
+  it('accepts every HEARTBEAT field', () => {
+    const config = createRuntimeConfig({
+      monitors: [
+        ...createRuntimeConfig().monitors,
+        {
+          id: 'backup',
+          name: 'Backup',
+          method: 'HEARTBEAT',
+          periodSeconds: 3600,
+          graceSeconds: 300,
+          private: true,
+          dependsOn: ['api'],
+          reminderEveryChecks: 30,
+          link: 'https://backup.example.com',
+          tooltip: 'Nightly database dump',
+        },
+      ],
+    });
+
+    expect(configIssues(config)).toEqual([]);
+  });
+
+  it('names a misspelt HEARTBEAT field', () => {
+    const monitor = {
+      id: 'backup',
+      name: 'Backup',
+      method: 'HEARTBEAT',
+      periodSeconds: 3600,
+      graceSeconds: 300,
+      reminderEveryCheck: 30,
+    };
+
+    expect(configIssues({ monitors: [monitor] })).toEqual([
+      'monitor "backup": unknown field "reminderEveryCheck"',
+    ]);
   });
 
   it('rejects duplicate monitor ids', () => {
