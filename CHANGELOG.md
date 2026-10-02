@@ -46,6 +46,7 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 
 ### Fixed
 
+- `vp run dev-status-page` serves the page again. Before, the browser got a 500 for a module that imports `cloudflare:workers` on the server only.
 - The `text` template called a recovery "still up" when it came in the same second as the outage began.
 - An alert's target URL no longer carries the user name and password from a monitor's `target`.
 - Browsers and proxies no longer cache the page that finishes a provider sign-in and sets the session cookie.

@@ -6,7 +6,12 @@ declare global {
 export async function resolveRuntimeEnv(): Promise<Cloudflare.Env> {
   if (import.meta.env.SSR) {
     try {
-      const { env } = await import('cloudflare:workers');
+      const specifier = 'cloudflare:workers';
+      // SAFETY: the specifier is that literal. It is a variable only so Vite's client import
+      // analysis in dev skips a module that exists in workerd alone.
+      const { env } = (await import(
+        /* @vite-ignore */ specifier
+      )) as typeof import('cloudflare:workers');
       return env;
     } catch {
       // Ignore - likely not running in the Workers runtime.
