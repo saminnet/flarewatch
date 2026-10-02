@@ -99,45 +99,55 @@ export default defineConfig({
       'status-page-build': {
         command: 'vp build',
         cwd: 'apps/status-page',
-        input: [
-          { auto: true },
-          '!apps/status-page/.wrangler/**',
-          '!apps/status-page/dist/**',
-          '!apps/status-page/node_modules/.vite/**',
-          '!apps/status-page/node_modules/.vite-temp/**',
-        ],
+        cache: {
+          input: [
+            { auto: true },
+            '!apps/status-page/.wrangler/**',
+            '!apps/status-page/dist/**',
+            '!apps/status-page/node_modules/.vite/**',
+            '!apps/status-page/node_modules/.vite-temp/**',
+          ],
+        },
       },
       'worker-build': {
         command: 'pnpm exec wrangler deploy src/index.ts --outdir dist --dry-run',
         cwd: 'services/worker',
-        input: [{ auto: true }, '!services/worker/dist/**'],
+        cache: {
+          input: [{ auto: true }, '!services/worker/dist/**'],
+        },
       },
       'status-page-test': {
         command: 'vp test run',
         cwd: 'apps/status-page',
-        input: [
-          { auto: true },
-          '!apps/status-page/node_modules/.vite/**',
-          '!apps/status-page/node_modules/.vite-temp/**',
-        ],
+        cache: {
+          input: [
+            { auto: true },
+            '!apps/status-page/node_modules/.vite/**',
+            '!apps/status-page/node_modules/.vite-temp/**',
+          ],
+        },
       },
       'worker-test': {
         command: 'vp test run',
         cwd: 'services/worker',
-        input: [
-          { auto: true },
-          '!services/worker/node_modules/.vite/**',
-          '!services/worker/node_modules/.vite-temp/**',
-        ],
+        cache: {
+          input: [
+            { auto: true },
+            '!services/worker/node_modules/.vite/**',
+            '!services/worker/node_modules/.vite-temp/**',
+          ],
+        },
       },
       'shared-test': {
         command: 'vp test run',
         cwd: 'packages/shared',
-        input: [
-          { auto: true },
-          '!packages/shared/node_modules/.vite/**',
-          '!packages/shared/node_modules/.vite-temp/**',
-        ],
+        cache: {
+          input: [
+            { auto: true },
+            '!packages/shared/node_modules/.vite/**',
+            '!packages/shared/node_modules/.vite-temp/**',
+          ],
+        },
       },
       ci: {
         command: 'vp check && vp run test && vp run build',

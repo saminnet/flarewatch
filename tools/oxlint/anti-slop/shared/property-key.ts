@@ -1,4 +1,4 @@
-import type { ESTree } from "@oxlint/plugins";
+import type { ESTree } from "vite-plus/lint/plugins";
 
 /**
  * The fixed string a computed key names. `x["k"]` and a template with no substitutions both name

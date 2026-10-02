@@ -2,7 +2,7 @@
 
 name = "flarewatch-worker"
 main = "src/index.ts"
-compatibility_date = "2025-11-17"
+compatibility_date = "2026-09-30"
 compatibility_flags = []
 
 # The trigger and ping endpoints are only for the status page's service binding — never expose this worker publicly.

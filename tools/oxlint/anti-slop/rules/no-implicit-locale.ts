@@ -1,8 +1,8 @@
-import { defineRule } from "@oxlint/plugins";
+import { defineRule } from "vite-plus/lint/plugins";
 
 import { staticMemberName, staticPropertyName } from "../shared/property-key.ts";
 
-import type { ESTree } from "@oxlint/plugins";
+import type { ESTree } from "vite-plus/lint/plugins";
 
 type Argument = ESTree.CallExpression["arguments"][number];
 

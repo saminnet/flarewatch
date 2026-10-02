@@ -11,6 +11,7 @@ The hub moves your history to its new storage once, when it first starts after t
 - A monitor that keeps going down and coming back up stays in one outage until it has been up for 15 minutes. The page shows it as down until then, and its recovery alert goes out then. The outage counts as ending when the monitor came back up. Before, each flip wrote several rows, and about 20 flapping monitors could use up the free plan's daily writes.
 - Error messages are stored up to their first 500 characters.
 - Each monitor keeps at most about 1 MB of incident history. Only a monitor whose long error keeps changing reaches that before 1,000 incidents.
+- Both Workers run on the 2026-09-30 compatibility date, up from 2025-11-17. Wrangler is 4.145.
 
 ### Fixed
 

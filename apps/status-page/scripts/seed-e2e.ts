@@ -58,7 +58,7 @@ writeFileSync(e2eConfigPath, `${JSON.stringify(wranglerConfig, null, 2)}\n`);
 const workerConfig = {
   name: 'flarewatch-worker',
   main: path.join(repoDir, 'services/worker/tests/e2e/entry.ts'),
-  compatibility_date: '2025-11-17',
+  compatibility_date: '2026-09-30',
   durable_objects: { bindings: [{ name: 'MONITOR_HUB', class_name: 'MonitorHub' }] },
   migrations: [{ tag: 'v1', new_sqlite_classes: ['MonitorHub'] }],
   alias: {

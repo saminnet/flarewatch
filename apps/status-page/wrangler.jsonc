@@ -12,7 +12,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "flarewatch",
-  "compatibility_date": "2025-11-17",
+  "compatibility_date": "2026-09-30",
   // TanStack Start requires nodejs_compat for SSR (async_hooks, streams)
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",

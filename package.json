@@ -12,7 +12,6 @@
     "lint": "vp lint"
   },
   "devDependencies": {
-    "@oxlint/plugins": "^1.83.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "vite": "catalog:",
     "vite-plus": "catalog:"
