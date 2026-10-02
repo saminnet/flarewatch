@@ -125,12 +125,17 @@ export async function handlePing(
   }
 
   const limiter = env.HEARTBEAT_RATE_LIMIT;
-  if (limiter) {
-    const outcome = await limiter.limit({ key: id });
-    if (!outcome.success) {
-      log.info('Ping rate limited', { monitor: id });
-      return new Response('Too Many Requests', { status: 429, headers: RESPONSE_HEADERS });
-    }
+  if (!limiter) {
+    log.error('HEARTBEAT_RATE_LIMIT binding not found', { monitor: id });
+    return new Response('HEARTBEAT_RATE_LIMIT binding not found', {
+      status: 503,
+      headers: RESPONSE_HEADERS,
+    });
+  }
+  const outcome = await limiter.limit({ key: id });
+  if (!outcome.success) {
+    log.info('Ping rate limited', { monitor: id });
+    return new Response('Too Many Requests', { status: 429, headers: RESPONSE_HEADERS });
   }
 
   await getHub(env).ping(monitor, kind, Math.floor(Date.now() / 1000), message);

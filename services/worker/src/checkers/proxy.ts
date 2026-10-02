@@ -10,6 +10,7 @@ import {
   getErrorMessage,
   isJsonObject,
   readJsonUpTo,
+  MAX_BODY_BYTES,
   readTextUpTo,
 } from '@flarewatch/shared';
 
@@ -75,7 +76,7 @@ export async function checkExternalProxy(
       return { location: 'ERROR', result: failure(`Proxy HTTP ${response.status}`) };
     }
 
-    const data = await readJsonUpTo(response, 1024 * 1024);
+    const data = await readJsonUpTo(response, MAX_BODY_BYTES);
     if (!isProxyCheckResponse(data)) {
       return {
         location: 'ERROR',

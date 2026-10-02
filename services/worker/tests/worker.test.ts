@@ -427,6 +427,28 @@ describe('hub routes for the status page', () => {
     expect(hub.view().maintenances).toEqual([]);
   });
 
+  it('refuses a window past 100 and a body over 64 KiB with a 400', async () => {
+    const { env } = createEnv(
+      Array.from({ length: 100 }, (_, index) => createMaintenance({ id: `w${index}` })),
+    );
+    const put = (id: string, body: string) =>
+      Worker.fetch(
+        new Request(`https://internal/maintenances/${id}`, { method: 'PUT', body }),
+        env,
+        {} as ExecutionContext,
+      );
+
+    const full = await put('new', JSON.stringify(createMaintenance({ id: 'new' })));
+    expect(full.status).toBe(400);
+    await expect(full.json()).resolves.toEqual({ error: 'Too many maintenance windows' });
+
+    const large = JSON.stringify({
+      ...createMaintenance({ id: 'w1' }),
+      pad: 'x'.repeat(64 * 1024),
+    });
+    expect((await put('w1', large)).status).toBe(400);
+  });
+
   it('stores a window as normalized, with a padded time zone trimmed and a blank one as UTC', async () => {
     const { hub, env } = createEnv();
     const put = (id: string, timeZone: string) =>

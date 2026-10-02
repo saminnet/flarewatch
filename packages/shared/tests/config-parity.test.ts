@@ -1,5 +1,5 @@
-// Pins the accepted and rejected shapes inherited from the pre-Zod guards; webhook payload and
-// monitor method validation are intentionally stricter.
+// Pins the accepted and rejected shapes inherited from the pre-Zod guards; webhook payload,
+// monitor method and status page field validation are intentionally stricter.
 import { describe, expect, it } from 'vite-plus/test';
 import { configIssues, isValidMaintenance, parseMaintenances } from '../src/config';
 
@@ -104,7 +104,7 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
   ],
   ['extra top-level keys ignored', { monitors: [], somethingElse: 42 }, true],
   ['statusPage title must be a string', { monitors: [], statusPage: { title: 5 } }, false],
-  ['statusPage other fields ignored', { monitors: [], statusPage: { theme: 42 } }, true],
+  ['statusPage theme must be a string', { monitors: [], statusPage: { theme: 42 } }, false],
   ['statusPage private visibility', { monitors: [], statusPage: { visibility: 'private' } }, true],
   // A typo must not silently leave a private page public.
   ['statusPage unknown visibility', { monitors: [], statusPage: { visibility: 'Private' } }, false],
@@ -243,6 +243,13 @@ const maintenanceCases: Array<[string, unknown, boolean]> = [
   ],
   ['padded body rejected', { ...maintenanceBase, body: ' b ' }, false],
   ['extra keys ignored', { ...maintenanceBase, whatever: {} }, true],
+  // Size caps apply when a window is written; one stored before them must still load.
+  ['stored body of 3000 characters accepted', { ...maintenanceBase, body: 'b'.repeat(3000) }, true],
+  [
+    'stored list of 101 monitors accepted',
+    { ...maintenanceBase, monitors: Array.from({ length: 101 }, (_, index) => `m${index}`) },
+    true,
+  ],
   ['not an object', 7, false],
 ];
 

@@ -9,6 +9,7 @@ import type {
   NotificationConfig,
   WorkerConfig,
 } from '@flarewatch/shared';
+import type { Alert } from '../src/hub/alerts';
 import { runChecks } from '../src/index';
 import { createNotifier, type NotificationContext } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
@@ -1125,6 +1126,30 @@ describe('alert delivery', () => {
     expect(record(T + 60).alerts).toEqual([]);
     expect(record(T + 15 * 60).alerts).toEqual([]);
     expect(record(T + 20 * 60).alerts).toMatchObject([{ kind: 'down' }]);
+  });
+
+  it('lets a late failure from the run that lost its claim leave the newer claim alone', async () => {
+    const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+    const d = deployment([pull('api')]);
+    const failing = { location: 'SFO', result: { ok: false as const, error: 'Unavailable' } };
+    const record = (at: number) =>
+      d.hub.record(at, [{ monitor: pull('api') as MonitorTarget, check: failing }], policy);
+    const outcome = ({ incident, kind, reopenedAt, run }: Alert, delivered: boolean) => ({
+      incident,
+      kind,
+      reopenedAt,
+      run,
+      delivered,
+    });
+
+    const first = record(T).alerts;
+    const second = record(T + 20 * 60).alerts;
+    expect(second).toMatchObject([{ kind: 'down' }]);
+
+    d.hub.confirmAlerts(first.map((alert) => outcome(alert, false)));
+    d.hub.confirmAlerts(second.map((alert) => outcome(alert, true)));
+
+    expect(record(T + 41 * 60).alerts).toEqual([]);
   });
 });
 

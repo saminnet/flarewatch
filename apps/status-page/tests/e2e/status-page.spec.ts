@@ -839,6 +839,28 @@ test('another site can frame the embed but not the status page', async ({ page, 
   await expect(page.frameLocator('#page').getByRole('banner')).toHaveCount(0);
 });
 
+test('every script on a page carries the nonce from its Content-Security-Policy', async ({
+  request,
+}) => {
+  for (const path of ['/', '/embed/demo_example']) {
+    const response = await request.get(path);
+    const policy = response.headers()['content-security-policy'] ?? '';
+    const nonce = /script-src 'self' 'nonce-([^']+)';/.exec(policy)?.[1];
+    expect(nonce, path).toBeTruthy();
+
+    const scripts = [
+      ...(await response.text()).matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g),
+    ].map(([, attrs = '', body = '']) => ({
+      nonce: /\bnonce=["']([^"']*)["']/.exec(attrs)?.[1],
+      body,
+    }));
+    expect(scripts.map((script) => script.nonce)).toEqual(scripts.map(() => nonce));
+    const themeInit = scripts.filter(({ body }) => body.includes('__flarewatchSetThemePreference'));
+    expect(themeInit, path).toHaveLength(1);
+    expect(scripts.length, path).toBeGreaterThan(themeInit.length);
+  }
+});
+
 test.describe.serial('operator maintenance lifecycle', () => {
   test.skip(
     Boolean(process.env.PLAYWRIGHT_BASE_URL),

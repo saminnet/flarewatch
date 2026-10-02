@@ -89,6 +89,7 @@ describe('provider sign-in', () => {
     const response = await callback(`code=c1&state=${state}`);
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
     await expect(response.text()).resolves.toContain('url=/monitors/api');
     const cookies = response.headers.getSetCookie();
     expect(cookies[0]).toMatch(

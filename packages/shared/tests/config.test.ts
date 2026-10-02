@@ -48,6 +48,44 @@ describe('config validation', () => {
     expect(isValid(config)).toBe(true);
   });
 
+  it('accepts every status page field', () => {
+    const config = createRuntimeConfig({
+      statusPage: {
+        title: 'Status',
+        visibility: 'private',
+        links: [{ label: 'Home', link: 'https://example.com', highlight: true }],
+        group: { APIs: ['api'] },
+        favicon: '/favicon.png',
+        logo: 'https://example.com/logo.svg',
+        apiCorsOrigins: ['https://status.example.com'],
+        poweredByUrl: 'https://example.com',
+        theme: 'ocean',
+        customCss: 'body { margin: 0; }',
+        themeVars: '--background: #fff;',
+      },
+    });
+
+    expect(configIssues(config)).toEqual([]);
+  });
+
+  it('names an unknown status page field', () => {
+    const issues = configIssues({ monitors: [], statusPage: { titel: 'x' } });
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('titel');
+  });
+
+  it('rejects an SVG data image and accepts a PNG one', () => {
+    const issues = configIssues(
+      createRuntimeConfig({ statusPage: { favicon: 'data:image/svg+xml;base64,AAAA' } }),
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('favicon');
+    expect(
+      configIssues(createRuntimeConfig({ statusPage: { logo: 'data:image/png;base64,AAAA' } })),
+    ).toEqual([]);
+  });
+
   it('accepts string webhook options and rejects numeric values', () => {
     const config = createRuntimeConfig({
       notification: {

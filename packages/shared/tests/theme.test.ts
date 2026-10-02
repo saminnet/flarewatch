@@ -22,16 +22,76 @@ describe('contract metadata', () => {
 });
 
 describe('sanitizeThemeVars', () => {
-  it('passes through safe themeVars unchanged', () => {
-    const css = ':root{--primary:oklch(0.67 0.16 58);--radius:0.5rem}';
-    expect(sanitizeThemeVars(css)).toBe(css);
+  it('keeps the documented example intact', () => {
+    const themeVars = `
+      :root {
+        --primary: oklch(0.62 0.19 259);
+        --status-operational: oklch(0.70 0.17 162);
+      }
+      .dark {
+        --primary: oklch(0.71 0.16 255);
+      }
+    `;
+
+    expect(sanitizeThemeVars(themeVars)).toBe(
+      [
+        ':root {',
+        '  --primary: oklch(0.62 0.19 259);',
+        '  --status-operational: oklch(0.70 0.17 162);',
+        '}',
+        '.dark {',
+        '  --primary: oklch(0.71 0.16 255);',
+        '}',
+      ].join('\n'),
+    );
   });
 
-  it('rejects style-context breakouts', () => {
-    expect(sanitizeThemeVars('a}</style><script>alert(1)</script>')).toBe('');
-    expect(sanitizeThemeVars('--x: </STYLE>')).toBe('');
-    expect(sanitizeThemeVars('--x: <SCRIPT>')).toBe('');
-    expect(sanitizeThemeVars('--bg: url(JavaScript:alert(1))')).toBe('');
+  it('drops a block with another selector and keeps :root and .dark beside it', () => {
+    expect(
+      sanitizeThemeVars(
+        ':root { --primary: #ff6600 } body { color: red; --primary: red } .dark { --ring: #fff }',
+      ),
+    ).toBe(':root {\n  --primary: #ff6600;\n}\n.dark {\n  --ring: #fff;\n}');
+  });
+
+  it('puts a bare declaration in :root and drops an unknown token', () => {
+    expect(sanitizeThemeVars('--brand: #000; --primary: #ff6600; .dark { --ring: #fff }')).toBe(
+      ':root {\n  --primary: #ff6600;\n}\n.dark {\n  --ring: #fff;\n}',
+    );
+  });
+
+  it('keeps a block after a comment', () => {
+    expect(sanitizeThemeVars('/* Brand colours */ :root { --primary: #f60; }')).toBe(
+      ':root {\n  --primary: #f60;\n}',
+    );
+  });
+
+  it('keeps a declaration after a comment inside a block', () => {
+    expect(sanitizeThemeVars('.dark {\n  /* focus\n  ring */ --ring: #fff;\n}')).toBe(
+      '.dark {\n  --ring: #fff;\n}',
+    );
+  });
+
+  it('drops a value that loads a resource', () => {
+    expect(
+      sanitizeThemeVars(':root { --background: url(//evil.example/a.png); --ring: #fff }'),
+    ).toBe(':root {\n  --ring: #fff;\n}');
+    expect(sanitizeThemeVars('--background: URL(a.png)')).toBe('');
+  });
+
+  it('keeps only the valid declarations around a </style>', () => {
+    expect(
+      sanitizeThemeVars(
+        '--primary: #fff;</style><script>alert(1)</script>;--ring: red</style>;--radius: 1rem',
+      ),
+    ).toBe(':root {\n  --primary: #fff;\n  --radius: 1rem;\n}');
+  });
+
+  it('drops a value over 200 characters', () => {
+    expect(sanitizeThemeVars(`--primary: ${'a'.repeat(200)}`)).toBe(
+      `:root {\n  --primary: ${'a'.repeat(200)};\n}`,
+    );
+    expect(sanitizeThemeVars(`--primary: ${'a'.repeat(201)}`)).toBe('');
   });
 
   it('returns empty string for non-strings and empty input', () => {

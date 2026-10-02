@@ -3,6 +3,7 @@ import { verifyBasicAuthHeader } from '@/lib/auth-secret';
 import { resolveRuntimeEnv } from '@/lib/runtime-env';
 import { isSignInConfigured, overSignInLimit, resolveViewer } from '@/lib/operator.server';
 import { getConfig, isPrivateOnly } from '@/lib/config';
+import { cspNonce } from './csp-nonce';
 
 function jsonError(status: number, message: string): Response {
   return new Response(JSON.stringify({ error: message }), {
@@ -28,6 +29,23 @@ function hasInvalidOrigin(request: Request): boolean {
   return origin !== new URL(request.url).origin;
 }
 
+function contentSecurityPolicy(nonce: string, framable: boolean): string {
+  // Vite's dev server injects inline scripts for HMR and React refresh.
+  const devScripts = import.meta.env.DEV ? " 'unsafe-inline' 'unsafe-eval'" : '';
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}'${devScripts}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    ...(framable ? [] : ["frame-ancestors 'none'"]),
+  ].join('; ');
+}
+
 type MiddlewareResult = Response | RequestServerResult<any, any, any>;
 
 export async function authMiddlewareServer(
@@ -44,9 +62,10 @@ export async function authMiddlewareServer(
   const response = result instanceof Response ? result : result.response;
   const pathname = opts.pathname.toLowerCase();
   // Only the embed belongs in another site's frame; a framed sign-in or admin page invites clickjacking.
-  if (!pathname.startsWith('/embed/')) {
-    response.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
-  }
+  response.headers.set(
+    'Content-Security-Policy',
+    contentSecurityPolicy(cspNonce(opts.request), pathname.startsWith('/embed/')),
+  );
   // What a signed-in person or an admin script sees must never be stored by a shared cache.
   const env = await resolveRuntimeEnv();
   if (pathname.startsWith('/api/admin') || (await resolveViewer(env, opts.request)) !== 'visitor') {

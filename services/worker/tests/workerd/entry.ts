@@ -94,10 +94,11 @@ async function alert(hub: Stub, runs: Run[]) {
     const { alerts } = await hub.record(now, records, policy);
     for (let batch = alerts; batch.length > 0;) {
       batch = await hub.confirmAlerts(
-        batch.map(({ incident, kind, reopenedAt }) => ({
+        batch.map(({ incident, kind, reopenedAt, run }) => ({
           incident,
           kind,
           reopenedAt,
+          run,
           delivered: true,
         })),
       );

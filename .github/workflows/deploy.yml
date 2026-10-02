@@ -81,7 +81,7 @@ jobs:
 
   build-and-deploy:
     name: Deploy to Cloudflare
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     concurrency:
       group: deploy-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false

@@ -55,12 +55,14 @@ function pageLink(field: string) {
 }
 
 function pageImage(field: string) {
-  const error = `${field} must be an http(s) URL, a path or a data:image URL`;
+  const error = `${field} must be an http(s) URL, a path or a data:image/png, jpeg, gif, webp or x-icon URL`;
   return z
     .string({ error })
     .check(
       z.refine(
-        (value) => isValidHttpUrl(value, 'https://page.invalid') || /^data:image\//i.test(value),
+        (value) =>
+          isValidHttpUrl(value, 'https://page.invalid') ||
+          /^data:image\/(?:png|jpeg|gif|webp|x-icon)[;,]/i.test(value),
         { error },
       ),
     );
@@ -121,19 +123,22 @@ type SchemaOutput<T, Depth extends number = 4> = Depth extends 0
   : { [K in keyof T]: SchemaOutput<T[K], Prev[Depth]> | undefined };
 
 /** The record to store: its id and times plus the window as normalizeMaintenance returns it. */
-export function toStoredMaintenance(value: unknown): Maintenance | null {
+export function toStoredMaintenance(value: unknown, { capped = true } = {}): Maintenance | null {
   if (!isJsonObject(value) || !isNonEmptyString(value.id)) return null;
   const { createdAt, updatedAt } = value;
   if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) return null;
   if (typeof updatedAt !== 'number' || !Number.isFinite(updatedAt)) return null;
-  const result = normalizeMaintenance(value);
+  const result = normalizeMaintenance(value, { capped });
   if ('error' in result) return null;
   return { ...result.value, id: value.id, createdAt, updatedAt };
 }
 
-/** A stored window, already normalized: one that is not would reach the schedule maths raw. */
+/**
+ * A stored window, already normalized: one that is not would reach the schedule maths raw. Size
+ * caps are not checked, so a window stored before them still loads.
+ */
 export function isValidMaintenance(value: unknown): value is Maintenance {
-  return toStoredMaintenance(value) !== null && isNormalizedMaintenance(value);
+  return toStoredMaintenance(value, { capped: false }) !== null && isNormalizedMaintenance(value);
 }
 
 function nonEmptyString(field: string) {
@@ -249,30 +254,29 @@ const pullMonitorShape = {
   sslIgnoreSelfSigned: optionalBoolean('sslIgnoreSelfSigned'),
 } satisfies Record<keyof PullMonitor, z.ZodMiniType>;
 
-/** Strict, so a misspelt field fails the config instead of being ignored. */
-const pullMonitorSchema = z
-  .strictObject(pullMonitorShape, {
-    error: (issue) =>
-      issue.code === 'unrecognized_keys'
-        ? `unknown field ${issue.keys.map((key) => JSON.stringify(key)).join(', ')}`
-        : undefined,
-  })
-  .check((ctx) => {
-    const { method, target, responseJsonPath, responseJsonValue, checkProxy, confirmVia } =
-      ctx.value;
-    const issues = [
-      targetIssue(method, target),
-      (responseJsonPath === undefined) !== (responseJsonValue === undefined)
-        ? 'responseJsonPath and responseJsonValue go together'
-        : null,
-      confirmVia !== undefined && confirmVia === checkProxy
-        ? 'confirmVia must be another place than checkProxy'
-        : null,
-    ];
-    for (const message of issues) {
-      if (message) ctx.issues.push({ code: 'custom', message, input: ctx.value });
-    }
-  });
+/** For a strict object, so a misspelt field fails the config instead of being ignored. */
+const unknownFieldError = {
+  error: (issue: z.core.$ZodRawIssue) =>
+    issue.code === 'unrecognized_keys'
+      ? `unknown field ${issue.keys.map((key) => JSON.stringify(key)).join(', ')}`
+      : undefined,
+};
+
+const pullMonitorSchema = z.strictObject(pullMonitorShape, unknownFieldError).check((ctx) => {
+  const { method, target, responseJsonPath, responseJsonValue, checkProxy, confirmVia } = ctx.value;
+  const issues = [
+    targetIssue(method, target),
+    (responseJsonPath === undefined) !== (responseJsonValue === undefined)
+      ? 'responseJsonPath and responseJsonValue go together'
+      : null,
+    confirmVia !== undefined && confirmVia === checkProxy
+      ? 'confirmVia must be another place than checkProxy'
+      : null,
+  ];
+  for (const message of issues) {
+    if (message) ctx.issues.push({ code: 'custom', message, input: ctx.value });
+  }
+});
 
 const heartbeatMonitorSchema = z.looseObject({
   ...monitorCommon,
@@ -362,22 +366,30 @@ function loopFrom(start: string, byId: Map<string, DependencyNode>): string[] | 
   return walk(start, [start]);
 }
 
-const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.object({
-  title: z.optional(z.string()),
-  visibility: z.optional(z.enum(['public', 'private'])),
-  links: z.optional(
-    z.array(
-      z.object({
-        link: pageLink('links[].link'),
-        label: z.string(),
-        highlight: z.optional(z.boolean()),
-      }),
+const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.strictObject(
+  {
+    title: z.optional(z.string()),
+    visibility: z.optional(z.enum(['public', 'private'])),
+    links: z.optional(
+      z.array(
+        z.object({
+          link: pageLink('links[].link'),
+          label: z.string(),
+          highlight: z.optional(z.boolean()),
+        }),
+      ),
     ),
-  ),
-  favicon: z.optional(pageImage('favicon')),
-  logo: z.optional(pageImage('logo')),
-  poweredByUrl: z.optional(pageLink('poweredByUrl')),
-});
+    favicon: z.optional(pageImage('favicon')),
+    logo: z.optional(pageImage('logo')),
+    poweredByUrl: z.optional(pageLink('poweredByUrl')),
+    group: z.optional(z.record(z.string(), z.array(z.string()))),
+    apiCorsOrigins: z.optional(z.array(z.string())),
+    theme: z.optional(z.string()),
+    customCss: z.optional(z.string()),
+    themeVars: z.optional(z.string()),
+  },
+  unknownFieldError,
+);
 
 const webhookMethod = z.pipe(
   z.string().check(z.toUpperCase()),

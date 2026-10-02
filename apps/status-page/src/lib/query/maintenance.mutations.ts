@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
+  isJsonObject,
   isValidMaintenance,
   type Maintenance,
   type MaintenanceConfig,
@@ -54,8 +55,16 @@ async function requestOk(path: string, init: RequestInit): Promise<Response> {
     if (res.status === 401) {
       throw new SessionExpiredError();
     }
+    const body: unknown = await res
+      .clone()
+      .json()
+      .catch(() => null);
     const text = await res.text().catch(() => '');
-    throw new Error(text || `Request failed (${res.status})`);
+    throw new Error(
+      isJsonObject(body) && typeof body.error === 'string'
+        ? body.error
+        : text || `Request failed (${res.status})`,
+    );
   }
   return res;
 }

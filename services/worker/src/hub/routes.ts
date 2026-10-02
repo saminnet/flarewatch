@@ -1,4 +1,4 @@
-import { toStoredMaintenance } from '@flarewatch/shared';
+import { readJsonUpTo, toStoredMaintenance } from '@flarewatch/shared';
 import { getHub, type Env } from '../env';
 
 const MAINTENANCE_PREFIX = '/maintenances/';
@@ -27,11 +27,15 @@ export async function handleHubRequest(request: Request, env: Env): Promise<Resp
   const id = decodeId(pathname.slice(MAINTENANCE_PREFIX.length));
   if (id === null) return Response.json({ error: 'Invalid id' }, { status: 400 });
   if (method === 'PUT') {
-    const maintenance = toStoredMaintenance(await request.json().catch(() => null));
+    const maintenance = toStoredMaintenance(
+      await readJsonUpTo(request, 64 * 1024).catch(() => null),
+    );
     if (!maintenance || maintenance.id !== id) {
       return Response.json({ error: 'Invalid maintenance' }, { status: 400 });
     }
-    await getHub(env).putMaintenance(maintenance);
+    if (!(await getHub(env).putMaintenance(maintenance))) {
+      return Response.json({ error: 'Too many maintenance windows' }, { status: 400 });
+    }
     return new Response(null, { status: 204 });
   }
   if (method === 'DELETE') {

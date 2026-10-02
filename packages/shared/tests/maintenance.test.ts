@@ -102,6 +102,24 @@ describe('normalizeMaintenance', () => {
   ])('rejects %s', (_name, input) => {
     expect(normalizeMaintenance(input)).toHaveProperty('error');
   });
+
+  const ids = (count: number) => Array.from({ length: count }, (_, index) => `m${index}`);
+
+  it.each([
+    ['body', 'Description must be at most 2000 characters', 'b'.repeat(2000), 'b'.repeat(2001)],
+    ['title', 'Title must be at most 200 characters', 't'.repeat(200), 't'.repeat(201)],
+    ['color', 'Color must be at most 64 characters', 'c'.repeat(64), 'c'.repeat(65)],
+    ['monitors', 'Monitors must list at most 100 monitor ids', ids(100), ids(101)],
+    [
+      'monitors',
+      'A monitor id must be at most 100 characters',
+      ['i'.repeat(100)],
+      ['i'.repeat(101)],
+    ],
+  ])('caps %s: %s', (field, error, atCap, overCap) => {
+    expect(normalizeMaintenance({ ...valid, [field]: atCap })).toHaveProperty('value');
+    expect(normalizeMaintenance({ ...valid, [field]: overCap })).toEqual({ error });
+  });
 });
 
 /** Runs as [start, end] ISO pairs, easier to read in a failure than ms. */

@@ -16,6 +16,7 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 - Maintenance windows can repeat every day, week or month, on chosen weekdays or a day of the month, until a date or for good. Each run keeps its clock time in the time zone you pick, across daylight saving changes. The dashboard shows the current or next run, History lists every run, and alerts pause during each one. See [Repeating windows](docs/status-page.md#repeating-windows).
 - Send a monitor's alerts to some channels only: give a webhook `monitors`, a list of monitor IDs. Leave it out and the webhook gets every monitor's alerts, as before. See [Routing](docs/alerts.md#routing).
 - Reminders while a monitor stays down: set `reminderEveryChecks` on a monitor, at least 30. See [Reminders](docs/monitors.md#reminders).
+- The status page sends a Content-Security-Policy. Scripts run only from the page's own origin or with a nonce that changes on every request. See [API, badges and embeds](docs/status-page.md#api-badges-and-embeds).
 
 ### Changed
 
@@ -30,10 +31,21 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 - The admin API rejects a maintenance window with a title, color or monitor list of the wrong type. Before, it dropped the field, and a `monitors` value that wasn't a list covered every monitor. A rejected window's error now says what's wrong. `null` leaves a field out when you create a window, as it already cleared one when you update it.
 - The config check rejects a webhook with a field FlareWatch doesn't know, so a misspelt `monitors` can't route every alert to that channel. In `FLAREWATCH_WEBHOOKS` the Worker logs the field, ignores it and still alerts the webhook.
 - An error change that no webhook accepts no longer counts toward the 5 an outage may send.
+- A Globalping measurement over 1 MiB fails the check, the same limit a direct check puts on a response body. Before, the limit was 4 MiB.
+- A maintenance window's description can be at most 2000 characters, its title 200, its color 64, and it can list at most 100 monitors with IDs of at most 100 characters. The hub keeps at most 100 windows and refuses a new one past that. You can still edit the ones it has, and a window saved before these limits still shows and pauses alerts.
+- The config check rejects a `statusPage` field FlareWatch doesn't know, so a misspelt one fails the deploy instead of being ignored.
+- The page keeps only the `:root` and `.dark` blocks of `themeVars`, and in them only supported tokens set to a plain colour or length value. Before, the page kept all of it unless it held `</style`, `<script` or `javascript:`. See [Theming](docs/theming.md#what-isnt-supported).
+- `logo` and `favicon` take a `data:image/` URL only for PNG, JPEG, GIF, WebP or ICO. An SVG data URL now fails the config check; use a path or URL to the SVG file instead.
+- Heartbeat pings answer 503 when the Worker has no `HEARTBEAT_RATE_LIMIT` binding. Before, they were taken without a limit. The committed `wrangler.toml` has the binding, so keep it if you edit that file.
+- A monitor's page lists maintenance windows up to a year ahead. A window that starts later shows there once it is less than a year away.
 
 ### Fixed
 
 - The `text` template called a recovery "still up" when it came in the same second as the outage began.
+- An alert's target URL no longer carries the user name and password from a monitor's `target`.
+- Browsers and proxies no longer cache the page that finishes a provider sign-in and sets the session cookie.
+- The maintenance dialog shows why a window was refused, such as "Too many maintenance windows", instead of the raw JSON reply.
+- A down alert no longer goes out twice when a stalled check run reports a failed delivery after a later run took the alert over.
 
 ## 3.2.0 - 2026-10-02
 

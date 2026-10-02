@@ -14,11 +14,9 @@ import {
   createLogger,
   getErrorMessage,
   readJsonUpTo,
+  MAX_BODY_BYTES,
 } from '@flarewatch/shared';
 import * as z from 'zod/mini';
-
-/** A measurement carries the monitored site's response body, so its size is not ours to trust. */
-const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 const log = createLogger('GlobalPing');
 
@@ -193,7 +191,7 @@ async function createMeasurement(
   if (response.status !== 202) {
     const errorBody = z
       .object({ error: z.optional(z.object({ message: z.string() })) })
-      .safeParse(await readJsonUpTo(response, MAX_RESPONSE_BYTES));
+      .safeParse(await readJsonUpTo(response, MAX_BODY_BYTES));
     throw new Error(
       (errorBody.success ? errorBody.data.error?.message : undefined) ??
         `API error: ${response.status}`,
@@ -202,7 +200,7 @@ async function createMeasurement(
 
   const created = z
     .object({ id: z.string() })
-    .safeParse(await readJsonUpTo(response, MAX_RESPONSE_BYTES));
+    .safeParse(await readJsonUpTo(response, MAX_BODY_BYTES));
   if (!created.success) {
     throw new Error('invalid measurement creation response');
   }
@@ -224,9 +222,7 @@ async function pollMeasurement(
     const response = await fetcher(`${GLOBALPING_API}/${measurementId}`, {
       timeout: API_TIMEOUT,
     });
-    const parsed = measurementResultSchema.safeParse(
-      await readJsonUpTo(response, MAX_RESPONSE_BYTES),
-    );
+    const parsed = measurementResultSchema.safeParse(await readJsonUpTo(response, MAX_BODY_BYTES));
     if (!parsed.success) {
       throw new Error('invalid measurement payload');
     }

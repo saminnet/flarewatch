@@ -144,6 +144,15 @@ function redact(text: string, webhook: Webhook, finalUrl: string): string {
     .reduce((result, secret) => result.replaceAll(secret, '<header>'), masked);
 }
 
+/** The target without the user:pass@ of a URL; every other target exactly as written. */
+function withoutCredentials(target: string): string {
+  const url = URL.parse(target);
+  if (!url || (!url.username && !url.password)) return target;
+  url.username = '';
+  url.password = '';
+  return url.href;
+}
+
 export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook): TemplateContext {
   const { monitor, incidentStartTime, currentTime, reason, timeZone } = ctx;
   const formatter = createDateFormatter(timeZone);
@@ -151,8 +160,9 @@ export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook)
   return {
     monitorName: monitor.name,
     monitorId: monitor.id,
-    targetUrl:
+    targetUrl: withoutCredentials(
       'target' in monitor ? monitor.target : typeof monitor.link === 'string' ? monitor.link : '',
+    ),
     kind: ctx.kind,
     isInitialOutage: isInitialOutage(ctx),
     downtimeMinutes: Math.round(ctx.downtimeSeconds / 60),

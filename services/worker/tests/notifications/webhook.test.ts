@@ -123,6 +123,18 @@ describe('webhook notifications', () => {
       expect(up.incidentKey).toBe(down.incidentKey);
     });
 
+    it('drops the credentials from a target URL and keeps a host:port target', () => {
+      const targetUrl = (target: string) =>
+        buildTemplateContext(createContext({ monitor: { ...createMonitor(), target } }), webhook)
+          .targetUrl;
+
+      expect(targetUrl('https://alice:s3cret@example.com/health')).toBe(
+        'https://example.com/health',
+      );
+      expect(targetUrl('db.example.com:5432')).toBe('db.example.com:5432');
+      expect(targetUrl('https://example.com')).toBe('https://example.com');
+    });
+
     it('passes webhook url and options into the template context', () => {
       const ctx = buildTemplateContext(createContext(), {
         url: 'https://hooks.example.com/webhook',

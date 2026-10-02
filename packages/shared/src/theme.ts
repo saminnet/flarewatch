@@ -56,18 +56,45 @@ export const SUPPORTED_THEME_TOKENS = [
   'status-unknown-border',
 ] as const;
 
-/** Sequences that could break out of an inline <style>. */
-const UNSAFE_THEME_SEQUENCES = ['</style', '<script', 'javascript:'] as const;
+const THEME_TOKENS: ReadonlySet<string> = new Set(SUPPORTED_THEME_TOKENS);
+const THEME_VALUE = /^[\w\s#%.,()/-]+$/;
+const THEME_DECLARATION = /^\s*--([^:]*?)\s*:\s*(.*?)\s*$/s;
+
+/** The declarations in `text` that set a supported token to a plain value, one per line. */
+function themeDeclarations(text: string): string[] {
+  return text.split(';').flatMap((declaration) => {
+    const [, name = '', value = ''] = THEME_DECLARATION.exec(declaration) ?? [];
+    const kept =
+      THEME_TOKENS.has(name) &&
+      value.length <= 200 &&
+      THEME_VALUE.test(value) &&
+      !/url\(/i.test(value);
+    return kept ? [`  --${name}: ${value};`] : [];
+  });
+}
 
 /**
- * Safety floor for injected themeVars: guarantees it can't break out of an inline
- * <style>. Returns '' if unsafe or not a non-empty string (no token validation).
+ * themeVars rebuilt from what is safe in it: a `:root` and a `.dark` block of supported tokens set
+ * to plain values, with declarations outside any block in `:root`. Everything else is dropped, so
+ * nothing can leave the inline <style> or load a resource.
  */
 export function sanitizeThemeVars(input: unknown): string {
   if (!isNonEmptyString(input)) return '';
-  const lower = input.toLowerCase();
-  for (const sequence of UNSAFE_THEME_SEQUENCES) {
-    if (lower.includes(sequence)) return '';
+  const blocks = new Map<string, string[]>([
+    [':root', []],
+    ['.dark', []],
+  ]);
+  for (const chunk of input.replace(/\/\*[\s\S]*?\*\//g, '').split('}')) {
+    const open = chunk.indexOf('{');
+    const outside = (open === -1 ? chunk : chunk.slice(0, open)).split(';');
+    const selector = open === -1 ? undefined : outside.pop()?.trim();
+    blocks.get(':root')?.push(...themeDeclarations(outside.join(';')));
+    if (selector !== undefined) {
+      blocks.get(selector)?.push(...themeDeclarations(chunk.slice(open + 1)));
+    }
   }
-  return input;
+  return [...blocks]
+    .filter(([, lines]) => lines.length > 0)
+    .map(([selector, lines]) => `${selector} {\n${lines.join('\n')}\n}`)
+    .join('\n');
 }

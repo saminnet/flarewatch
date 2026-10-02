@@ -560,6 +560,7 @@ describe('runBudget', () => {
   it('keeps the checks, extra attempts and the hub call within 50 subrequests', () => {
     const { subrequests } = runBudget(monitors(45), 0);
     expect(45 + subrequests + 1).toBeLessThanOrEqual(50);
+    expect(runBudget(monitors(60), 0).subrequests).toBe(0);
   });
 
   it('counts a Globalping check as at least two subrequests: create and poll', () => {

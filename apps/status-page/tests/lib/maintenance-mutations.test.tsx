@@ -92,4 +92,17 @@ describe('maintenance mutations', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(queryClient.getQueryData(qk.session)).toBeUndefined();
   });
+
+  it("shows the server's reason when it turns a window down", async () => {
+    const { wrapper } = setup(maintenance('x', '2026-01-01T00:00:00.000Z'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ error: 'Too many maintenance windows' }, { status: 400 })),
+    );
+
+    const { result } = renderHook(() => useCreateMaintenance(), { wrapper });
+    result.current.mutate({ body: 'x', start: '2026-01-01T00:00:00.000Z' });
+
+    await waitFor(() => expect(result.current.error?.message).toBe('Too many maintenance windows'));
+  });
 });

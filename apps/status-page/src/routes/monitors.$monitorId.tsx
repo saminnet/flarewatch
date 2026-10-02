@@ -92,9 +92,9 @@ function MonitorHistory({
     state,
     monitors: snapshot.monitors,
     maintenances: snapshot.maintenances,
-    // Incidents are kept for the same 90 days; the far end keeps every window's next run.
+    // Incidents are kept for the same 90 days.
     monthStart: new Date(nowMs - UPTIME_DAYS * TIME_MS.DAY),
-    monthEnd: new Date(8.64e15),
+    monthEnd: new Date(nowMs + 366 * TIME_MS.DAY),
     nowMs,
     selectedMonitor: monitorId,
     eventType: 'all',

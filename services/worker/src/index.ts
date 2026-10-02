@@ -139,6 +139,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
         incident: alert.incident,
         kind: alert.kind,
         reopenedAt: alert.reopenedAt,
+        run: alert.run,
         delivered,
       });
     }

@@ -41,6 +41,7 @@ function createEnv(extra: Partial<Env> = {}): Env {
   return {
     MONITOR_HUB: hubNamespace(hub),
     HEARTBEAT_SECRET: SECRET,
+    HEARTBEAT_RATE_LIMIT: { limit: async () => ({ success: true }) },
     ...extra,
   };
 }
@@ -357,6 +358,18 @@ describe('ping routes', () => {
 
     expect(limited.status).toBe(429);
     expect(limiter.limit).toHaveBeenCalledWith({ key: heartbeat.id });
+    expect(hub.view().monitors[heartbeat.id]).toBeUndefined();
+  });
+
+  it('refuses with 503 and leaves the hub alone without the rate limit binding', async () => {
+    const { HEARTBEAT_RATE_LIMIT: _limiter, ...env } = createEnv();
+
+    const response = await ping(`/ping/${heartbeat.id}/${await token()}`, undefined, env);
+
+    expect(response.status).toBe(503);
+    await expect(response.text()).resolves.toBe('HEARTBEAT_RATE_LIMIT binding not found');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
     expect(hub.view().monitors[heartbeat.id]).toBeUndefined();
   });
 

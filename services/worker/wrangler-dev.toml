@@ -13,3 +13,8 @@ class_name = "MonitorHub"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["MonitorHub"]
+
+[[ratelimits]]
+name = "HEARTBEAT_RATE_LIMIT"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }

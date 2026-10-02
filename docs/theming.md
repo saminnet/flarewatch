@@ -56,4 +56,4 @@ A maintenance window with its own severity colour uses that colour instead of th
 
 Stick to colour and length values like `oklch(...)`, `#rrggbb` or `1rem`. New selectors, Tailwind classes, layout rules, fonts (`@import`, `@font-face`) and `url()` may render today but can break on any upgrade.
 
-If `themeVars` contains `</style`, `<script` or `javascript:`, the page drops all of it and uses the defaults. That check lives in `sanitizeThemeVars()` in [`theme.ts`](../packages/shared/src/theme.ts), next to the list of supported tokens.
+The page keeps only the `:root` and `.dark` blocks of `themeVars`, and reads a declaration outside any block as `:root`. In those it keeps a declaration when the token is in the lists above and the value is at most 200 characters of letters, digits, spaces and `# % . , ( ) / -`, without `url(`. It drops everything else, including any other selector with its whole block. That check lives in `sanitizeThemeVars()` in [`theme.ts`](../packages/shared/src/theme.ts), next to the list of supported tokens.

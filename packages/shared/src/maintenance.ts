@@ -265,11 +265,22 @@ function normalizeRepeat(
   };
 }
 
+/** Size limits a window must meet to be written. A stored window is read without them. */
+function overCap({ body, title = '', color = '', monitors = [] }: MaintenanceConfig) {
+  if (body.length > 2000) return 'Description must be at most 2000 characters';
+  if (title.length > 200) return 'Title must be at most 200 characters';
+  if (color.length > 64) return 'Color must be at most 64 characters';
+  if (monitors.length > 100) return 'Monitors must list at most 100 monitor ids';
+  if (monitors.some((id) => id.length > 100)) return 'A monitor id must be at most 100 characters';
+  return undefined;
+}
+
 /**
  * Checks a window as an operator, a script or the hub sends it, and returns it trimmed, with
- * ISO times and deduplicated monitors. Every place that accepts a window calls this.
+ * ISO times and deduplicated monitors. Every place that accepts a window calls this; reading a
+ * stored one passes `capped: false`.
  */
-export function normalizeMaintenance(input: unknown): Normalized {
+export function normalizeMaintenance(input: unknown, { capped = true } = {}): Normalized {
   if (!isJsonObject(input)) return { error: 'A maintenance window must be an object' };
 
   const body = typeof input.body === 'string' ? input.body.trim() : '';
@@ -302,17 +313,17 @@ export function normalizeMaintenance(input: unknown): Normalized {
     repeat = result.repeat;
   }
 
-  return {
-    value: {
-      ...(title !== undefined && { title }),
-      body,
-      start: new Date(start).toISOString(),
-      ...(end !== undefined && { end: new Date(end).toISOString() }),
-      ...(monitors && { monitors }),
-      ...(color !== undefined && { color }),
-      ...(repeat && { repeat }),
-    },
+  const value = {
+    ...(title !== undefined && { title }),
+    body,
+    start: new Date(start).toISOString(),
+    ...(end !== undefined && { end: new Date(end).toISOString() }),
+    ...(monitors && { monitors }),
+    ...(color !== undefined && { color }),
+    ...(repeat && { repeat }),
   };
+  const error = capped ? overCap(value) : undefined;
+  return error ? { error } : { value };
 }
 
 const WINDOW_FIELDS = ['title', 'body', 'start', 'end', 'monitors', 'color', 'repeat'] as const;
@@ -338,7 +349,7 @@ function sameValue(raw: unknown, normal: unknown, field = ''): boolean {
  * way for the same instant; keys outside the window's own fields are ignored.
  */
 export function isNormalizedMaintenance(value: unknown): boolean {
-  const result = normalizeMaintenance(value);
+  const result = normalizeMaintenance(value, { capped: false });
   return (
     isJsonObject(value) &&
     'value' in result &&

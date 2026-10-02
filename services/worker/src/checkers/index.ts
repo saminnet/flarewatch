@@ -163,7 +163,7 @@ export function runBudget(
   }
   return {
     deadline: now + CHECK_WINDOW_MS,
-    subrequests: SUBREQUEST_LIMIT - RESERVED_SUBREQUESTS - webhooks - primaries,
+    subrequests: Math.max(0, SUBREQUEST_LIMIT - RESERVED_SUBREQUESTS - webhooks - primaries),
   };
 }
 

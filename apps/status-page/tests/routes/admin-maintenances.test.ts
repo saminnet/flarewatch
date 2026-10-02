@@ -9,12 +9,14 @@ afterEach(() => {
   globalThis.__env__ = originalEnv;
 });
 
-function getPostHandler() {
+function getHandler(method: 'POST' | 'PUT') {
   const options = Route.options as { server?: { handlers?: Record<string, Handler> } };
-  const post = options.server?.handlers?.POST;
-  if (!post) throw new Error('POST handler not found on the maintenances route');
-  return post;
+  const handler = options.server?.handlers?.[method];
+  if (!handler) throw new Error(`${method} handler not found on the maintenances route`);
+  return handler;
 }
+
+const getPostHandler = () => getHandler('POST');
 
 type Handler = (ctx: { request: Request }) => Promise<Response>;
 
@@ -210,5 +212,37 @@ describe('POST /api/admin/maintenances', () => {
 
     expect(response.status).toBe(400);
     expect(put).not.toHaveBeenCalled();
+  });
+});
+
+describe('the hub refusing a window', () => {
+  function stubHub() {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'PUT'
+        ? Response.json({ error: 'Too many maintenance windows' }, { status: 400 })
+        : Response.json([current]),
+    );
+    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+  }
+
+  const send = (method: 'POST' | 'PUT', body: unknown) =>
+    getHandler(method)({
+      request: new Request('https://flarewatch.test/api/admin/maintenances', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    });
+
+  it.each([
+    ['POST', { body: 'Upgrade', start: '2026-06-10T10:00:00Z' }],
+    ['PUT', { id: current.id, updates: { body: 'Edited' } }],
+  ] as const)('answers %s with 400 and the reason the hub gave', async (method, body) => {
+    stubHub();
+
+    const response = await send(method, body);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Too many maintenance windows' });
   });
 });

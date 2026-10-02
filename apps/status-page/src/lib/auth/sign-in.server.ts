@@ -143,7 +143,10 @@ export async function finishSignIn(
   if (!kv) return new Response('FLAREWATCH_STATE binding not found', { status: 500 });
 
   const sessionId = await startSession(kv, clientIp(request), identity);
-  const headers = new Headers({ 'Content-Type': 'text/html; charset=utf-8' });
+  const headers = new Headers({
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
   headers.append('Set-Cookie', sessionCookie(request, sessionId));
   headers.append('Set-Cookie', flowCookie(request, '', 0));
   // A page, not a redirect: after a cross-site hop the browser would hold back

@@ -104,7 +104,7 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T
 }
 
 /** A body is read this far and no further: a monitored site must not be able to exhaust the Worker's memory. */
-const MAX_BODY_BYTES = 1024 * 1024;
+export const MAX_BODY_BYTES = 1024 * 1024;
 
 const JSON_PATH = /^\$(?:\.[^.[\]]+|\[\d+\])*$/;
 

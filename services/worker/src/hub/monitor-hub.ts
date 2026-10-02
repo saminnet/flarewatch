@@ -27,6 +27,7 @@ import { durableObjectSql, parseJson, type Sql } from './sql';
 const HISTORY_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
 const HOUR = 60 * 60;
+const MAX_MAINTENANCES = 100;
 
 /** A check monitor's result, or a heartbeat monitor, which the hub evaluates from its pings. */
 export type CheckRecord =
@@ -273,13 +274,20 @@ export class MonitorHub extends DurableObject<Env> {
     ).sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
   }
 
-  putMaintenance(maintenance: Maintenance): void {
+  /** False, and nothing stored, when the id is new and the hub already holds MAX_MAINTENANCES. */
+  putMaintenance(maintenance: Maintenance): boolean {
+    const [existing] = this.sql.exec('SELECT 1 FROM maintenances WHERE id = ?', maintenance.id);
+    if (!existing) {
+      const [row] = this.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM maintenances');
+      if ((row?.count ?? 0) >= MAX_MAINTENANCES) return false;
+    }
     this.sql.exec(
       `INSERT INTO maintenances (id, data) VALUES (?, ?)
        ON CONFLICT (id) DO UPDATE SET data = excluded.data`,
       maintenance.id,
       JSON.stringify(maintenance),
     );
+    return true;
   }
 
   deleteMaintenance(id: string): boolean {

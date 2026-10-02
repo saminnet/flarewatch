@@ -505,6 +505,21 @@ describe('MonitorHub maintenance windows', () => {
     expect(hub.view().maintenances.map(({ id }) => id)).toEqual(['b-early']);
   });
 
+  it('refuses a new window past 100 and still updates an existing one', () => {
+    const { hub } = createHub();
+    for (let index = 1; index <= 100; index++) {
+      expect(hub.putMaintenance(window(`w${index}`, T0))).toBe(true);
+    }
+
+    expect(hub.putMaintenance(window('w101', T0))).toBe(false);
+    expect(hub.putMaintenance({ ...window('w50', T0), body: 'edited' })).toBe(true);
+
+    const stored = hub.view().maintenances;
+    expect(stored).toHaveLength(100);
+    expect(stored.find(({ id }) => id === 'w50')?.body).toBe('edited');
+    expect(stored.some(({ id }) => id === 'w101')).toBe(false);
+  });
+
   it('deletes a window 90 days after it ends and keeps one without an end', () => {
     const { hub } = createHub();
     hub.putMaintenance(window('expired', T0 - 100 * DAY, T0 - 90 * DAY - 1));
@@ -616,10 +631,11 @@ describe('MonitorHub after an upgrade from 3.2', () => {
     const before = createHub({}, db).hub;
     const { alerts } = before.record(T0, [check('api', down())], POLICY);
     before.confirmAlerts(
-      alerts.map(({ incident, kind, reopenedAt }) => ({
+      alerts.map(({ incident, kind, reopenedAt, run }) => ({
         incident,
         kind,
         reopenedAt,
+        run,
         delivered: true,
       })),
     );

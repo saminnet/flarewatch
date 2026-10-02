@@ -8,7 +8,12 @@ import {
   normalizeMaintenance,
   readJsonUpTo,
 } from '@flarewatch/shared';
-import { deleteMaintenance, fetchMaintenances, saveMaintenance } from '@/lib/monitor-worker';
+import {
+  deleteMaintenance,
+  fetchMaintenances,
+  MaintenanceRefused,
+  saveMaintenance,
+} from '@/lib/monitor-worker';
 import { forgetCachedView } from '@/lib/snapshots';
 
 function jsonError(message: string, status: number): Response {
@@ -103,6 +108,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
 
           return Response.json(maintenance, { status: 201 });
         } catch (error) {
+          if (error instanceof MaintenanceRefused) return jsonError(error.message, 400);
           console.error('Error creating maintenance:', error);
           return jsonError('Internal server error', 500);
         }
@@ -141,6 +147,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
 
           return Response.json(updated);
         } catch (error) {
+          if (error instanceof MaintenanceRefused) return jsonError(error.message, 400);
           console.error('Error updating maintenance:', error);
           return jsonError('Internal server error', 500);
         }

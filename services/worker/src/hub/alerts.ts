@@ -87,6 +87,11 @@ export interface Alert {
    * counters an outcome updates, so an outcome from before it is dropped.
    */
   reopenedAt: number | null;
+  /**
+   * The check run that decided the alert. A later run can take over a stale
+   * claim, so a down alert's outcome counts only while its run holds the claim.
+   */
+  run: number;
 }
 
 /** Whether any webhook accepted an alert. */
@@ -95,6 +100,8 @@ export interface AlertOutcome {
   kind: AlertKind;
   /** The alert's reopenedAt, handed back unchanged. */
   reopenedAt: number | null;
+  /** The alert's run, handed back unchanged. */
+  run: number;
   delivered: boolean;
 }
 
@@ -140,7 +147,14 @@ export class Alerts {
           // A held recovery ended when the monitor came back up, not now.
           const end = closed.upSince ?? undefined;
           alerts.push(
-            recoveryAlert(monitor.id, closed.id, closed.reopenedAt, change.incidentStartTime, end),
+            recoveryAlert(
+              monitor.id,
+              closed.id,
+              closed.reopenedAt,
+              runNumber,
+              change.incidentStartTime,
+              end,
+            ),
           );
         }
         continue;
@@ -178,6 +192,7 @@ export class Alerts {
           monitorId: monitor.id,
           incident: open.id,
           reopenedAt: open.reopenedAt,
+          run: runNumber,
           kind: 'down',
           incidentStartTime: start,
           error,
@@ -198,6 +213,7 @@ export class Alerts {
           monitorId: monitor.id,
           incident: open.id,
           reopenedAt: open.reopenedAt,
+          run: runNumber,
           kind: 'error',
           incidentStartTime: start,
           error,
@@ -216,6 +232,7 @@ export class Alerts {
           monitorId: monitor.id,
           incident: open.id,
           reopenedAt: open.reopenedAt,
+          run: runNumber,
           kind: 'reminder',
           incidentStartTime: start,
           error,
@@ -234,7 +251,7 @@ export class Alerts {
    */
   record(outcomes: AlertOutcome[]): Alert[] {
     const recoveries: Alert[] = [];
-    for (const { incident, kind, reopenedAt, delivered } of outcomes) {
+    for (const { incident, kind, reopenedAt, run, delivered } of outcomes) {
       if (kind === 'error' && !delivered) {
         this.sql.exec(
           `UPDATE incidents SET error_alerts = error_alerts - 1
@@ -256,9 +273,10 @@ export class Alerts {
         this.sql.exec(
           `UPDATE incidents SET alert_attempts = alert_attempts + 1,
              alert = CASE WHEN alert_attempts + 1 >= ? THEN 'failed' ELSE 'pending' END
-           WHERE id = ? AND alert = 'sending'`,
+           WHERE id = ? AND alert = 'sending' AND alert_run = ?`,
           MAX_ALERT_ATTEMPTS,
           incident,
+          run,
         );
         continue;
       }
@@ -268,10 +286,11 @@ export class Alerts {
         end_at: number | null;
         reopened_at: number | null;
       }>(
-        `UPDATE incidents SET alert = 'sent' WHERE id = ? AND alert = 'sending'
+        `UPDATE incidents SET alert = 'sent' WHERE id = ? AND alert = 'sending' AND alert_run = ?
          RETURNING monitor_id, end_at, reopened_at,
            CASE WHEN json_valid(starts) THEN json_extract(starts, '$[0]') END AS start`,
         incident,
+        run,
       );
       if (row?.end_at != null) {
         recoveries.push(
@@ -279,6 +298,7 @@ export class Alerts {
             row.monitor_id,
             incident,
             row.reopened_at,
+            run,
             row.start ?? row.end_at,
             row.end_at,
           ),
@@ -293,6 +313,7 @@ function recoveryAlert(
   monitorId: string,
   incident: number,
   reopenedAt: number | null,
+  run: number,
   start: number,
   at?: number,
 ): Alert {
@@ -300,6 +321,7 @@ function recoveryAlert(
     monitorId,
     incident,
     reopenedAt,
+    run,
     kind: 'recovered',
     incidentStartTime: start,
     error: '',

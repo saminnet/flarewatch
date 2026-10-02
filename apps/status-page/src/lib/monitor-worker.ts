@@ -53,11 +53,20 @@ export async function fetchMaintenances(): Promise<Maintenance[]> {
   return maintenances;
 }
 
+/** The hub turned a window down, for a reason the operator can act on. */
+export class MaintenanceRefused extends Error {}
+
 export async function saveMaintenance(maintenance: Maintenance): Promise<void> {
   const response = await callMonitorWorker(`/maintenances/${encodeURIComponent(maintenance.id)}`, {
     method: 'PUT',
     body: JSON.stringify(maintenance),
   });
+  if (response.status === 400) {
+    const body: unknown = await response.json().catch(() => null);
+    if (isJsonObject(body) && typeof body.error === 'string') {
+      throw new MaintenanceRefused(body.error);
+    }
+  }
   if (!response.ok) throw new Error(`Saving maintenance answered ${response.status}`);
 }
 

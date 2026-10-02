@@ -120,15 +120,15 @@ To keep the whole page to yourself, set `visibility: 'private'` in `packages/con
 
 `packages/config/src/public.ts`:
 
-| Setting           | Does                                                           |
-| ----------------- | -------------------------------------------------------------- |
-| `title`           | Page and tab title.                                            |
-| `logo`, `favicon` | Image URLs, paths or `data:image/` URLs.                       |
-| `links`           | Footer links, like `{ label: 'GitHub', link: 'https://...' }`. |
-| `group`           | Monitor groups, like `{ APIs: ['api', 'auth'] }`.              |
-| `visibility`      | `'private'` for a [private page](#private-page).               |
-| `apiCorsOrigins`  | Origins allowed to call the JSON API. Defaults to any.         |
-| `themeVars`       | Colour overrides. See [Theming](theming.md).                   |
+| Setting           | Does                                                                  |
+| ----------------- | --------------------------------------------------------------------- |
+| `title`           | Page and tab title.                                                   |
+| `logo`, `favicon` | Image URLs, paths or `data:image/` URLs: PNG, JPEG, GIF, WebP or ICO. |
+| `links`           | Footer links, like `{ label: 'GitHub', link: 'https://...' }`.        |
+| `group`           | Monitor groups, like `{ APIs: ['api', 'auth'] }`.                     |
+| `visibility`      | `'private'` for a [private page](#private-page).                      |
+| `apiCorsOrigins`  | Origins allowed to call the JSON API. Defaults to any.                |
+| `themeVars`       | Colour overrides. See [Theming](theming.md).                          |
 
 ## Statuses
 
@@ -154,6 +154,8 @@ Only down counts against uptime.
 | `/embed/<monitor>`        | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`.                                                        |
 
 Other sites can show `/embed` in a frame. All other pages refuse to load in a frame. This stops other sites from framing your sign-in page.
+
+Every page sends a Content-Security-Policy header. It lets a page run scripts only from its own origin, plus the page's own inline scripts, which carry a new random nonce on each request. A script injected into the page from anywhere else doesn't run. Images may load from any `https:` address or a `data:` URL, so a logo or favicon URL in your config still works.
 
 ### Admin endpoints
 

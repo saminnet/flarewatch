@@ -286,29 +286,71 @@ describe('auth middleware caching', () => {
   });
 });
 
-describe('auth middleware framing', () => {
+describe('auth middleware content security policy', () => {
   const { visibility } = pageConfig;
   afterEach(() => {
     pageConfig.visibility = visibility;
   });
 
-  const frameAncestors = async (pathname: string) =>
-    ((await call(pathname).response) as Response).headers.get('Content-Security-Policy');
+  const policy = async (pathname: string) =>
+    ((await call(pathname).response) as Response).headers.get('Content-Security-Policy') ?? '';
+
+  const directive = async (pathname: string, name: string) =>
+    (await policy(pathname))
+      .split('; ')
+      .find((entry) => entry.startsWith(`${name} `))
+      ?.slice(name.length + 1);
+
+  const nonceOf = async (pathname: string) =>
+    /'nonce-([^']+)'/.exec((await directive(pathname, 'script-src')) ?? '')?.[1];
 
   it('lets other sites frame the embed only', async () => {
     vi.stubGlobal('__env__', {});
 
-    await expect(frameAncestors('/')).resolves.toBe("frame-ancestors 'none'");
-    await expect(frameAncestors('/login')).resolves.toBe("frame-ancestors 'none'");
-    await expect(frameAncestors('/api/admin/maintenances')).resolves.toBe("frame-ancestors 'none'");
-    await expect(frameAncestors('/embed/demo_example')).resolves.toBeNull();
-    await expect(frameAncestors('/Embed/demo_example')).resolves.toBeNull();
+    await expect(directive('/', 'frame-ancestors')).resolves.toBe("'none'");
+    await expect(directive('/login', 'frame-ancestors')).resolves.toBe("'none'");
+    await expect(directive('/api/admin/maintenances', 'frame-ancestors')).resolves.toBe("'none'");
+    await expect(directive('/embed/demo_example', 'frame-ancestors')).resolves.toBeUndefined();
+    await expect(directive('/Embed/demo_example', 'frame-ancestors')).resolves.toBeUndefined();
   });
 
   it('forbids framing the sign-in redirect of a private page', async () => {
     pageConfig.visibility = 'private';
     vi.stubGlobal('__env__', { FLAREWATCH_ADMIN_BASIC_AUTH: 'configured' });
 
-    await expect(frameAncestors('/')).resolves.toBe("frame-ancestors 'none'");
+    await expect(directive('/', 'frame-ancestors')).resolves.toBe("'none'");
+  });
+
+  it('allows only same-origin scripts and those carrying the request nonce', async () => {
+    vi.stubGlobal('__env__', {});
+    vi.stubEnv('DEV', false);
+
+    const header = await policy('/');
+    const nonce = /'nonce-([A-Za-z0-9_-]{43})'/.exec(header)?.[1];
+    expect(header).toBe(
+      `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,
+    );
+    await expect(directive('/embed/demo_example', 'script-src')).resolves.toMatch(
+      /^'self' 'nonce-[A-Za-z0-9_-]{43}'$/,
+    );
+  });
+
+  it('gives every request its own nonce', async () => {
+    vi.stubGlobal('__env__', {});
+
+    const first = await nonceOf('/');
+    const second = await nonceOf('/');
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(first).not.toBe(second);
+  });
+
+  it('allows inline scripts and eval in dev only, for HMR', async () => {
+    vi.stubGlobal('__env__', {});
+    vi.stubEnv('DEV', true);
+
+    await expect(directive('/', 'script-src')).resolves.toMatch(
+      /^'self' 'nonce-[A-Za-z0-9_-]{43}' 'unsafe-inline' 'unsafe-eval'$/,
+    );
   });
 });
