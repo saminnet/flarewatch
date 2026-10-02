@@ -16,7 +16,6 @@ const checkMonitorMock = vi.fn<WorkerDeps['checkMonitor']>();
 const getEdgeLocationMock = vi.fn<WorkerDeps['getEdgeLocation']>();
 const notifierSendMock = vi.fn<WebhookNotifier['send']>();
 const createNotifierMock = vi.fn<WorkerDeps['createNotifier']>();
-const formatNotificationMessageMock = vi.fn<WorkerDeps['formatNotificationMessage']>();
 const workerConfigMock: WorkerConfig = { monitors: [] };
 
 const NOW_SECONDS = Date.parse('2025-01-15T12:00:00Z') / 1000;
@@ -74,7 +73,6 @@ async function runScheduled(env: Env): Promise<void> {
   await runChecks(env, {
     checkMonitor: checkMonitorMock,
     createNotifier: createNotifierMock,
-    formatNotificationMessage: formatNotificationMessageMock,
     getEdgeLocation: getEdgeLocationMock,
     staticConfig: workerConfigMock,
   });
@@ -181,7 +179,6 @@ describe('worker', () => {
     vi.spyOn(notifier, 'send').mockImplementation(notifierSendMock);
     createNotifierMock.mockImplementation((config) => (config ? notifier : null));
     notifierSendMock.mockResolvedValue([{ success: true }]);
-    formatNotificationMessageMock.mockReturnValue('notification');
     mockUp();
   });
 
@@ -200,10 +197,14 @@ describe('worker', () => {
       expect(notifierSendMock).toHaveBeenCalledTimes(1);
       expect(notifierSendMock.mock.calls[0]?.[0]).toMatchObject({
         monitor: { id: 'test-monitor' },
-        isUp: false,
+        kind: 'down',
         incidentStartTime: NOW_SECONDS,
         currentTime: NOW_SECONDS,
+        downtimeSeconds: 0,
       });
+      expect(notifierSendMock.mock.calls[0]?.[1]).toBe(
+        '🔴 Monitor test-monitor is down\nDetected at 1/15, 12:00\nReason: Unavailable',
+      );
     });
 
     it('does not notify before the grace period is reached', async () => {
@@ -296,7 +297,7 @@ describe('worker', () => {
       mockUp();
       await runScheduled(env);
       expect(notifierSendMock).toHaveBeenCalledTimes(2);
-      expect(notifierSendMock.mock.calls[1]?.[0]).toMatchObject({ isUp: true });
+      expect(notifierSendMock.mock.calls[1]?.[0]).toMatchObject({ kind: 'recovered' });
     });
 
     it('suppresses monitors in skipNotificationIds', async () => {
@@ -369,7 +370,6 @@ describe('hub routes for the status page', () => {
     Worker.fetch(new Request(`https://internal${path}`), env, {} as ExecutionContext, {
       checkMonitor: checkMonitorMock,
       createNotifier: createNotifierMock,
-      formatNotificationMessage: formatNotificationMessageMock,
       getEdgeLocation: getEdgeLocationMock,
       staticConfig: workerConfigMock,
     });
@@ -471,7 +471,6 @@ describe('trigger route for the status page', () => {
   const deps: WorkerDeps = {
     checkMonitor: checkMonitorMock,
     createNotifier: createNotifierMock,
-    formatNotificationMessage: formatNotificationMessageMock,
     getEdgeLocation: getEdgeLocationMock,
     staticConfig: workerConfigMock,
   };

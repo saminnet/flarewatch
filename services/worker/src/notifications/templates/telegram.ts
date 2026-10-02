@@ -1,18 +1,19 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { alsoDownList, escapeMarkup, jsonOutput } from './format';
+import { alsoDownList, escapeMarkup, jsonOutput, reminderNote, statusText } from './format';
 
 export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
-  const emoji = ctx.isUp ? '✅' : '🔴';
-  const status = ctx.isUp ? 'Operational' : 'Down';
+  const up = ctx.kind === 'recovered';
+  const emoji = up ? '✅' : '🔴';
+  const status = statusText(ctx);
 
   const lines: string[] = [
-    `${emoji} <b>${escapeHtml(ctx.monitorName)}</b>`,
+    `${emoji} <b>${escapeHtml(ctx.monitorName)}</b>${reminderNote(ctx)}`,
     '',
     `<b>Status:</b> ${status}`,
     `<b>Duration:</b> ${ctx.downtimeMinutes} minutes`,
   ];
 
-  if (!ctx.isUp && ctx.reason) {
+  if (!up && ctx.reason) {
     lines.push(`<b>Reason:</b> ${escapeHtml(ctx.reason)}`);
   }
 

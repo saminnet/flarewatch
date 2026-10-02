@@ -1,9 +1,14 @@
 import * as z from 'zod/mini';
 import type { CheckResult, Incident } from '@flarewatch/shared';
+import {
+  ALERT_COLUMNS,
+  readAlert,
+  REOPEN_ALERT_RESET,
+  type AlertRow,
+  type IncidentAlert,
+} from './alerts';
 import { parseJson, type Sql } from './sql';
 
-/** Failed deliveries of one down alert before the hub stops trying. */
-const MAX_ALERT_ATTEMPTS = 10;
 /** A failure this soon after recovering reopens the incident, so a flapping target adds no rows. */
 const FLAP_SECONDS = 15 * 60;
 /** Closed incidents kept per monitor, however many fit in the retention window. */
@@ -37,12 +42,10 @@ export interface OpenIncident {
   id: number;
   monitorId: string;
   incident: Incident;
-  alert: 'pending' | 'sending' | 'sent' | 'failed' | 'silent';
-  alertClaimedAt: number | null;
+  alert: IncidentAlert;
   reopenedAt: number | null;
   /** When a reopened incident's monitor last came back up, while it waits to close. */
   upSince: number | null;
-  errorAlerts: number;
 }
 
 type IncidentRow = {
@@ -51,11 +54,8 @@ type IncidentRow = {
   starts: string;
   errors: string;
   end_at: number | null;
-  alert: OpenIncident['alert'];
-  alert_claimed_at: number | null;
   reopened_at: number | null;
   up_since: number | null;
-  error_alerts: number;
 };
 
 const startsSchema = z.array(z.number());
@@ -65,8 +65,8 @@ const listSchema = z.array(
 );
 
 /**
- * Every incident and its alert state, plus each monitor's incidents as a JSON
- * list, so a view does not read every row.
+ * Every incident, plus each monitor's incidents as a JSON list, so a view does
+ * not read every row. The alert columns belong to alerts.ts.
  */
 export class Incidents {
   constructor(private readonly sql: Sql) {}
@@ -74,9 +74,8 @@ export class Incidents {
   open(): Map<string, OpenIncident> {
     return new Map(
       this.sql
-        .exec<IncidentRow>(
-          `SELECT id, monitor_id, starts, errors, end_at, alert, alert_claimed_at, reopened_at,
-             up_since, error_alerts
+        .exec<IncidentRow & AlertRow>(
+          `SELECT id, monitor_id, starts, errors, end_at, reopened_at, up_since, ${ALERT_COLUMNS}
            FROM incidents WHERE end_at IS NULL`,
         )
         .map((row) => [
@@ -85,11 +84,9 @@ export class Incidents {
             id: row.id,
             monitorId: row.monitor_id,
             incident: toIncident(row),
-            alert: row.alert,
-            alertClaimedAt: row.alert_claimed_at,
+            alert: readAlert(row),
             reopenedAt: row.reopened_at,
             upSince: row.up_since,
-            errorAlerts: row.error_alerts,
           },
         ]),
     );
@@ -292,64 +289,14 @@ export class Incidents {
     }
   }
 
-  /** Claimed so an overlapping run skips it, until confirm hears how delivery went. */
-  claimAlert(id: number, now: number): void {
-    this.sql.exec(
-      "UPDATE incidents SET alert = 'sending', alert_claimed_at = ? WHERE id = ?",
-      now,
-      id,
-    );
-  }
-
-  countErrorAlert(id: number): void {
-    this.sql.exec('UPDATE incidents SET error_alerts = error_alerts + 1 WHERE id = ?', id);
-  }
-
-  /**
-   * Records which down alerts reached a webhook. One that did not is due again
-   * next run, until MAX_ALERT_ATTEMPTS failures. Returns the delivered ones
-   * whose outage ended while they were being sent.
-   */
-  confirm(
-    outcomes: { incident: number; delivered: boolean }[],
-  ): { monitorId: string; id: number; start: number; end: number }[] {
-    const ended: { monitorId: string; id: number; start: number; end: number }[] = [];
-    for (const { incident, delivered } of outcomes) {
-      if (!delivered) {
-        this.sql.exec(
-          `UPDATE incidents SET alert_attempts = alert_attempts + 1,
-             alert = CASE WHEN alert_attempts + 1 >= ? THEN 'failed' ELSE 'pending' END
-           WHERE id = ? AND alert = 'sending'`,
-          MAX_ALERT_ATTEMPTS,
-          incident,
-        );
-        continue;
-      }
-      const [row] = this.sql.exec<IncidentRow>(
-        `UPDATE incidents SET alert = 'sent' WHERE id = ? AND alert = 'sending'
-         RETURNING id, monitor_id, starts, errors, end_at`,
-        incident,
-      );
-      if (row?.end_at != null) {
-        const start = toIncident(row).start[0] ?? row.end_at;
-        ended.push({ monitorId: row.monitor_id, id: row.id, start, end: row.end_at });
-      }
-    }
-    return ended;
-  }
-
-  /**
-   * The down alert is due again unless it is still waiting to go out: the
-   * outage it covered ended. The grace period restarts at the reopen.
-   */
+  /** The grace period before a down alert restarts at the reopen. */
   private reopen(monitorId: string, row: IncidentRow, error: string, now: number): IncidentUpdate {
     const { start, error: errors } = toIncident(row);
     const incident = { start, error: errors };
     const reopened = addSegment(incident, error, now) ?? incident;
     this.sql.exec(
-      `UPDATE incidents SET end_at = NULL, reopened_at = ?, starts = ?, errors = ?, error_alerts = 0,
-         alert_attempts = CASE WHEN alert IN ('pending', 'sending') THEN alert_attempts ELSE 0 END,
-         alert = CASE WHEN alert IN ('pending', 'sending') THEN alert ELSE 'pending' END
+      `UPDATE incidents SET end_at = NULL, reopened_at = ?, starts = ?, errors = ?,
+         ${REOPEN_ALERT_RESET}
        WHERE id = ?`,
       now,
       JSON.stringify(reopened.start),

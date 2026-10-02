@@ -1,6 +1,6 @@
 import type { NotificationTemplate } from '@flarewatch/shared';
 import type { TemplateContext, TemplateOutput } from './types';
-import { alsoDownSuffix } from './format';
+import { notificationBody, stateText } from './format';
 import { slackTemplate } from './slack';
 import { discordTemplate } from './discord';
 import { telegramTemplate } from './telegram';
@@ -16,22 +16,11 @@ import { resendTemplate } from './resend';
 type TemplateFunction = (ctx: TemplateContext) => TemplateOutput;
 
 function textTemplate(ctx: TemplateContext): TemplateOutput {
-  const emoji = ctx.isUp ? '✅' : '🔴';
-  const status = ctx.isUp ? 'up' : 'down';
-
-  let text: string;
-  if (ctx.isRecovery) {
-    text = `${emoji} ${ctx.monitorName} is up!\nRecovered after ${ctx.downtimeMinutes} minutes of downtime.`;
-  } else if (ctx.isInitialOutage) {
-    text = `${emoji} ${ctx.monitorName} is ${status}\nDetected at ${ctx.timestamp}\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
-  } else {
-    text = `${emoji} ${ctx.monitorName} is still ${status}\nDown for ${ctx.downtimeMinutes} minutes\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
-  }
-
+  const emoji = ctx.kind === 'recovered' ? '✅' : '🔴';
   return {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body: text,
+    body: `${emoji} ${ctx.monitorName} ${stateText(ctx)}\n${notificationBody(ctx)}`,
   };
 }
 

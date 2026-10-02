@@ -14,6 +14,8 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 - `confirmVia` checks a failing monitor once more from a second place, such as your own flarewatch-proxy or a Globalping probe, and records that result. A blip on one network path no longer opens an incident. See [Confirm from a second place](docs/monitors.md#confirm-from-a-second-place).
 - `responseHeaderEquals` checks response headers, and `responseJsonPath` with `responseJsonValue` checks one value in a JSON response. See [Monitors](docs/monitors.md#websites-and-apis).
 - Maintenance windows can repeat every day, week or month, on chosen weekdays or a day of the month, until a date or for good. Each run keeps its clock time in the time zone you pick, across daylight saving changes. The dashboard shows the current or next run, History lists every run, and alerts pause during each one. See [Repeating windows](docs/status-page.md#repeating-windows).
+- Send a monitor's alerts to some channels only: give a webhook `monitors`, a list of monitor IDs. Leave it out and the webhook gets every monitor's alerts, as before. See [Routing](docs/alerts.md#routing).
+- Reminders while a monitor stays down: set `reminderEveryChecks` on a monitor, at least 30. See [Reminders](docs/monitors.md#reminders).
 
 ### Changed
 
@@ -26,6 +28,12 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 - A `TCP_PING` monitor with `expectedCodes`, `responseKeyword`, `responseForbiddenKeyword`, `responseJsonPath`, `responseHeaderEquals` or `sslCheckEnabled` now fails. Before, it passed on the connection alone.
 - `checkProxy: 'worker://...'` is gone. Remove it from your config.
 - The admin API rejects a maintenance window with a title, color or monitor list of the wrong type. Before, it dropped the field, and a `monitors` value that wasn't a list covered every monitor. A rejected window's error now says what's wrong. `null` leaves a field out when you create a window, as it already cleared one when you update it.
+- The config check rejects a webhook with a field FlareWatch doesn't know, so a misspelt `monitors` can't route every alert to that channel. In `FLAREWATCH_WEBHOOKS` the Worker logs the field, ignores it and still alerts the webhook.
+- An error change that no webhook accepts no longer counts toward the 5 an outage may send.
+
+### Fixed
+
+- The `text` template called a recovery "still up" when it came in the same second as the outage began.
 
 ## 3.2.0 - 2026-10-02
 

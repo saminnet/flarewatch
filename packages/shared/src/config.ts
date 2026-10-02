@@ -33,6 +33,8 @@ const MAX_HEARTBEAT_PERIOD_SECONDS = 2_678_400;
 const MAX_HEARTBEAT_GRACE_SECONDS = 604_800;
 /** A check or delivery may not outlast the minute between check runs. */
 const MAX_TIMEOUT_MS = 60_000;
+/** About half an hour on the one-minute cron, so a long outage cannot flood a channel. */
+const MIN_REMINDER_CHECKS = 30;
 
 /** With a base, a path on that site passes too. */
 function isValidHttpUrl(value: string, base?: string): boolean {
@@ -144,11 +146,16 @@ function intInRange(field: string, min: number, max: number) {
   return z.int({ error }).check(z.gte(min, { error }), z.lte(max, { error }));
 }
 
+const reminderError = `reminderEveryChecks must be an integer of at least ${MIN_REMINDER_CHECKS}`;
+
 const monitorCommon = {
   id: nonEmptyString('id'),
   name: nonEmptyString('name'),
   private: z.optional(z.boolean({ error: 'private must be a boolean' })),
   dependsOn: z.optional(z.array(z.string(), { error: 'dependsOn must be a list of monitor ids' })),
+  reminderEveryChecks: z.optional(
+    z.int({ error: reminderError }).check(z.gte(MIN_REMINDER_CHECKS, { error: reminderError })),
+  ),
   link: z.optional(
     z.union([z.literal(false), pageLink('link')], {
       error: 'link must be false or an http(s) URL or a path',
@@ -379,17 +386,21 @@ const webhookMethod = z.pipe(
 
 const webhookTimeout = intInRange('timeout', 1, MAX_TIMEOUT_MS);
 
+const webhookShape = {
+  url: z.string().check(z.refine(isValidHttpUrl)),
+  template: z.optional(z.enum(NOTIFICATION_TEMPLATES)),
+  options: z.optional(z.record(z.string(), z.string())),
+  method: z.optional(webhookMethod),
+  headers: z.optional(z.record(z.string(), z.union([z.string(), z.number()]))),
+  payloadType: z.optional(z.enum(['param', 'json', 'x-www-form-urlencoded'])),
+  payload: z.optional(z.json()),
+  timeout: z.optional(webhookTimeout),
+  monitors: z.optional(z.array(z.string(), { error: 'monitors must be a list of monitor ids' })),
+};
+
+// Strict: a misspelt `monitors` would otherwise vanish and route every monitor to the webhook.
 const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
-  .object({
-    url: z.string().check(z.refine(isValidHttpUrl)),
-    template: z.optional(z.enum(NOTIFICATION_TEMPLATES)),
-    options: z.optional(z.record(z.string(), z.string())),
-    method: z.optional(webhookMethod),
-    headers: z.optional(z.record(z.string(), z.union([z.string(), z.number()]))),
-    payloadType: z.optional(z.enum(['param', 'json', 'x-www-form-urlencoded'])),
-    payload: z.optional(z.json()),
-    timeout: z.optional(webhookTimeout),
-  })
+  .strictObject(webhookShape)
   .check(z.refine((webhook) => isAllowedPayload(webhook.payloadType, webhook.payload)));
 
 const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.object({
@@ -400,11 +411,29 @@ const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.ob
   skipErrorChangeNotification: z.optional(z.boolean()),
 });
 
-const runtimeConfigSchema: z.ZodMiniType<SchemaOutput<RuntimeConfig>> = z.object({
-  monitors: monitorListSchema,
-  statusPage: z.optional(statusPageSchema),
-  notification: z.optional(notificationSchema),
-});
+const runtimeConfigSchema: z.ZodMiniType<SchemaOutput<RuntimeConfig>> = z
+  .object({
+    monitors: monitorListSchema,
+    statusPage: z.optional(statusPageSchema),
+    notification: z.optional(notificationSchema),
+  })
+  .check((ctx) => {
+    const ids = ctx.value.monitors.map(({ id }) => id);
+    const webhook = ctx.value.notification?.webhook;
+    const listed = Array.isArray(webhook);
+    (listed ? webhook : [webhook]).forEach((entry, index) => {
+      for (const id of entry?.monitors ?? []) {
+        // SchemaOutput stops typing this deep; the webhook schema has checked each id is a string.
+        if (typeof id !== 'string' || ids.includes(id)) continue;
+        ctx.issues.push({
+          code: 'custom',
+          message: `no monitor has id "${id}"`,
+          input: entry,
+          path: ['notification', 'webhook', ...(listed ? [index] : []), 'monitors'],
+        });
+      }
+    });
+  });
 
 const PROVIDER_ID = /^[A-Za-z0-9_-]{1,32}$/;
 const ACCESS_RULE = /^(\*@[^@\s]+|[^@\s*]+@[^@\s]+|group:\S+|github:[A-Za-z0-9-]+)$/;
@@ -525,8 +554,9 @@ export function configIssues(value: unknown): string[] {
 /**
  * The webhooks in the FLAREWATCH_WEBHOOKS secret, one or a list as in `notification.webhook`.
  * A bad entry is dropped with an issue; the others still alert. Issues never quote the secret.
+ * `monitorIds` are the configured monitors, which an entry's `monitors` may list.
  */
-export function parseSecretWebhooks(text: string) {
+export function parseSecretWebhooks(text: string, monitorIds: string[]) {
   const webhooks: Webhook[] = [];
   const issues: string[] = [];
   let value: unknown;
@@ -547,6 +577,26 @@ export function parseSecretWebhooks(text: string) {
       );
       entry = { ...entry, timeout: undefined };
     }
+    // An unknown field or monitor id is ignored, not fatal, for the same reason. Issues count
+    // them without naming them, since any part of the secret could carry a token.
+    if (isJsonObject(entry)) {
+      const known = Object.entries(entry).filter(([key]) => Object.hasOwn(webhookShape, key));
+      const unknown = Object.keys(entry).length - known.length;
+      if (unknown > 0)
+        issues.push(`webhook ${index + 1}: ${countOf(unknown, 'unknown field')} ignored`);
+      entry = Object.fromEntries(known);
+    }
+    if (isJsonObject(entry) && Array.isArray(entry.monitors)) {
+      const listed: unknown[] = entry.monitors;
+      const monitors = listed.filter((id) => typeof id !== 'string' || monitorIds.includes(id));
+      const unknown = listed.length - monitors.length;
+      if (unknown > 0) {
+        issues.push(
+          `webhook ${index + 1}.monitors: ${countOf(unknown, 'unknown monitor id')} ignored`,
+        );
+      }
+      entry = { ...entry, monitors };
+    }
     const result = webhookSchema.safeParse(entry);
     // The parsed value, not the entry: parsing upper-cases the method.
     if (result.success && isWebhook(result.data)) webhooks.push(result.data);
@@ -558,6 +608,10 @@ export function parseSecretWebhooks(text: string) {
     }
   });
   return { webhooks, issues };
+}
+
+function countOf(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
 export function accessConfigIssues(value: unknown, pageGroups: string[]): string[] {

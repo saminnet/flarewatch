@@ -1,28 +1,18 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { alsoDownSuffix } from './format';
+import { notificationBody, stateText } from './format';
 
 export function ntfyTemplate(ctx: TemplateContext): TemplateOutput {
-  let title: string;
-  let body: string;
-
-  if (ctx.isRecovery) {
-    title = `${ctx.monitorName} is up`;
-    body = `Recovered after ${ctx.downtimeMinutes} minutes of downtime.`;
-  } else if (ctx.isInitialOutage) {
-    title = `${ctx.monitorName} is down`;
-    body = `Detected at ${ctx.timestamp}\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
-  } else {
-    title = `${ctx.monitorName} is still down`;
-    body = `Down for ${ctx.downtimeMinutes} minutes\nReason: ${ctx.reason || 'Unknown'}${alsoDownSuffix(ctx)}`;
-  }
+  const up = ctx.kind === 'recovered';
+  const title = `${ctx.monitorName} ${up ? 'is up' : stateText(ctx)}`;
+  const body = notificationBody(ctx);
 
   return {
     method: 'POST',
     headers: {
       'Content-Type': 'text/plain',
       Title: encodeHeaderValue(title),
-      Priority: ctx.isUp ? 'default' : 'urgent',
-      Tags: ctx.isUp ? 'white_check_mark' : 'rotating_light',
+      Priority: up ? 'default' : 'urgent',
+      Tags: up ? 'white_check_mark' : 'rotating_light',
     },
     body: `${body}\n${ctx.targetUrl}`,
   };

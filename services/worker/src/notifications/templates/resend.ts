@@ -1,10 +1,10 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { jsonOutput, notificationBody, singleLine, stripControlChars } from './format';
+import { jsonOutput, notificationBody, singleLine, stateText, stripControlChars } from './format';
 
 export function resendTemplate(ctx: TemplateContext): TemplateOutput {
-  const subject = singleLine(
-    `${ctx.isUp ? '✅' : '🔴'} ${ctx.monitorName} ${ctx.isUp ? 'is up' : 'is down'}`,
-  );
+  const up = ctx.kind === 'recovered';
+  const state = up ? 'is up' : ctx.kind === 'reminder' ? stateText(ctx) : 'is down';
+  const subject = singleLine(`${up ? '✅' : '🔴'} ${ctx.monitorName} ${state}`);
 
   const payload = {
     from: ctx.options.from ?? '',

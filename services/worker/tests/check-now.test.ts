@@ -26,7 +26,6 @@ const checkMonitor = vi.fn<WorkerDeps['checkMonitor']>();
 const deps: WorkerDeps = {
   checkMonitor,
   createNotifier: () => null,
-  formatNotificationMessage: () => 'notification',
   getEdgeLocation: async () => 'HEL',
   staticConfig: config,
 };

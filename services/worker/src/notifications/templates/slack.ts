@@ -1,16 +1,17 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { alsoDownList, escapeMarkup, jsonOutput } from './format';
+import { alsoDownList, escapeMarkup, jsonOutput, reminderNote, statusText } from './format';
 
 export function slackTemplate(ctx: TemplateContext): TemplateOutput {
-  const color = ctx.isUp ? '#36a64f' : '#dc3545';
-  const status = ctx.isUp ? 'Operational' : 'Down';
+  const up = ctx.kind === 'recovered';
+  const color = up ? '#36a64f' : '#dc3545';
+  const status = statusText(ctx);
 
   const blocks: unknown[] = [
     {
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `${ctx.isUp ? '✅' : '🔴'} ${ctx.monitorName}`,
+        text: `${up ? '✅' : '🔴'} ${ctx.monitorName}${reminderNote(ctx)}`,
         emoji: true,
       },
     },
@@ -29,7 +30,7 @@ export function slackTemplate(ctx: TemplateContext): TemplateOutput {
     },
   ];
 
-  if (!ctx.isUp && ctx.reason) {
+  if (!up && ctx.reason) {
     blocks.push({
       type: 'section',
       text: {

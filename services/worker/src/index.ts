@@ -4,7 +4,7 @@ import {
   type CheckResultWithLocation,
   type MonitorTarget,
   parseSecretWebhooks,
-  type WebhookConfig,
+  type Webhook,
   type WorkerConfig,
 } from '@flarewatch/shared';
 import { workerConfig } from '@flarewatch/config/worker';
@@ -18,9 +18,11 @@ import { checkMonitor, runBudget } from './checkers';
 import {
   createNotifier,
   formatNotificationMessage,
+  routes,
   type NotificationContext,
 } from './notifications/webhook';
-import type { Alert, AlertPolicy, CheckRecord } from './hub/monitor-hub';
+import type { Alert, AlertOutcome, AlertPolicy } from './hub/alerts';
+import type { CheckRecord } from './hub/monitor-hub';
 
 // Durable Object classes must be exports of the Worker's main module.
 export { MonitorHub } from './hub/monitor-hub';
@@ -41,15 +43,14 @@ async function safeCallback<T extends unknown[]>(
 }
 
 /** The config's webhooks plus FLAREWATCH_WEBHOOKS, which keeps webhook URLs out of a public fork. */
-function alertWebhooks(
-  configured: WebhookConfig | undefined,
-  secret: string | undefined,
-): WebhookConfig | undefined {
-  if (!secret) return configured;
-  const { webhooks, issues } = parseSecretWebhooks(secret);
-  for (const issue of issues) log.error('Skipping part of FLAREWATCH_WEBHOOKS', { issue });
+function alertWebhooks(config: WorkerConfig, secret: string | undefined): Webhook[] {
+  const configured = config.notification?.webhook;
   const listed =
     configured === undefined ? [] : Array.isArray(configured) ? configured : [configured];
+  if (!secret) return listed;
+  const ids = config.monitors.map(({ id }) => id);
+  const { webhooks, issues } = parseSecretWebhooks(secret, ids);
+  for (const issue of issues) log.error('Skipping part of FLAREWATCH_WEBHOOKS', { issue });
   return [...listed, ...webhooks];
 }
 
@@ -59,7 +60,6 @@ export interface WorkerDeps {
     ctx: CheckContext,
   ) => Promise<CheckResultWithLocation>;
   readonly createNotifier: typeof createNotifier;
-  readonly formatNotificationMessage: typeof formatNotificationMessage;
   readonly getEdgeLocation: () => Promise<string>;
   readonly staticConfig: WorkerConfig;
 }
@@ -67,7 +67,6 @@ export interface WorkerDeps {
 const defaultWorkerDeps: WorkerDeps = {
   checkMonitor,
   createNotifier,
-  formatNotificationMessage,
   getEdgeLocation,
   staticConfig: workerConfig,
 };
@@ -80,7 +79,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const hub = getHub(env);
 
   const currentTime = Math.floor(Date.now() / 1000);
-  const webhooks = alertWebhooks(config.notification?.webhook, env.FLAREWATCH_WEBHOOKS);
+  const webhooks = alertWebhooks(config, env.FLAREWATCH_WEBHOOKS);
   const notifier = deps.createNotifier(webhooks);
 
   const ctx: CheckContext = {
@@ -98,7 +97,13 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const policy: AlertPolicy | undefined = notifier
     ? {
         gracePeriodSeconds: (config.notification?.gracePeriod ?? 0) * 60,
-        skipIds: config.notification?.skipNotificationIds ?? [],
+        // A monitor no webhook takes is never claimed, so it cannot use up its tries.
+        skipIds: [
+          ...(config.notification?.skipNotificationIds ?? []),
+          ...config.monitors
+            .filter(({ id }) => !webhooks.some((webhook) => routes(webhook, id)))
+            .map(({ id }) => id),
+        ],
         skipErrorChanges: Boolean(config.notification?.skipErrorChangeNotification),
       }
     : undefined;
@@ -106,33 +111,43 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
   const deliver = async (batch: Alert[]) => {
-    const outcomes: { incident: number; delivered: boolean }[] = [];
-    if (!notifier) return outcomes;
+    const outcomes: AlertOutcome[] = [];
     for (const alert of batch) {
       const monitor = monitors.get(alert.monitorId);
-      if (!monitor) continue;
-      const ctx: NotificationContext = {
-        monitor,
-        isUp: alert.kind === 'up',
-        incidentStartTime: alert.incidentStartTime,
-        currentTime: alert.at ?? currentTime,
-        reason: alert.error,
-        timeZone: config.notification?.timeZone ?? 'UTC',
-        alsoDown: alert.alsoDown,
-      };
       let delivered = false;
-      try {
-        const results = await notifier.send(ctx, deps.formatNotificationMessage(ctx));
-        delivered = results.some((result) => result.success);
-      } catch (error) {
-        log.error('Alert failed', { monitor: monitor.id, error: String(error) });
+      if (notifier && monitor) {
+        const at = alert.at ?? currentTime;
+        const ctx: NotificationContext = {
+          monitor,
+          kind: alert.kind,
+          incidentStartTime: alert.incidentStartTime,
+          currentTime: at,
+          downtimeSeconds: at - alert.incidentStartTime,
+          reason: alert.error,
+          timeZone: config.notification?.timeZone ?? 'UTC',
+          alsoDown: alert.alsoDown,
+          ...(alert.reminder !== undefined && { reminder: alert.reminder }),
+        };
+        try {
+          const results = await notifier.send(ctx, formatNotificationMessage(ctx));
+          delivered = results.some((result) => result.success);
+        } catch (error) {
+          log.error('Alert failed', { monitor: monitor.id, error: String(error) });
+        }
       }
-      if (alert.kind === 'down') outcomes.push({ incident: alert.incident, delivered });
+      outcomes.push({
+        incident: alert.incident,
+        kind: alert.kind,
+        reopenedAt: alert.reopenedAt,
+        delivered,
+      });
     }
     return outcomes;
   };
-  const outcomes = await deliver(alerts);
-  if (outcomes.length > 0) await deliver(await hub.confirmAlerts(outcomes));
+  // Reporting a down alert's outcome can turn up the recovery of an outage that ended meanwhile.
+  for (let batch = alerts; batch.length > 0;) {
+    batch = await hub.confirmAlerts(await deliver(batch));
+  }
 
   for (const update of updates) {
     const monitor = monitors.get(update.monitorId);

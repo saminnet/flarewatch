@@ -8,8 +8,7 @@ const baseContext: TemplateContext = {
   monitorName: 'Test Monitor',
   monitorId: 'test-monitor',
   targetUrl: 'https://example.com',
-  isUp: false,
-  isRecovery: false,
+  kind: 'down',
   isInitialOutage: true,
   downtimeMinutes: 5,
   reason: 'Connection refused',
@@ -89,8 +88,7 @@ describe('notification templates', () => {
 
     const recovered = ntfy({
       ...baseContext,
-      isUp: true,
-      isRecovery: true,
+      kind: 'recovered',
       isInitialOutage: false,
     });
     expect(recovered.headers.Title).toBe('Test Monitor is up');
@@ -140,7 +138,7 @@ describe('notification templates', () => {
     expect(String(downCard[0]?.text)).toContain('🔴 Test Monitor is down');
     expect(JSON.stringify(downCard)).toContain('"Reason","value":"Connection refused"');
 
-    const up = teams({ ...baseContext, isUp: true, isRecovery: true, isInitialOutage: false });
+    const up = teams({ ...baseContext, kind: 'recovered', isInitialOutage: false });
     const upPayload = JSON.parse(up.body) as typeof downPayload;
     const upCard = upPayload.attachments[0]?.content.body ?? [];
     expect(String(upCard[0]?.text)).toContain('✅ Test Monitor is up!');
@@ -158,7 +156,7 @@ describe('notification templates', () => {
     expect(downPayload.text).toContain('*Reason:* Connection refused');
     expect(downPayload.text).toContain('https://example.com');
 
-    const up = googleChat({ ...baseContext, isUp: true, isRecovery: true, isInitialOutage: false });
+    const up = googleChat({ ...baseContext, kind: 'recovered', isInitialOutage: false });
     const upPayload = JSON.parse(up.body) as { text: string };
     expect(upPayload.text).toContain('✅ *Test Monitor is up!*');
     expect(upPayload.text).not.toContain('Reason');
@@ -183,7 +181,7 @@ describe('notification templates', () => {
     expect(downPayload.body).toContain('🔴 Test Monitor is down');
     expect(downPayload.body).toContain('Connection refused');
 
-    const up = matrix({ ...ctx, isUp: true, isRecovery: true, isInitialOutage: false });
+    const up = matrix({ ...ctx, kind: 'recovered', isInitialOutage: false });
     expect(up.url).toBe(
       'https://matrix.example.com/_matrix/client/v3/rooms/!room:example.com/send/m.room.message/test-monitor%3A1000-up-2025-01-15T12%3A00%3A00Z?access_token=s3cret',
     );
@@ -209,7 +207,7 @@ describe('notification templates', () => {
     expect(downForm.get('message')).toContain('Connection refused');
     expect(downForm.get('priority')).toBe('1');
 
-    const up = pushover({ ...ctx, isUp: true, isRecovery: true, isInitialOutage: false });
+    const up = pushover({ ...ctx, kind: 'recovered', isInitialOutage: false });
     const upForm = new URLSearchParams(up.body);
     expect(upForm.get('priority')).toBe('0');
     expect(upForm.get('message')).toContain('Recovered after 5 minutes');
@@ -230,7 +228,7 @@ describe('notification templates', () => {
     expect(downPayload.message).toContain('Connection refused');
     expect(downPayload.priority).toBe(8);
 
-    const up = gotify({ ...baseContext, isUp: true, isRecovery: true, isInitialOutage: false });
+    const up = gotify({ ...baseContext, kind: 'recovered', isInitialOutage: false });
     const upPayload = JSON.parse(up.body) as typeof downPayload;
     expect(upPayload.title).toBe('✅ Test Monitor');
     expect(upPayload.message).toContain('Recovered after 5 minutes');
@@ -254,7 +252,7 @@ describe('notification templates', () => {
     expect(downForm.get('content')).toContain('🔴 **Test Monitor is down**');
     expect(downForm.get('content')).toContain('Connection refused');
 
-    const up = zulip({ ...ctx, isUp: true, isRecovery: true, isInitialOutage: false });
+    const up = zulip({ ...ctx, kind: 'recovered', isInitialOutage: false });
     const upForm = new URLSearchParams(up.body);
     expect(upForm.get('content')).toContain('✅ **Test Monitor is up!**');
   });
@@ -291,7 +289,7 @@ describe('notification templates', () => {
     expect(downPayload.subject).toBe('🔴 Test Monitor is down');
     expect(downPayload.text).toContain('Connection refused');
 
-    const up = resend({ ...ctx, isUp: true, isRecovery: true, isInitialOutage: false });
+    const up = resend({ ...ctx, kind: 'recovered', isInitialOutage: false });
     const upPayload = JSON.parse(up.body) as typeof downPayload;
     expect(upPayload.subject).toBe('✅ Test Monitor is up');
     expect(upPayload.text).toContain('Recovered after 5 minutes');
@@ -331,7 +329,6 @@ describe('notification templates', () => {
       const output = getTemplate(templateName)({
         ...baseContext,
         isInitialOutage: false,
-        isRecovery: false,
       });
       const body = notificationText(output.body);
 
@@ -370,7 +367,7 @@ describe('notification templates', () => {
     );
     expect(hasReasonDown).toBe(true);
 
-    const upOutput = slack({ ...baseContext, isUp: true });
+    const upOutput = slack({ ...baseContext, kind: 'recovered', isInitialOutage: false });
     const upPayload = JSON.parse(upOutput.body) as {
       attachments: Array<{ blocks: Array<Record<string, JsonValue>> }>;
     };
@@ -404,9 +401,22 @@ describe('notification templates', () => {
       expect(text).toMatch(/and \d+ more/);
     });
 
+    it('says a reminder’s monitor is still down, for how long, and which reminder it is', () => {
+      const text = render({
+        kind: 'reminder',
+        isInitialOutage: false,
+        reminder: 2,
+        downtimeMinutes: 45,
+      }).toLowerCase();
+
+      expect(text).toContain('still down');
+      expect(text).toContain('45 min');
+      expect(text).toContain('reminder 2');
+    });
+
     it('leaves the list out of an up alert', () => {
       expect(
-        render({ isUp: true, isRecovery: true, isInitialOutage: false, alsoDown: ['App'] }),
+        render({ kind: 'recovered', isInitialOutage: false, alsoDown: ['App'] }),
       ).not.toContain('Also down');
     });
   });

@@ -71,6 +71,15 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
     `DELETE FROM samples`,
     (sql) => new Incidents(sql).importHistory(),
   ],
+  // Reminders count check runs. The run count rides on the row every run already
+  // writes; alert_run is the run that claimed the incident's last notice, and
+  // reminders how many reminders reached a webhook. An outage alerted before
+  // this step has no alert_run and counts from the step's first run.
+  [
+    `ALTER TABLE meta ADD COLUMN runs INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE incidents ADD COLUMN alert_run INTEGER`,
+    `ALTER TABLE incidents ADD COLUMN reminders INTEGER NOT NULL DEFAULT 0`,
+  ],
 ];
 
 export function migrate(sql: Sql): void {

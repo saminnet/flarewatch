@@ -1,18 +1,19 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { alsoDownList, inlineCode, jsonOutput } from './format';
+import { alsoDownList, inlineCode, jsonOutput, reminderNote, statusText } from './format';
 
 export function discordTemplate(ctx: TemplateContext): TemplateOutput {
+  const up = ctx.kind === 'recovered';
   // Discord uses decimal color values
-  const color = ctx.isUp ? 0x36a64f : 0xdc3545;
-  const emoji = ctx.isUp ? '✅' : '🔴';
-  const status = ctx.isUp ? 'Operational' : 'Down';
+  const color = up ? 0x36a64f : 0xdc3545;
+  const emoji = up ? '✅' : '🔴';
+  const status = statusText(ctx);
 
   const fields: { name: string; value: string; inline?: boolean }[] = [
     { name: 'Status', value: status, inline: true },
     { name: 'Duration', value: `${ctx.downtimeMinutes} minutes`, inline: true },
   ];
 
-  if (!ctx.isUp && ctx.reason) {
+  if (!up && ctx.reason) {
     fields.push({ name: 'Reason', value: inlineCode(ctx.reason), inline: false });
   }
 
@@ -24,7 +25,7 @@ export function discordTemplate(ctx: TemplateContext): TemplateOutput {
   const payload = {
     embeds: [
       {
-        title: `${emoji} ${ctx.monitorName}`,
+        title: `${emoji} ${ctx.monitorName}${reminderNote(ctx)}`,
         color,
         fields,
         timestamp: ctx.timestampIso,

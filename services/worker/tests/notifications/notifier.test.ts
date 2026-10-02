@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import type { Fetcher, MonitorTarget } from '@flarewatch/shared';
-import { WebhookNotifier } from '../../src/notifications/webhook';
+import { WebhookNotifier, type NotificationContext } from '../../src/notifications/webhook';
 
 const fetchMock = vi.fn<Fetcher>();
 
@@ -13,12 +13,13 @@ function createMonitor(): MonitorTarget {
   };
 }
 
-function createNotificationContext() {
+function createNotificationContext(): NotificationContext {
   return {
     monitor: createMonitor(),
-    isUp: false,
+    kind: 'down',
     incidentStartTime: 1000,
     currentTime: 1000,
+    downtimeSeconds: 0,
     reason: 'Connection refused',
     timeZone: 'UTC',
     alsoDown: [],

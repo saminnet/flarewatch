@@ -11,6 +11,7 @@ import {
   readTextUpTo,
   toHeaders,
 } from '@flarewatch/shared';
+import type { AlertKind } from '../hub/alerts';
 import { getTemplate } from './templates';
 import type { TemplateContext } from './templates/types';
 
@@ -29,13 +30,23 @@ function createDateFormatter(timeZone: string) {
 
 export interface NotificationContext {
   monitor: Monitor;
-  isUp: boolean;
+  kind: AlertKind;
   incidentStartTime: number;
+  /** When it happened: the run's time, or when a held recovery came back up. */
   currentTime: number;
+  /** From the incident's start to currentTime. */
+  downtimeSeconds: number;
   reason: string;
   timeZone: string;
   /** Monitors behind this one that are down with it; their own alerts are held back. */
   alsoDown: string[];
+  /** Reminders only: this one's number, counted from 1. */
+  reminder?: number;
+}
+
+/** A down alert sent the run its outage began; one delayed by a grace period, a retry or a reopen reads "still down". */
+function isInitialOutage(ctx: NotificationContext): boolean {
+  return ctx.kind === 'down' && ctx.downtimeSeconds === 0;
 }
 
 interface WebhookResult {
@@ -45,13 +56,11 @@ interface WebhookResult {
 }
 
 export function formatNotificationMessage(ctx: NotificationContext): string {
-  const { monitor, isUp, incidentStartTime, currentTime, reason, timeZone } = ctx;
+  const { monitor, incidentStartTime, currentTime, reason, timeZone } = ctx;
   const formatter = createDateFormatter(timeZone);
-  const downtimeMinutes = Math.round((currentTime - incidentStartTime) / 60);
-  const currentTimeFormatted = formatter.format(new Date(currentTime * 1000));
-  const incidentStartFormatted = formatter.format(new Date(incidentStartTime * 1000));
+  const downtimeMinutes = Math.round(ctx.downtimeSeconds / 60);
 
-  if (isUp) {
+  if (ctx.kind === 'recovered') {
     return [
       `✅ ${monitor.name} is up!`,
       `The service recovered after ${downtimeMinutes} minutes of downtime.`,
@@ -59,18 +68,19 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
   }
 
   const alsoDown = ctx.alsoDown.length > 0 ? [`Also down: ${ctx.alsoDown.join(', ')}`] : [];
-  if (currentTime === incidentStartTime) {
+  if (isInitialOutage(ctx)) {
     return [
       `🔴 ${monitor.name} is down`,
-      `Detected at ${currentTimeFormatted}`,
+      `Detected at ${formatter.format(new Date(currentTime * 1000))}`,
       `Reason: ${reason || 'Unknown'}`,
       ...alsoDown,
     ].join('\n');
   }
 
+  const reminder = ctx.kind === 'reminder' ? ` (reminder ${String(ctx.reminder)})` : '';
   return [
-    `🔴 ${monitor.name} is still down`,
-    `Down since ${incidentStartFormatted} (${downtimeMinutes} minutes)`,
+    `🔴 ${monitor.name} is still down${reminder}`,
+    `Down since ${formatter.format(new Date(incidentStartTime * 1000))} (${downtimeMinutes} minutes)`,
     `Reason: ${reason || 'Unknown'}`,
     ...alsoDown,
   ].join('\n');
@@ -135,29 +145,31 @@ function redact(text: string, webhook: Webhook, finalUrl: string): string {
 }
 
 export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook): TemplateContext {
-  const { monitor, isUp, incidentStartTime, currentTime, reason, timeZone } = ctx;
+  const { monitor, incidentStartTime, currentTime, reason, timeZone } = ctx;
   const formatter = createDateFormatter(timeZone);
-  const downtimeMinutes = Math.round((currentTime - incidentStartTime) / 60);
-  const timestamp = formatter.format(new Date(currentTime * 1000));
-  const timestampIso = new Date(currentTime * 1000).toISOString();
 
   return {
     monitorName: monitor.name,
     monitorId: monitor.id,
     targetUrl:
       'target' in monitor ? monitor.target : typeof monitor.link === 'string' ? monitor.link : '',
-    isUp,
-    isRecovery: isUp && currentTime !== incidentStartTime,
-    isInitialOutage: !isUp && currentTime === incidentStartTime,
-    downtimeMinutes,
+    kind: ctx.kind,
+    isInitialOutage: isInitialOutage(ctx),
+    downtimeMinutes: Math.round(ctx.downtimeSeconds / 60),
     reason: reason || 'Unknown',
     alsoDown: ctx.alsoDown,
-    timestamp,
-    timestampIso,
+    ...(ctx.reminder !== undefined && { reminder: ctx.reminder }),
+    timestamp: formatter.format(new Date(currentTime * 1000)),
+    timestampIso: new Date(currentTime * 1000).toISOString(),
     incidentKey: `${monitor.id}:${incidentStartTime}`,
     webhookUrl: webhook.url,
     options: webhook.options ?? {},
   };
+}
+
+/** Whether the webhook takes this monitor's alerts: every monitor's, unless it lists some. */
+export function routes(webhook: Webhook, monitorId: string): boolean {
+  return webhook.monitors === undefined || webhook.monitors.includes(monitorId);
 }
 
 export class WebhookNotifier {
@@ -168,8 +180,11 @@ export class WebhookNotifier {
 
   async send(ctx: NotificationContext, message: string): Promise<WebhookResult[]> {
     const configs = Array.isArray(this.config) ? this.config : [this.config];
-    const results = await Promise.all(configs.map((cfg) => this.sendSingle(cfg, ctx, message)));
-    return results;
+    return Promise.all(
+      configs
+        .filter((webhook) => routes(webhook, ctx.monitor.id))
+        .map((webhook) => this.sendSingle(webhook, ctx, message)),
+    );
   }
 
   private async sendSingle(

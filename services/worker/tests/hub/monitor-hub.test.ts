@@ -1,7 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vite-plus/test';
 import type { CheckResult, HeartbeatMonitor, MonitorTarget } from '@flarewatch/shared';
-import type { AlertPolicy, CheckRecord } from '../../src/hub/monitor-hub';
+import type { AlertPolicy } from '../../src/hub/alerts';
+import type { CheckRecord } from '../../src/hub/monitor-hub';
 import { createHub } from '../helpers/hub';
 
 const T0 = Date.parse('2025-01-15T12:00:00Z') / 1000;
@@ -101,21 +102,6 @@ describe('MonitorHub incidents', () => {
       status: 'up',
       incidents: [{ start: [T0], error: ['Unavailable'], end: lastUp }],
     });
-  });
-
-  it('sends a flapping monitor’s recovery alert once it has stayed up', () => {
-    const { hub } = createHub();
-    const run = (now: number, result: CheckResult) => {
-      const { alerts } = hub.record(now, [check('api', result)], POLICY);
-      hub.confirmAlerts(alerts.map(({ incident }) => ({ incident, delivered: true })));
-      return alerts.map(({ kind, at }) => (at === undefined ? kind : `${kind} at ${at}`));
-    };
-
-    expect(run(T0, down())).toEqual(['down']);
-    expect(run(T0 + 60, up())).toEqual(['up']);
-    expect(run(T0 + 120, down())).toEqual(['down']);
-    expect(run(T0 + 180, up())).toEqual([]);
-    expect(run(T0 + 180 + 15 * 60, up())).toEqual([`up at ${T0 + 180}`]);
   });
 
   it('alerts a flapping monitor only once it stays down for the grace period', () => {
@@ -624,10 +610,48 @@ describe('MonitorHub after an upgrade from a release without alert tracking', ()
   });
 });
 
+describe('MonitorHub after an upgrade from 3.2', () => {
+  it('reminds about an outage alerted before the upgrade once 30 runs have passed since it', () => {
+    const db = new DatabaseSync(':memory:');
+    const before = createHub({}, db).hub;
+    const { alerts } = before.record(T0, [check('api', down())], POLICY);
+    before.confirmAlerts(
+      alerts.map(({ incident, kind, reopenedAt }) => ({
+        incident,
+        kind,
+        reopenedAt,
+        delivered: true,
+      })),
+    );
+    // The schema 3.2.0 left behind.
+    db.exec(`
+      DELETE FROM _migrations WHERE id >= 8;
+      ALTER TABLE meta DROP COLUMN runs;
+      ALTER TABLE incidents DROP COLUMN alert_run;
+      ALTER TABLE incidents DROP COLUMN reminders;
+    `);
+    const { hub } = createHub({}, db);
+    const api: CheckRecord = {
+      monitor: { ...monitor('api'), reminderEveryChecks: 30 },
+      check: { location: 'HEL', result: down() },
+    };
+
+    const kinds = Array.from({ length: 30 }, (_, i) =>
+      hub.record(T0 + (i + 1) * 60, [api], POLICY).alerts.map(({ kind }) => kind),
+    );
+
+    expect(kinds.flat()).toEqual(['reminder']);
+    expect(kinds[29]).toEqual(['reminder']);
+  });
+});
+
 /** Rewinds a new hub's storage to the schema 3.1.0 left behind. */
 function rewindTo31(db: DatabaseSync): void {
   db.exec(`
     DELETE FROM _migrations WHERE id >= 7;
+    ALTER TABLE meta DROP COLUMN runs;
+    ALTER TABLE incidents DROP COLUMN alert_run;
+    ALTER TABLE incidents DROP COLUMN reminders;
     DROP TABLE incident_lists;
     DROP TABLE latency;
     ALTER TABLE incidents DROP COLUMN up_since;

@@ -48,6 +48,16 @@ function maintenance(monitors: string[], start: number, end: number): Maintenanc
   };
 }
 
+function label(ctx: NotificationContext): string {
+  if (ctx.kind === 'recovered') return 'up';
+  return ctx.kind === 'reminder' ? `reminder ${String(ctx.reminder)}` : ctx.kind;
+}
+
+/** A monitor that sends a reminder every 30 check runs while it stays down. */
+function reminding(id: string, dependsOn?: string[]): Monitor {
+  return { ...pull(id, dependsOn), reminderEveryChecks: 30 };
+}
+
 /** A deployment with an in-memory hub. `run` is one cron run; `alerts` drains what it sent. */
 function deployment(
   monitors: Monitor[],
@@ -57,13 +67,12 @@ function deployment(
   const db = new DatabaseSync(':memory:');
   let { hub } = createHub({}, db);
   const failing = new Map<string, string>();
-  const sent: NotificationContext[] = [];
+  const sent: { ctx: NotificationContext; message: string }[] = [];
   const config: WorkerConfig = {
     monitors,
     notification: { webhook: { url: 'https://hooks.example.com' }, ...notification },
   };
   const refusing = new Set<string>();
-  const unformattable = new Set<string>();
   let duringDelivery: (() => Promise<void>) | undefined;
   const fetcher = vi.fn<Fetcher>(async (url) => {
     const hook = duringDelivery;
@@ -89,13 +98,6 @@ function deployment(
     },
     accept(host = 'hooks.example.com') {
       refusing.delete(host);
-    },
-    /** Monitors whose message cannot be formatted, like a config with a bad time zone. */
-    breakFormatting(id: string) {
-      unformattable.add(id);
-    },
-    fixFormatting(id: string) {
-      unformattable.delete(id);
     },
     deliveryAttempts: () => fetcher.mock.calls.length,
     requests: () => fetcher.mock.calls.map(([, init]) => init),
@@ -131,30 +133,28 @@ function deployment(
             const send = notifier.send.bind(notifier);
             vi.spyOn(notifier, 'send').mockImplementation(async (ctx, message) => {
               const results = await send(ctx, message);
-              if (results.some((result) => result.success)) sent.push(ctx);
+              if (results.some((result) => result.success)) sent.push({ ctx, message });
               return results;
             });
             return notifier;
-          },
-          formatNotificationMessage: (ctx) => {
-            if (unformattable.has(ctx.monitor.id)) throw new RangeError('Invalid time zone');
-            return 'message';
           },
           getEdgeLocation: async () => 'SFO',
           staticConfig: config,
         },
       );
     },
-    /** Alerts sent since the last call, as "id down|up [(also: A, B)]". */
+    /** Alerts sent since the last call, as "id down|error|reminder N|up [(also: A, B)]". */
     alerts(): string[] {
       const lines = sent.map(
-        (ctx) =>
-          `${ctx.monitor.id} ${ctx.isUp ? 'up' : 'down'}${ctx.alsoDown.length > 0 ? ` (also: ${ctx.alsoDown.join(', ')})` : ''}`,
+        ({ ctx }) =>
+          `${ctx.monitor.id} ${label(ctx)}${ctx.alsoDown.length > 0 ? ` (also: ${ctx.alsoDown.join(', ')})` : ''}`,
       );
       sent.length = 0;
       return lines;
     },
-    lastSent: () => sent[sent.length - 1],
+    lastSent: () => sent[sent.length - 1]?.ctx,
+    /** The text of the last alert sent, as a custom payload's $MSG gets it. */
+    lastMessage: () => sent[sent.length - 1]?.message,
   };
 }
 
@@ -284,7 +284,7 @@ describe('alerts for monitors with dependencies', () => {
 
     expect(d.lastSent()).toMatchObject({
       monitor: { id: 'app' },
-      isUp: false,
+      kind: 'down',
       incidentStartTime: T,
       currentTime: T + 60,
       reason: 'HTTP 502',
@@ -484,6 +484,94 @@ describe('alert state', () => {
     expect(d.alerts()).toHaveLength(5);
   });
 
+  it('gives back an error change no webhook accepted, so five still reach a webhook', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api', 'error 0');
+    await d.run(T);
+    d.refuse();
+    d.down('api', 'error 1');
+    await d.run(T + 60);
+    d.accept();
+    d.alerts();
+
+    for (let i = 2; i <= 8; i++) {
+      d.down('api', `error ${i}`);
+      await d.run(T + i * 60);
+    }
+
+    expect(d.lastSent()).toMatchObject({ reason: 'error 6' });
+    expect(d.alerts()).toHaveLength(5);
+  });
+
+  it('sends no sixth error change from a run that overlaps the delivery of the fifth', async () => {
+    const d = deployment([pull('api')]);
+    for (let i = 0; i <= 4; i++) {
+      d.down('api', `error ${i}`);
+      await d.run(T + i * 60);
+    }
+    expect(d.alerts()).toEqual(['api down', 'api error', 'api error', 'api error', 'api error']);
+
+    d.down('api', 'error 5');
+    d.whileDelivering(() => {
+      d.down('api', 'error 6');
+      return d.run(T + 330);
+    });
+    await d.run(T + 300);
+
+    expect(d.alerts()).toEqual(['api error']);
+    expect(d.deliveryAttempts()).toBe(6);
+  });
+
+  it('sends five more error changes after the outage reopens', async () => {
+    const d = deployment([pull('api')]);
+    let now = T;
+    const fail = async (error: string) => {
+      d.down('api', error);
+      await d.run((now += 60));
+    };
+    for (let i = 0; i <= 6; i++) await fail(`first ${i}`);
+    d.up('api');
+    await d.run((now += 60));
+    for (let i = 0; i <= 6; i++) await fail(`second ${i}`);
+
+    expect(d.alerts()).toEqual([
+      'api down',
+      ...Array<string>(5).fill('api error'),
+      'api up',
+      'api down',
+      ...Array<string>(5).fill('api error'),
+    ]);
+  });
+
+  it('gives a refused error change back to its own outage, not to the one that reopened it', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api', 'first 0');
+    await d.run(T);
+    d.down('api', 'first 1');
+    d.whileDelivering(async () => {
+      d.up('api');
+      await d.run(T + 70);
+      d.down('api', 'second 0');
+      await d.run(T + 80);
+      d.down('api', 'second 1');
+      await d.run(T + 90);
+      d.refuse();
+    });
+    await d.run(T + 60);
+    d.accept();
+    for (let i = 2; i <= 9; i++) {
+      d.down('api', `second ${i}`);
+      await d.run(T + 60 * i);
+    }
+
+    expect(d.alerts()).toEqual([
+      'api down',
+      'api up',
+      'api down',
+      ...Array<string>(5).fill('api error'),
+    ]);
+  });
+
   it('sends one down alert with the latest error when it becomes due on an error change', async () => {
     const d = deployment([pull('api')], { gracePeriod: 1 });
     d.down('api', 'Timeout');
@@ -580,7 +668,7 @@ describe('alert state', () => {
     await d.run(T + 120);
 
     expect(d.lastSent()).toMatchObject({ reason: 'HTTP 502' });
-    expect(d.alerts()).toEqual(['app down']);
+    expect(d.alerts()).toEqual(['app error']);
   });
 
   it('does not hold a dependent again in a second run within the same second', async () => {
@@ -603,6 +691,325 @@ describe('alert state', () => {
     await d.run(T + 60);
 
     expect(d.alerts()).toEqual(['api down']);
+  });
+});
+
+describe('alert messages', () => {
+  it('says a monitor is down, and when, on the run its outage began', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    await d.run(T);
+
+    expect(d.lastMessage()).toBe('🔴 Api is down\nDetected at 1/15, 12:00\nReason: Unavailable');
+  });
+
+  it('says a monitor is still down, and for how long, when the grace period delays the alert', async () => {
+    const d = deployment([pull('api')], { gracePeriod: 2 });
+    d.down('api');
+    await d.run(T);
+    await d.run(T + 120);
+
+    expect(d.lastMessage()).toBe(
+      '🔴 Api is still down\nDown since 1/15, 12:00 (2 minutes)\nReason: Unavailable',
+    );
+  });
+
+  it('gives an error change the new error and the downtime so far', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api', 'Timeout');
+    await d.run(T);
+    d.down('api', 'HTTP 502');
+    await d.run(T + 60);
+
+    expect(d.lastSent()).toMatchObject({ kind: 'error' });
+    expect(d.lastMessage()).toBe(
+      '🔴 Api is still down\nDown since 1/15, 12:00 (1 minutes)\nReason: HTTP 502',
+    );
+  });
+
+  it('counts a recovery’s downtime from the start of the outage', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    await d.run(T + 420);
+
+    expect(d.lastMessage()).toBe(
+      '✅ Api is up!\nThe service recovered after 7 minutes of downtime.',
+    );
+  });
+
+  it('ends a flapping monitor’s downtime when it came back up, not when the hold ran out', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    await d.run(T + 60);
+    d.down('api');
+    await d.run(T + 120);
+    expect(d.alerts()).toEqual(['api down', 'api up', 'api down']);
+
+    d.up('api');
+    await d.run(T + 180);
+    expect(d.alerts()).toEqual([]);
+    await d.run(T + 180 + 15 * 60);
+
+    expect(d.lastSent()).toMatchObject({ currentTime: T + 180, downtimeSeconds: 180 });
+    expect(d.alerts()).toEqual(['api up']);
+  });
+
+  it('writes a recovery as one, even in the same second its outage began', async () => {
+    const d = deployment([pull('api')], {
+      webhook: { url: 'https://hooks.example.com', template: 'text' },
+    });
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    await d.run(T);
+
+    expect(d.requests().map((init) => init?.body)).toEqual([
+      '🔴 Api is down\nDetected at 1/15, 12:00\nReason: Unavailable',
+      '✅ Api is up!\nRecovered after 0 minutes of downtime.',
+    ]);
+  });
+});
+
+describe('reminders', () => {
+  /** Runs `count` check runs a minute apart, starting at `from`. Returns the time after the last. */
+  async function runs(d: ReturnType<typeof deployment>, from: number, count: number, step = 60) {
+    for (let i = 0; i < count; i++) await d.run(from + i * step);
+    return from + count * step;
+  }
+
+  it('reminds every 30 check runs after the down alert, saying for how long and which reminder', async () => {
+    const d = deployment([reminding('api')]);
+    d.down('api');
+    await runs(d, T, 30);
+    expect(d.alerts()).toEqual(['api down']);
+
+    await d.run(T + 30 * 60);
+    expect(d.lastMessage()).toBe(
+      '🔴 Api is still down (reminder 1)\nDown since 1/15, 12:00 (30 minutes)\nReason: Unavailable',
+    );
+    expect(d.alerts()).toEqual(['api reminder 1']);
+
+    await runs(d, T + 31 * 60, 29);
+    expect(d.alerts()).toEqual([]);
+    await d.run(T + 60 * 60);
+    expect(d.lastMessage()).toMatch(
+      /^🔴 Api is still down \(reminder 2\)\nDown since .* \(60 minutes\)/,
+    );
+  });
+
+  it('sends no reminder for a monitor without reminderEveryChecks', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    await runs(d, T, 100);
+
+    expect(d.alerts()).toEqual(['api down']);
+  });
+
+  it('counts check runs, not minutes', async () => {
+    const d = deployment([reminding('api')]);
+    d.down('api');
+    await runs(d, T, 30, 120);
+    expect(d.alerts()).toEqual(['api down']);
+
+    await d.run(T + 30 * 120);
+    expect(d.lastSent()).toMatchObject({ downtimeSeconds: 3600 });
+    expect(d.alerts()).toEqual(['api reminder 1']);
+  });
+
+  it('counts from the run that delivered the down alert, not the one that found the outage', async () => {
+    const d = deployment([reminding('api')]);
+    d.refuse();
+    d.down('api');
+    await runs(d, T, 3);
+    d.accept();
+    await runs(d, T + 3 * 60, 30);
+    expect(d.alerts()).toEqual(['api down']);
+
+    await d.run(T + 33 * 60);
+    expect(d.alerts()).toEqual(['api reminder 1']);
+  });
+
+  it('sends no reminder during a maintenance window and sends it once the window ends', async () => {
+    const d = deployment([reminding('api')]);
+    d.hub.putMaintenance(maintenance(['api'], T + 1700, T + 2000));
+    d.down('api');
+    const after = await runs(d, T, 34);
+    expect(d.alerts()).toEqual(['api down']);
+
+    await d.run(after);
+    expect(d.alerts()).toEqual(['api reminder 1']);
+  });
+
+  it('sends no reminder while a dependency is down', async () => {
+    const d = deployment([pull('gateway'), reminding('app', ['gateway'])]);
+    d.down('app');
+    await runs(d, T, 10);
+    d.down('gateway');
+    const after = await runs(d, T + 600, 30);
+    expect(d.alerts()).toEqual(['app down', 'gateway down (also: App)']);
+
+    d.up('gateway');
+    await d.run(after);
+    expect(d.alerts()).toEqual(['gateway up', 'app reminder 1']);
+  });
+
+  it('sends no reminder while a flapping monitor waits out its recovery hold', async () => {
+    const d = deployment([reminding('api')]);
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    await d.run(T + 60);
+    d.down('api');
+    await runs(d, T + 120, 29);
+    d.up('api');
+    await runs(d, T + 1860, 16);
+
+    expect(d.alerts()).toEqual(['api down', 'api up', 'api down', 'api up']);
+  });
+
+  it('gives a reminder no webhook accepted the same number next time', async () => {
+    const d = deployment([reminding('api')]);
+    d.down('api');
+    await runs(d, T, 30);
+    d.refuse();
+    await d.run(T + 30 * 60);
+    d.accept();
+    await runs(d, T + 31 * 60, 30);
+
+    expect(d.lastSent()).toMatchObject({ downtimeSeconds: 60 * 60 });
+    expect(d.alerts()).toEqual(['api down', 'api reminder 1']);
+  });
+
+  it('numbers reminders from 1 again after the outage reopens', async () => {
+    const d = deployment([reminding('api')]);
+    d.down('api');
+    await runs(d, T, 31);
+    d.up('api');
+    await d.run(T + 31 * 60);
+    d.down('api');
+    await runs(d, T + 32 * 60, 31);
+
+    expect(d.lastSent()).toMatchObject({ incidentStartTime: T, downtimeSeconds: 62 * 60 });
+    expect(d.alerts()).toEqual([
+      'api down',
+      'api reminder 1',
+      'api up',
+      'api down',
+      'api reminder 1',
+    ]);
+  });
+
+  it('numbers the first reminder of a reopened outage 1 when the old one’s outcome comes late', async () => {
+    const d = deployment([reminding('api')]);
+    d.down('api');
+    await runs(d, T, 30);
+    d.whileDelivering(async () => {
+      d.up('api');
+      await d.run(T + 30 * 60 + 10);
+      d.down('api');
+      await d.run(T + 30 * 60 + 20);
+    });
+    await d.run(T + 30 * 60);
+    await runs(d, T + 31 * 60, 30);
+
+    expect(d.alerts()).toEqual([
+      'api down',
+      'api up',
+      'api down',
+      'api reminder 1',
+      'api reminder 1',
+    ]);
+  });
+
+  it('reminds about a heartbeat that stays down', async () => {
+    const backup: HeartbeatMonitor = { ...job('backup'), reminderEveryChecks: 30 };
+    const d = deployment([backup]);
+    d.hub.ping(backup, 'fail', T - 10);
+    await runs(d, T, 31);
+
+    expect(d.alerts()).toEqual(['backup down', 'backup reminder 1']);
+  });
+});
+
+describe('alert routing', () => {
+  const ops = { url: 'https://ops.example.com', monitors: ['api'] };
+  const all = { url: 'https://all.example.com' };
+
+  it('sends a monitor’s alerts only to the webhooks that take it', async () => {
+    const d = deployment([pull('api'), pull('web')], {
+      webhook: [ops, all, { url: 'https://none.example.com', monitors: [] }],
+    });
+    d.down('api', 'Timeout');
+    d.down('web');
+    await d.run(T);
+    d.down('api', 'HTTP 502');
+    await d.run(T + 60);
+    d.up('api');
+    d.up('web');
+    await d.run(T + 120);
+
+    expect(d.alerts()).toEqual(['api down', 'web down', 'api error', 'api up', 'web up']);
+    expect(d.deliveredTo()).toEqual([
+      'ops.example.com',
+      'all.example.com',
+      'all.example.com',
+      'ops.example.com',
+      'all.example.com',
+      'ops.example.com',
+      'all.example.com',
+      'all.example.com',
+    ]);
+  });
+
+  it('never claims a monitor no webhook takes, so it alerts once one does', async () => {
+    const d = deployment([pull('api'), pull('web')], { webhook: [ops] });
+    d.down('web');
+    for (let run = 0; run < 12; run++) await d.run(T + run * 60);
+    expect(d.deliveryAttempts()).toBe(0);
+
+    d.config.notification = { webhook: [ops, all] };
+    await d.run(T + 720);
+
+    expect(d.alerts()).toEqual(['web down']);
+  });
+
+  it('sends nothing for a monitor in skipNotificationIds, even to a webhook that lists it', async () => {
+    const d = deployment([pull('api')], { webhook: [ops], skipNotificationIds: ['api'] });
+    d.down('api');
+    await d.run(T);
+
+    expect(d.deliveryAttempts()).toBe(0);
+  });
+
+  it('routes the webhooks in the FLAREWATCH_WEBHOOKS secret too', async () => {
+    const d = deployment(
+      [pull('api'), pull('web')],
+      { webhook: [] },
+      JSON.stringify([{ url: 'https://ops.example.com', monitors: ['api'] }]),
+    );
+    d.down('web');
+    await d.run(T);
+    d.down('api');
+    await d.run(T + 60);
+
+    expect(d.alerts()).toEqual(['api down']);
+    expect(d.deliveredTo()).toEqual(['ops.example.com']);
+  });
+
+  it('sends a webhook that takes only a dependent nothing while its dependency alerts', async () => {
+    const d = deployment([pull('gateway'), pull('app', ['gateway'])], {
+      webhook: [{ url: 'https://app-team.example.com', monitors: ['app'] }, all],
+    });
+    d.down('gateway');
+    d.down('app');
+    await d.run(T);
+
+    expect(d.alerts()).toEqual(['gateway down (also: App)']);
+    expect(d.deliveredTo()).toEqual(['all.example.com']);
   });
 });
 
@@ -668,17 +1075,16 @@ describe('alert delivery', () => {
     expect(d.alerts()).toEqual([]);
   });
 
-  it('keeps sending the other alerts when one cannot be formatted, and retries that one', async () => {
-    const d = deployment([pull('broken'), pull('api')]);
-    d.breakFormatting('broken');
-    d.down('broken');
+  it('tries every alert a run cannot format again on the next run', async () => {
+    const d = deployment([pull('web'), pull('api')], { timeZone: 'Mars/Olympus_Mons' });
+    d.down('web');
     d.down('api');
     await d.run(T);
-    expect(d.alerts()).toEqual(['api down']);
+    expect(d.alerts()).toEqual([]);
 
-    d.fixFormatting('broken');
+    d.config.notification = { ...d.config.notification, timeZone: 'UTC' };
     await d.run(T + 60);
-    expect(d.alerts()).toEqual(['broken down']);
+    expect(d.alerts()).toEqual(['web down', 'api down']);
   });
 
   it('sends the recovery when the outage ends while its down alert is being delivered', async () => {
@@ -691,7 +1097,10 @@ describe('alert delivery', () => {
 
     await d.run(T);
 
-    expect(d.lastSent()).toMatchObject({ isUp: true, currentTime: T + 60 });
+    expect(d.lastSent()).toMatchObject({ kind: 'recovered', currentTime: T + 60 });
+    expect(d.lastMessage()).toBe(
+      '✅ Api is up!\nThe service recovered after 1 minutes of downtime.',
+    );
     expect(d.alerts()).toEqual(['api down', 'api up']);
   });
 

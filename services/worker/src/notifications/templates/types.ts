@@ -1,14 +1,18 @@
+import type { AlertKind } from '../../hub/alerts';
+
 export interface TemplateContext {
   monitorName: string;
   monitorId: string;
   targetUrl: string;
-  isUp: boolean;
-  isRecovery: boolean;
+  kind: AlertKind;
+  /** A down alert sent the run its outage began, which reads "is down" rather than "is still down". */
   isInitialOutage: boolean;
   downtimeMinutes: number;
   reason: string;
   /** Monitors behind this one that are down with it; their own alerts are held back. */
   alsoDown: string[];
+  /** Reminders only: this one's number, counted from 1. */
+  reminder?: number;
   timestamp: string;
   timestampIso: string;
   /** Stable id for one incident, identical across its down and up notifications */

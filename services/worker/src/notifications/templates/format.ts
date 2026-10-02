@@ -8,8 +8,25 @@ export function jsonOutput(body: unknown): TemplateOutput {
   };
 }
 
+/** " (reminder N)" on a reminder's title, nothing on another alert's. */
+export function reminderNote(ctx: TemplateContext): string {
+  return ctx.kind === 'reminder' ? ` (reminder ${String(ctx.reminder)})` : '';
+}
+
+/** What the alert says of the monitor, after its name. */
+export function stateText(ctx: TemplateContext): string {
+  if (ctx.kind === 'recovered') return 'is up!';
+  return ctx.isInitialOutage ? 'is down' : `is still down${reminderNote(ctx)}`;
+}
+
+/** The value of a Status field. */
+export function statusText(ctx: TemplateContext): string {
+  if (ctx.kind === 'recovered') return 'Operational';
+  return ctx.kind === 'reminder' ? 'Still down' : 'Down';
+}
+
 export function notificationBody(ctx: TemplateContext): string {
-  if (ctx.isRecovery) {
+  if (ctx.kind === 'recovered') {
     return `Recovered after ${ctx.downtimeMinutes} minutes of downtime.`;
   }
   const lead = ctx.isInitialOutage
@@ -29,7 +46,7 @@ export function alsoDownList(
   ctx: TemplateContext,
   format: (name: string) => string = (name) => name,
 ): string {
-  if (ctx.isUp) return '';
+  if (ctx.kind === 'recovered') return '';
   const shown: string[] = [];
   let length = 0;
   for (const name of ctx.alsoDown) {

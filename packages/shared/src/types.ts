@@ -136,6 +136,8 @@ export type PullMonitor = {
   private?: boolean;
   /** Monitor ids this one reaches its target through. While one of them is down, this one sends no alert of its own. */
   dependsOn?: string[];
+  /** Check runs between reminders while the monitor stays down after its down alert, at least 30. Off when absent. */
+  reminderEveryChecks?: number;
 };
 
 export type HeartbeatMonitor = {
@@ -146,6 +148,8 @@ export type HeartbeatMonitor = {
   graceSeconds: number;
   private?: boolean;
   dependsOn?: string[];
+  /** Check runs between reminders while the job stays down after its down alert, at least 30. Off when absent. */
+  reminderEveryChecks?: number;
   link?: string | false;
   tooltip?: string;
 };
@@ -228,6 +232,8 @@ type SingleWebhook = {
   payload?: JsonValue;
   /** Request timeout in ms (default: 5000) */
   timeout?: number;
+  /** IDs of the monitors whose alerts this webhook gets. Absent means every monitor; an empty list, none. */
+  monitors?: string[];
 };
 
 export type Webhook = SingleWebhook;

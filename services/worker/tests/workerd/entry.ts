@@ -1,5 +1,6 @@
 import type { Env } from '../../src/env';
-import { MonitorHub as Hub, type AlertPolicy, type CheckRecord } from '../../src/hub/monitor-hub';
+import type { AlertPolicy } from '../../src/hub/alerts';
+import { MonitorHub as Hub, type CheckRecord } from '../../src/hub/monitor-hub';
 
 /** Rows read and written as Durable Objects bill them. */
 export interface Rows {
@@ -86,6 +87,26 @@ async function record(hub: Stub, runs: Run[]) {
   return results;
 }
 
+/** Runs as runChecks does with every webhook accepting: record, then report each alert delivered. */
+async function alert(hub: Stub, runs: Run[]) {
+  const results = [];
+  for (const { now, records, policy } of runs) {
+    const { alerts } = await hub.record(now, records, policy);
+    for (let batch = alerts; batch.length > 0;) {
+      batch = await hub.confirmAlerts(
+        batch.map(({ incident, kind, reopenedAt }) => ({
+          incident,
+          kind,
+          reopenedAt,
+          delivered: true,
+        })),
+      );
+    }
+    results.push(alerts.map(({ monitorId, kind }) => `${monitorId} ${kind}`));
+  }
+  return results;
+}
+
 export default {
   async fetch(request: Request, env: { MONITOR_HUB: DurableObjectNamespace<MonitorHub> }) {
     const url = new URL(request.url);
@@ -101,6 +122,10 @@ export default {
       case '/record': {
         const runs: Run[] = await request.json();
         return measured(hub, () => record(hub, runs));
+      }
+      case '/alert': {
+        const runs: Run[] = await request.json();
+        return measured(hub, () => alert(hub, runs));
       }
       default:
         return new Response(null, { status: 404 });

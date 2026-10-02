@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { configIssues } from '../src/config';
+import { configIssues, parseSecretWebhooks } from '../src/config';
 import type { JsonValue, PullMonitor, RuntimeConfig } from '../src/types';
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
@@ -315,6 +315,131 @@ describe('config validation', () => {
       ],
     ])('rejects %s', (_case, monitors, issue) => {
       expect(configIssues({ monitors })).toContain(issue);
+    });
+  });
+
+  describe('reminderEveryChecks', () => {
+    const job = { id: 'job', name: 'Job', method: 'HEARTBEAT', periodSeconds: 60, graceSeconds: 0 };
+    const api = { id: 'api', name: 'API', method: 'GET', target: 'https://api.example.com' };
+
+    it('accepts 30 or more check runs on a check monitor and a heartbeat', () => {
+      expect(
+        configIssues({
+          monitors: [
+            { ...api, reminderEveryChecks: 30 },
+            { ...job, reminderEveryChecks: 1440 },
+          ],
+        }),
+      ).toEqual([]);
+    });
+
+    it.each([29, 0, 30.5, '60'])('rejects %j', (reminderEveryChecks) => {
+      expect(configIssues({ monitors: [{ ...api, reminderEveryChecks }] })).toEqual([
+        'monitor "api": reminderEveryChecks must be an integer of at least 30',
+      ]);
+    });
+  });
+
+  describe('webhook monitors', () => {
+    const monitors = [
+      { id: 'api', name: 'API', method: 'GET', target: 'https://api.example.com' },
+      { id: 'db', name: 'DB', method: 'TCP_PING', target: 'db.example.com:5432' },
+    ];
+
+    it('accepts ids of configured monitors, and an empty list', () => {
+      expect(
+        configIssues({
+          monitors,
+          notification: {
+            webhook: [
+              { url: 'https://a.example.com', monitors: ['api', 'db'] },
+              { url: 'https://b.example.com', monitors: [] },
+            ],
+          },
+        }),
+      ).toEqual([]);
+    });
+
+    it.each([
+      [
+        'an unknown id in a list of webhooks',
+        {
+          webhook: [
+            { url: 'https://a.example.com' },
+            { url: 'https://b.example.com', monitors: ['api', 'web'] },
+          ],
+        },
+        'notification.webhook.1.monitors: no monitor has id "web"',
+      ],
+      [
+        'an unknown id in a single webhook',
+        { webhook: { url: 'https://a.example.com', monitors: ['web'] } },
+        'notification.webhook.monitors: no monitor has id "web"',
+      ],
+    ])('rejects %s', (_case, notification, issue) => {
+      expect(configIssues({ monitors, notification })).toContain(issue);
+    });
+
+    // The webhook union reports any bad field as the whole webhook's.
+    it.each([
+      ['a string instead of a list', { url: 'https://a.example.com', monitors: 'api' }],
+      ['a field webhooks do not have', { url: 'https://a.example.com', monitor: ['api'] }],
+    ])('rejects %s', (_case, webhook) => {
+      expect(configIssues({ monitors, notification: { webhook } })).toEqual([
+        'notification.webhook: Invalid input',
+      ]);
+    });
+  });
+
+  describe('parseSecretWebhooks', () => {
+    const ids = ['api', 'db'];
+
+    it('keeps the monitors a webhook lists', () => {
+      expect(
+        parseSecretWebhooks(
+          '[{"url": "https://a.example.com", "monitors": ["api"]}, {"url": "https://b.example.com", "monitors": []}]',
+          ids,
+        ),
+      ).toEqual({
+        webhooks: [
+          { url: 'https://a.example.com', monitors: ['api'] },
+          { url: 'https://b.example.com', monitors: [] },
+        ],
+        issues: [],
+      });
+    });
+
+    it('ignores an unknown monitor id and keeps the rest of the webhook', () => {
+      expect(
+        parseSecretWebhooks(
+          '{"url": "https://a.example.com", "monitors": ["web", "db", "T0SECRET", "cache"]}',
+          ids,
+        ),
+      ).toEqual({
+        webhooks: [{ url: 'https://a.example.com', monitors: ['db'] }],
+        issues: ['webhook 1.monitors: 3 unknown monitor ids ignored'],
+      });
+    });
+
+    it('ignores a field webhooks do not have and still alerts the webhook', () => {
+      expect(
+        parseSecretWebhooks(
+          '[{"url": "https://a.example.com"}, {"url": "https://b.example.com", "monitor": ["db"]}]',
+          ids,
+        ),
+      ).toEqual({
+        webhooks: [{ url: 'https://a.example.com' }, { url: 'https://b.example.com' }],
+        issues: ['webhook 2: 1 unknown field ignored'],
+      });
+    });
+
+    it('drops a webhook whose monitors is not a list', () => {
+      expect(
+        parseSecretWebhooks('{"url": "https://a.example.com", "monitors": "db"}', ids),
+      ).toEqual({
+        webhooks: [],
+        issues: ['webhook 1.monitors: monitors must be a list of monitor ids'],
+      });
     });
   });
 });

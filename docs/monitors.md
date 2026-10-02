@@ -62,6 +62,16 @@ The Worker opens a TCP connection to the host and port. A connection is all it c
 
 To stop one network path from raising an outage, use [`confirmVia`](#confirm-from-a-second-place) instead.
 
+## Reminders
+
+`reminderEveryChecks: 60` sends a reminder every 60 check runs while the monitor stays down after its down alert. Checks run every minute, so that's about once an hour. The lowest you can set is 30. Leave it out and the monitor sends no reminders.
+
+```ts
+{ id: 'api', name: 'API', method: 'GET', target: 'https://example.com/health', reminderEveryChecks: 60 }
+```
+
+Each reminder says how long the monitor has been down and which reminder it is: reminder 1, reminder 2 and so on. It goes to the same channels as the down alert. No reminder goes out during a maintenance window that covers the monitor, while a monitor in its `dependsOn` is down, or while a flapping monitor is back up and waiting out its 15 minutes. A reminder that no channel accepts isn't sent again, and the next one keeps its number. When the outage reopens, the count starts over from its new down alert. Heartbeats take `reminderEveryChecks` too.
+
 ## Groups
 
 Group monitors on the page in `packages/config/src/public.ts`:

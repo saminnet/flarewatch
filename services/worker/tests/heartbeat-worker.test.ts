@@ -98,7 +98,7 @@ describe('heartbeat scheduled checks', () => {
     expect(recoveredState?.heartbeat?.status).toBe('up');
     expect(recoveredState?.incidents?.[0]?.end).toBe(NOW + 71);
     expect(notifierSendMock).toHaveBeenCalledTimes(2);
-    expect(notifierSendMock.mock.calls.map(([ctx]) => ctx.isUp)).toEqual([false, true]);
+    expect(notifierSendMock.mock.calls.map(([ctx]) => ctx.kind)).toEqual(['down', 'recovered']);
   });
 
   it('opens from a fail signal with its message and closes after success', async () => {

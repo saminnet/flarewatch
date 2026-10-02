@@ -1,17 +1,25 @@
 import type { TemplateContext, TemplateOutput } from './types';
-import { alsoDownList, jsonOutput, singleLine, stripControlChars } from './format';
+import {
+  alsoDownList,
+  stateText,
+  statusText,
+  jsonOutput,
+  singleLine,
+  stripControlChars,
+} from './format';
 
 export function teamsTemplate(ctx: TemplateContext): TemplateOutput {
-  const emoji = ctx.isUp ? '✅' : '🔴';
-  const state = ctx.isUp ? 'is up!' : ctx.isInitialOutage ? 'is down' : 'is still down';
+  const up = ctx.kind === 'recovered';
+  const emoji = up ? '✅' : '🔴';
+  const state = stateText(ctx);
   const name = singleLine(ctx.monitorName);
 
   const facts: { title: string; value: string }[] = [
-    { title: 'Status', value: ctx.isUp ? 'Operational' : 'Down' },
+    { title: 'Status', value: statusText(ctx) },
     { title: 'Duration', value: `${ctx.downtimeMinutes} min` },
   ];
 
-  if (!ctx.isUp && ctx.reason) {
+  if (!up && ctx.reason) {
     // Cards render Markdown with no escape, so the brackets of a [text](url) link become look-alikes.
     const reason = stripControlChars(ctx.reason).replaceAll('[', '⟦').replaceAll(']', '⟧');
     facts.push({ title: 'Reason', value: reason });
@@ -34,7 +42,7 @@ export function teamsTemplate(ctx: TemplateContext): TemplateOutput {
               size: 'Medium',
               weight: 'Bolder',
               wrap: true,
-              color: ctx.isUp ? 'Good' : 'Attention',
+              color: up ? 'Good' : 'Attention',
               text: `${emoji} ${name} ${state}`,
             },
             {

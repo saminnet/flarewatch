@@ -15,9 +15,10 @@ const createMonitor = (name = 'Test Monitor'): MonitorTarget => ({
 
 const createContext = (overrides: Partial<NotificationContext> = {}): NotificationContext => ({
   monitor: createMonitor(),
-  isUp: false,
+  kind: 'down',
   incidentStartTime: 1000,
   currentTime: 2000,
+  downtimeSeconds: 1000,
   reason: 'Connection refused',
   timeZone: 'UTC',
   alsoDown: [],
@@ -35,11 +36,11 @@ describe('webhook notifications', () => {
   });
 
   describe('formatNotificationMessage', () => {
-    it('formats initial outage message when currentTime equals incidentStartTime', () => {
+    it('formats a down alert sent the run its outage began as an initial outage', () => {
       const ctx = createContext({
-        isUp: false,
         incidentStartTime: 1000,
         currentTime: 1000,
+        downtimeSeconds: 0,
         reason: 'Connection refused',
       });
 
@@ -50,9 +51,8 @@ describe('webhook notifications', () => {
       expect(message).not.toContain('still down');
     });
 
-    it('formats ongoing outage message when currentTime differs from incidentStartTime', () => {
+    it('formats a later down alert as an ongoing outage', () => {
       const ctx = createContext({
-        isUp: false,
         incidentStartTime: 1000,
         currentTime: 2000,
         reason: 'Connection refused',
@@ -64,9 +64,9 @@ describe('webhook notifications', () => {
       expect(message).toContain('Reason: Connection refused');
     });
 
-    it('formats recovery message when isUp is true', () => {
+    it('formats a recovery', () => {
       const ctx = createContext({
-        isUp: true,
+        kind: 'recovered',
         incidentStartTime: 1000,
         currentTime: 2000,
       });
@@ -85,9 +85,9 @@ describe('webhook notifications', () => {
 
     it('uses "Unknown" as fallback when reason is empty', () => {
       const ctx = createContext({
-        isUp: false,
         incidentStartTime: 1000,
         currentTime: 1000,
+        downtimeSeconds: 0,
         reason: '',
       });
 
@@ -102,21 +102,25 @@ describe('webhook notifications', () => {
 
     it('reuses one incidentKey across down and up', () => {
       const down = buildTemplateContext(
-        createContext({ incidentStartTime: 1700000000, currentTime: 1700000000 }),
+        createContext({
+          incidentStartTime: 1700000000,
+          currentTime: 1700000000,
+          downtimeSeconds: 0,
+        }),
         webhook,
       );
       const up = buildTemplateContext(
         createContext({
-          isUp: true,
+          kind: 'recovered',
           incidentStartTime: 1700000000,
           currentTime: 1700000300,
+          downtimeSeconds: 300,
         }),
         webhook,
       );
 
       expect(down.incidentKey).toBe('test-monitor:1700000000');
       expect(up.incidentKey).toBe(down.incidentKey);
-      expect(up.isRecovery).toBe(true);
     });
 
     it('passes webhook url and options into the template context', () => {

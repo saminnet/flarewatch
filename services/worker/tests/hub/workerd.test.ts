@@ -52,6 +52,8 @@ const view = (hub: string) => call<HubView>(hub, '/view');
 const latency = (hub: string, id: string, now: number) =>
   call<LatencySample[]>(hub, '/latency', `&id=${encodeURIComponent(id)}&now=${now}`);
 const record = (hub: string, runs: Run[]) => call<unknown[]>(hub, '/record', '', runs);
+/** Runs that decide alerts and report every down alert delivered. The body lists each run's alerts. */
+const alert = (hub: string, runs: Run[]) => call<string[][]>(hub, '/alert', '', runs);
 
 /** Ends the running instance as hibernation does; the next request starts a fresh one. */
 const evict = (hub: string) => server.getWorker().evictDurableObject('MONITOR_HUB', { name: hub });
@@ -64,8 +66,8 @@ const closed = (incidents: Incident[]) => incidents.filter(({ end }) => end !== 
 it('keeps what it stored across a cold start in workerd', async () => {
   expect((await view('hub')).body.monitors).toEqual({});
   const sql = await storage('hub');
-  expect(await sql.exec('SELECT id FROM _migrations')).toHaveLength(7);
-  await sql.exec("INSERT INTO meta VALUES ('marker', '1')");
+  expect(await sql.exec('SELECT id FROM _migrations')).toHaveLength(8);
+  await sql.exec("INSERT INTO meta (key, value) VALUES ('marker', '1')");
   await evict('hub');
   expect((await view('hub')).body.monitors).toEqual({});
   expect(await sql.exec("SELECT value FROM meta WHERE key = 'marker'")).toEqual([{ value: '1' }]);
@@ -80,6 +82,9 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
     const sql = await storage(hub);
     // The schema 3.1.0 left behind.
     await sql.exec('DELETE FROM _migrations WHERE id >= 7');
+    await sql.exec('ALTER TABLE meta DROP COLUMN runs');
+    await sql.exec('ALTER TABLE incidents DROP COLUMN alert_run');
+    await sql.exec('ALTER TABLE incidents DROP COLUMN reminders');
     await sql.exec('DROP TABLE incident_lists');
     await sql.exec('DROP TABLE latency');
     await sql.exec('ALTER TABLE incidents DROP COLUMN up_since');
@@ -139,7 +144,7 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
       10, 20,
     ]);
     expect(await sql.exec('SELECT count(*) AS n FROM samples')).toEqual([{ n: 0 }]);
-    expect(await sql.exec('SELECT MAX(id) AS id FROM _migrations')).toEqual([{ id: 7 }]);
+    expect(await sql.exec('SELECT MAX(id) AS id FROM _migrations')).toEqual([{ id: 8 }]);
 
     await record(hub, [{ now: T0 + 60, records: [check('api', up()), check('db', up())] }]);
 
@@ -255,6 +260,11 @@ describe('MonitorHub in workerd row budgets', () => {
       changingError: { read: 0, written: 0 },
       longOpening: { read: 0, written: 0 },
       longNewError: { read: 0, written: 0 },
+      alertOpening: { read: 0, written: 0 },
+      alertSteady: { read: 0, written: 0 },
+      alertErrorChange: { read: 0, written: 0 },
+      alertReminder: { read: 0, written: 0 },
+      alertRecovery: { read: 0, written: 0 },
     };
     costs.view = await cold(() => view(hub));
     let samples: LatencySample[] = [];
@@ -299,6 +309,46 @@ describe('MonitorHub in workerd row budgets', () => {
       withLong(NOW + 4260, up()),
     ]);
     costs.longNewError = await cold(() => record(hub, [withLong(NOW + 4320, down('Other'))]));
+
+    // m1 alerts while m0 and LONG stay down with their last errors, skipped so they never alert.
+    const policy = { gracePeriodSeconds: 0, skipIds: ['m0', LONG], skipErrorChanges: false };
+    const withM1 = (now: number, result: CheckResult): Run => ({
+      now,
+      records: MONITORS.map((id): CheckRecord => {
+        if (id === 'm0') return check(id, down('Error 29'));
+        if (id === LONG) return check(id, down('Other'));
+        if (id !== 'm1') return check(id, up());
+        return {
+          monitor: {
+            id,
+            name: id,
+            method: 'GET',
+            target: `https://${id}.example.com`,
+            reminderEveryChecks: 30,
+          },
+          check: { location: 'HEL', result },
+        };
+      }),
+      policy,
+    });
+    const sent: string[][] = [];
+    const alerted = async (run: Run) => {
+      const response = await alert(hub, [run]);
+      sent.push(...response.body);
+      return response;
+    };
+    costs.alertOpening = await cold(() => alerted(withM1(NOW + 4380, down())));
+    costs.alertSteady = await cold(() => alerted(withM1(NOW + 4440, down())));
+    costs.alertErrorChange = await cold(() => alerted(withM1(NOW + 4500, down('Other'))));
+    // The down alert's run was the 1st here; the reminder falls due on the 31st.
+    const waiting = Array.from({ length: 27 }, (_, i) =>
+      withM1(NOW + 4560 + i * 60, down('Other')),
+    );
+    expect((await alert(hub, waiting)).body.flat()).toEqual([]);
+    costs.alertReminder = await cold(() => alerted(withM1(NOW + 6180, down('Other'))));
+    costs.alertRecovery = await cold(() => alerted(withM1(NOW + 6240, up())));
+    expect(sent).toEqual([['m1 down'], [], ['m1 error'], ['m1 reminder'], ['m1 recovered']]);
+
     const { body } = await view(hub);
     expect(body.monitors.m0?.status).toBe('down');
     expect(body.monitors.m0?.incidents).toHaveLength(total / MONITORS.length + 1);
@@ -377,6 +427,28 @@ describe('MonitorHub in workerd row budgets', () => {
     expect(small.changingError.written, `measured 106; ${report()}`).toBeLessThanOrEqual(
       15 * 3 + 15 * 4 + 1,
     );
+  });
+
+  it('writes two rows for a reminder, its claim and its outcome, and reads only those rows', () => {
+    expect(large.alertReminder, report()).toEqual(small.alertReminder);
+    // Measured 22 read and 4 written on workerd 1.20260930: a steady run plus two
+    // updates of the incident row, each reading the row it writes.
+    expect(small.alertReminder.written, report()).toBeLessThanOrEqual(
+      small.alertSteady.written + 2,
+    );
+    expect(small.alertReminder.read, report()).toBeLessThanOrEqual(small.alertSteady.read + 2);
+  });
+
+  it.each([
+    // Measured on workerd 1.20260930 before alerts.ts took over the alert columns.
+    ['alertOpening', { read: 25, written: 8 }],
+    ['alertSteady', { read: 20, written: 2 }],
+    ['alertErrorChange', { read: 23, written: 5 }],
+    ['alertRecovery', { read: 23, written: 6 }],
+  ] as const)('reads and writes no more rows than before for %s', (name, before) => {
+    expect(large[name], report()).toEqual(small[name]);
+    expect(small[name].read, report()).toBeLessThanOrEqual(before.read);
+    expect(small[name].written, report()).toBeLessThanOrEqual(before.written);
   });
 });
 
