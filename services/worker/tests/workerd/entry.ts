@@ -17,9 +17,20 @@ export class MonitorHub extends Hub {
   constructor(ctx: DurableObjectState, env: Env) {
     const { sql } = ctx.storage;
     const cursors: SqlStorageCursor<Record<string, SqlStorageValue>>[] = [];
+    let migrated = false;
     Object.defineProperty(ctx.storage, 'sql', {
       value: {
         exec: (query: string, ...bindings: unknown[]) => {
+          if (migrated) {
+            const plan = sql.exec(`EXPLAIN QUERY PLAN ${query}`, ...bindings).toArray();
+            if (
+              plan.some(
+                ({ detail }) => typeof detail === 'string' && /^SCAN incidents\b/.test(detail),
+              )
+            ) {
+              throw new Error(`Query scans every incident: ${query}`);
+            }
+          }
           const cursor = sql.exec(query, ...bindings);
           cursors.push(cursor);
           return cursor;
@@ -27,6 +38,7 @@ export class MonitorHub extends Hub {
       },
     });
     super(ctx, env);
+    migrated = true;
     this.startup = sum(cursors.splice(0));
     this.cursors = cursors;
   }

@@ -63,6 +63,38 @@ const storage = (hub: string) =>
 
 const closed = (incidents: Incident[]) => incidents.filter(({ end }) => end !== undefined);
 
+async function insertHistory(
+  sql: Awaited<ReturnType<typeof storage>>,
+  id: string,
+  startedAt: number,
+  list: Incident[],
+  partChars: number,
+) {
+  await sql.exec('INSERT INTO monitors (id, started_at) VALUES (?, ?)', id, startedAt);
+  await sql.exec(
+    `INSERT INTO incidents (monitor_id, starts, errors, end_at)
+     SELECT ?, json_extract(value, '$.start'), json_extract(value, '$.error'),
+       json_extract(value, '$.end')
+     FROM json_each(?)`,
+    id,
+    JSON.stringify(list),
+  );
+  const parts: Incident[][] = [[]];
+  for (const incident of list) {
+    const part = parts[parts.length - 1] ?? [];
+    if (JSON.stringify([...part, incident]).length <= partChars) part.push(incident);
+    else parts.push([incident]);
+  }
+  for (const [part, incidents] of parts.entries()) {
+    await sql.exec(
+      'INSERT INTO incident_lists (monitor_id, part, data) VALUES (?, ?, ?)',
+      id,
+      part,
+      JSON.stringify(incidents),
+    );
+  }
+}
+
 it('keeps what it stored across a cold start in workerd', async () => {
   expect((await view('hub')).body.monitors).toEqual({});
   const sql = await storage('hub');
@@ -194,29 +226,7 @@ describe('MonitorHub in workerd row budgets', () => {
         id === LONG
           ? history(1000, 'Unavailable '.padEnd(500, 'x'))
           : history(total / MONITORS.length, 'Unavailable');
-      await sql.exec('INSERT INTO monitors (id, started_at) VALUES (?, ?)', id, first);
-      await sql.exec(
-        `INSERT INTO incidents (monitor_id, starts, errors, end_at)
-         SELECT ?, json_extract(value, '$.start'), json_extract(value, '$.error'),
-           json_extract(value, '$.end')
-         FROM json_each(?)`,
-        id,
-        JSON.stringify(list),
-      );
-      const parts: Incident[][] = [[]];
-      for (const incident of list) {
-        const part = parts[parts.length - 1] ?? [];
-        if (JSON.stringify([...part, incident]).length <= PART_CHARS) part.push(incident);
-        else parts.push([incident]);
-      }
-      for (const [part, incidents] of parts.entries()) {
-        await sql.exec(
-          'INSERT INTO incident_lists (monitor_id, part, data) VALUES (?, ?, ?)',
-          id,
-          part,
-          JSON.stringify(incidents),
-        );
-      }
+      await insertHistory(sql, id, first, list, PART_CHARS);
     }
     expect(
       await sql.exec('SELECT count(*) AS n FROM incident_lists WHERE monitor_id = ?', LONG),
@@ -452,6 +462,20 @@ describe('MonitorHub in workerd row budgets', () => {
   });
 });
 
+describe('MonitorHub in workerd query plans', () => {
+  it('fails a request whose query would scan every incident', async () => {
+    const hub = 'plans';
+    await view(hub);
+    const sql = await storage(hub);
+    await sql.exec('DROP INDEX incidents_end_at');
+    await sql.exec('DROP INDEX incidents_monitor_end');
+    await evict(hub);
+
+    const run = [{ now: T0, records: [check('api', up())] }];
+    await expect(record(hub, run)).rejects.toThrow('Query scans every incident');
+  }, 60_000);
+});
+
 describe('MonitorHub in workerd after a cold start', () => {
   it('shows an outage and its end that runs recorded before hibernation', async () => {
     const hub = 'cold-start';
@@ -481,7 +505,7 @@ describe('MonitorHub in workerd storage sizes', () => {
   it('keeps every row of a long, changing history within the row limit', async () => {
     const hub = 'sizes';
     // Three bytes a character, so a part's bytes reach three times its characters.
-    const error = (label: string) => `${label} `.padEnd(500, '漢');
+    const error = (label: string, chars = 500) => `${label} `.padEnd(chars, '漢');
     let now = T0;
     const send = async (runs: Run[]) => {
       for (let i = 0; i < runs.length; i += 500) await record(hub, runs.slice(i, i + 500));
@@ -503,9 +527,27 @@ describe('MonitorHub in workerd storage sizes', () => {
       return incidents;
     };
 
-    // 1,100 short outages, each closed before the next: past the count cap.
+    // 978 short outages and 22 at the segment cap, with errors short enough to
+    // stay under the size cap: the next 100 outages cross the count cap alone.
+    const stored: Incident[] = [];
+    for (let i = 0; i < 978; i++, now += FLAP_SECONDS + 120) {
+      stored.push({ start: [now], error: [error(`short-${i}`)], end: now + 60 });
+    }
+    for (let i = 0; i < 22; i++, now += FLAP_SECONDS + 60) {
+      const start: number[] = [];
+      const errors: string[] = [];
+      for (let j = 0; j < 100; j++, now += 60) {
+        start.push(now);
+        errors.push(error(`stored-${i}-${j}`, 150));
+      }
+      stored.push({ start, error: errors, end: now });
+    }
+    expect(JSON.stringify(stored).length).toBeLessThan(1_000_000);
+    await view(hub);
+    await insertHistory(await storage(hub), 'api', T0, stored, 2_000_000);
+
     const short: Run[] = [];
-    for (let i = 0; i < 1100; i++, now += FLAP_SECONDS + 120) {
+    for (let i = 1000; i < 1100; i++, now += FLAP_SECONDS + 120) {
       short.push({ now, records: [check('api', down(error(`short-${i}`)))] });
       short.push({ now: now + 60, records: [check('api', up())] });
     }
@@ -517,16 +559,19 @@ describe('MonitorHub in workerd storage sizes', () => {
       newest: kept[kept.length - 1]?.error,
     }).toEqual({ count: 1000, oldest: [error('short-100')], newest: [error('short-1099')] });
 
-    // 25 outages whose error changes for 105 runs each: past the segment and size caps.
     const long: Run[] = [];
-    for (let i = 0; i < 25; i++, now += FLAP_SECONDS + 60) {
+    for (let i = 0; i < 3; i++, now += FLAP_SECONDS + 60) {
       for (let j = 0; j < 105; j++, now += 60) {
         long.push({ now, records: [check('api', down(error(`${i}-${j}`)))] });
       }
       long.push({ now, records: [check('api', up())] });
     }
     await send(long);
-    await history();
+    const changed = closed(await history());
+    // The count cap alone would drop three; the size cap drops more.
+    expect(changed.length).toBeLessThan(997);
+    expect(changed[changed.length - 1]?.error).toHaveLength(100);
+    expect(changed[changed.length - 1]?.error[99]).toBe(error('2-104'));
 
     await send([{ now, records: [check('api', down(error('open')))] }]);
     const incidents = await history();
