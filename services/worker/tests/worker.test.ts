@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   type Fetcher,
+  isJsonObject,
   type Maintenance,
   type MonitorTarget,
   type NotificationConfig,
@@ -154,6 +155,51 @@ describe('subrequests per check run', () => {
     // 45 checks, the hub's record and alert confirmation, a cold edge lookup and one webhook.
     expect(45 + confirmations + 2 + 1 + 1).toBeLessThanOrEqual(50);
     expect(alerts).toBeGreaterThan(0);
+  });
+
+  it('sends a mass outage over the next runs and loses no alert to the request cap', async () => {
+    const monitors = Array.from({ length: 40 }, (_, i) => createMonitor(`m${i}`));
+    const hooks = ['https://a.example.com/alert', 'https://b.example.com/alert'];
+    const alerted = new Map(hooks.map((hook) => [hook, [] as string[]]));
+    let requests = 0;
+    let refused = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async (input, init) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        // The free plan refuses the 48th request of an invocation; the hub's calls take the rest.
+        if (++requests > 47) {
+          refused++;
+          throw new Error('Too many subrequests.');
+        }
+        const hook = alerted.get(url);
+        if (!hook) return new Response('down', { status: 503 });
+        const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+        const text = isJsonObject(body) && typeof body.text === 'string' ? body.text : '';
+        hook.push(/Monitor (m\d+)(?!\d)/.exec(text)?.[1] ?? '?');
+        return new Response('ok');
+      }),
+    );
+    const { env } = createEnv();
+    const deps = {
+      ...createWorkerDeps({
+        monitors,
+        notification: { webhook: hooks.map((url) => ({ url, payload: { text: '$MSG' } })) },
+      }),
+      createNotifier,
+    };
+
+    let runs = 0;
+    do {
+      requests = 0;
+      await runChecks(env, deps);
+    } while (++runs < 20 && requests > monitors.length);
+
+    expect(refused).toBe(0);
+    // 40 checks leave 7 requests: the prepaid alert and two more at two webhooks each.
+    expect(runs).toBeLessThanOrEqual(15);
+    const ids = monitors.map((monitor) => monitor.id).sort();
+    for (const hook of hooks) expect(alerted.get(hook)?.sort()).toEqual(ids);
   });
 
   it('spends nothing on confirmations while every monitor is up', async () => {

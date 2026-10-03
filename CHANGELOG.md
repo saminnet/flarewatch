@@ -49,6 +49,8 @@ Your config's monitors are now checked field by field. A misspelt or unknown fie
 - A proxy that reports a latency that is not a finite, non-negative number is treated as an invalid response. Before, one such value made the hub drop every monitor's samples for that hour.
 - A failed result a proxy reports no longer carries the proxy token into the public error text.
 - A `notification.timeZone` the runtime does not know fails the config check. Before, it passed, and then every alert failed at send time.
+- A connection failure the runtime reports as "internal error" with a log reference shows as "Connection failed". The full text stays in the worker's log.
+- A mass outage no longer loses down alerts to the free plan's request cap. Alerts a run cannot send wait for the following runs, and waiting does not count as a try. Before, an alert past the cap counted as failed, and after 10 runs it was dropped.
 - `vp run dev-status-page` serves the page again. Before, the browser got a 500 for a module that imports `cloudflare:workers` on the server only.
 - The `text` template called a recovery "still up" when it came in the same second as the outage began.
 - An alert's target URL no longer carries the user name and password from a monitor's `target`.

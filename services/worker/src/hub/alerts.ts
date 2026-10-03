@@ -103,6 +103,8 @@ export interface AlertOutcome {
   /** The alert's run, handed back unchanged. */
   run: number;
   delivered: boolean;
+  /** Not tried: the run had no requests left for it. */
+  deferred?: boolean;
 }
 
 /** One check run's view of what changed, for the alert rules. */
@@ -246,12 +248,13 @@ export class Alerts {
 
   /**
    * Records how each alert's delivery went. A down alert no webhook accepted is
-   * due again next run, until MAX_ALERT_ATTEMPTS failures. Returns the recovery
+   * due again next run, until MAX_ALERT_ATTEMPTS failures; a deferred one is due
+   * again with no failure counted. Returns the recovery
    * alerts of delivered outages that ended while they were being sent.
    */
   record(outcomes: AlertOutcome[]): Alert[] {
     const recoveries: Alert[] = [];
-    for (const { incident, kind, reopenedAt, run, delivered } of outcomes) {
+    for (const { incident, kind, reopenedAt, run, delivered, deferred } of outcomes) {
       if (kind === 'error' && !delivered) {
         this.sql.exec(
           `UPDATE incidents SET error_alerts = error_alerts - 1
@@ -269,6 +272,14 @@ export class Alerts {
         );
       }
       if (kind !== 'down') continue;
+      if (deferred) {
+        this.sql.exec(
+          "UPDATE incidents SET alert = 'pending' WHERE id = ? AND alert = 'sending' AND alert_run = ?",
+          incident,
+          run,
+        );
+        continue;
+      }
       if (!delivered) {
         this.sql.exec(
           `UPDATE incidents SET alert_attempts = alert_attempts + 1,

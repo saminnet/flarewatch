@@ -9,6 +9,7 @@ import {
   DEFAULT_HTTP_TIMEOUT,
   createLogger,
   getErrorMessage,
+  publicErrorMessage,
   isTimeoutError,
 } from '@flarewatch/shared';
 
@@ -56,7 +57,7 @@ export class TcpChecker implements MonitorChecker {
       }
 
       log.info('Error', { name: target.name, error: errorMessage });
-      return failure(errorMessage, latency);
+      return failure(publicErrorMessage(errorMessage), latency);
     }
   }
 }

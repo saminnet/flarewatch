@@ -18,8 +18,8 @@ import { checkMonitor, runBudget } from './checkers';
 import {
   createNotifier,
   formatNotificationMessage,
-  routes,
   type NotificationContext,
+  routes,
 } from './notifications/webhook';
 import type { Alert, AlertOutcome, AlertPolicy } from './hub/alerts';
 import type { CheckRecord } from './hub/monitor-hub';
@@ -81,11 +81,9 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const currentTime = Math.floor(Date.now() / 1000);
   const webhooks = alertWebhooks(config, env.FLAREWATCH_WEBHOOKS);
   const notifier = deps.createNotifier(webhooks);
+  const budget = runBudget(config.monitors, webhooks.length);
 
-  const ctx: CheckContext = {
-    env,
-    budget: runBudget(config.monitors, [webhooks ?? []].flat().length),
-  };
+  const ctx: CheckContext = { env, budget };
   const records = await Promise.all(
     config.monitors.map(async (monitor): Promise<CheckRecord> => {
       if (monitor.method === 'HEARTBEAT') return { monitor };
@@ -110,12 +108,28 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const { updates, alerts } = await hub.record(currentTime, records, policy);
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
+  // runBudget held one request per webhook, so the first alert is paid for.
+  let prepaid = true;
   const deliver = async (batch: Alert[]) => {
     const outcomes: AlertOutcome[] = [];
     for (const alert of batch) {
       const monitor = monitors.get(alert.monitorId);
       let delivered = false;
       if (notifier && monitor) {
+        const cost = webhooks.filter((webhook) => routes(webhook, monitor.id)).length;
+        if (prepaid) prepaid = false;
+        else if (budget.subrequests >= cost) budget.subrequests -= cost;
+        else {
+          outcomes.push({
+            incident: alert.incident,
+            kind: alert.kind,
+            reopenedAt: alert.reopenedAt,
+            run: alert.run,
+            delivered,
+            deferred: true,
+          });
+          continue;
+        }
         const at = alert.at ?? currentTime;
         const ctx: NotificationContext = {
           monitor,

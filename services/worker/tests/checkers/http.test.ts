@@ -114,6 +114,14 @@ describe('HttpChecker', () => {
     expect(result).toMatchObject({ ok: false, error: 'JSON value at $.checks[0].ok is not true' });
   });
 
+  it('shows a connection failure the runtime does not explain as "Connection failed"', async () => {
+    fetchMock.mockRejectedValue(new Error('internal error; reference = af8u8m9eap4vgpst8jm117i3'));
+
+    const result = await checker.check(createMonitor());
+
+    expect(result).toMatchObject({ ok: false, error: 'Connection failed' });
+  });
+
   it('maps timeout-like errors to a consistent message using the configured timeout', async () => {
     fetchMock.mockRejectedValue(new Error('timeout'));
 

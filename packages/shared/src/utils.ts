@@ -40,6 +40,11 @@ export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** A check's error as the page shows it. The runtime's "internal error" carries a reference for its own logs. */
+export function publicErrorMessage(message: string): string {
+  return message.startsWith('internal error') ? 'Connection failed' : message;
+}
+
 export function isTimeoutError(message: string): boolean {
   const lower = message.toLowerCase();
   return lower.includes('timeout') || lower.includes('timed out') || lower.includes('abort');
