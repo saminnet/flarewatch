@@ -207,9 +207,11 @@ const pullMonitorShape = {
   tooltip: optionalString('tooltip'),
   hideLatencyChart: optionalBoolean('hideLatencyChart'),
   expectedCodes: z.optional(
-    z.array(intInRange('expectedCodes', 100, 599), {
-      error: 'expectedCodes must be a list of status codes',
-    }),
+    z
+      .array(intInRange('expectedCodes', 100, 599), {
+        error: 'expectedCodes must be a list of status codes',
+      })
+      .check(z.minLength(1, { error: 'expectedCodes must list at least one status code' })),
   ),
   timeout: z.optional(intInRange('timeout', 1, MAX_TIMEOUT_MS)),
   maxLatencyMs: z.optional(
@@ -223,8 +225,8 @@ const pullMonitorShape = {
     }),
   ),
   body: optionalString('body'),
-  responseKeyword: optionalString('responseKeyword'),
-  responseForbiddenKeyword: optionalString('responseForbiddenKeyword'),
+  responseKeyword: z.optional(nonEmptyString('responseKeyword')),
+  responseForbiddenKeyword: z.optional(nonEmptyString('responseForbiddenKeyword')),
   responseJsonPath: z.optional(
     z.string({ error: 'responseJsonPath must be a string' }).check(
       z.refine((path) => jsonPathKeys(path) !== null, {
@@ -243,6 +245,9 @@ const pullMonitorShape = {
         error: 'responseHeaderEquals must map header names to strings',
       })
       .check(
+        z.refine((headers) => Object.keys(headers).length > 0, {
+          error: 'responseHeaderEquals must name at least one header',
+        }),
         z.refine((headers) => Object.keys(headers).every((name) => HEADER_NAME.test(name)), {
           error: 'responseHeaderEquals: bad header name',
         }),
