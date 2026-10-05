@@ -41,9 +41,17 @@ function isCheckResult(value: unknown): value is CheckResult {
   return false;
 }
 
-function isProxyCheckResponse(value: unknown): value is CheckResultWithLocation {
+type ProxyCheckResponse = CheckResultWithLocation & { contract?: unknown };
+
+function isProxyCheckResponse(value: unknown): value is ProxyCheckResponse {
   if (!isJsonObject(value)) return false;
   return typeof value.location === 'string' && isCheckResult(value.result);
+}
+
+/** flarewatch-proxy before 1.1.0 drops these fields and passes the check without them. */
+function runsAssertions(response: ProxyCheckResponse): boolean {
+  const { contract } = response;
+  return typeof contract === 'number' && Number.isInteger(contract) && contract >= 2;
 }
 
 export async function checkExternalProxy(
@@ -88,12 +96,23 @@ export async function checkExternalProxy(
       };
     }
 
+    const asserts =
+      monitor.responseHeaderEquals !== undefined || monitor.responseJsonPath !== undefined;
+    if (asserts && !runsAssertions(data)) {
+      return {
+        location: 'ERROR',
+        result: failure(
+          'Proxy is too old for header and JSON checks: update to flarewatch-proxy 1.1.0',
+        ),
+      };
+    }
+
     // A proxy can echo the token it was sent, and a failed result's text is public.
     const token = env?.FLAREWATCH_PROXY_TOKEN;
     if (!data.result.ok && token) {
       data.result.error = data.result.error.replaceAll(token, '<proxy token>');
     }
-    return data;
+    return { location: data.location, result: data.result };
   } catch (error) {
     return {
       location: 'ERROR',

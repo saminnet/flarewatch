@@ -17,7 +17,7 @@ Monitors live in `packages/config/src/worker.ts`. [`worker.example.ts`](../packa
 }
 ```
 
-A check fails on another status code, when `responseKeyword` is missing from the first 1 MiB of the response, when `responseForbiddenKeyword` is in it, or after `timeout` milliseconds, at most 60000. Each `expectedCodes` entry must be a whole number from 100 to 599. `headers` and `body` go with the request.
+A check fails on another status code, when `responseKeyword` is missing from the first 1 MiB of the response, when `responseForbiddenKeyword` is in it, or after `timeout` milliseconds, at most 60000. `expectedCodes` must list at least one code, and each must be a whole number from 100 to 599. Neither keyword can be empty. `headers` and `body` go with the request.
 
 `maxLatencyMs` marks a slow site. Set it to a whole number of milliseconds, at least 1. When the last check took longer than that, the page shows the monitor as degraded until a check comes in at or under it. It sends no alert, opens no incident and doesn't change uptime. A slow check taken while a maintenance window covered the monitor shows as up, even after the window ends.
 
@@ -35,7 +35,7 @@ To check more than a keyword:
 }
 ```
 
-- `responseHeaderEquals` lists headers the response must have, with exactly these values. Header names ignore case; values don't. Names must be valid HTTP header names, so no spaces or colons, and values must be strings.
+- `responseHeaderEquals` lists headers the response must have, with exactly these values. List at least one. Header names ignore case; values don't. Names must be valid HTTP header names, so no spaces or colons, and values must be strings.
 - `responseJsonPath` points into a JSON response, and the value there must equal `responseJsonValue`: the same string, number, `true`, `false` or `null`. `"3"` doesn't equal `3`. Paths use dots for keys and brackets for list items: `$.a.b[0].c`. `$` is the whole response. Set both fields or neither.
 
 The check fails when the response isn't JSON, is 1 MiB or larger, or has nothing at the path. The error names the header or path, never what the response held, because errors show on the status page.
@@ -152,10 +152,12 @@ Not every place can run every check:
 | `body`                 | yes             | no                           | yes            |
 | `sslCheckEnabled`      | no              | yes                          | yes            |
 | `pingProtocol: 'icmp'` | no              | yes                          | no             |
-| `responseHeaderEquals` | yes             | no                           | no             |
-| `responseJsonPath`     | yes             | yes                          | no             |
+| `responseHeaderEquals` | yes             | no                           | 1.1.0 or later |
+| `responseJsonPath`     | yes             | yes                          | 1.1.0 or later |
 
 A monitor that asks a place for something it can't do fails on every check, with an error that names the setting, such as `sslCheckEnabled is not supported by a direct check`. This counts the fallback too: `sslCheckEnabled` with `checkProxyFallback: true` fails, because the fallback runs from the Worker. The unit tests run the same rules on your config, so the deploy stops before such a monitor goes live.
+
+`responseHeaderEquals` and `responseJsonPath` need flarewatch-proxy 1.1.0 or later. The unit tests can't see which version you run. An older proxy fails these checks with `Proxy is too old for header and JSON checks: update to flarewatch-proxy 1.1.0`. With `checkProxyFallback: true`, the Worker then runs the check itself.
 
 ### Confirm from a second place
 
@@ -171,7 +173,7 @@ A monitor that asks a place for something it can't do fails on every check, with
 }
 ```
 
-This is how to use your own [flarewatch-proxy](https://github.com/saminnet/flarewatch-proxy) as a second vantage point: a blip between Cloudflare and your site no longer opens an incident unless the proxy sees it too. `confirmVia: 'globalping://<token>?magic=fra'` does the same from a Globalping probe. `confirmVia` must name a different place than `checkProxy`, and the table above applies to it too.
+This is how to use your own [flarewatch-proxy](https://github.com/saminnet/flarewatch-proxy) as a second vantage point: a blip between Cloudflare and your site no longer opens an incident unless the proxy sees it too. `confirmVia: 'globalping://<token>?magic=fra'` does the same from a Globalping probe. `confirmVia` must name a different place than `checkProxy`, and the table above applies to it too. A confirmation that fails for any reason counts as down, so a proxy older than 1.1.0 can't clear a failed header or JSON check.
 
 The free plan allows a check run 50 subrequests. Each check is one, a Globalping check two plus one per extra poll, and the hub and each alert webhook need their own. A confirmation, a `checkProxyFallback` check or an extra Globalping poll runs only while the run has some to spare, so with many monitors failing at once, the later ones keep their first result. FlareWatch holds back one request per webhook, which covers the first alert of a run; with many monitors going down in the same minute, later alerts can still go over the limit.
 

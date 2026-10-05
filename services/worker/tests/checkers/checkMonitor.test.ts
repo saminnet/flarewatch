@@ -241,20 +241,6 @@ describe('checkMonitor', () => {
         'checkProxy: responseHeaderEquals is not supported by Globalping',
       ],
       [
-        'a header assertion through an external proxy',
-        { responseHeaderEquals: { 'X-A': '1' }, checkProxy: 'https://proxy.example.com/check' },
-        'checkProxy: responseHeaderEquals is not supported by an external proxy',
-      ],
-      [
-        'a JSON assertion through an external proxy',
-        {
-          responseJsonPath: '$.status',
-          responseJsonValue: 'ok',
-          checkProxy: 'https://proxy.example.com/check',
-        },
-        'checkProxy: responseJsonPath is not supported by an external proxy',
-      ],
-      [
         'a JSON assertion on a TCP_PING, even through Globalping',
         {
           method: 'TCP_PING',
@@ -308,6 +294,42 @@ describe('checkMonitor', () => {
         checkProxy: 'globalping://TOKEN',
       });
       expect(planIssues(target)).toEqual([]);
+    });
+
+    it.each(['checkProxy', 'confirmVia'] as const)(
+      'plans header and JSON checks through an external proxy as %s',
+      (via) => {
+        const target = createTarget({
+          responseHeaderEquals: { 'X-A': '1' },
+          responseJsonPath: '$.status',
+          responseJsonValue: 'ok',
+          [via]: 'https://proxy.example.com/check',
+        });
+        expect(planIssues(target)).toEqual([]);
+      },
+    );
+
+    it('falls back to the Worker for a header check when the proxy is too old', async () => {
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ location: 'FRA', result: { ok: true, latency: 3 } })),
+      );
+      httpCheckMock.mockResolvedValue({ ok: false, error: 'Header X-A is not 1', latency: 8 });
+
+      const result = await checkMonitor(
+        createTarget({
+          responseHeaderEquals: { 'X-A': '1' },
+          checkProxy: 'https://proxy.example.com/check',
+          checkProxyFallback: true,
+        }),
+        createCtx(),
+        deps,
+      );
+
+      expect(result).toEqual({
+        location: 'SFO',
+        result: { ok: false, error: 'Header X-A is not 1', latency: 8 },
+      });
+      expect(httpCheckMock.mock.calls[0]?.[0].responseHeaderEquals).toEqual({ 'X-A': '1' });
     });
 
     it('checks the certificate through a proxy that can see it', async () => {
@@ -379,6 +401,28 @@ describe('checkMonitor', () => {
       httpCheckMock.mockResolvedValue({ ok: true, latency: 4 });
 
       const result = await checkMonitor(
+        createTarget({ responseHeaderEquals: { 'X-A': '1' }, confirmVia: 'globalping://TOKEN' }),
+        createCtx(),
+        deps,
+      );
+
+      expect(result).toEqual({
+        location: 'SFO',
+        result: {
+          ok: false,
+          error: 'confirmVia: responseHeaderEquals is not supported by Globalping',
+        },
+      });
+      expect(httpCheckMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps the monitor down when the confirming proxy is too old for its JSON check', async () => {
+      httpCheckMock.mockResolvedValue({ ok: false, error: 'JSON path $.ok not found in response' });
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ location: 'home-lab', result: { ok: true, latency: 6 } })),
+      );
+
+      const result = await checkMonitor(
         createTarget({
           responseJsonPath: '$.ok',
           responseJsonValue: true,
@@ -389,13 +433,33 @@ describe('checkMonitor', () => {
       );
 
       expect(result).toEqual({
-        location: 'SFO',
+        location: 'ERROR',
         result: {
           ok: false,
-          error: 'confirmVia: responseJsonPath is not supported by an external proxy',
+          error: 'Proxy is too old for header and JSON checks: update to flarewatch-proxy 1.1.0',
         },
       });
-      expect(httpCheckMock).not.toHaveBeenCalled();
+    });
+
+    it('lets a proxy with contract 2 confirm a JSON check', async () => {
+      httpCheckMock.mockResolvedValue({ ok: false, error: 'Connection reset' });
+      fetchMock.mockResolvedValue(
+        new Response(
+          JSON.stringify({ contract: 2, location: 'home-lab', result: { ok: true, latency: 6 } }),
+        ),
+      );
+
+      const result = await checkMonitor(
+        createTarget({
+          responseJsonPath: '$.ok',
+          responseJsonValue: true,
+          confirmVia: 'https://proxy.example.com/check',
+        }),
+        createCtx(),
+        deps,
+      );
+
+      expect(result).toEqual({ location: 'home-lab', result: { ok: true, latency: 6 } });
     });
   });
 

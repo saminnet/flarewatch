@@ -220,6 +220,117 @@ describe('checkExternalProxy', () => {
     });
   });
 
+  describe('header and JSON checks', () => {
+    const TOO_OLD = {
+      location: 'ERROR',
+      result: {
+        ok: false,
+        error: 'Proxy is too old for header and JSON checks: update to flarewatch-proxy 1.1.0',
+      },
+    };
+    const assertions: [string, Partial<MonitorTarget>][] = [
+      ['a header check', { responseHeaderEquals: { 'X-A': '1' } }],
+      ['a JSON check', { responseJsonPath: '$.status', responseJsonValue: 'ok' }],
+    ];
+    const answer = (fields: { contract?: unknown }) =>
+      new Response(
+        JSON.stringify({ location: 'FRA', result: { ok: true, latency: 5 }, ...fields }),
+      );
+
+    it.each(assertions)('fails %s on a proxy that sends no contract', async (_case, overrides) => {
+      fetchMock.mockResolvedValue(answer({}));
+
+      const result = await checkExternalProxy(
+        createTarget(overrides),
+        PROXY_URL,
+        undefined,
+        fetchMock,
+      );
+
+      expect(result).toEqual(TOO_OLD);
+    });
+
+    it.each([1, 0, '2', 2.5, null])('treats contract %j as no contract', async (contract) => {
+      fetchMock.mockResolvedValue(answer({ contract }));
+
+      const result = await checkExternalProxy(
+        createTarget({ responseHeaderEquals: { 'X-A': '1' } }),
+        PROXY_URL,
+        undefined,
+        fetchMock,
+      );
+
+      expect(result).toEqual(TOO_OLD);
+    });
+
+    it('fails on an old proxy even when the proxy reports a failure', async () => {
+      fetchMock.mockResolvedValue(
+        new Response(
+          JSON.stringify({ location: 'FRA', result: { ok: false, error: 'Refused', latency: 3 } }),
+        ),
+      );
+
+      const result = await checkExternalProxy(
+        createTarget({ responseJsonPath: '$.ok', responseJsonValue: true }),
+        PROXY_URL,
+        undefined,
+        fetchMock,
+      );
+
+      expect(result).toEqual(TOO_OLD);
+    });
+
+    it.each([2, 3])('takes the result of a proxy with contract %j', async (contract) => {
+      fetchMock.mockResolvedValue(answer({ contract }));
+
+      const result = await checkExternalProxy(
+        createTarget({ responseHeaderEquals: { 'X-A': '1' } }),
+        PROXY_URL,
+        undefined,
+        fetchMock,
+      );
+
+      expect(result).toEqual({ location: 'FRA', result: { ok: true, latency: 5 } });
+    });
+
+    it('reports the failure a proxy with contract 2 finds', async () => {
+      fetchMock.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            contract: 2,
+            location: 'FRA',
+            result: { ok: false, error: 'Header X-A is not 1', latency: 5 },
+          }),
+        ),
+      );
+
+      const result = await checkExternalProxy(
+        createTarget({ responseHeaderEquals: { 'X-A': '1' } }),
+        PROXY_URL,
+        undefined,
+        fetchMock,
+      );
+
+      expect(result).toEqual({
+        location: 'FRA',
+        result: { ok: false, error: 'Header X-A is not 1', latency: 5 },
+      });
+    });
+
+    it('runs a monitor without them on a proxy that sends no contract', async () => {
+      fetchMock.mockResolvedValue(answer({}));
+
+      const result = await checkExternalProxy(
+        createTarget({ responseKeyword: 'ok', expectedCodes: [200] }),
+        PROXY_URL,
+        undefined,
+        fetchMock,
+      );
+
+      expect(result).toEqual({ location: 'FRA', result: { ok: true, latency: 5 } });
+    });
+  });
+
   it('returns a failure when the proxy request throws', async () => {
     fetchMock.mockRejectedValue(new Error('network unavailable'));
 

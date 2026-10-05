@@ -1,0 +1,390 @@
+[
+  {
+    "name": "default: 200 passes",
+    "monitor": {},
+    "reply": { "status": 200, "headers": {}, "body": "ok" },
+    "error": null
+  },
+  {
+    "name": "default: 201 passes",
+    "monitor": {},
+    "reply": { "status": 201, "headers": {}, "body": "ok" },
+    "error": null
+  },
+  {
+    "name": "default: 299 passes",
+    "monitor": {},
+    "reply": { "status": 299, "headers": {}, "body": "ok" },
+    "error": null
+  },
+  {
+    "name": "default: 300 fails",
+    "monitor": {},
+    "reply": { "status": 300, "headers": {}, "body": "ok" },
+    "error": "Expected 2xx status, got 300"
+  },
+  {
+    "name": "default: 404 fails",
+    "monitor": {},
+    "reply": { "status": 404, "headers": {}, "body": "error" },
+    "error": "Expected 2xx status, got 404"
+  },
+  {
+    "name": "default: 500 fails",
+    "monitor": {},
+    "reply": { "status": 500, "headers": {}, "body": "error" },
+    "error": "Expected 2xx status, got 500"
+  },
+  {
+    "name": "expectedCodes: a listed non-2xx code passes",
+    "monitor": { "expectedCodes": [200, 201, 404] },
+    "reply": { "status": 404, "headers": {}, "body": "not found" },
+    "error": null
+  },
+  {
+    "name": "expectedCodes: a listed 2xx code passes",
+    "monitor": { "expectedCodes": [200, 201, 404] },
+    "reply": { "status": 200, "headers": {}, "body": "ok" },
+    "error": null
+  },
+  {
+    "name": "expectedCodes: an unlisted code fails",
+    "monitor": { "expectedCodes": [200, 201] },
+    "reply": { "status": 500, "headers": {}, "body": "error" },
+    "error": "Expected status 200|201, got 500"
+  },
+  {
+    "name": "expectedCodes: an unlisted 2xx code fails",
+    "monitor": { "expectedCodes": [200] },
+    "reply": { "status": 201, "headers": {}, "body": "ok" },
+    "error": "Expected status 200, got 201"
+  },
+  {
+    "name": "expectedCodes: replace the default 2xx",
+    "monitor": { "expectedCodes": [301] },
+    "reply": { "status": 200, "headers": {}, "body": "ok" },
+    "error": "Expected status 301, got 200"
+  },
+  {
+    "name": "responseKeyword: present passes",
+    "monitor": { "responseKeyword": "success" },
+    "reply": { "status": 200, "headers": {}, "body": "Operation success completed" },
+    "error": null
+  },
+  {
+    "name": "responseKeyword: absent fails",
+    "monitor": { "responseKeyword": "success" },
+    "reply": { "status": 200, "headers": {}, "body": "Operation failed" },
+    "error": "Required keyword \"success\" not found in response"
+  },
+  {
+    "name": "responseKeyword: matches case",
+    "monitor": { "responseKeyword": "SUCCESS" },
+    "reply": { "status": 200, "headers": {}, "body": "success" },
+    "error": "Required keyword \"SUCCESS\" not found in response"
+  },
+  {
+    "name": "responseKeyword: an empty body fails",
+    "monitor": { "responseKeyword": "ok" },
+    "reply": { "status": 200, "headers": {}, "body": "" },
+    "error": "Required keyword \"ok\" not found in response"
+  },
+  {
+    "name": "responseForbiddenKeyword: present fails",
+    "monitor": { "responseForbiddenKeyword": "error" },
+    "reply": { "status": 200, "headers": {}, "body": "An error occurred" },
+    "error": "Forbidden keyword \"error\" found in response"
+  },
+  {
+    "name": "responseForbiddenKeyword: absent passes",
+    "monitor": { "responseForbiddenKeyword": "error" },
+    "reply": { "status": 200, "headers": {}, "body": "All good" },
+    "error": null
+  },
+  {
+    "name": "both keywords: required present and forbidden absent passes",
+    "monitor": { "responseKeyword": "ok", "responseForbiddenKeyword": "error" },
+    "reply": { "status": 200, "headers": {}, "body": "status: ok" },
+    "error": null
+  },
+  {
+    "name": "both keywords: required absent fails",
+    "monitor": { "responseKeyword": "ok", "responseForbiddenKeyword": "error" },
+    "reply": { "status": 200, "headers": {}, "body": "status: done" },
+    "error": "Required keyword \"ok\" not found in response"
+  },
+  {
+    "name": "both keywords: forbidden present fails",
+    "monitor": { "responseKeyword": "ok", "responseForbiddenKeyword": "error" },
+    "reply": { "status": 200, "headers": {}, "body": "ok but error" },
+    "error": "Forbidden keyword \"error\" found in response"
+  },
+  {
+    "name": "responseHeaderEquals: an equal value passes",
+    "monitor": { "responseHeaderEquals": { "X-Version": "2" } },
+    "reply": { "status": 200, "headers": { "X-Version": "2" }, "body": "" },
+    "error": null
+  },
+  {
+    "name": "responseHeaderEquals: a different value fails",
+    "monitor": { "responseHeaderEquals": { "X-Version": "2" } },
+    "reply": { "status": 200, "headers": { "X-Version": "3" }, "body": "" },
+    "error": "Header \"X-Version\" does not have the expected value"
+  },
+  {
+    "name": "responseHeaderEquals: a value in another case fails",
+    "monitor": { "responseHeaderEquals": { "cache-control": "no-store" } },
+    "reply": { "status": 200, "headers": { "Cache-Control": "No-Store" }, "body": "" },
+    "error": "Header \"cache-control\" does not have the expected value"
+  },
+  {
+    "name": "responseHeaderEquals: a missing header fails",
+    "monitor": { "responseHeaderEquals": { "X-Version": "2" } },
+    "reply": { "status": 200, "headers": {}, "body": "" },
+    "error": "Header \"X-Version\" not found in response"
+  },
+  {
+    "name": "responseHeaderEquals: a lower-case name matches a mixed-case header",
+    "monitor": { "responseHeaderEquals": { "cache-control": "no-store" } },
+    "reply": { "status": 200, "headers": { "Cache-Control": "no-store" }, "body": "" },
+    "error": null
+  },
+  {
+    "name": "responseHeaderEquals: a mixed-case name matches a lower-case header",
+    "monitor": { "responseHeaderEquals": { "Content-Type": "application/json" } },
+    "reply": { "status": 200, "headers": { "content-type": "application/json" }, "body": "{}" },
+    "error": null
+  },
+  {
+    "name": "responseHeaderEquals: every listed header must match",
+    "monitor": { "responseHeaderEquals": { "X-One": "1", "X-Two": "2" } },
+    "reply": { "status": 200, "headers": { "X-One": "1" }, "body": "" },
+    "error": "Header \"X-Two\" not found in response"
+  },
+  {
+    "name": "responseJsonPath: an equal string passes",
+    "monitor": { "responseJsonPath": "$.status", "responseJsonValue": "ok" },
+    "reply": { "status": 200, "headers": {}, "body": "{\"status\":\"ok\"}" },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: a different string fails",
+    "monitor": { "responseJsonPath": "$.status", "responseJsonValue": "ok" },
+    "reply": { "status": 200, "headers": {}, "body": "{\"status\":\"down\"}" },
+    "error": "JSON value at $.status is not \"ok\""
+  },
+  {
+    "name": "responseJsonPath: a nested path passes",
+    "monitor": { "responseJsonPath": "$.a.b[0].c", "responseJsonValue": "ok" },
+    "reply": { "status": 200, "headers": {}, "body": "{\"a\":{\"b\":[{\"c\":\"ok\"}]}}" },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: an index at the root passes",
+    "monitor": { "responseJsonPath": "$[1]", "responseJsonValue": "y" },
+    "reply": { "status": 200, "headers": {}, "body": "[\"x\",\"y\"]" },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: an index into a nested list passes",
+    "monitor": { "responseJsonPath": "$.checks[2].status", "responseJsonValue": "pass" },
+    "reply": {
+      "status": 200,
+      "headers": {},
+      "body": "{\"checks\":[{\"status\":\"fail\"},{\"status\":\"fail\"},{\"status\":\"pass\"}]}"
+    },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: $ is the whole response",
+    "monitor": { "responseJsonPath": "$", "responseJsonValue": true },
+    "reply": { "status": 200, "headers": {}, "body": "true" },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: a key with a dash passes",
+    "monitor": { "responseJsonPath": "$.user-id", "responseJsonValue": 7 },
+    "reply": { "status": 200, "headers": {}, "body": "{\"user-id\":7}" },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: an equal number passes",
+    "monitor": { "responseJsonPath": "$.count", "responseJsonValue": 3 },
+    "reply": { "status": 200, "headers": {}, "body": "{\"count\":3}" },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: the same number written 3.0 passes",
+    "monitor": { "responseJsonPath": "$.count", "responseJsonValue": 3 },
+    "reply": { "status": 200, "headers": {}, "body": "{\"count\":3.0}" },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: a different number fails",
+    "monitor": { "responseJsonPath": "$.count", "responseJsonValue": 3 },
+    "reply": { "status": 200, "headers": {}, "body": "{\"count\":4}" },
+    "error": "JSON value at $.count is not 3"
+  },
+  {
+    "name": "responseJsonPath: a string that looks like the number fails",
+    "monitor": { "responseJsonPath": "$.count", "responseJsonValue": 3 },
+    "reply": { "status": 200, "headers": {}, "body": "{\"count\":\"3\"}" },
+    "error": "JSON value at $.count is not 3"
+  },
+  {
+    "name": "responseJsonPath: a number for a string fails",
+    "monitor": { "responseJsonPath": "$.count", "responseJsonValue": "3" },
+    "reply": { "status": 200, "headers": {}, "body": "{\"count\":3}" },
+    "error": "JSON value at $.count is not \"3\""
+  },
+  {
+    "name": "responseJsonPath: an equal boolean passes",
+    "monitor": { "responseJsonPath": "$.up", "responseJsonValue": false },
+    "reply": { "status": 200, "headers": {}, "body": "{\"up\":false}" },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: the other boolean fails",
+    "monitor": { "responseJsonPath": "$.up", "responseJsonValue": true },
+    "reply": { "status": 200, "headers": {}, "body": "{\"up\":false}" },
+    "error": "JSON value at $.up is not true"
+  },
+  {
+    "name": "responseJsonPath: a string for a boolean fails",
+    "monitor": { "responseJsonPath": "$.up", "responseJsonValue": true },
+    "reply": { "status": 200, "headers": {}, "body": "{\"up\":\"true\"}" },
+    "error": "JSON value at $.up is not true"
+  },
+  {
+    "name": "responseJsonPath: an equal null passes",
+    "monitor": { "responseJsonPath": "$.error", "responseJsonValue": null },
+    "reply": { "status": 200, "headers": {}, "body": "{\"error\":null}" },
+    "error": null
+  },
+  {
+    "name": "responseJsonPath: a string for null fails",
+    "monitor": { "responseJsonPath": "$.error", "responseJsonValue": null },
+    "reply": { "status": 200, "headers": {}, "body": "{\"error\":\"null\"}" },
+    "error": "JSON value at $.error is not null"
+  },
+  {
+    "name": "responseJsonPath: an object at the path fails",
+    "monitor": { "responseJsonPath": "$.a", "responseJsonValue": "ok" },
+    "reply": { "status": 200, "headers": {}, "body": "{\"a\":{\"b\":1}}" },
+    "error": "JSON value at $.a is not \"ok\""
+  },
+  {
+    "name": "responseJsonPath: a missing key is not found",
+    "monitor": { "responseJsonPath": "$.a.b", "responseJsonValue": "x" },
+    "reply": { "status": 200, "headers": {}, "body": "{\"a\":{}}" },
+    "error": "JSON path $.a.b not found in response"
+  },
+  {
+    "name": "responseJsonPath: an index past the end is not found",
+    "monitor": { "responseJsonPath": "$.a[1]", "responseJsonValue": "x" },
+    "reply": { "status": 200, "headers": {}, "body": "{\"a\":[1]}" },
+    "error": "JSON path $.a[1] not found in response"
+  },
+  {
+    "name": "responseJsonPath: an index into an object is not found",
+    "monitor": { "responseJsonPath": "$.a[0]", "responseJsonValue": "x" },
+    "reply": { "status": 200, "headers": {}, "body": "{\"a\":{\"0\":\"x\"}}" },
+    "error": "JSON path $.a[0] not found in response"
+  },
+  {
+    "name": "responseJsonPath: a key into a list is not found",
+    "monitor": { "responseJsonPath": "$.a.length", "responseJsonValue": 1 },
+    "reply": { "status": 200, "headers": {}, "body": "{\"a\":[1]}" },
+    "error": "JSON path $.a.length not found in response"
+  },
+  {
+    "name": "responseJsonPath: a key inside a string is not found",
+    "monitor": { "responseJsonPath": "$.a.length", "responseJsonValue": 4 },
+    "reply": { "status": 200, "headers": {}, "body": "{\"a\":\"text\"}" },
+    "error": "JSON path $.a.length not found in response"
+  },
+  {
+    "name": "responseJsonPath: null where an object should be is not found",
+    "monitor": { "responseJsonPath": "$.a.b", "responseJsonValue": "x" },
+    "reply": { "status": 200, "headers": {}, "body": "{\"a\":null}" },
+    "error": "JSON path $.a.b not found in response"
+  },
+  {
+    "name": "responseJsonPath: an inherited property is not found",
+    "monitor": { "responseJsonPath": "$.constructor", "responseJsonValue": "x" },
+    "reply": { "status": 200, "headers": {}, "body": "{}" },
+    "error": "JSON path $.constructor not found in response"
+  },
+  {
+    "name": "responseJsonPath: a body that is not JSON fails",
+    "monitor": { "responseJsonPath": "$.status", "responseJsonValue": "ok" },
+    "reply": { "status": 200, "headers": {}, "body": "<html>token-1234</html>" },
+    "error": "Response is not valid JSON"
+  },
+  {
+    "name": "responseJsonPath: an empty body fails",
+    "monitor": { "responseJsonPath": "$.status", "responseJsonValue": "ok" },
+    "reply": { "status": 200, "headers": {}, "body": "" },
+    "error": "Response is not valid JSON"
+  },
+  {
+    "name": "order: status before headers",
+    "monitor": { "responseHeaderEquals": { "X-Mode": "live" } },
+    "reply": { "status": 503, "headers": { "X-Mode": "maintenance" }, "body": "" },
+    "error": "Expected 2xx status, got 503"
+  },
+  {
+    "name": "order: status before body",
+    "monitor": { "responseKeyword": "ok" },
+    "reply": { "status": 500, "headers": {}, "body": "down" },
+    "error": "Expected 2xx status, got 500"
+  },
+  {
+    "name": "order: status before a body that is not JSON",
+    "monitor": { "responseJsonPath": "$.a", "responseJsonValue": 1 },
+    "reply": { "status": 503, "headers": {}, "body": "<html></html>" },
+    "error": "Expected 2xx status, got 503"
+  },
+  {
+    "name": "order: headers before a keyword",
+    "monitor": { "responseHeaderEquals": { "X-Mode": "maintenance" }, "responseKeyword": "ok" },
+    "reply": { "status": 200, "headers": { "X-Mode": "live" }, "body": "down" },
+    "error": "Header \"X-Mode\" does not have the expected value"
+  },
+  {
+    "name": "order: headers before a forbidden keyword",
+    "monitor": {
+      "responseHeaderEquals": { "X-Version": "2" },
+      "responseForbiddenKeyword": "error"
+    },
+    "reply": { "status": 200, "headers": {}, "body": "error" },
+    "error": "Header \"X-Version\" not found in response"
+  },
+  {
+    "name": "order: headers before a JSON path",
+    "monitor": {
+      "responseHeaderEquals": { "Content-Type": "application/json" },
+      "responseJsonPath": "$.status",
+      "responseJsonValue": "ok"
+    },
+    "reply": { "status": 200, "headers": { "Content-Type": "text/html" }, "body": "<html></html>" },
+    "error": "Header \"Content-Type\" does not have the expected value"
+  },
+  {
+    "name": "all assertions pass together",
+    "monitor": {
+      "expectedCodes": [200],
+      "responseKeyword": "pass",
+      "responseForbiddenKeyword": "fail",
+      "responseHeaderEquals": { "Content-Type": "application/json" },
+      "responseJsonPath": "$.checks[0].status",
+      "responseJsonValue": "pass"
+    },
+    "reply": {
+      "status": 200,
+      "headers": { "Content-Type": "application/json" },
+      "body": "{\"checks\":[{\"status\":\"pass\"}]}"
+    },
+    "error": null
+  }
+]

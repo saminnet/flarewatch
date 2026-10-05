@@ -75,7 +75,7 @@ const CAPABILITIES: Record<Adapter, Capabilities> = {
     responseHeaders: false,
     responseJson: true,
   },
-  // flarewatch-proxy reads the fields in its src/types.ts MonitorTarget and drops the rest.
+  // A proxy older than 1.1.0 drops header and JSON fields and sends no contract 2.
   proxy: {
     label: 'an external proxy',
     subrequests: 1,
@@ -83,8 +83,8 @@ const CAPABILITIES: Record<Adapter, Capabilities> = {
     body: true,
     sslCheck: true,
     icmp: false,
-    responseHeaders: false,
-    responseJson: false,
+    responseHeaders: true,
+    responseJson: true,
   },
 };
 

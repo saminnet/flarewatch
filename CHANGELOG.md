@@ -2,6 +2,16 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- `responseHeaderEquals` and `responseJsonPath` work through flarewatch-proxy 1.1.0 or later, as `checkProxy` or `confirmVia`. An older proxy fails these checks with a message that asks you to update it, because it would skip them and pass. See the table in [Monitors](docs/monitors.md#other-regions-and-private-networks).
+
+### Fixed
+
+- A config with `expectedCodes: []`, an empty `responseKeyword` or `responseForbiddenKeyword`, or `responseHeaderEquals: {}` now fails the config check, so the unit tests fail and the deploy stops. Before, an empty `expectedCodes` failed every check with "Expected status , got 200", and the other three checked nothing.
+
 ## 3.3.0 - 2026-10-03
 
 Deploys no longer check for 1.x data in KV. If you are still on 1.x, follow the 3.0.0 entry below first.
