@@ -132,4 +132,94 @@ describe('HttpChecker', () => {
     expect(result.error).toBe('Timeout after 1234ms');
     expect(result.latency).toBeTypeOf('number');
   });
+
+  describe('redirects', () => {
+    const redirect = (status: number, location: string) =>
+      new Response(null, { status, headers: { location } });
+
+    function sent(index: number) {
+      const [url, options] = fetchMock.mock.calls[index] ?? [];
+      if (!url || !options) throw new Error(`Expected call ${index}`);
+      return {
+        url,
+        method: options.method,
+        body: options.body,
+        headers: options.headers as Headers,
+      };
+    }
+
+    it('drops Cookie, Authorization and Proxy-Authorization on a redirect to another origin', async () => {
+      fetchMock
+        .mockResolvedValueOnce(redirect(302, 'https://other.example/1'))
+        .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+      const headers = {
+        Cookie: 'a=b',
+        Authorization: 'Bearer t',
+        'Proxy-Authorization': 'x',
+        'X-Api-Key': 'k',
+      };
+
+      const result = await checker.check(createMonitor({ headers }));
+
+      expect(result.ok).toBe(true);
+      expect(sent(1).url).toBe('https://other.example/1');
+      expect([...sent(1).headers.keys()].sort()).toEqual(['user-agent', 'x-api-key']);
+    });
+
+    it('keeps Cookie on a redirect within the origin', async () => {
+      fetchMock
+        .mockResolvedValueOnce(redirect(302, '/1'))
+        .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+
+      await checker.check(createMonitor({ headers: { Cookie: 'a=b' } }));
+
+      expect(sent(1).url).toBe('https://example.com/1');
+      expect(sent(1).headers.get('cookie')).toBe('a=b');
+    });
+
+    it('turns a redirected POST into a GET without the body', async () => {
+      fetchMock
+        .mockResolvedValueOnce(redirect(301, '/1'))
+        .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+      const headers = { 'Content-Type': 'text/plain', 'Content-Language': 'en', 'X-Api-Key': 'k' };
+
+      await checker.check(createMonitor({ method: 'POST', body: 'ping', headers }));
+
+      expect(sent(1).method).toBe('GET');
+      expect(sent(1).body).toBeUndefined();
+      expect([...sent(1).headers.keys()].sort()).toEqual(['user-agent', 'x-api-key']);
+    });
+
+    it('keeps the method and body on a 307', async () => {
+      fetchMock
+        .mockResolvedValueOnce(redirect(307, '/1'))
+        .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+
+      await checker.check(createMonitor({ method: 'POST', body: 'ping' }));
+
+      expect(sent(1).method).toBe('POST');
+      expect(sent(1).body).toBe('ping');
+    });
+
+    it('fails after 20 redirects', async () => {
+      fetchMock.mockImplementation(async (url) => redirect(302, `${url}x`));
+
+      const result = await checker.check(createMonitor());
+
+      expect(result).toMatchObject({ ok: false, error: 'Too many redirects' });
+      expect(fetchMock).toHaveBeenCalledTimes(21);
+    });
+
+    it('fails a redirect to a URL with a username and password', async () => {
+      fetchMock.mockResolvedValueOnce(redirect(302, 'https://u:p@example.com/1'));
+
+      const result = await checker.check(createMonitor());
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: 'Redirect to a URL with a username or password',
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });

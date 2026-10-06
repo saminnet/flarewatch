@@ -75,7 +75,7 @@ const CAPABILITIES: Record<Adapter, Capabilities> = {
     responseHeaders: false,
     responseJson: true,
   },
-  // A proxy older than 1.1.0 drops header and JSON fields and sends no contract 2.
+  // A proxy older than 2.0.0 drops header and JSON fields and sends no contract 2.
   proxy: {
     label: 'an external proxy',
     subrequests: 1,

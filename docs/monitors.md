@@ -42,7 +42,7 @@ The check fails when the response isn't JSON, is 1 MiB or larger, or has nothing
 
 A field FlareWatch doesn't know, such as a misspelt `expectedCode`, fails the config. The same goes for heartbeats.
 
-The monitor name links to its target on the status page, without any credentials or query string. Set `link: false` to hide the URL, or `link: 'https://...'` to link somewhere else.
+The monitor name links to its target on the status page, without the query string. A target can't hold a username and password. Send them in `headers`. Set `link: false` to hide the URL, or `link: 'https://...'` to link somewhere else.
 
 ## TCP ports
 
@@ -152,12 +152,12 @@ Not every place can run every check:
 | `body`                 | yes             | no                           | yes            |
 | `sslCheckEnabled`      | no              | yes                          | yes            |
 | `pingProtocol: 'icmp'` | no              | yes                          | no             |
-| `responseHeaderEquals` | yes             | no                           | 1.1.0 or later |
-| `responseJsonPath`     | yes             | yes                          | 1.1.0 or later |
+| `responseHeaderEquals` | yes             | no                           | 2.0.0 or later |
+| `responseJsonPath`     | yes             | yes                          | 2.0.0 or later |
 
 A monitor that asks a place for something it can't do fails on every check, with an error that names the setting, such as `sslCheckEnabled is not supported by a direct check`. This counts the fallback too: `sslCheckEnabled` with `checkProxyFallback: true` fails, because the fallback runs from the Worker. The unit tests run the same rules on your config, so the deploy stops before such a monitor goes live.
 
-`responseHeaderEquals` and `responseJsonPath` need flarewatch-proxy 1.1.0 or later. The unit tests can't see which version you run. An older proxy fails these checks with `Proxy is too old for header and JSON checks: update to flarewatch-proxy 1.1.0`. With `checkProxyFallback: true`, the Worker then runs the check itself.
+`responseHeaderEquals` and `responseJsonPath` need flarewatch-proxy 2.0.0 or later. The unit tests can't see which version you run. An older proxy fails these checks with `Proxy is too old for header and JSON checks: update to flarewatch-proxy 2.0.0`. With `checkProxyFallback: true`, the Worker then runs the check itself.
 
 ### Confirm from a second place
 
@@ -173,7 +173,7 @@ A monitor that asks a place for something it can't do fails on every check, with
 }
 ```
 
-This is how to use your own [flarewatch-proxy](https://github.com/saminnet/flarewatch-proxy) as a second vantage point: a blip between Cloudflare and your site no longer opens an incident unless the proxy sees it too. `confirmVia: 'globalping://<token>?magic=fra'` does the same from a Globalping probe. `confirmVia` must name a different place than `checkProxy`, and the table above applies to it too. A confirmation that fails for any reason counts as down, so a proxy older than 1.1.0 can't clear a failed header or JSON check.
+This is how to use your own [flarewatch-proxy](https://github.com/saminnet/flarewatch-proxy) as a second vantage point: a blip between Cloudflare and your site no longer opens an incident unless the proxy sees it too. `confirmVia: 'globalping://<token>?magic=fra'` does the same from a Globalping probe. `confirmVia` must name a different place than `checkProxy`, and the table above applies to it too. A confirmation that fails for any reason counts as down, so a proxy older than 2.0.0 can't clear a failed header or JSON check.
 
 The free plan allows a check run 50 subrequests. Each check is one, a Globalping check two plus one per extra poll, and the hub and each alert webhook need their own. A confirmation, a `checkProxyFallback` check or an extra Globalping poll runs only while the run has some to spare, so with many monitors failing at once, the later ones keep their first result. FlareWatch holds back one request per webhook, which covers the first alert of a run; with many monitors going down in the same minute, later alerts can still go over the limit.
 

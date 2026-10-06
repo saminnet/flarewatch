@@ -183,6 +183,22 @@ describe('config validation', () => {
     );
   });
 
+  it('rejects a target with a username and password', () => {
+    const config = createConfigWithMonitor({ target: 'https://user:secret@example.com/' });
+
+    expect(configIssues(config)).toEqual([
+      'monitor "api": GET target must not hold a username or password, send them in headers',
+    ]);
+  });
+
+  it.each([true, null, {}, ['a']])('names headers for the header value %j', (value) => {
+    const config = createConfigWithMonitor({ headers: { 'X-Test': value } });
+
+    expect(configIssues(config)).toEqual([
+      'monitor "api": headers must map names to strings or numbers',
+    ]);
+  });
+
   it('accepts TCP_PING with a host:port target', () => {
     const config = createConfigWithMonitor({ method: 'TCP_PING', target: 'example.com:443' });
 

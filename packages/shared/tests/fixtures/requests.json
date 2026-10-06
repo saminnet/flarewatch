@@ -1,0 +1,754 @@
+[
+  {
+    "name": "accepted: only a target",
+    "body": {"target": "{origin}/"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: every field",
+    "body": {"target": "{origin}/", "id": "api", "name": "API", "method": "POST", "expectedCodes": [200, 201], "timeout": 5000, "headers": {"X-Api-Key": "k", "X-Count": 5}, "body": "{}", "responseKeyword": "ok", "responseForbiddenKeyword": "error", "responseHeaderEquals": {"Content-Type": "text/plain"}, "responseJsonPath": "$.a.b[0].c", "responseJsonValue": "ok", "sslCheckEnabled": true, "sslCheckDaysBeforeExpiry": 14, "sslIgnoreSelfSigned": false},
+    "accepted": true
+  },
+  {
+    "name": "accepted: method GET",
+    "body": {"target": "{origin}/", "method": "GET"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: method POST",
+    "body": {"target": "{origin}/", "method": "POST"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: method PUT",
+    "body": {"target": "{origin}/", "method": "PUT"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: method PATCH",
+    "body": {"target": "{origin}/", "method": "PATCH"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: method DELETE",
+    "body": {"target": "{origin}/", "method": "DELETE"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: method HEAD",
+    "body": {"target": "{origin}/", "method": "HEAD"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: method OPTIONS",
+    "body": {"target": "{origin}/", "method": "OPTIONS"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: TCP_PING with host:port",
+    "body": {"method": "TCP_PING", "target": "{tcp}"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: TCP_PING with spaces around the target",
+    "body": {"method": "TCP_PING", "target": "  {tcp}  "},
+    "accepted": true
+  },
+  {
+    "name": "accepted: TCP_PING ignores headers",
+    "body": {"method": "TCP_PING", "target": "{tcp}", "headers": {"Bad Name": "x"}},
+    "accepted": true
+  },
+  {
+    "name": "accepted: unknown fields are ignored",
+    "body": {"target": "{origin}/", "tooltip": "Home", "maxLatencyMs": 500, "checkProxy": "https://proxy.example.com/check", "hideLatencyChart": true},
+    "accepted": true
+  },
+  {
+    "name": "accepted: a field name in another case is ignored",
+    "body": {"target": "{origin}/", "TIMEOUT": "x", "Method": 7},
+    "accepted": true
+  },
+  {
+    "name": "accepted: timeout 1",
+    "body": {"target": "{origin}/", "timeout": 1},
+    "accepted": true
+  },
+  {
+    "name": "accepted: timeout 60000",
+    "body": {"target": "{origin}/", "timeout": 60000},
+    "accepted": true
+  },
+  {
+    "name": "accepted: expectedCodes 100 and 599",
+    "body": {"target": "{origin}/", "expectedCodes": [100, 599]},
+    "accepted": true
+  },
+  {
+    "name": "accepted: sslCheckDaysBeforeExpiry 0",
+    "body": {"target": "{origin}/", "sslCheckDaysBeforeExpiry": 0},
+    "accepted": true
+  },
+  {
+    "name": "accepted: sslCheckDaysBeforeExpiry 3650",
+    "body": {"target": "{origin}/", "sslCheckDaysBeforeExpiry": 3650},
+    "accepted": true
+  },
+  {
+    "name": "accepted: responseJsonValue null",
+    "body": {"target": "{origin}/", "responseJsonPath": "$.a", "responseJsonValue": null},
+    "accepted": true
+  },
+  {
+    "name": "accepted: responseJsonValue a number",
+    "body": {"target": "{origin}/", "responseJsonPath": "$.a", "responseJsonValue": 1.5},
+    "accepted": true
+  },
+  {
+    "name": "accepted: responseJsonValue a boolean",
+    "body": {"target": "{origin}/", "responseJsonPath": "$.a", "responseJsonValue": false},
+    "accepted": true
+  },
+  {
+    "name": "accepted: responseJsonPath $",
+    "body": {"target": "{origin}/", "responseJsonPath": "$", "responseJsonValue": "x"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: responseJsonPath with indexes",
+    "body": {"target": "{origin}/", "responseJsonPath": "$[0][12].a-b", "responseJsonValue": "x"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: responseHeaderEquals with token characters",
+    "body": {"target": "{origin}/", "responseHeaderEquals": {"X-A_b.c!#$%&'*+^`|~": "1"}},
+    "accepted": true
+  },
+  {
+    "name": "accepted: an empty body",
+    "body": {"target": "{origin}/", "method": "POST", "body": ""},
+    "accepted": true
+  },
+  {
+    "name": "accepted: headers with an empty value",
+    "body": {"target": "{origin}/", "headers": {"X-Empty": ""}},
+    "accepted": true
+  },
+  {
+    "name": "accepted: a target with spaces around it",
+    "body": {"target": "  {origin}/  "},
+    "accepted": true
+  },
+  {
+    "name": "accepted: a target with an upper-case scheme",
+    "body": {"target": "{ORIGIN}/"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: an https target",
+    "body": {"target": "https://127.0.0.1:1/"},
+    "accepted": true
+  },
+  {
+    "name": "accepted: a target with a port",
+    "body": {"target": "http://127.0.0.1:1"},
+    "accepted": true
+  },
+  {
+    "name": "root: invalid JSON",
+    "rawBody": "{\"target\":",
+    "accepted": false
+  },
+  {
+    "name": "root: an empty body",
+    "rawBody": "",
+    "accepted": false
+  },
+  {
+    "name": "root: an array",
+    "rawBody": "[{\"target\":\"http://127.0.0.1:1/\"}]",
+    "accepted": false
+  },
+  {
+    "name": "root: a number",
+    "rawBody": "5",
+    "accepted": false
+  },
+  {
+    "name": "root: a string",
+    "rawBody": "\"http://127.0.0.1:1/\"",
+    "accepted": false
+  },
+  {
+    "name": "root: null",
+    "rawBody": "null",
+    "accepted": false
+  },
+  {
+    "name": "root: true",
+    "rawBody": "true",
+    "accepted": false
+  },
+  {
+    "name": "target: missing",
+    "body": {},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: empty",
+    "body": {"target": ""},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: a number",
+    "body": {"target": 5},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: a field name in another case does not count",
+    "body": {"TARGET": "http://127.0.0.1:1/"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: an ftp URL",
+    "body": {"target": "ftp://example.com"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: a data URL",
+    "body": {"target": "data:text/plain,ok"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: no scheme",
+    "body": {"target": "example.com"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: host:port without TCP_PING",
+    "body": {"target": "192.168.1.50:5432"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: a space in the host",
+    "body": {"target": "https://example .com"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: a port over 65535",
+    "body": {"target": "http://example.com:99999"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: a port with letters",
+    "body": {"target": "http://example.com:abc"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: only spaces",
+    "body": {"target": "   "},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "target: http: without slashes",
+    "body": {"target": "http:127.0.0.1:1/"},
+    "accepted": true,
+    "deviation": "fetch reads it as http://127.0.0.1:1/, and the proxy rejects it.",
+    "field": "target"
+  },
+  {
+    "name": "target: http: with one slash",
+    "body": {"target": "http:/127.0.0.1:1/"},
+    "accepted": true,
+    "deviation": "fetch reads it as http://127.0.0.1:1/, and the proxy rejects it.",
+    "field": "target"
+  },
+  {
+    "name": "target: backslashes for slashes",
+    "body": {"target": "http:\\\\127.0.0.1:1\\x"},
+    "accepted": true,
+    "deviation": "fetch reads a backslash as a slash, and the proxy rejects it.",
+    "field": "target"
+  },
+  {
+    "name": "target: a backslash after the port",
+    "body": {"target": "http://127.0.0.1:1\\x"},
+    "accepted": true,
+    "deviation": "fetch reads a backslash as a slash, and the proxy rejects it.",
+    "field": "target"
+  },
+  {
+    "name": "target: given twice",
+    "rawBody": "{\"target\":\"http://127.0.0.1:1/\",\"target\":\"http://127.0.0.1:1/\"}",
+    "accepted": true,
+    "deviation": "JSON.parse keeps the last value, and the proxy rejects a repeated name.",
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: an https URL",
+    "body": {"method": "TCP_PING", "target": "https://example.com"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: no port",
+    "body": {"method": "TCP_PING", "target": "db.internal"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: port 0",
+    "body": {"method": "TCP_PING", "target": "db.internal:0"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: port 65536",
+    "body": {"method": "TCP_PING", "target": "db.internal:65536"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: a port with letters",
+    "body": {"method": "TCP_PING", "target": "db.internal:abc"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: empty",
+    "body": {"method": "TCP_PING", "target": ""},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: a path",
+    "body": {"method": "TCP_PING", "target": "db.internal:5432/path"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: a query",
+    "body": {"method": "TCP_PING", "target": "db.internal:5432?q=1"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: only a port",
+    "body": {"method": "TCP_PING", "target": ":5432"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: user info",
+    "body": {"method": "TCP_PING", "target": "u@db.internal:5432"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "TCP_PING target: a space before the port",
+    "body": {"method": "TCP_PING", "target": "127.0.0.1 :5432"},
+    "accepted": false,
+    "field": "target"
+  },
+  {
+    "name": "method: lower case",
+    "body": {"target": "{origin}/", "method": "get"},
+    "accepted": false,
+    "field": "method"
+  },
+  {
+    "name": "method: unknown",
+    "body": {"target": "{origin}/", "method": "CONNECT"},
+    "accepted": false,
+    "field": "method"
+  },
+  {
+    "name": "method: empty",
+    "body": {"target": "{origin}/", "method": ""},
+    "accepted": false,
+    "field": "method"
+  },
+  {
+    "name": "method: a number",
+    "body": {"target": "{origin}/", "method": 7},
+    "accepted": false,
+    "field": "method"
+  },
+  {
+    "name": "method: HEARTBEAT",
+    "body": {"target": "{origin}/", "method": "HEARTBEAT"},
+    "accepted": false,
+    "field": "method"
+  },
+  {
+    "name": "timeout: 0",
+    "body": {"target": "{origin}/", "timeout": 0},
+    "accepted": false,
+    "field": "timeout"
+  },
+  {
+    "name": "timeout: 60001",
+    "body": {"target": "{origin}/", "timeout": 60001},
+    "accepted": false,
+    "field": "timeout"
+  },
+  {
+    "name": "timeout: negative",
+    "body": {"target": "{origin}/", "timeout": -1},
+    "accepted": false,
+    "field": "timeout"
+  },
+  {
+    "name": "timeout: a fraction",
+    "body": {"target": "{origin}/", "timeout": 1.5},
+    "accepted": false,
+    "field": "timeout"
+  },
+  {
+    "name": "timeout: a string",
+    "body": {"target": "{origin}/", "timeout": "10"},
+    "accepted": false,
+    "field": "timeout"
+  },
+  {
+    "name": "timeout: a boolean",
+    "body": {"target": "{origin}/", "timeout": true},
+    "accepted": false,
+    "field": "timeout"
+  },
+  {
+    "name": "expectedCodes: empty",
+    "body": {"target": "{origin}/", "expectedCodes": []},
+    "accepted": false,
+    "field": "expectedCodes"
+  },
+  {
+    "name": "expectedCodes: 99",
+    "body": {"target": "{origin}/", "expectedCodes": [99]},
+    "accepted": false,
+    "field": "expectedCodes"
+  },
+  {
+    "name": "expectedCodes: 600",
+    "body": {"target": "{origin}/", "expectedCodes": [600]},
+    "accepted": false,
+    "field": "expectedCodes"
+  },
+  {
+    "name": "expectedCodes: a fraction",
+    "body": {"target": "{origin}/", "expectedCodes": [200.5]},
+    "accepted": false,
+    "field": "expectedCodes"
+  },
+  {
+    "name": "expectedCodes: a string element",
+    "body": {"target": "{origin}/", "expectedCodes": ["200"]},
+    "accepted": false,
+    "field": "expectedCodes"
+  },
+  {
+    "name": "expectedCodes: a string",
+    "body": {"target": "{origin}/", "expectedCodes": "200"},
+    "accepted": false,
+    "field": "expectedCodes"
+  },
+  {
+    "name": "expectedCodes: nested",
+    "body": {"target": "{origin}/", "expectedCodes": [[200]]},
+    "accepted": false,
+    "field": "expectedCodes"
+  },
+  {
+    "name": "expectedCodes: an object",
+    "body": {"target": "{origin}/", "expectedCodes": {"0": 200}},
+    "accepted": false,
+    "field": "expectedCodes"
+  },
+  {
+    "name": "headers: a string",
+    "body": {"target": "{origin}/", "headers": "x"},
+    "accepted": false,
+    "field": "headers"
+  },
+  {
+    "name": "headers: an array",
+    "body": {"target": "{origin}/", "headers": ["X-A"]},
+    "accepted": false,
+    "field": "headers"
+  },
+  {
+    "name": "headers: a boolean value",
+    "body": {"target": "{origin}/", "headers": {"X-Flag": true}},
+    "accepted": false,
+    "field": "headers"
+  },
+  {
+    "name": "headers: a null value",
+    "body": {"target": "{origin}/", "headers": {"X-A": null}},
+    "accepted": false,
+    "field": "headers"
+  },
+  {
+    "name": "headers: an object value",
+    "body": {"target": "{origin}/", "headers": {"X-A": {}}},
+    "accepted": false,
+    "field": "headers"
+  },
+  {
+    "name": "headers: an array value",
+    "body": {"target": "{origin}/", "headers": {"X-A": ["a"]}},
+    "accepted": false,
+    "field": "headers"
+  },
+  {
+    "name": "headers: a name given twice",
+    "rawBody": "{\"target\":\"http://127.0.0.1:1/\",\"headers\":{\"X-A\":\"1\",\"X-A\":\"2\"}}",
+    "accepted": true,
+    "deviation": "JSON.parse keeps the last value, and the proxy rejects a repeated name.",
+    "field": "headers"
+  },
+  {
+    "name": "body: a number",
+    "body": {"target": "{origin}/", "method": "POST", "body": 1},
+    "accepted": false,
+    "field": "body"
+  },
+  {
+    "name": "body: an object",
+    "body": {"target": "{origin}/", "method": "POST", "body": {"a": 1}},
+    "accepted": false,
+    "field": "body"
+  },
+  {
+    "name": "id: a number",
+    "body": {"target": "{origin}/", "id": 5},
+    "accepted": false,
+    "field": "id"
+  },
+  {
+    "name": "name: a number",
+    "body": {"target": "{origin}/", "name": 5},
+    "accepted": false,
+    "field": "name"
+  },
+  {
+    "name": "responseKeyword: empty",
+    "body": {"target": "{origin}/", "responseKeyword": ""},
+    "accepted": false,
+    "field": "responseKeyword"
+  },
+  {
+    "name": "responseKeyword: a number",
+    "body": {"target": "{origin}/", "responseKeyword": 1},
+    "accepted": false,
+    "field": "responseKeyword"
+  },
+  {
+    "name": "responseForbiddenKeyword: empty",
+    "body": {"target": "{origin}/", "responseForbiddenKeyword": ""},
+    "accepted": false,
+    "field": "responseForbiddenKeyword"
+  },
+  {
+    "name": "responseForbiddenKeyword: a number",
+    "body": {"target": "{origin}/", "responseForbiddenKeyword": 1},
+    "accepted": false,
+    "field": "responseForbiddenKeyword"
+  },
+  {
+    "name": "responseHeaderEquals: empty",
+    "body": {"target": "{origin}/", "responseHeaderEquals": {}},
+    "accepted": false,
+    "field": "responseHeaderEquals"
+  },
+  {
+    "name": "responseHeaderEquals: a space in a name",
+    "body": {"target": "{origin}/", "responseHeaderEquals": {"X Version": "2"}},
+    "accepted": false,
+    "field": "responseHeaderEquals"
+  },
+  {
+    "name": "responseHeaderEquals: an empty name",
+    "body": {"target": "{origin}/", "responseHeaderEquals": {"": "2"}},
+    "accepted": false,
+    "field": "responseHeaderEquals"
+  },
+  {
+    "name": "responseHeaderEquals: a number value",
+    "body": {"target": "{origin}/", "responseHeaderEquals": {"X-Version": 2}},
+    "accepted": false,
+    "field": "responseHeaderEquals"
+  },
+  {
+    "name": "responseHeaderEquals: a null value",
+    "body": {"target": "{origin}/", "responseHeaderEquals": {"X-Version": null}},
+    "accepted": false,
+    "field": "responseHeaderEquals"
+  },
+  {
+    "name": "responseHeaderEquals: a string",
+    "body": {"target": "{origin}/", "responseHeaderEquals": "X-Version: 2"},
+    "accepted": false,
+    "field": "responseHeaderEquals"
+  },
+  {
+    "name": "responseHeaderEquals: an array",
+    "body": {"target": "{origin}/", "responseHeaderEquals": []},
+    "accepted": false,
+    "field": "responseHeaderEquals"
+  },
+  {
+    "name": "responseJsonPath: no dollar",
+    "body": {"target": "{origin}/", "responseJsonPath": "status", "responseJsonValue": "ok"},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonPath: a key in brackets",
+    "body": {"target": "{origin}/", "responseJsonPath": "$.a[x]", "responseJsonValue": "ok"},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonPath: two dots",
+    "body": {"target": "{origin}/", "responseJsonPath": "$..a", "responseJsonValue": "ok"},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonPath: a trailing dot",
+    "body": {"target": "{origin}/", "responseJsonPath": "$.a.", "responseJsonValue": "ok"},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonPath: a negative index",
+    "body": {"target": "{origin}/", "responseJsonPath": "$[-1]", "responseJsonValue": "ok"},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonPath: an empty index",
+    "body": {"target": "{origin}/", "responseJsonPath": "$[]", "responseJsonValue": "ok"},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonPath: empty",
+    "body": {"target": "{origin}/", "responseJsonPath": "", "responseJsonValue": "ok"},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonPath: a number",
+    "body": {"target": "{origin}/", "responseJsonPath": 5, "responseJsonValue": "ok"},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonValue: an object",
+    "body": {"target": "{origin}/", "responseJsonPath": "$.a", "responseJsonValue": {"ok": true}},
+    "accepted": false,
+    "field": "responseJsonValue"
+  },
+  {
+    "name": "responseJsonValue: an array",
+    "body": {"target": "{origin}/", "responseJsonPath": "$.a", "responseJsonValue": [1]},
+    "accepted": false,
+    "field": "responseJsonValue"
+  },
+  {
+    "name": "responseJsonValue: a number beyond a float64",
+    "body": {"target": "{origin}/", "responseJsonPath": "$.a", "responseJsonValue": 1e400},
+    "accepted": false,
+    "field": "responseJsonValue"
+  },
+  {
+    "name": "responseJsonValue: without responseJsonPath",
+    "body": {"target": "{origin}/", "responseJsonValue": "ok"},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonValue: null without responseJsonPath",
+    "body": {"target": "{origin}/", "responseJsonValue": null},
+    "accepted": false,
+    "field": "responseJsonPath"
+  },
+  {
+    "name": "responseJsonPath: without responseJsonValue",
+    "body": {"target": "{origin}/", "responseJsonPath": "$.status"},
+    "accepted": false,
+    "field": "responseJsonValue"
+  },
+  {
+    "name": "sslCheckDaysBeforeExpiry: -1",
+    "body": {"target": "{origin}/", "sslCheckDaysBeforeExpiry": -1},
+    "accepted": false,
+    "field": "sslCheckDaysBeforeExpiry"
+  },
+  {
+    "name": "sslCheckDaysBeforeExpiry: 3651",
+    "body": {"target": "{origin}/", "sslCheckDaysBeforeExpiry": 3651},
+    "accepted": false,
+    "field": "sslCheckDaysBeforeExpiry"
+  },
+  {
+    "name": "sslCheckDaysBeforeExpiry: a fraction",
+    "body": {"target": "{origin}/", "sslCheckDaysBeforeExpiry": 1.5},
+    "accepted": false,
+    "field": "sslCheckDaysBeforeExpiry"
+  },
+  {
+    "name": "sslCheckDaysBeforeExpiry: a string",
+    "body": {"target": "{origin}/", "sslCheckDaysBeforeExpiry": "14"},
+    "accepted": false,
+    "field": "sslCheckDaysBeforeExpiry"
+  },
+  {
+    "name": "sslCheckEnabled: a string",
+    "body": {"target": "{origin}/", "sslCheckEnabled": "yes"},
+    "accepted": false,
+    "field": "sslCheckEnabled"
+  },
+  {
+    "name": "sslCheckEnabled: a number",
+    "body": {"target": "{origin}/", "sslCheckEnabled": 1},
+    "accepted": false,
+    "field": "sslCheckEnabled"
+  },
+  {
+    "name": "sslIgnoreSelfSigned: a string",
+    "body": {"target": "{origin}/", "sslIgnoreSelfSigned": "yes"},
+    "accepted": false,
+    "field": "sslIgnoreSelfSigned"
+  },
+  {
+    "name": "sslIgnoreSelfSigned: a number",
+    "body": {"target": "{origin}/", "sslIgnoreSelfSigned": 1},
+    "accepted": false,
+    "field": "sslIgnoreSelfSigned"
+  },
+  {
+    "name": "two fields: target and method",
+    "body": {"target": "ftp://x", "method": "nope"},
+    "accepted": false
+  },
+  {
+    "name": "two fields: method and timeout",
+    "body": {"target": "{origin}/", "method": "X", "timeout": 0},
+    "accepted": false
+  }
+]

@@ -1,0 +1,4 @@
+# The same compatibility date as the deployed Worker.
+name = "flarewatch-direct-under-test"
+main = "entry.ts"
+compatibility_date = "2026-09-30"

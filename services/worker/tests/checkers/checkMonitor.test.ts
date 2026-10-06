@@ -436,7 +436,7 @@ describe('checkMonitor', () => {
         location: 'ERROR',
         result: {
           ok: false,
-          error: 'Proxy is too old for header and JSON checks: update to flarewatch-proxy 1.1.0',
+          error: 'Proxy is too old for header and JSON checks: update to flarewatch-proxy 2.0.0',
         },
       });
     });

@@ -17,7 +17,15 @@ Browser tests start two local status pages, one public and one private:
 cd apps/status-page && vp exec playwright test
 ```
 
-`packages/shared/tests/fixtures/http-assertions.json` lists HTTP replies and the error each one should give. flarewatch-proxy runs the same file against its own copy of the checks, so a change to the file or to `validateHttpResponse` needs the same change in both repos.
+FlareWatch and flarewatch-proxy share three fixture files. The proxy keeps them in `cmd/flarewatch-proxy/testdata`, and each copy here must match it byte for byte. A change to a file, or to the code it tests, needs the same change in both repos.
+
+| File                   | Copy in                          | Says                                    | Run by                                            |
+| ---------------------- | -------------------------------- | --------------------------------------- | ------------------------------------------------- |
+| `http-assertions.json` | `packages/shared/tests/fixtures` | which error an HTTP reply gives         | `packages/shared/tests/http-assertions.test.ts`   |
+| `requests.json`        | `packages/shared/tests/fixtures` | which monitors the proxy accepts        | `packages/shared/tests/proxy-requests.test.ts`    |
+| `verdicts.json`        | `services/worker/tests/fixtures` | how a check ends against a given target | `services/worker/tests/checkers/verdicts.test.ts` |
+
+The last two tests each hold a short table of the cases where FlareWatch and the proxy differ, with the reason. The verdicts test runs the Worker's own check in a local workerd, started with wrangler's `unstable_startWorker`. wrangler's test harness would send the Worker's requests out through Node, and Node handles redirects and gzip differently.
 
 ## Layout
 

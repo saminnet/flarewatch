@@ -48,7 +48,7 @@ function isProxyCheckResponse(value: unknown): value is ProxyCheckResponse {
   return typeof value.location === 'string' && isCheckResult(value.result);
 }
 
-/** flarewatch-proxy before 1.1.0 drops these fields and passes the check without them. */
+/** flarewatch-proxy before 2.0.0 drops these fields and passes the check without them. */
 function runsAssertions(response: ProxyCheckResponse): boolean {
   const { contract } = response;
   return typeof contract === 'number' && Number.isInteger(contract) && contract >= 2;
@@ -102,7 +102,7 @@ export async function checkExternalProxy(
       return {
         location: 'ERROR',
         result: failure(
-          'Proxy is too old for header and JSON checks: update to flarewatch-proxy 1.1.0',
+          'Proxy is too old for header and JSON checks: update to flarewatch-proxy 2.0.0',
         ),
       };
     }

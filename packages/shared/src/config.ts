@@ -93,7 +93,15 @@ function targetIssue(method: string, target: string): string | null {
       ? null
       : 'TCP_PING target must be host:port (e.g. "example.com:443")';
   }
-  return isValidHttpUrl(target.trim()) ? null : `${method} target must be an http(s) URL`;
+  const url = URL.parse(target.trim());
+  if (url?.protocol !== 'http:' && url?.protocol !== 'https:') {
+    return `${method} target must be an http(s) URL`;
+  }
+  const { username, password } = url;
+  // A Worker drops them and sends the request, and flarewatch-proxy fails the check.
+  return username || password
+    ? `${method} target must not hold a username or password, send them in headers`
+    : null;
 }
 
 function isAllowedPayload(payloadType: string | undefined, payload: unknown): boolean {
@@ -199,6 +207,7 @@ function checkLocation(field: string) {
 
 /** RFC 9110 token characters; Headers.get throws on anything else. */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const HEADERS_ERROR = 'headers must map names to strings or numbers';
 
 const pullMonitorShape = {
   ...monitorCommon,
@@ -220,8 +229,8 @@ const pullMonitorShape = {
       .check(z.gte(1, { error: 'maxLatencyMs must be a positive integer' })),
   ),
   headers: z.optional(
-    z.record(z.string(), z.union([z.string(), z.number()]), {
-      error: 'headers must map names to strings or numbers',
+    z.record(z.string(), z.union([z.string(), z.number()], { error: HEADERS_ERROR }), {
+      error: HEADERS_ERROR,
     }),
   ),
   body: optionalString('body'),

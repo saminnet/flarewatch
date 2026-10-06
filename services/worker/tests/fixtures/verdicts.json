@@ -1,0 +1,642 @@
+[
+  {
+    "name": "json value: 3.0 in the body equals 3",
+    "replies": [{"body": "{\"v\":3.0}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 3},
+    "result": {"ok": true}
+  },
+  {
+    "name": "json value: 1e2 in the body equals 100",
+    "replies": [{"body": "{\"v\":1e2}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 100},
+    "result": {"ok": true}
+  },
+  {
+    "name": "json value: -0 in the body equals 0",
+    "replies": [{"body": "{\"v\":-0}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 0},
+    "result": {"ok": true}
+  },
+  {
+    "name": "json value: a fraction prints as written",
+    "replies": [{"body": "{\"v\":2}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 1.5},
+    "result": {"ok": false, "error": "JSON value at $.v is not 1.5"}
+  },
+  {
+    "name": "json value: 1e21 prints with an exponent",
+    "replies": [{"body": "{\"v\":1}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 1e+21},
+    "result": {"ok": false, "error": "JSON value at $.v is not 1e+21"}
+  },
+  {
+    "name": "json value: 1e20 prints in full",
+    "replies": [{"body": "{\"v\":1}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 1e+20},
+    "result": {"ok": false, "error": "JSON value at $.v is not 100000000000000000000"}
+  },
+  {
+    "name": "json value: 1e-7 prints with an exponent",
+    "replies": [{"body": "{\"v\":1}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 1e-07},
+    "result": {"ok": false, "error": "JSON value at $.v is not 1e-7"}
+  },
+  {
+    "name": "json value: 0.000001 prints in full",
+    "replies": [{"body": "{\"v\":1}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 1e-06},
+    "result": {"ok": false, "error": "JSON value at $.v is not 0.000001"}
+  },
+  {
+    "name": "json value: a 20-digit integer prints rounded",
+    "replies": [{"body": "{\"v\":1}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 12345678901234567890},
+    "result": {"ok": false, "error": "JSON value at $.v is not 12345678901234567000"}
+  },
+  {
+    "name": "json value: a 20-digit integer equals its rounded form",
+    "replies": [{"body": "{\"v\":12345678901234567000}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 12345678901234567890},
+    "result": {"ok": true}
+  },
+  {
+    "name": "json value: a negative number",
+    "replies": [{"body": "{\"v\":1}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": -42},
+    "result": {"ok": false, "error": "JSON value at $.v is not -42"}
+  },
+  {
+    "name": "json value: a string with quotes and a backslash",
+    "replies": [{"body": "{\"v\":\"x\"}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": "say \"hi\" \\ bye"},
+    "result": {"ok": false, "error": "JSON value at $.v is not \"say \\\"hi\\\" \\\\ bye\""}
+  },
+  {
+    "name": "json value: a string with HTML characters prints them as is",
+    "replies": [{"body": "{\"v\":\"x\"}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": "<b>&amp;</b>"},
+    "result": {"ok": false, "error": "JSON value at $.v is not \"<b>&amp;</b>\""}
+  },
+  {
+    "name": "json value: a string with non-ASCII text prints it as is",
+    "replies": [{"body": "{\"v\":\"x\"}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": "café ✓ 😀"},
+    "result": {"ok": false, "error": "JSON value at $.v is not \"café ✓ 😀\""}
+  },
+  {
+    "name": "json value: a string with a line separator prints it as is",
+    "replies": [{"body": "{\"v\":\"x\"}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": "ab"},
+    "result": {"ok": false, "error": "JSON value at $.v is not \"ab\""}
+  },
+  {
+    "name": "json value: a string with control characters escapes them",
+    "replies": [{"body": "{\"v\":\"x\"}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": "a\tb\nc\u0001d\u001f"},
+    "result": {"ok": false, "error": "JSON value at $.v is not \"a\\tb\\nc\\u0001d\\u001f\""}
+  },
+  {
+    "name": "json value: an escaped body string equals the plain string",
+    "replies": [{"body": "{\"v\":\"caf\\u00e9\"}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": "café"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "json value: the last of two duplicate keys counts",
+    "replies": [{"body": "{\"status\":\"down\",\"status\":\"ok\"}"}],
+    "monitor": {"responseJsonPath": "$.status", "responseJsonValue": "ok"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "json value: an unpaired surrogate escape elsewhere still parses",
+    "replies": [{"body": "{\"note\":\"\\ud83d\",\"status\":\"ok\"}"}],
+    "monitor": {"responseJsonPath": "$.status", "responseJsonValue": "ok"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "json value: a number beyond a float64 fails the check",
+    "replies": [{"body": "{\"v\":1e400}"}],
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": 1.7976931348623157e308},
+    "deviation": "JSON.parse reads 1e400 as Infinity, so the TypeScript proxy reports the value at $.v. The proxy reports that the response is not valid JSON.",
+    "result": {"ok": false}
+  },
+  {
+    "name": "utf-8: a byte-order mark before JSON is dropped",
+    "replies": [{"bodyBase64": "77u/eyJzdGF0dXMiOiJvayJ9"}],
+    "monitor": {"responseJsonPath": "$.status", "responseJsonValue": "ok"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "utf-8: a byte-order mark is not part of the text",
+    "replies": [{"bodyBase64": "77u/b2s="}],
+    "monitor": {"responseKeyword": "﻿ok"},
+    "result": {"ok": false, "error": "Required keyword \"﻿ok\" not found in response"}
+  },
+  {
+    "name": "utf-8: a keyword after a byte-order mark is found",
+    "replies": [{"bodyBase64": "77u/b2s="}],
+    "monitor": {"responseKeyword": "ok"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "utf-8: a Latin-1 byte elsewhere in JSON still parses",
+    "replies": [{"bodyBase64": "eyJuYW1lIjoiY2Fm6SIsInN0YXR1cyI6Im9rIn0="}],
+    "monitor": {"responseJsonPath": "$.status", "responseJsonValue": "ok"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "utf-8: a Latin-1 byte becomes one replacement character",
+    "replies": [{"bodyBase64": "eyJuYW1lIjoiY2Fm6SJ9"}],
+    "monitor": {"responseJsonPath": "$.name", "responseJsonValue": "caf�"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "utf-8: a cut character at the end becomes one replacement character",
+    "replies": [{"bodyBase64": "c3RhdHVzIG9rIOKC"}],
+    "monitor": {"responseKeyword": "ok �"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "utf-8: a forbidden replacement character is found",
+    "replies": [{"bodyBase64": "Y2Fm6Q=="}],
+    "monitor": {"responseForbiddenKeyword": "�"},
+    "result": {"ok": false, "error": "Forbidden keyword \"�\" found in response"}
+  },
+  {
+    "name": "utf-8: a keyword in a body with a bad byte is found",
+    "replies": [{"bodyBase64": "/3N0YXR1czogb2s="}],
+    "monitor": {"responseKeyword": "status: ok"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "keyword: quotes print as written when missing",
+    "replies": [{"body": "plain"}],
+    "monitor": {"responseKeyword": "say \"hi\""},
+    "result": {"ok": false, "error": "Required keyword \"say \"hi\"\" not found in response"}
+  },
+  {
+    "name": "keyword: a backslash prints as written when missing",
+    "replies": [{"body": "plain"}],
+    "monitor": {"responseKeyword": "back\\slash"},
+    "result": {"ok": false, "error": "Required keyword \"back\\slash\" not found in response"}
+  },
+  {
+    "name": "keyword: a forbidden keyword with quotes prints as written",
+    "replies": [{"body": "status \"down\""}],
+    "monitor": {"responseForbiddenKeyword": "\"down\""},
+    "result": {"ok": false, "error": "Forbidden keyword \"\"down\"\" found in response"}
+  },
+  {
+    "name": "keyword: a newline prints as written",
+    "replies": [{"body": "plain"}],
+    "monitor": {"responseKeyword": "a\nb"},
+    "result": {"ok": false, "error": "Required keyword \"a\nb\" not found in response"}
+  },
+  {
+    "name": "request headers: names that differ in case join in order",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"X-Echo": " a ", "x-echo": "b "}, "responseJsonPath": "$.headers.x-echo", "responseJsonValue": "a, b"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: a number value is sent as text",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"X-Count": 5}, "responseJsonPath": "$.headers.x-count", "responseJsonValue": "5"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: a fractional number value is sent as text",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"X-Ratio": 0.5}, "responseJsonPath": "$.headers.x-ratio", "responseJsonValue": "0.5"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: spaces and line breaks around a value are dropped",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"X-Token": " abc\n "}, "responseJsonPath": "$.headers.x-token", "responseJsonValue": "abc"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: a tab inside a value is kept",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"X-Pair": "a\tb"}, "responseJsonPath": "$.headers.x-pair", "responseJsonValue": "a\tb"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: an empty value is sent",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"X-Empty": ""}, "responseJsonPath": "$.headers.x-empty", "responseJsonValue": ""},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: a name with a space fails the check",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"Bad Name": "x"}},
+    "result": {"ok": false}
+  },
+  {
+    "name": "request headers: an empty name fails the check",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"": "x"}},
+    "result": {"ok": false}
+  },
+  {
+    "name": "request headers: a line break inside a value fails the check",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"X-A": "a\nb"}},
+    "result": {"ok": false}
+  },
+  {
+    "name": "request headers: a NUL inside a value fails the check",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"X-A": "a\u0000b"}},
+    "result": {"ok": false}
+  },
+  {
+    "name": "request headers: a control character inside a value fails the check",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"X-A": "a\u0001b"}},
+    "result": {"ok": false}
+  },
+  {
+    "name": "request headers: the default user agent",
+    "replies": [{"echo": true}],
+    "monitor": {"responseJsonPath": "$.headers.user-agent", "responseJsonValue": "FlareWatch-Proxy/1.0 (+https://github.com/saminnet/flarewatch)"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: a lower-case user agent replaces the default",
+    "replies": [{"echo": true}],
+    "monitor": {"headers": {"user-agent": "probe/2"}, "responseJsonPath": "$.headers.user-agent", "responseJsonValue": "probe/2"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: a body gets a text content type",
+    "replies": [{"echo": true}],
+    "monitor": {"method": "POST", "body": "ping", "responseJsonPath": "$.headers.content-type", "responseJsonValue": "text/plain;charset=UTF-8"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: a configured content type stays",
+    "replies": [{"echo": true}],
+    "monitor": {"method": "POST", "body": "{}", "headers": {"content-type": "application/json"}, "responseJsonPath": "$.headers.content-type", "responseJsonValue": "application/json"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request headers: no body gets no content type",
+    "replies": [{"echo": true}],
+    "monitor": {"method": "POST", "responseJsonPath": "$.headers.content-type", "responseJsonValue": "x"},
+    "result": {"ok": false, "error": "JSON path $.headers.content-type not found in response"}
+  },
+  {
+    "name": "request body: an empty body still gets a content type",
+    "replies": [{"echo": true}],
+    "monitor": {"method": "POST", "body": "", "responseJsonPath": "$.headers.content-type", "responseJsonValue": "text/plain;charset=UTF-8"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "request body: a GET with a body fails the check",
+    "replies": [{"echo": true}],
+    "monitor": {"method": "GET", "body": "x"},
+    "result": {"ok": false}
+  },
+  {
+    "name": "request body: a HEAD with an empty body fails the check",
+    "replies": [{"echo": true}],
+    "monitor": {"method": "HEAD", "body": ""},
+    "result": {"ok": false}
+  },
+  {
+    "name": "redirect: 301 turns POST into GET",
+    "replies": [{"status": 301, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "POST", "body": "ping", "responseJsonPath": "$.method", "responseJsonValue": "GET"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 301 from POST drops the body",
+    "replies": [{"status": 301, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "POST", "body": "ping", "responseJsonPath": "$.body", "responseJsonValue": ""},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 302 from POST drops the content type",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "POST", "body": "ping", "responseJsonPath": "$.headers.content-type", "responseJsonValue": "text/plain;charset=UTF-8"},
+    "result": {"ok": false, "error": "JSON path $.headers.content-type not found in response"}
+  },
+  {
+    "name": "redirect: 301 keeps PUT",
+    "replies": [{"status": 301, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "PUT", "body": "ping", "responseJsonPath": "$.method", "responseJsonValue": "PUT"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 301 keeps the PUT body",
+    "replies": [{"status": 301, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "PUT", "body": "ping", "responseJsonPath": "$.body", "responseJsonValue": "ping"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 302 keeps the PATCH content type",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "PATCH", "body": "ping", "responseJsonPath": "$.headers.content-type", "responseJsonValue": "text/plain;charset=UTF-8"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 302 keeps DELETE",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "DELETE", "responseJsonPath": "$.method", "responseJsonValue": "DELETE"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 302 then 302 keeps the PUT body",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"status": 302, "headers": {"Location": "/2"}}, {"echo": true}],
+    "monitor": {"method": "PUT", "body": "ping", "responseJsonPath": "$.body", "responseJsonValue": "ping"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 303 turns PUT into GET",
+    "replies": [{"status": 303, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "PUT", "body": "ping", "responseJsonPath": "$.method", "responseJsonValue": "GET"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 303 turns DELETE into GET",
+    "replies": [{"status": 303, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "DELETE", "responseJsonPath": "$.method", "responseJsonValue": "GET"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 307 keeps the POST body",
+    "replies": [{"status": 307, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "POST", "body": "ping", "responseJsonPath": "$.body", "responseJsonValue": "ping"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 308 keeps PATCH",
+    "replies": [{"status": 308, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "PATCH", "body": "ping", "responseJsonPath": "$.method", "responseJsonValue": "PATCH"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: a 301 without Location is the answer",
+    "replies": [{"status": 301}],
+    "monitor": {},
+    "result": {"ok": false, "error": "Expected 2xx status, got 301"}
+  },
+  {
+    "name": "redirect: a 301 without Location can be expected",
+    "replies": [{"status": 301}],
+    "monitor": {"expectedCodes": [301]},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: a redirect to ftp fails the check",
+    "replies": [{"status": 302, "headers": {"Location": "ftp://127.0.0.1/x"}}],
+    "monitor": {},
+    "result": {"ok": false}
+  },
+  {
+    "name": "redirect: no Referer is added",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"responseJsonPath": "$.headers.referer", "responseJsonValue": "x"},
+    "result": {"ok": false, "error": "JSON path $.headers.referer not found in response"}
+  },
+  {
+    "name": "redirect: a configured Referer stays",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"headers": {"referer": "https://example.com/"}, "responseJsonPath": "$.headers.referer", "responseJsonValue": "https://example.com/"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: same origin keeps Authorization",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"headers": {"Authorization": "Bearer t"}, "responseJsonPath": "$.headers.authorization", "responseJsonValue": "Bearer t"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: another origin drops Authorization",
+    "replies": [{"status": 302, "headers": {"Location": "{other}/1"}}, {"echo": true}],
+    "monitor": {"headers": {"Authorization": "Bearer t"}, "responseJsonPath": "$.headers.authorization", "responseJsonValue": "Bearer t"},
+    "result": {"ok": false, "error": "JSON path $.headers.authorization not found in response"}
+  },
+  {
+    "name": "redirect: another origin drops Cookie",
+    "replies": [{"status": 302, "headers": {"Location": "{other}/1"}}, {"echo": true}],
+    "monitor": {"headers": {"Cookie": "a=b"}, "responseJsonPath": "$.headers.cookie", "responseJsonValue": "a=b"},
+    "result": {"ok": false, "error": "JSON path $.headers.cookie not found in response"}
+  },
+  {
+    "name": "redirect: another origin drops Proxy-Authorization",
+    "replies": [{"status": 302, "headers": {"Location": "{other}/1"}}, {"echo": true}],
+    "monitor": {"headers": {"Proxy-Authorization": "Basic eA=="}, "responseJsonPath": "$.headers.proxy-authorization", "responseJsonValue": "Basic eA=="},
+    "result": {"ok": false, "error": "JSON path $.headers.proxy-authorization not found in response"}
+  },
+  {
+    "name": "redirect: another origin keeps X-Api-Key",
+    "replies": [{"status": 302, "headers": {"Location": "{other}/1"}}, {"echo": true}],
+    "monitor": {"headers": {"X-Api-Key": "k"}, "responseJsonPath": "$.headers.x-api-key", "responseJsonValue": "k"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: Authorization stays dropped after a return to the first origin",
+    "replies": [{"status": 302, "headers": {"Location": "{other}/1"}}, {"status": 302, "headers": {"Location": "{origin}/2"}}, {"echo": true}],
+    "monitor": {"headers": {"Authorization": "Bearer t"}, "responseJsonPath": "$.headers.authorization", "responseJsonValue": "Bearer t"},
+    "result": {"ok": false, "error": "JSON path $.headers.authorization not found in response"}
+  },
+  {
+    "name": "credentials: a target URL with a username and password fails",
+    "replies": [{"echo": true}],
+    "monitor": {"target": "http://u:p@{originhost}/0"},
+    "result": {"ok": false}
+  },
+  {
+    "name": "credentials: a redirect to another origin with a username and password fails",
+    "replies": [{"status": 302, "headers": {"Location": "http://u:p@{otherhost}/1"}}, {"echo": true}],
+    "monitor": {},
+    "result": {"ok": false}
+  },
+  {
+    "name": "credentials: a redirect to the same origin with a username and password fails",
+    "replies": [{"status": 302, "headers": {"Location": "http://u:p@{originhost}/1"}}, {"echo": true}],
+    "monitor": {},
+    "result": {"ok": false}
+  },
+  {
+    "name": "redirect: 20 redirects are followed",
+    "hops": 20,
+    "monitor": {"responseKeyword": "end"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 21 redirects fail the check",
+    "hops": 21,
+    "monitor": {"responseKeyword": "end"},
+    "result": {"ok": false}
+  },
+  {
+    "name": "redirect: the status check reads the last answer",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"status": 503}],
+    "monitor": {},
+    "result": {"ok": false, "error": "Expected 2xx status, got 503"}
+  },
+  {
+    "name": "timeout: a target that never answers",
+    "replies": [{"hang": true}],
+    "monitor": {"timeout": 200},
+    "result": {"ok": false, "error": "Timeout after 200ms"}
+  },
+  {
+    "name": "timeout: a body that never ends",
+    "replies": [{"hang": "body"}],
+    "monitor": {"timeout": 200, "responseKeyword": "never"},
+    "result": {"ok": false, "error": "Timeout after 200ms"}
+  },
+  {
+    "name": "body: a body cut off midway fails the check",
+    "replies": [{"cut": true}],
+    "monitor": {"responseKeyword": "partial"},
+    "result": {"ok": false}
+  },
+  {
+    "name": "http target: spaces around the URL are dropped",
+    "replies": [{"body": "ok"}],
+    "monitor": {"target": "  {origin}/0  "},
+    "result": {"ok": true}
+  },
+  {
+    "name": "http target: tabs and line breaks inside the URL are dropped",
+    "replies": [{"body": "ok"}],
+    "monitor": {"target": "\t{origin}/\n0\r\n"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "http target: an upper-case scheme",
+    "replies": [{"body": "ok"}],
+    "monitor": {"target": "{ORIGIN}/0"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "tcp target: an open port passes",
+    "monitor": {"method": "TCP_PING", "target": "{tcp}"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "tcp target: a closed port fails",
+    "monitor": {"method": "TCP_PING", "target": "{closed}"},
+    "result": {"ok": false}
+  },
+  {
+    "name": "tcp target: a trailing space is dropped",
+    "monitor": {"method": "TCP_PING", "target": "{tcp} "},
+    "result": {"ok": true}
+  },
+  {
+    "name": "tcp target: a trailing line break is dropped",
+    "monitor": {"method": "TCP_PING", "target": "{tcp}\n"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "tcp target: tabs around it are dropped",
+    "monitor": {"method": "TCP_PING", "target": "\t{tcp}\t"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "tcp target: a leading line break is dropped",
+    "monitor": {"method": "TCP_PING", "target": "\n{tcp}"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "tcp target: a tab before the port is dropped",
+    "monitor": {"method": "TCP_PING", "target": "{tcphost}:\t{tcpport}"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "tcp target: a leading space fails",
+    "monitor": {"method": "TCP_PING", "target": " {tcp}"},
+    "result": {"ok": false}
+  },
+  {
+    "name": "tcp target: headers are not checked",
+    "monitor": {"method": "TCP_PING", "target": "{tcp}", "headers": {"Bad Name": "x"}},
+    "result": {"ok": true}
+  },
+  {
+    "name": "gzip: the body is decoded and Content-Encoding stays",
+    "replies": [{"headers": {"Content-Encoding": "gzip", "Content-Length": "35"}, "bodyBase64": "H4sIAAAAAAAAA6tWKi5JLCktVrJSys9WqgUA3e0THQ8AAAA="}],
+    "monitor": {"responseHeaderEquals": {"Content-Encoding": "gzip"}, "responseJsonPath": "$.status", "responseJsonValue": "ok"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "gzip: the body is decoded when the monitor sets Accept-Encoding",
+    "replies": [{"headers": {"Content-Encoding": "gzip", "Content-Length": "35"}, "bodyBase64": "H4sIAAAAAAAAA6tWKi5JLCktVrJSys9WqgUA3e0THQ8AAAA="}],
+    "monitor": {"headers": {"Accept-Encoding": "gzip"}, "responseForbiddenKeyword": "ok"},
+    "result": {"ok": false, "error": "Forbidden keyword \"ok\" found in response"}
+  },
+  {
+    "name": "gzip: Content-Length stays the compressed length",
+    "replies": [{"headers": {"Content-Encoding": "gzip", "Content-Length": "35"}, "bodyBase64": "H4sIAAAAAAAAA6tWKi5JLCktVrJSys9WqgUA3e0THQ8AAAA="}],
+    "monitor": {"responseHeaderEquals": {"Content-Length": "35"}},
+    "result": {"ok": true}
+  },
+  {
+    "name": "gzip: HEAD keeps Content-Length",
+    "replies": [{"headers": {"Content-Encoding": "gzip", "Content-Length": "35"}, "bodyBase64": "H4sIAAAAAAAAA6tWKi5JLCktVrJSys9WqgUA3e0THQ8AAAA="}],
+    "monitor": {"method": "HEAD", "responseHeaderEquals": {"Content-Length": "35"}},
+    "result": {"ok": true}
+  },
+  {
+    "name": "gzip: a body that is not gzip fails",
+    "replies": [{"headers": {"Content-Encoding": "gzip"}, "body": "not gzip"}],
+    "monitor": {"responseKeyword": "gzip"},
+    "result": {"ok": false}
+  },
+  {
+    "name": "redirect: 301 keeps the content type of a PUT without a body",
+    "replies": [{"status": 301, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "PUT", "headers": {"Content-Type": "application/json"}, "responseJsonPath": "$.headers.content-type", "responseJsonValue": "application/json"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 302 keeps the content language of a PATCH without a body",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "PATCH", "headers": {"Content-Language": "en"}, "responseJsonPath": "$.headers.content-language", "responseJsonValue": "en"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "redirect: 302 keeps the content type of a DELETE without a body",
+    "replies": [{"status": 302, "headers": {"Location": "/1"}}, {"echo": true}],
+    "monitor": {"method": "DELETE", "headers": {"Content-Type": "application/json"}, "responseJsonPath": "$.headers.content-type", "responseJsonValue": "application/json"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "broken UTF-8: each stray byte becomes one U+FFFD",
+    "replies": [{"bodyBase64": "eyJ0ZXh0Ijoi//8ifQ=="}],
+    "monitor": {"responseJsonPath": "$.text", "responseJsonValue": "\ufffd\ufffd"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "broken UTF-8: a cut-off sequence before a stray byte becomes one U+FFFD",
+    "replies": [{"bodyBase64": "eyJ0ZXh0Ijoi4oL/In0="}],
+    "monitor": {"responseJsonPath": "$.text", "responseJsonValue": "\ufffd\ufffd"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "broken UTF-8: a cut-off sequence becomes one U+FFFD",
+    "replies": [{"bodyBase64": "eyJ0ZXh0Ijoi8J+SIn0="}],
+    "monitor": {"responseJsonPath": "$.text", "responseJsonValue": "\ufffd"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "broken UTF-8: each byte of an overlong sequence becomes one U+FFFD",
+    "replies": [{"bodyBase64": "eyJ0ZXh0Ijoi4ICAIn0="}],
+    "monitor": {"responseJsonPath": "$.text", "responseJsonValue": "\ufffd\ufffd\ufffd"},
+    "result": {"ok": true}
+  },
+  {
+    "name": "broken UTF-8: each byte of a surrogate becomes one U+FFFD",
+    "replies": [{"bodyBase64": "eyJ0ZXh0Ijoi7aCAIn0="}],
+    "monitor": {"responseJsonPath": "$.text", "responseJsonValue": "\ufffd\ufffd\ufffd"},
+    "result": {"ok": true}
+  }
+]

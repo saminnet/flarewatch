@@ -75,6 +75,8 @@ export default defineConfig({
       'worker-configuration.d.ts',
       'routeTree.gen.ts',
       'tools/oxlint/anti-slop/**',
+      'packages/shared/tests/fixtures/requests.json',
+      'services/worker/tests/fixtures/verdicts.json',
     ],
     printWidth: 100,
     tabWidth: 2,
