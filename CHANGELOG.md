@@ -4,42 +4,32 @@ All notable changes to FlareWatch will be documented in this file.
 
 ## Unreleased
 
-Certificate expiry now warns instead of causing downtime. On the next successful check, an incident caused only by the old certificate threshold closes and stays in history. Rollback preserves storage but restores the old failure rule and can reopen that incident. Remove new config fields before deploying older code.
+A certificate close to expiry now shows its monitor as degraded and sends one warning, instead of taking it down. If a monitor is down today only because of its certificate, its next check closes that outage, and the outage stays in History.
 
-The current flarewatch-proxy still rejects valid certificates with less than 24 hours left, even with the new zero threshold. That boundary needs a separate proxy fix.
+You can roll back to 3.3.0 on the same storage. Take the new fields out of your config first, because 3.3.0 rejects fields it doesn't know. A certificate inside its warning window then takes its monitor down again.
 
 ### Added
 
-- Set `notification.summaryAfter` from 2 to 50 to send one grouped message when that many alerts route to a webhook in one run. Below the threshold, messages stay individual. An accepted summary confirms every listed alert and costs one webhook request.
-
-- `checkProxy: 'vpc'` and `confirmVia: 'vpc'` check a target the Worker reaches through its `VPC` binding, a Workers VPC network behind a Cloudflare Tunnel. Workers VPC is in beta and free on every Workers plan. The committed `wrangler.toml` stays without a `[[vpc_networks]]` block, so a fork without a tunnel deploys unchanged; a `vpc` monitor there fails with an error that says to add the binding. See [Monitors](docs/monitors.md#other-regions-and-private-networks).
-
-- `DOMAIN` monitors check registration expiry through RDAP. They default to a daily check and a 30-day warning window. Near expiry sends one warning per date without downtime; an expired domain or failed lookup fails the check.
-
-- `DNS` monitors check records through DNS-over-HTTPS, with an optional resolver and expected values. They support A, AAAA, CNAME, MX, TXT, NS and CAA records.
-
-- Valid certificates inside `sslCheckDaysBeforeExpiry` show as degraded and send one warning per monitor and expiry date. They open no incident and leave uptime unchanged. Maintenance pauses warning alerts. Expired or invalid certificates still fail checks.
-
-- `downAfterChecks` requires 1 to 10 consecutive failed checks before opening an incident. The default remains 1. Success resets the streak, skipped runs do not count, and the incident starts at its first failed check.
-
-- `checkEveryMinutes` sets each check monitor's interval from 1 to 1440 minutes. The default remains one minute. Checks spread across stable slots, and skipped monitors keep their status and history. Reminders still count minute runs.
-
-- The upstream demo has separate config files in `packages/config/src/demo`, the title **FlareWatch demo**, and a **Deploy your own** link. Forks keep their starter config files. The demo keeps all six monitor IDs and their history.
-- `/feed.atom` lists the newest 50 public incidents, maintenance windows and announcements, with stable entry IDs. The page head advertises it to feed readers. See [Atom feed](docs/status-page.md#atom-feed).
-- Operators can post announcements from History or `/api/admin/announcements`. Active announcements appear as plain text banners, newest first. The hub keeps at most 50, with titles up to 200 characters and bodies up to 2000. See [Announcements](docs/status-page.md#announcements).
-- `/api/badge.svg` serves a flat SVG badge directly, with the JSON badge's parameters, bounded text and validated colors. See [API, badges and embeds](docs/status-page.md#api-badges-and-embeds).
+- `checkEveryMinutes` checks a monitor every 1 to 1440 minutes instead of every minute. Monitors with the same interval are spread over different minutes. A monitor that isn't due keeps its status. `reminderEveryChecks` still counts check runs, one a minute.
+- `downAfterChecks` opens an outage only after 1 to 10 failed checks in a row. The default is 1, as before. The outage starts at the first failed check of the streak.
+- A certificate inside `sslCheckDaysBeforeExpiry` shows its monitor as degraded and sends one warning for each expiry date. It opens no outage and doesn't change uptime. A maintenance window pauses the warning. An expired or invalid certificate still fails the check. flarewatch-proxy counts whole days, so it fails a valid certificate in its last 24 hours.
+- `DNS` monitors look up an `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS` or `CAA` record over DNS-over-HTTPS. `dnsExpected` lists values the answer must hold. They ask `cloudflare-dns.com` unless you set `dnsResolver`. See [Monitors](docs/monitors.md).
+- `DOMAIN` monitors read a domain's expiry date over RDAP, once a day. Inside `domainExpiryDays`, 30 by default, the monitor shows as degraded and sends one warning for each expiry date. An expired domain, a failed lookup or a TLD with no HTTPS RDAP service fails the check.
+- `notification.summaryAfter` sends one message instead of many. When a check run has that many alerts or more for one webhook, from 2 to 50, the webhook gets a single message that lists them. A long list is cut at 1,900 characters and says how many it left out.
+- `checkProxy: 'vpc'` and `confirmVia: 'vpc'` check a target in your private network through a Workers VPC binding and a Cloudflare Tunnel. Workers VPC is in beta and free on every plan. You add the binding to `wrangler.toml` yourself; without it, a `vpc` monitor fails with an error that says so. See [Monitors](docs/monitors.md#other-regions-and-private-networks).
+- `/api/badge.svg` serves the badge as an image, with the same parameters as the JSON badge. See [API, badges and embeds](docs/status-page.md#api-badges-and-embeds).
+- Announcements: the operator posts a notice from History or `POST /api/admin/announcements`, and it shows as a banner at the top of the page until it ends. The hub keeps at most 50. See [Announcements](docs/status-page.md#announcements).
+- `/feed.atom` is an Atom feed of the newest 50 public incidents, maintenance windows and announcements. See [Atom feed](docs/status-page.md#atom-feed).
 - `responseHeaderEquals` and `responseJsonPath` work through flarewatch-proxy 2.0.0 or later, as `checkProxy` or `confirmVia`. An older proxy fails these checks with a message that asks you to update it, because it would skip them and pass. See the table in [Monitors](docs/monitors.md#other-regions-and-private-networks).
+- `packages/config/src/demo` holds the config of demo.flarewatch.app. The deploy uses it only in `saminnet/flarewatch`, so your fork keeps deploying `worker.ts` and `public.ts`.
 
 ### Fixed
-
-- RDAP checks now require HTTPS services and redirects. `domainExpiryDays` accepts integers from 1 to 365.
-- Expiry alert claims remove that monitor's dates more than 90 days in the past when claiming a warning.
-- Summary text stays within 1,900 characters and ends with the exact count of omitted alerts when needed.
 
 - A config with `expectedCodes: []`, an empty `responseKeyword` or `responseForbiddenKeyword`, or `responseHeaderEquals: {}` now fails the config check, so the unit tests fail and the deploy stops. Before, an empty `expectedCodes` failed every check with "Expected status , got 200", and the other three checked nothing.
 - A target URL with a username and password, such as `https://user:secret@example.com`, now fails the config check. A Worker dropped them and sent the request without them, so the check never signed in. Send them in `headers` instead.
 - A header value that isn't a string or a number now gets the error `headers must map names to strings or numbers`. Before, the error was a bare `Invalid input`.
 - A direct check now follows redirects itself, with the same rules as flarewatch-proxy. When a target redirects to another site, the `Cookie`, `Authorization` and `Proxy-Authorization` headers from the monitor no longer travel with it. Before, the runtime kept `Cookie` and `Proxy-Authorization`. A redirect to a URL with a username and password, or past 20 hops, fails the check.
+- A latency chart with a single sample draws it in the middle instead of at the left edge.
 
 ## 3.3.0 - 2026-10-03
 
