@@ -11,7 +11,7 @@ jobs:
     # Forks keep their own tags; only the upstream repo publishes releases.
     if: ${{ github.repository == 'saminnet/flarewatch' }}
     permissions:
-      contents: write # gh release create
+      contents: write
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
