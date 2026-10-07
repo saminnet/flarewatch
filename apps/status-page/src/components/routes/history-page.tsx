@@ -117,9 +117,9 @@ export function HistoryPage() {
         )}
       </div>
 
-      <ManageAnnouncements announcements={announcements} nowMs={nowMs} operator={operator} />
-
       {state && <UptimeCalendar monitors={monitors} state={state} selectedMonth={resolvedMonth} />}
+
+      <ManageAnnouncements announcements={announcements} nowMs={nowMs} operator={operator} />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
