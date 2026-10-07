@@ -33,6 +33,7 @@ const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
 const HOUR = 60 * 60;
 const MAX_MAINTENANCES = 100;
 const MAX_ANNOUNCEMENTS = 50;
+const MAX_EXPIRY_CLAIMS = 32;
 
 /** A check monitor's result, or a heartbeat monitor, which the hub evaluates from its pings. */
 export type CheckRecord =
@@ -70,6 +71,26 @@ export class MonitorHub extends DurableObject<Env> {
     migrate(this.sql);
     this.incidents = new Incidents(this.sql);
     this.alerts = new Alerts(this.sql);
+  }
+
+  claimInitialCheck(nowMs: number): boolean {
+    return this.sql.transaction(() => {
+      const rows = this.sql.exec<{ key: string; value: string }>(
+        "SELECT key, value FROM meta WHERE key IN ('last_update', 'initial_trigger')",
+      );
+      if (
+        rows.some(({ key, value }) =>
+          key === 'last_update' ? Number(value) > 0 : nowMs - Number(value) < 60_000,
+        )
+      )
+        return false;
+      this.sql.exec(
+        `INSERT INTO meta (key, value) VALUES ('initial_trigger', ?)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+        String(nowMs),
+      );
+      return true;
+    });
   }
 
   /**
@@ -225,7 +246,16 @@ export class MonitorHub extends DurableObject<Env> {
             warning.expiryDate,
             run,
           );
-          if (claimed.length > 0)
+          if (claimed.length > 0) {
+            this.sql.exec(
+              `DELETE FROM expiry_alerts WHERE monitor_id = ? AND expiry_date IN (
+                 SELECT expiry_date FROM expiry_alerts WHERE monitor_id = ?
+                 ORDER BY run DESC, expiry_date DESC LIMIT -1 OFFSET ?
+               )`,
+              monitor.id,
+              monitor.id,
+              MAX_EXPIRY_CLAIMS,
+            );
             warningAlerts.push({
               monitorId: monitor.id,
               incident: 0,
@@ -237,6 +267,7 @@ export class MonitorHub extends DurableObject<Env> {
               run,
               expiryDate: warning.expiryDate,
             });
+          }
         }
       }
       this.sql.exec(

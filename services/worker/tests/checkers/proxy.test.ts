@@ -80,6 +80,7 @@ describe('checkExternalProxy', () => {
         timeout: 1234,
       }),
       timeout: 1234,
+      redirect: 'error',
     });
   });
 

@@ -292,7 +292,7 @@ export class GlobalPingChecker {
         budget.subrequests -= 1;
       }
       const timeout = Math.min(options.timeout ?? API_TIMEOUT, remaining);
-      return this.fetcher(input, { ...options, timeout });
+      return this.fetcher(input, { ...options, timeout, redirect: 'error' });
     };
     try {
       const config = parseProxyUrl(url);

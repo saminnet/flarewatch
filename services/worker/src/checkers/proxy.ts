@@ -88,6 +88,7 @@ export async function checkExternalProxy(
         ...(monitor.sslCheckEnabled && { sslCheckDaysBeforeExpiry: 0 }),
       }),
       timeout,
+      redirect: 'error',
     });
 
     if (!response.ok) {
@@ -121,12 +122,11 @@ export async function checkExternalProxy(
       };
     }
 
-    // A proxy can echo the token it was sent, and a failed result's text is public.
+    // A proxy can echo the token it was sent, and its location and a failed result's text are public.
     const token = env?.FLAREWATCH_PROXY_TOKEN;
-    if (!data.result.ok && token) {
-      data.result.error = data.result.error.replaceAll(token, '<proxy token>');
-    }
-    return { location: data.location, result: data.result };
+    const redact = (text: string) => (token ? text.replaceAll(token, '<proxy token>') : text);
+    if (!data.result.ok) data.result.error = redact(data.result.error);
+    return { location: redact(data.location), result: data.result };
   } catch (error) {
     return {
       location: 'ERROR',

@@ -7,6 +7,7 @@ export type Occurrence = { start: number; end: number };
 type MaintenanceWindow = Pick<MaintenanceConfig, 'start' | 'end' | 'repeat'>;
 
 const DAY = 24 * 60 * 60 * 1000;
+const SAFE_DATE_MS = 8.64e15 - 2 * DAY;
 /** Any rule matches a day within 62 days; a longer miss means a rule no day can match. */
 const MAX_DAYS_WITHOUT_RUN = 366;
 
@@ -77,6 +78,7 @@ function* runs(window: MaintenanceWindow, repeat: MaintenanceRepeat, from: numbe
   const start = toMs(window.start);
   const duration = toMs(window.end ?? window.start) - start;
   const until = repeat.until === undefined ? Infinity : toMs(repeat.until);
+  if (Math.abs(start) > SAFE_DATE_MS) return;
 
   const startWall = start + offsetAt(start, timeZone);
   const startDay = Math.floor(startWall / DAY);
@@ -90,9 +92,11 @@ function* runs(window: MaintenanceWindow, repeat: MaintenanceRepeat, from: numbe
     (repeat.every === 'month' && date.getUTCDate() === dayOfMonth);
 
   const earliest = Math.max(from - duration, start);
+  if (Math.abs(earliest) > SAFE_DATE_MS) return;
   // A day early: a skipped hour can push a run past midnight into the next day.
   let day = Math.floor((earliest + offsetAt(earliest, timeZone)) / DAY) - 1;
   for (let missed = 0; missed < MAX_DAYS_WITHOUT_RUN; day++) {
+    if (Math.abs(day * DAY + timeOfDay) > SAFE_DATE_MS) return;
     if (!matches(new Date(day * DAY))) {
       missed++;
       continue;

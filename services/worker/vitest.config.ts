@@ -4,6 +4,7 @@ import { defineConfig } from 'vite-plus/test/config';
 export default defineConfig({
   resolve: {
     alias: {
+      '@': path.resolve(import.meta.dirname, '../../apps/status-page/src'),
       'cloudflare:workers': path.resolve(
         import.meta.dirname,
         './tests/helpers/cloudflare-workers.ts',

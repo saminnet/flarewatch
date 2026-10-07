@@ -319,6 +319,7 @@ export class WebhookNotifier {
       const response = await this.fetcher(finalUrl, {
         ...requestInit,
         timeout,
+        redirect: 'error',
       });
 
       if (!response.ok) {

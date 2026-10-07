@@ -82,6 +82,7 @@ export async function runChecks(
   env: Env,
   deps: WorkerDeps = defaultWorkerDeps,
   scheduledAt?: number,
+  spentSubrequests = 0,
 ): Promise<void> {
   const startedAt = Date.now();
   const location = await deps.getEdgeLocation();
@@ -100,6 +101,7 @@ export async function runChecks(
   );
   const dueIds = new Set(due.map((monitor) => monitor.id));
   const budget = runBudget(due, webhooks.length, startedAt);
+  budget.subrequests = Math.max(0, budget.subrequests - spentSubrequests);
 
   const ctx: CheckContext = { env, budget };
   const records = await Promise.all(
@@ -251,8 +253,15 @@ const Worker = {
     // reaches this worker (workers_dev and preview_urls off, no routes; a test
     // holds wrangler.toml to that). Routing it publicly needs an auth check first.
     if (url.pathname === '/trigger' && request.method === 'POST') {
-      ctx.waitUntil(runChecks(env, deps));
-      return Response.json({ success: true, message: 'Check triggered' }, { status: 202 });
+      const admitted = await getHub(env).claimInitialCheck(Date.now());
+      if (admitted) ctx.waitUntil(runChecks(env, deps, undefined, 1));
+      return Response.json(
+        {
+          success: true,
+          message: admitted ? 'Check triggered' : 'Already initialized or initializing',
+        },
+        { status: 202 },
+      );
     }
     if (url.pathname.startsWith(CHECK_NOW_PREFIX) && request.method === 'POST') {
       return handleCheckNow(request, env, deps);
