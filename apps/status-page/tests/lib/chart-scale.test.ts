@@ -48,8 +48,9 @@ describe('linearScale', () => {
     expect(s.invert(5)).toBeCloseTo(250, 9);
   });
 
-  it('does not divide by zero on a degenerate domain', () => {
+  it('puts every value of a degenerate domain in the middle of the range', () => {
     const s = linearScale([42, 42], [0, 100]);
-    expect(Number.isFinite(s(42))).toBe(true);
+    expect(s(42)).toBe(50);
+    expect(s.invert(50)).toBe(42);
   });
 });
