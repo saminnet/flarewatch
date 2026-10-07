@@ -208,14 +208,14 @@ async function run(
     return checkExternalProxy(target, attempt.url, ctx.env, deps.fetcher);
   }
   if (attempt.adapter === 'vpc') {
-    return checkVpc(target, ctx.env.VPC, deps.getEdgeLocation);
+    return checkVpc(target, ctx.env.VPC, deps.getEdgeLocation, ctx.budget);
   }
   const location = await deps.getEdgeLocation();
   if (target.method === 'DNS') return { location, result: await checkDns(target, deps.fetcher) };
   if (target.method === 'DOMAIN')
     return { location, result: await checkDomain(target, ctx.budget, deps.fetcher) };
-  const checker = target.method === 'TCP_PING' ? deps.tcp : deps.http;
-  return { location, result: await checker.check(target) };
+  if (target.method === 'TCP_PING') return { location, result: await deps.tcp.check(target) };
+  return { location, result: await deps.http.check(target, ctx.budget) };
 }
 
 /** One attempt, its timeout cut to what is left of the run, and stopped at the deadline. */

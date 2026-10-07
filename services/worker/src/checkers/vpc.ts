@@ -4,6 +4,7 @@ import {
   failure,
   type Fetcher,
   type MonitorTarget,
+  type RunBudget,
   type VpcBinding,
 } from '@flarewatch/shared';
 import { HttpChecker } from './http';
@@ -26,11 +27,12 @@ export async function checkVpc(
   target: MonitorTarget,
   binding: VpcBinding | undefined,
   getEdgeLocation: () => Promise<string>,
+  budget: RunBudget,
 ): Promise<CheckResultWithLocation> {
   if (!binding) return { location: 'ERROR', result: failure(MISSING_BINDING) };
   const checker =
     target.method === 'TCP_PING'
       ? new TcpChecker((address) => binding.connect(address))
       : new HttpChecker(vpcFetcher(binding));
-  return { location: await getEdgeLocation(), result: await checker.check(target) };
+  return { location: await getEdgeLocation(), result: await checker.check(target, budget) };
 }

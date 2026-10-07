@@ -23,12 +23,16 @@ You can roll back to 3.3.0 on the same storage. Take the new fields out of your 
 - `responseHeaderEquals` and `responseJsonPath` work through flarewatch-proxy 2.0.0 or later, as `checkProxy` or `confirmVia`. An older proxy fails these checks with a message that asks you to update it, because it would skip them and pass. See the table in [Monitors](docs/monitors.md#other-regions-and-private-networks).
 - `packages/config/src/demo` holds the config of demo.flarewatch.app. The deploy uses it only in `saminnet/flarewatch`, so your fork keeps deploying `worker.ts` and `public.ts`.
 
+### Changed
+
+- The deploy warns when `HEARTBEAT_SECRET` is shorter than 32 characters, because anyone with one ping URL can guess a short secret offline. Replace it with the output of `openssl rand -base64 32`, then update your ping URLs. The next major release will refuse to deploy with a short secret.
+
 ### Fixed
 
 - A config with `expectedCodes: []`, an empty `responseKeyword` or `responseForbiddenKeyword`, or `responseHeaderEquals: {}` now fails the config check, so the unit tests fail and the deploy stops. Before, an empty `expectedCodes` failed every check with "Expected status , got 200", and the other three checked nothing.
 - A target URL with a username and password, such as `https://user:secret@example.com`, now fails the config check. A Worker dropped them and sent the request without them, so the check never signed in. Send them in `headers` instead.
 - A header value that isn't a string or a number now gets the error `headers must map names to strings or numbers`. Before, the error was a bare `Invalid input`.
-- A direct check now follows redirects itself, with the same rules as flarewatch-proxy. When a target redirects to another site, the `Cookie`, `Authorization` and `Proxy-Authorization` headers from the monitor no longer travel with it. Before, the runtime kept `Cookie` and `Proxy-Authorization`. A redirect to a URL with a username and password, or past 20 hops, fails the check.
+- A direct check now follows redirects itself, with the same rules as flarewatch-proxy. When a target redirects to another site, the `Cookie`, `Authorization` and `Proxy-Authorization` headers from the monitor no longer travel with it. Before, the runtime kept `Cookie` and `Proxy-Authorization`. A redirect to a URL with a username and password, or past 20 hops, fails the check. Each redirect counts against the check run's 50 requests, so a monitor that runs out fails instead of the whole run.
 - A latency chart with a single sample draws it in the middle instead of at the left edge.
 
 ## 3.3.0 - 2026-10-03

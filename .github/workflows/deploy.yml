@@ -95,7 +95,14 @@ jobs:
     steps:
       - name: Validate required secrets
         shell: bash
+        env:
+          HEARTBEAT_SECRET: ${{ secrets.HEARTBEAT_SECRET }}
         run: |
+          # One ping URL lets anyone guess a short secret offline. The next major release fails here instead.
+          if [ -n "${HEARTBEAT_SECRET}" ] && [ ${#HEARTBEAT_SECRET} -lt 32 ]; then
+            echo "::warning title=Short HEARTBEAT_SECRET::HEARTBEAT_SECRET has fewer than 32 characters. Replace it with the output of 'openssl rand -base64 32', then update your ping URLs."
+          fi
+
           missing=()
 
           [ -z "${CLOUDFLARE_ACCOUNT_ID}" ] && missing+=(CLOUDFLARE_ACCOUNT_ID)

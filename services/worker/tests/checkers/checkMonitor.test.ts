@@ -655,6 +655,63 @@ describe('checkMonitor', () => {
       vi.useRealTimers();
     });
 
+    describe.each(['direct', 'vpc'])('%s HTTP redirects', (adapter) => {
+      function context(subrequests: number): CheckContext {
+        const ctx = createCtx({ subrequests });
+        if (adapter === 'vpc')
+          ctx.env.VPC = {
+            fetch: (input) => fetchMock(input instanceof Request ? input.url : input.toString()),
+            connect: vi.fn(),
+          };
+        return ctx;
+      }
+
+      const target = () => createTarget(adapter === 'vpc' ? { checkProxy: 'vpc' } : {});
+
+      it.each([
+        [0, 0, 1, true],
+        [1, 2, 2, false],
+        [20, 20, 21, true],
+      ])(
+        'with %i spare requests and %i redirects makes %i fetches',
+        async (spare, redirects, requests, ok) => {
+          fetchMock.mockImplementation(async (input) => {
+            const hop = Number(new URL(input).pathname.slice(1));
+            return hop < redirects
+              ? new Response(null, { status: 302, headers: { location: `/${hop + 1}` } })
+              : new Response('ok');
+          });
+
+          const result = await checkMonitor(target(), context(spare), deps);
+
+          expect(fetchMock).toHaveBeenCalledTimes(requests);
+          expect(result.result.ok).toBe(ok);
+          if (!ok)
+            expect(result.result).toMatchObject({
+              error: 'No subrequests left in this check run',
+            });
+        },
+      );
+
+      it.each([false, true])(
+        'starts no fetch after the deadline (first fetch completed: %s)',
+        async (fetched) => {
+          vi.useFakeTimers();
+          const ctx = context(20);
+          if (!fetched) vi.setSystemTime(ctx.budget.deadline);
+          fetchMock.mockImplementation(async () => {
+            vi.setSystemTime(ctx.budget.deadline);
+            return new Response(null, { status: 302, headers: { location: '/next' } });
+          });
+
+          const result = await checkMonitor(target(), ctx, deps);
+
+          expect(fetchMock).toHaveBeenCalledTimes(fetched ? 1 : 0);
+          expect(result.result).toMatchObject({ ok: false, error: 'The check run ended' });
+        },
+      );
+    });
+
     it('cuts the timeout to what is left of the run', async () => {
       fetchMock.mockResolvedValue(new Response('ok'));
 

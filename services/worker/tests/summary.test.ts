@@ -25,7 +25,9 @@ it.each([2, 3])(
           sent.push(typeof init?.body === 'string' ? init.body : '');
           return new Response('ok');
         }
-        vi.setSystemTime(start + 55000);
+        const completedAt = Date.now() + 55000;
+        await Promise.resolve();
+        vi.setSystemTime(completedAt);
         return new Response('down', { status: 503 });
       }),
     );

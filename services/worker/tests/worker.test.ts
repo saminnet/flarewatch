@@ -118,6 +118,55 @@ describe('subrequests per check run', () => {
 
   const HOOK = 'https://hooks.example.com/alert';
 
+  it.each(['direct', 'vpc'])(
+    'budgets 20-hop redirects across a %s run within 50 requests',
+    async (adapter) => {
+      const redirecting = Array.from({ length: 40 }, (_, i) => ({
+        ...createMonitor(`redirect${i}`),
+        ...(adapter === 'vpc' && { checkProxy: 'vpc' }),
+      }));
+      const healthy = createMonitor('healthy');
+      const fetchMock = vi.fn<typeof fetch>(async (input) => {
+        const url = new URL(input instanceof Request ? input.url : input.toString());
+        if (url.href === HOOK || url.hostname === 'healthy.example.com') return new Response('ok');
+        const hop = Number(url.pathname.slice(1));
+        return hop < 20
+          ? new Response(null, { status: 302, headers: { location: `/${hop + 1}` } })
+          : new Response('ok');
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const { hub, env } = createEnv();
+      if (adapter === 'vpc') env.VPC = { fetch: fetchMock, connect: vi.fn() };
+      const record = vi.spyOn(hub, 'record');
+      const confirmAlerts = vi.spyOn(hub, 'confirmAlerts');
+
+      await runChecks(
+        env,
+        createWorkerDeps({
+          monitors: [...redirecting, healthy],
+          notification: { webhook: { url: HOOK }, summaryAfter: 1 },
+        }),
+      );
+
+      const total =
+        fetchMock.mock.calls.length +
+        record.mock.calls.length +
+        confirmAlerts.mock.calls.length +
+        1;
+      expect(total).toBeLessThanOrEqual(50);
+      expect(fetchMock.mock.calls.filter(([input]) => input === HOOK)).toHaveLength(1);
+      const view = hub.view();
+      expect(Object.keys(view.monitors)).toHaveLength(41);
+      expect(view.monitors[healthy.id]?.status).toBe('up');
+      for (const monitor of redirecting) {
+        expect(view.monitors[monitor.id]?.status).toBe('down');
+        expect(view.monitors[monitor.id]?.incidents[0]?.error[0]).toContain(
+          'No subrequests left in this check run',
+        );
+      }
+    },
+  );
+
   /** Fetches and hub calls in one run of 45 monitors that confirm through a proxy. */
   async function countSubrequests(failing: number, notification?: NotificationConfig) {
     const monitors = Array.from({ length: 45 }, (_, i) => ({
