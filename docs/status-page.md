@@ -115,7 +115,7 @@ Months with fewer than 31 days get no run, so this one skips November and runs a
 
 ## Announcements
 
-Sign in and open History, then choose **Add announcement** beside **Add maintenance window**. Give it a title and body, and optionally an end time in UTC. Active announcements appear on the dashboard under the status banner, newest first. You edit and delete them on History, as you do maintenance windows. Titles and bodies render as plain text, including HTML tags and Markdown syntax.
+Sign in and open History, then choose **Add announcement** beside **Add maintenance window**. Give it a title and body, and optionally an end time in UTC. Active announcements appear on the dashboard under the status banner, newest first. You edit and delete them on History, as you do maintenance windows. Titles and bodies show exactly as typed. HTML tags and Markdown appear as text, so `<b>` shows as `<b>` and doesn't make text bold.
 
 The hub keeps at most 50 announcements. A title needs text and can be at most 200 characters. A body needs text and can be at most 2000 characters. Ended announcements remain in the hub and feed until you delete them. History lists them for the operator, so you can edit or delete an ended announcement too.
 

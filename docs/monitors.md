@@ -177,7 +177,7 @@ When the proxy fails, the check fails. Set `checkProxyFallback: true` to fall ba
 
 Set `checkProxy: 'vpc'`, or `confirmVia: 'vpc'`, to check a target the Worker reaches through a [Workers VPC](https://developers.cloudflare.com/workers-vpc/) network: HTTP through the binding's `fetch`, `TCP_PING` through its `connect`. The check runs in the Worker and follows the same rules as a direct one, including redirects, keywords, headers and JSON. Workers VPC is in beta and free on every Workers plan.
 
-The binding is yours to add, because the committed `services/worker/wrangler.toml` stays without one: a fork without a tunnel deploys it unchanged. Put this block in that file, with your tunnel's UUID:
+You add the binding yourself. The committed `services/worker/wrangler.toml` has none, so a fork without a tunnel deploys it unchanged. Put this block in that file, with your tunnel's UUID:
 
 ```toml
 [[vpc_networks]]

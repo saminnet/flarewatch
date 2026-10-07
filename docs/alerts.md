@@ -42,9 +42,9 @@ Here Slack gets everything and ntfy gets only `db` and `backup`. An empty list s
 
 Set `notification.summaryAfter` to an integer from 2 to 50 to combine a busy run's alerts. Leave it out to keep one message per alert.
 
-FlareWatch counts alerts after routing to each webhook. At or above the threshold, that webhook gets one message listing its alerts, grouped as down, recovered, still down, reminders and expiry warnings. A webhook below the threshold keeps individual messages. Summaries use each template's existing message or reason text, with no new payload fields. The title names FlareWatch and the alert count; target and duration fields hold an empty target and zero duration.
+FlareWatch counts alerts after routing to each webhook. At or above the threshold, that webhook gets one message listing its alerts, grouped as down, recovered, still down, reminders and expiry warnings. A webhook below the threshold keeps individual messages. Summaries use each template's existing message or reason text, with no new payload fields. The title names FlareWatch and the alert count. The target field is empty and the duration is zero.
 
-If a webhook accepts a summary, every listed alert counts as delivered. A refused summary keeps the existing rules for each alert: down alerts retry, and recoveries, error changes, reminders and expiry warnings do not. A summary costs one subrequest per webhook. A summary that exceeds a channel's message limit can be refused, just like an individual alert.
+If a webhook accepts a summary, every listed alert counts as delivered. A refused summary keeps the existing rules for each alert: down alerts retry, and recoveries, error changes, reminders and expiry warnings do not. A summary costs one subrequest per webhook. A channel can refuse a summary that is over its message limit, as it can an individual alert.
 
 ## Dependencies
 

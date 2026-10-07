@@ -16,7 +16,7 @@ You can roll back to 3.3.0 on the same storage. Take the new fields out of your 
 - `DNS` monitors look up an `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS` or `CAA` record over DNS-over-HTTPS. `dnsExpected` lists values the answer must hold. They ask `cloudflare-dns.com` unless you set `dnsResolver`. See [Monitors](docs/monitors.md).
 - `DOMAIN` monitors read a domain's expiry date over RDAP, once a day. Inside `domainExpiryDays`, 30 by default, the monitor shows as degraded and sends one warning for each expiry date. An expired domain, a failed lookup or a TLD with no HTTPS RDAP service fails the check.
 - `notification.summaryAfter` sends one message instead of many. When a check run has that many alerts or more for one webhook, from 2 to 50, the webhook gets a single message that lists them. A long list is cut at 1,900 characters and says how many it left out.
-- `checkProxy: 'vpc'` and `confirmVia: 'vpc'` check a target in your private network through a Workers VPC binding and a Cloudflare Tunnel. Workers VPC is in beta and free on every plan. You add the binding to `wrangler.toml` yourself; without it, a `vpc` monitor fails with an error that says so. See [Monitors](docs/monitors.md#other-regions-and-private-networks).
+- `checkProxy: 'vpc'` and `confirmVia: 'vpc'` check a target in your private network through a Workers VPC binding and a Cloudflare Tunnel. Workers VPC is in beta and free on every plan. You add the binding to `wrangler.toml` yourself. Without it, a `vpc` monitor fails with an error that says so. See [Monitors](docs/monitors.md#other-regions-and-private-networks).
 - `/api/badge.svg` serves the badge as an image, with the same parameters as the JSON badge. See [API, badges and embeds](docs/status-page.md#api-badges-and-embeds).
 - Announcements: the operator posts a notice from History or `POST /api/admin/announcements`, and it shows on the dashboard under the status banner until it ends. The hub keeps at most 50. See [Announcements](docs/status-page.md#announcements).
 - `/feed.atom` is an Atom feed of the newest 50 public incidents, maintenance windows and announcements. See [Atom feed](docs/status-page.md#atom-feed).
@@ -31,7 +31,7 @@ You can roll back to 3.3.0 on the same storage. Take the new fields out of your 
 
 ### Fixed
 
-- When someone else signs in on the same browser, every open tab of the status page reloads as that account. Before, an open tab could still show the private monitors of the account before, for example after leaving visitor view.
+- When someone else signs in on the same browser, every open tab of the status page reloads as that account. Before, an open tab could still show the previous account's private monitors, for example after leaving visitor view.
 - The first check run that a page view starts on a fresh deploy now runs once, even when several status-page instances serve the first visitors.
 - A repeating maintenance window with a start date near the end of the JavaScript date range no longer stops the check runs of every monitor.
 - When the Worker can't find its data center, the checks of one run share that failed lookup, and the next run tries again. Before, each check tried again and spent requests that the run keeps for checks and alerts.
