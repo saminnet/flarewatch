@@ -97,5 +97,7 @@ export function safeReturnTo(value: string | null): string {
   const base = 'https://flarewatch.invalid';
   if (!value?.startsWith('/') || !URL.canParse(value, base)) return '/';
   const url = new URL(value, base);
-  return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : '/';
+  const path = `${url.pathname}${url.search}${url.hash}`;
+  // Dot segments can normalize /.//host into //host, which a browser reads as another site.
+  return url.origin === base && new URL(path, base).origin === base ? path : '/';
 }

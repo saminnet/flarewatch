@@ -30,6 +30,7 @@ You can roll back to 3.3.0 on the same storage. Take the new fields out of your 
 
 ### Fixed
 
+- A sign-in link with a `next` path such as `/.//example.com/` no longer sends you to another site after you sign in.
 - A config with `expectedCodes: []`, an empty `responseKeyword` or `responseForbiddenKeyword`, or `responseHeaderEquals: {}` now fails the config check, so the unit tests fail and the deploy stops. Before, an empty `expectedCodes` failed every check with "Expected status , got 200", and the other three checked nothing.
 - A target URL with a username and password, such as `https://user:secret@example.com`, now fails the config check. A Worker dropped them and sent the request without them, so the check never signed in. Send them in `headers` instead.
 - A header value that isn't a string or a number now gets the error `headers must map names to strings or numbers`. Before, the error was a bare `Invalid input`.
