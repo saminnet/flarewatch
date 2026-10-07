@@ -14,8 +14,13 @@ test('an open tab forgets the previous account when another one signs in', async
   await page.getByRole('link', { name: 'Continue with Test ID' }).click();
   await page.getByRole('link', { name: 'member@e2e.test' }).click();
   await expect(page.getByRole('heading', { name: 'Internal Vault Backup' })).toBeVisible();
-  await page.getByRole('button', { name: /Account menu/ }).click();
-  await page.getByRole('menuitemcheckbox', { name: 'Visitor view' }).click();
+  const visitorView = page.getByRole('menuitemcheckbox', { name: 'Visitor view' });
+  // The menu opens only once the page has hydrated, so retry the click.
+  await expect(async () => {
+    await page.getByRole('button', { name: /Account menu/ }).click();
+    await expect(visitorView).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
+  await visitorView.click();
   await expect(page.getByRole('link', { name: 'Exit visitor view' })).toBeVisible();
 
   const disclosed: string[] = [];

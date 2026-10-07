@@ -55,13 +55,9 @@ function DashboardPage() {
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="space-y-3">
-        <AnnouncementBanner
-          announcements={announcements}
-          nowMs={nowMs}
-          operator={audience === 'operator'}
-        />
-
         <OverallStatus monitors={monitors} state={state} maintenances={maintenances} />
+
+        <AnnouncementBanner announcements={announcements} nowMs={nowMs} />
 
         <MaintenanceAlerts
           maintenances={maintenances}

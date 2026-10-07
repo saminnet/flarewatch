@@ -1087,6 +1087,8 @@ test.describe.serial('operator announcement lifecycle', () => {
     await expect(page.getByLabel('Announcements').getByRole('heading').first()).toHaveText(
       'E2E lifecycle announcement',
     );
+    await expect(page.getByRole('button', { name: /Edit announcement/ })).toHaveCount(0);
+    await page.goto('/history');
     await page
       .getByRole('button', { name: 'Edit announcement E2E lifecycle announcement' })
       .click();
