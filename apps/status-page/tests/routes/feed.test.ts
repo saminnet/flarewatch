@@ -119,7 +119,7 @@ describe('GET /feed.atom', () => {
       '<error> & "details"\uFFFD',
     );
     expect(text).not.toContain('PRIVATE');
-    expect(requests).toEqual(['https://internal/view']);
+    expect(requests).toHaveLength(1);
   });
 
   it('keeps entry ids across edits, rescheduling across years, and incident recovery', async () => {

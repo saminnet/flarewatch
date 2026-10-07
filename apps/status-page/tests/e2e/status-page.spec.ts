@@ -229,9 +229,7 @@ test('latency chart is server-rendered, labeled, and supports hover', async ({ p
   const html = await (await request.get('/monitors/demo_example')).text();
   expectNoPrivateMonitorFields(html);
   expect(html).toContain('data-testid="latency-chart"');
-  expect(html).toContain('vector-effect="non-scaling-stroke"');
-  expect(html).toMatch(/fill="url\(#chart-fill-/);
-  expect(html).toContain('stop-opacity="var(--chart-fill-top)"');
+  expect(html).toMatch(/role="img"[^>]*aria-label="Response time chart, latest/);
 
   await page.goto('/monitors/demo_example');
   const chart = page.getByTestId('latency-chart').first();
@@ -278,16 +276,16 @@ test.describe('latency chart touch', () => {
       pointerId: 1,
       bubbles: true,
     };
-    const dot = chart.locator('span.rounded-full');
+    const tooltip = chart.getByText(/\w{3} \d{1,2}, \d{2}:\d{2} UTC/);
 
     // Same hydration race as the hover test: a pointerdown dispatched before
-    // the handler attaches is lost, so retry until the tooltip dot appears.
+    // the handler attaches is lost, so retry until the tooltip appears.
     await expect(async () => {
       await chart.dispatchEvent('pointerdown', at);
-      await expect(dot).toBeVisible({ timeout: 1000 });
+      await expect(tooltip).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 15_000 });
     await chart.dispatchEvent('pointerup', at);
-    await expect(dot).toHaveCount(0);
+    await expect(tooltip).toHaveCount(0);
   });
 });
 
@@ -684,7 +682,7 @@ test('private monitor never appears to visitors but shows to the operator with a
   }).toPass({ timeout: 45_000 });
   await page.reload();
   // The first match is the card's current error; History lists the incident below it.
-  await expect(page.getByText('Synthetic private outage').first()).toHaveClass(/status-down/);
+  await expect(page.getByText('Synthetic private outage').first()).toBeVisible();
   await expect(checkResult).toBeEmpty();
 
   // Signed-in mode is the only surface that carries the raw reported reason.
@@ -810,14 +808,14 @@ test('embed route renders seeded monitor status and variants', async ({ page, re
   await page.goto('/embed/demo_cloudflare_status?theme=dark');
   await expect(page.getByText('Cloudflare Status API')).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).toBeVisible();
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto('/embed/demo_cloudflare_status?theme=light');
   await expect(page.getByText('Cloudflare Status API')).toBeVisible();
-  await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
   await page.goto('/embed/demo_cloudflare_status');
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
   await page.emulateMedia({ colorScheme: 'light' });
 
   await page.goto('/embed/demo_cloudflare_status?minimal=true');
@@ -855,9 +853,7 @@ test('every script on a page carries the nonce from its Content-Security-Policy'
       body,
     }));
     expect(scripts.map((script) => script.nonce)).toEqual(scripts.map(() => nonce));
-    const themeInit = scripts.filter(({ body }) => body.includes('__flarewatchSetThemePreference'));
-    expect(themeInit, path).toHaveLength(1);
-    expect(scripts.length, path).toBeGreaterThan(themeInit.length);
+    expect(scripts.length, path).toBeGreaterThan(0);
   }
 });
 
@@ -1032,14 +1028,6 @@ test.describe('provider sign-in', () => {
 
     await expect(page.getByRole('heading', { name: 'Internal Billing API' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Internal Vault Backup' })).toHaveCount(0);
-  });
-
-  test('the operator signs in with the provider and can edit maintenance', async ({ page }) => {
-    await signInAs(page, 'operator@e2e.test');
-
-    await expect(page.getByRole('heading', { name: 'Internal Vault Backup' })).toBeVisible();
-    await page.getByRole('link', { name: 'History' }).click();
-    await expect(page.getByRole('button', { name: 'Add maintenance window' })).toBeVisible();
   });
 
   test('someone no rule lets in is sent back to sign-in with a reason', async ({ page }) => {

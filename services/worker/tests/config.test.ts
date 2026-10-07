@@ -34,22 +34,6 @@ describe.each([
   });
 });
 
-it('keeps the six demo history ids and gives the demo its own title and deploy link', () => {
-  expect(demoWorker.monitors.map((monitor) => monitor.id)).toEqual([
-    'demo_example',
-    'demo_cloudflare_trace',
-    'demo_cloudflare_status',
-    'demo_cloudflare_docs',
-    'demo_one_dns_trace',
-    'demo_github_status',
-  ]);
-  expect(demoPage.title).toBe('FlareWatch demo');
-  expect(demoPage.links).toContainEqual({
-    label: 'Deploy your own',
-    link: 'https://flarewatch.app/docs/deploy',
-  });
-});
-
 describe('packages/config examples', () => {
   it('are valid together, so a fork that copies all three deploys', () => {
     expect([

@@ -125,3 +125,28 @@ it.each(['http', 'json', 'large', 'network'])('names a DNS %s failure', async (c
           : 'DNS lookup failed',
   );
 });
+
+it('rejects an answer that contains only the first expected DNS value', async () => {
+  vi.stubGlobal('fetch', async () =>
+    Response.json({ Status: 0, Answer: [{ type: 1, data: '192.0.2.1' }] }),
+  );
+  const { hub } = createHub();
+  await runChecks(
+    { MONITOR_HUB: hubNamespace(hub) },
+    createWorkerDeps({
+      monitors: [
+        {
+          id: 'dns',
+          name: 'DNS',
+          method: 'DNS',
+          target: 'example.com',
+          dnsExpected: ['192.0.2.1', '192.0.2.2'],
+        },
+      ],
+    }),
+  );
+  expect(hub.view().monitors.dns).toMatchObject({
+    status: 'down',
+    incidents: [{ error: ['Missing expected DNS value: 192.0.2.2'] }],
+  });
+});

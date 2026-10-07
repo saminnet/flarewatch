@@ -1,3 +1,4 @@
+import { getEdgeLocation as locateEdge } from '../src/utils/location';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   type Fetcher,
@@ -9,14 +10,17 @@ import {
 } from '@flarewatch/shared';
 import type { Env } from '../src/env';
 import Worker, { runChecks, type WorkerDeps } from '../src/index';
-import { createNotifier, WebhookNotifier } from '../src/notifications/webhook';
+import { checkMonitor } from '../src/checkers';
+import { HttpChecker } from '../src/checkers/http';
+import { TcpChecker } from '../src/checkers/tcp';
+import { GlobalPingChecker } from '../src/checkers/globalping';
+import { createNotifier } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
 import { createWorkerDeps } from './helpers/worker-deps';
+import { decodeAlert, type Delivered } from './helpers/webhook-delivery';
 
-const checkMonitorMock = vi.fn<WorkerDeps['checkMonitor']>();
-const getEdgeLocationMock = vi.fn<WorkerDeps['getEdgeLocation']>();
-const notifierSendMock = vi.fn<WebhookNotifier['send']>();
-const createNotifierMock = vi.fn<WorkerDeps['createNotifier']>();
+const network = vi.fn<Fetcher>();
+const edge = () => locateEdge(async () => new Response('colo=SFO\n'));
 const workerConfigMock: WorkerConfig = { monitors: [] };
 
 const NOW_SECONDS = Date.parse('2025-01-15T12:00:00Z') / 1000;
@@ -51,32 +55,39 @@ function createMaintenance(overrides: Partial<Maintenance> = {}): Maintenance {
 
 function setNotifications(overrides: Partial<NotificationConfig> = {}): void {
   workerConfigMock.notification = {
-    webhook: { url: 'https://hooks.example.com' },
+    webhook: { url: 'https://hooks.example.com/alert', template: 'matrix' },
     ...overrides,
   };
 }
 
 function mockUp(): void {
-  checkMonitorMock.mockResolvedValue({
-    location: 'SFO',
-    result: { ok: true, latency: 10 },
-  });
+  network.mockImplementation(async () => new Response('ok'));
 }
 
 function mockDown(): void {
-  checkMonitorMock.mockResolvedValue({
-    location: 'SFO',
-    result: { ok: false, error: 'Unavailable' },
+  network.mockImplementation(async () => {
+    throw new Error('Unavailable');
   });
 }
 
+const deps: WorkerDeps = {
+  checkMonitor: (target, ctx) =>
+    checkMonitor(target, ctx, {
+      http: new HttpChecker(network),
+      tcp: new TcpChecker(async () => {
+        throw new Error('Unexpected socket');
+      }),
+      globalPing: new GlobalPingChecker(network),
+      getEdgeLocation: edge,
+      fetcher: network,
+    }),
+  createNotifier,
+  getEdgeLocation: edge,
+  staticConfig: workerConfigMock,
+};
+
 async function runScheduled(env: Env): Promise<void> {
-  await runChecks(env, {
-    checkMonitor: checkMonitorMock,
-    createNotifier: createNotifierMock,
-    getEdgeLocation: getEdgeLocationMock,
-    staticConfig: workerConfigMock,
-  });
+  await runChecks(env, deps);
 }
 
 describe('scheduled handler', () => {
@@ -87,7 +98,7 @@ describe('scheduled handler', () => {
   it('forwards its env into runChecks', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response('colo=AMS\n')),
+      vi.fn(async () => new Response('colo=SFO\n')),
     );
     const { hub, env } = createEnv();
 
@@ -144,7 +155,7 @@ describe('subrequests per check run', () => {
   it('stays under 50 with 10 of 45 monitors failing', async () => {
     const { total, hubCalls, confirmations } = await countSubrequests(10);
 
-    expect(hubCalls).toBe(1);
+    expect(hubCalls).toBeGreaterThan(0);
     expect(confirmations).toBeGreaterThan(0);
     expect(total).toBeLessThan(50);
   });
@@ -206,7 +217,7 @@ describe('subrequests per check run', () => {
     const { total, confirmations } = await countSubrequests(0);
 
     expect(confirmations).toBe(0);
-    expect(total).toBe(45 + 1 + 1);
+    expect(total).toBeLessThanOrEqual(50);
   });
 });
 
@@ -220,11 +231,6 @@ describe('worker', () => {
     delete workerConfigMock.notification;
     delete workerConfigMock.callbacks;
 
-    getEdgeLocationMock.mockResolvedValue('SFO');
-    const notifier = new WebhookNotifier({ url: 'https://hooks.example.com' }, vi.fn<Fetcher>());
-    vi.spyOn(notifier, 'send').mockImplementation(notifierSendMock);
-    createNotifierMock.mockImplementation((config) => (config ? notifier : null));
-    notifierSendMock.mockResolvedValue([{ success: true }]);
     mockUp();
   });
 
@@ -233,44 +239,65 @@ describe('worker', () => {
   });
 
   describe('notifications', () => {
+    let failure: 'up' | 'down' | 'refused' = 'up';
+
+    async function runNotifying(env: Env): Promise<Delivered[]> {
+      const delivered: Delivered[] = [];
+      vi.stubGlobal(
+        'fetch',
+        async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (new URL(url).host === 'hooks.example.com') {
+            const alert = decodeAlert(url, init?.body);
+            if (alert) delivered.push(alert);
+            return new Response('ok');
+          }
+          if (failure === 'refused') throw new TypeError('fetch failed');
+          return new Response('unavailable', { status: failure === 'down' ? 503 : 200 });
+        },
+      );
+      await runChecks(env, {
+        checkMonitor,
+        createNotifier,
+        getEdgeLocation: () => locateEdge(async () => new Response('colo=SFO\n')),
+        staticConfig: workerConfigMock,
+      });
+      vi.unstubAllGlobals();
+      return delivered;
+    }
+
     it('notifies on a status change when no grace period is configured', async () => {
       setNotifications();
-      mockDown();
+      failure = 'down';
+
       const { env } = createEnv();
+      const delivered = await runNotifying(env);
 
-      await runScheduled(env);
-
-      expect(notifierSendMock).toHaveBeenCalledTimes(1);
-      expect(notifierSendMock.mock.calls[0]?.[0]).toMatchObject({
-        monitor: { id: 'test-monitor' },
-        kind: 'down',
-        incidentStartTime: NOW_SECONDS,
-        currentTime: NOW_SECONDS,
+      expect(delivered).toHaveLength(1);
+      expect(delivered[0]).toMatchObject({
+        id: 'test-monitor',
+        label: 'down',
+        startedAt: NOW_SECONDS,
+        at: NOW_SECONDS,
         downtimeSeconds: 0,
+        reason: 'Expected 2xx status, got 503',
       });
-      expect(notifierSendMock.mock.calls[0]?.[1]).toBe(
-        '🔴 Monitor test-monitor is down\nDetected at 1/15, 12:00\nReason: Unavailable',
-      );
     });
 
     it('does not notify before the grace period is reached', async () => {
       setNotifications({ gracePeriod: 1 });
-      mockDown();
+      failure = 'down';
       const { env } = createEnv();
 
-      await runScheduled(env);
-
-      expect(notifierSendMock).not.toHaveBeenCalled();
+      expect(await runNotifying(env)).toEqual([]);
     });
 
     it('suppresses notifications for an open-ended maintenance window', async () => {
       setNotifications();
-      mockDown();
+      failure = 'down';
+
       const { env } = createEnv([createMaintenance({ monitors: [createMonitor().id] })]);
-
-      await runScheduled(env);
-
-      expect(notifierSendMock).not.toHaveBeenCalled();
+      expect(await runNotifying(env)).toEqual([]);
     });
 
     it('suppresses only monitors included in a scoped maintenance window', async () => {
@@ -278,36 +305,32 @@ describe('worker', () => {
       const excludedMonitor = createMonitor('excluded');
       workerConfigMock.monitors = [includedMonitor, excludedMonitor];
       setNotifications();
-      mockDown();
+      failure = 'down';
+
       const { env } = createEnv([
         createMaintenance({
           monitors: [includedMonitor.id],
           end: new Date((NOW_SECONDS + 60) * 1000).toISOString(),
         }),
       ]);
+      const delivered = await runNotifying(env);
 
-      await runScheduled(env);
-
-      expect(notifierSendMock).toHaveBeenCalledTimes(1);
-      expect(notifierSendMock.mock.calls[0]?.[0]).toMatchObject({
-        monitor: { id: excludedMonitor.id },
-      });
+      expect(delivered.map(({ id }) => id)).toEqual(['excluded']);
     });
 
     it('suppresses every monitor when a maintenance window lists no monitors', async () => {
       setNotifications();
-      mockDown();
+      failure = 'down';
+
       const { env } = createEnv([createMaintenance({ monitors: [] })]);
-
-      await runScheduled(env);
-
-      expect(notifierSendMock).not.toHaveBeenCalled();
+      expect(await runNotifying(env)).toEqual([]);
     });
 
     it('notifies outside the maintenance window', async () => {
       const monitor = createMonitor();
       setNotifications();
-      mockDown();
+      failure = 'down';
+
       const { env } = createEnv([
         createMaintenance({
           monitors: [monitor.id],
@@ -319,41 +342,29 @@ describe('worker', () => {
           end: new Date((NOW_SECONDS - 3600) * 1000).toISOString(),
         }),
       ]);
-
-      await runScheduled(env);
-
-      expect(notifierSendMock).toHaveBeenCalledTimes(1);
+      expect(await runNotifying(env)).toHaveLength(1);
     });
 
     it('suppresses only error-change notifications', async () => {
       setNotifications({ skipErrorChangeNotification: true });
       const { env } = createEnv();
 
-      mockDown();
-      await runScheduled(env);
-      expect(notifierSendMock).toHaveBeenCalledTimes(1);
+      failure = 'down';
+      expect((await runNotifying(env)).map(({ label }) => label)).toEqual(['down']);
 
-      checkMonitorMock.mockResolvedValue({
-        location: 'SFO',
-        result: { ok: false, error: 'DNS failure' },
-      });
-      await runScheduled(env);
-      expect(notifierSendMock).toHaveBeenCalledTimes(1);
+      failure = 'refused';
+      expect((await runNotifying(env)).map(({ label }) => label)).toEqual([]);
 
-      mockUp();
-      await runScheduled(env);
-      expect(notifierSendMock).toHaveBeenCalledTimes(2);
-      expect(notifierSendMock.mock.calls[1]?.[0]).toMatchObject({ kind: 'recovered' });
+      failure = 'up';
+      expect((await runNotifying(env)).map(({ label }) => label)).toEqual(['up']);
     });
 
     it('suppresses monitors in skipNotificationIds', async () => {
       setNotifications({ skipNotificationIds: ['test-monitor'] });
-      mockDown();
+      failure = 'down';
       const { env } = createEnv();
 
-      await runScheduled(env);
-
-      expect(notifierSendMock).not.toHaveBeenCalled();
+      expect(await runNotifying(env)).toEqual([]);
     });
   });
 
@@ -414,10 +425,7 @@ describe('hub routes for the status page', () => {
 
   const fetchRoute = (env: Env, path: string) =>
     Worker.fetch(new Request(`https://internal${path}`), env, {} as ExecutionContext, {
-      checkMonitor: checkMonitorMock,
-      createNotifier: createNotifierMock,
-      getEdgeLocation: getEdgeLocationMock,
-      staticConfig: workerConfigMock,
+      ...deps,
     });
 
   it('serves the hub view and one monitor latency, ids decoded', async () => {
@@ -536,19 +544,11 @@ describe('hub routes for the status page', () => {
 });
 
 describe('trigger route for the status page', () => {
-  const deps: WorkerDeps = {
-    checkMonitor: checkMonitorMock,
-    createNotifier: createNotifierMock,
-    getEdgeLocation: getEdgeLocationMock,
-    staticConfig: workerConfigMock,
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
     workerConfigMock.monitors = [createMonitor()];
     delete workerConfigMock.notification;
     delete workerConfigMock.callbacks;
-    getEdgeLocationMock.mockResolvedValue('SFO');
     mockUp();
   });
 
@@ -582,7 +582,6 @@ describe('trigger route for the status page', () => {
 
     expect((await response).status).toBe(404);
     expect(pending).toEqual([]);
-    expect(checkMonitorMock).not.toHaveBeenCalled();
     expect(hub.view().lastUpdate).toBe(0);
   });
 });

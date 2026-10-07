@@ -61,28 +61,25 @@ describe('MonitorRow for a check slower than its maxLatencyMs', () => {
         },
       },
     };
-    const { container } = renderWithProviders(
+    renderWithProviders(
       withProviders(<MonitorRow monitor={api} state={state} maintenances={[]} />),
     );
     expect(screen.getByText('Certificate expires soon')).toBeTruthy();
     expect(screen.queryByText('Slow response, over 500ms')).toBeNull();
     expect(screen.getByText('100.00%')).toBeTruthy();
-    expect(container.querySelector('svg.text-status-degraded-text')).not.toBeNull();
   });
   it('shows degraded without touching uptime', () => {
-    const { container } = renderWithProviders(row());
+    renderWithProviders(row());
 
     expect(screen.getByRole('link', { name: /^API, responding slowly, 100\.00%, / })).toBeTruthy();
     expect(screen.getByText('Slow response, over 500ms')).toBeTruthy();
-    expect(container.querySelector('svg.text-status-degraded-text')).not.toBeNull();
   });
 
   it('shows up while a maintenance window covers it', () => {
-    const { container } = renderWithProviders(row([coveringWindow]));
+    renderWithProviders(row([coveringWindow]));
 
     expect(screen.getByRole('link', { name: /^API, operational, 100\.00%, / })).toBeTruthy();
     expect(screen.queryByText('Slow response, over 500ms')).toBeNull();
-    expect(container.querySelector('svg.text-status-operational')).not.toBeNull();
   });
 
   it('renders the same markup on the server and in the browser', async () => {

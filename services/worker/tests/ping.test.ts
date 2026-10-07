@@ -89,10 +89,12 @@ describe('heartbeat tokens', () => {
     const first = await token();
     const second = await token();
 
+    expect(first).toBe('ilj38AekxPUwhSJtEYcJqRW76MVAbiY9');
     expect(first).toBe(second);
     expect(first).toHaveLength(32);
     expect(first).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(await token('other-job')).not.toBe(first);
+    expect(await deriveHeartbeatToken('rotated-heartbeat-secret', heartbeat.id)).not.toBe(first);
   });
 });
 

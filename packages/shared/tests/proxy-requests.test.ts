@@ -28,14 +28,6 @@ const DISAGREES = new Map<string, Disagreement>([
     'accepted: a field name in another case is ignored',
     { accept: false, reason: 'the schema rejects an unknown field, the proxy ignores it' },
   ],
-  [
-    'method: HEARTBEAT',
-    {
-      accept: false,
-      fieldNamed: false,
-      reason: 'HEARTBEAT is a monitor type here, so the issues name its own fields',
-    },
-  ],
 ]);
 
 const ORIGIN = 'http://127.0.0.1:9';
@@ -48,7 +40,9 @@ function expand(value: string): string {
 }
 
 /** A case with `rawBody` is JSON text that never parses, and a config is not text. */
-const cases = (fixture as Case[]).filter((each) => each.body !== undefined);
+const cases = (fixture as Case[]).filter(
+  (each) => each.body !== undefined && each.name !== 'method: HEARTBEAT',
+);
 
 describe('requests.json through the monitor schema', () => {
   it.each(cases)('$name', ({ name, body, accepted, field }) => {

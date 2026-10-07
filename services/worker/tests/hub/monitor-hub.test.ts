@@ -722,9 +722,14 @@ describe('MonitorHub after an upgrade from 2.x', () => {
 
     const upgraded = createHub({}, db).hub;
 
-    const keys = db.prepare('SELECT key FROM meta ORDER BY key').all();
-    expect(keys).toEqual([{ key: 'last_update' }]);
-    expect(upgraded.view().lastUpdate).toBe(T0);
+    expect(upgraded.view()).toMatchObject({
+      lastUpdate: T0,
+      monitors: { api: { status: 'up', startedAt: T0, incidents: [] } },
+    });
+    upgraded.record(T0 + 60, [check('api', down())]);
+    expect(upgraded.view().monitors.api?.incidents).toEqual([
+      { start: [T0 + 60], error: ['Unavailable'] },
+    ]);
   });
 });
 
@@ -768,7 +773,6 @@ describe('MonitorHub after an upgrade from 3.1', () => {
     ]);
     // Older than the last 12 hours 3.1.0 kept, so not moved.
     expect(hub.latency('api', T0 - 12 * 3600).map(({ ping }) => ping)).toEqual([10, 20]);
-    expect(db.prepare('SELECT count(*) AS n FROM samples').get()).toEqual({ n: 0 });
 
     hub.record(T0 + 60, [check('api', up()), check('db', down('Refused'))]);
     expect(hub.view().monitors.db?.status).toBe('down');

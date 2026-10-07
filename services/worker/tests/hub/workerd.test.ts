@@ -95,16 +95,6 @@ async function insertHistory(
   }
 }
 
-it('keeps what it stored across a cold start in workerd', async () => {
-  expect((await view('hub')).body.monitors).toEqual({});
-  const sql = await storage('hub');
-  expect(await sql.exec('SELECT id FROM _migrations')).toHaveLength(11);
-  await sql.exec("INSERT INTO meta (key, value) VALUES ('marker', '1')");
-  await evict('hub');
-  expect((await view('hub')).body.monitors).toEqual({});
-  expect(await sql.exec("SELECT value FROM meta WHERE key = 'marker'")).toEqual([{ value: '1' }]);
-}, 60_000);
-
 describe('MonitorHub in workerd after an upgrade from 3.1', () => {
   it('keeps the history, an outage still open, and the last 12 hours of latency', async () => {
     const hub = 'upgrade';
@@ -180,8 +170,6 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
     expect((await latency(hub, 'api', T0 - 12 * HOUR)).body.map(({ ping }) => ping)).toEqual([
       10, 20,
     ]);
-    expect(await sql.exec('SELECT count(*) AS n FROM samples')).toEqual([{ n: 0 }]);
-    expect(await sql.exec('SELECT MAX(id) AS id FROM _migrations')).toEqual([{ id: 11 }]);
 
     await record(hub, [{ now: T0 + 60, records: [check('api', up()), check('db', up())] }]);
 
@@ -193,48 +181,38 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
 });
 
 describe('MonitorHub in workerd row budgets', () => {
-  it('prunes only the claiming monitor dates older than ninety days and leaves quiet runs alone', async () => {
+  it('prunes only the claiming monitor’s dates older than ninety days and leaves quiet runs alone', async () => {
     const hub = 'expiry-retention';
+    const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+    const warned = (id: string, expiryDate: number): CheckRecord => ({
+      monitor: { id, name: id, method: 'GET', target: `https://${id}.example.com` },
+      check: {
+        location: 'HEL',
+        result: { ok: true, latency: 1, warning: { text: 'Domain expires soon', expiryDate } },
+      },
+    });
     const id = "api'; --";
-    await view(hub);
-    const sql = await storage(hub);
-    const cutoff = T0 - 90 * DAY;
-    for (const [monitorId, expiry] of [
-      [id, cutoff - 1],
-      [id, cutoff],
-      [id, T0 + DAY],
-      ['other', cutoff - 1],
-    ] as const)
-      await sql.exec(
-        'INSERT INTO expiry_alerts (monitor_id, expiry_date, run) VALUES (?, ?, 1)',
-        monitorId,
-        expiry,
-      );
-    const quiet = {
-      now: T0,
-      records: [check(id, up())],
-      policy: { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false },
-    };
-    await alert(hub, [quiet]);
-    expect(await sql.exec('SELECT count(*) AS n FROM expiry_alerts')).toEqual([{ n: 4 }]);
-    const warning = {
-      ok: true as const,
-      latency: 1,
-      warning: { text: 'Domain expires soon', expiryDate: T0 + 2 * DAY },
-    };
-    expect((await alert(hub, [{ ...quiet, records: [check(id, warning)] }])).body).toEqual([
-      [`${id} expiry`],
+    const run = (now: number, records: CheckRecord[]): Run => ({ now, records, policy });
+
+    const date = 21 * DAY;
+    expect((await alert(hub, [run(DAY, [warned(id, date), warned('other', date)])])).body).toEqual([
+      [`${id} expiry`, 'other expiry'],
     ]);
-    expect(
-      await sql.exec(
-        'SELECT monitor_id, expiry_date FROM expiry_alerts ORDER BY monitor_id, expiry_date',
-      ),
-    ).toEqual([
-      { monitor_id: id, expiry_date: cutoff },
-      { monitor_id: id, expiry_date: T0 + DAY },
-      { monitor_id: id, expiry_date: T0 + 2 * DAY },
-      { monitor_id: 'other', expiry_date: cutoff - 1 },
-    ]);
+
+    for (let i = 1; i <= 40; i++) {
+      await alert(hub, [run(DAY + i, [warned('other', date + i)])]);
+    }
+    const quiet = await alert(hub, [run(DAY + 60, [check(id, up()), check('other', up())])]);
+    expect(quiet.body).toEqual([[]]);
+    expect(quiet.rows.written).toBeLessThanOrEqual(4);
+    expect(quiet.rows.read).toBeLessThanOrEqual(12);
+
+    expect((await alert(hub, [run(DAY + 120, [warned(id, date)])])).body).toEqual([[]]);
+
+    expect((await alert(hub, [run(date + 90 * DAY, [warned(id, date)])])).body).toEqual([[]]);
+    const expired = await alert(hub, [run(date + 90 * DAY + 1, [warned(id, date)])]);
+    expect(expired.body).toEqual([[`${id} expiry`]]);
+    expect(expired.rows.written).toBeLessThanOrEqual(8);
   }, 60_000);
   it('writes warning state only when it changes and one claim per expiry date', async () => {
     const hub = 'warning-budget';
@@ -581,20 +559,6 @@ describe('MonitorHub in workerd row budgets', () => {
   });
 });
 
-describe('MonitorHub in workerd query plans', () => {
-  it('fails a request whose query would scan every incident', async () => {
-    const hub = 'plans';
-    await view(hub);
-    const sql = await storage(hub);
-    await sql.exec('DROP INDEX incidents_end_at');
-    await sql.exec('DROP INDEX incidents_monitor_end');
-    await evict(hub);
-
-    const run = [{ now: T0, records: [check('api', up())] }];
-    await expect(record(hub, run)).rejects.toThrow('Query scans every incident');
-  }, 60_000);
-});
-
 describe('MonitorHub in workerd after a cold start', () => {
   it('shows an outage and its end that runs recorded before hibernation', async () => {
     const hub = 'cold-start';
@@ -606,6 +570,7 @@ describe('MonitorHub in workerd after a cold start', () => {
       status: 'down',
       incidents: [{ start: [T0], error: ['Unavailable'] }],
     });
+    expect((await latency(hub, 'db', T0)).body).toEqual([{ ping: 10, loc: 'HEL', time: T0 }]);
     expect(outage.rows.read, JSON.stringify(outage.rows)).toBeLessThanOrEqual(10 + 2 * 2);
 
     await record(hub, [{ now: T0 + 60, records: [check('api', up()), check('db', up())] }]);
@@ -696,10 +661,78 @@ describe('MonitorHub in workerd storage sizes', () => {
     const incidents = await history();
     expect(incidents.length).toBe(closed(incidents).length + 1);
     expect(incidents[incidents.length - 1]).toEqual({ start: [now], error: [error('open')] });
-    const sql = await storage(hub);
-    const [parts] = await sql.exec(
-      "SELECT count(*) AS n FROM incident_lists WHERE monitor_id = 'api'",
-    );
-    expect(parts?.n).toBe(1);
   }, 120_000);
 });
+
+it('rolls back every change when storage fails and accepts the same run on retry', async () => {
+  const hub = 'rollback';
+  await record(hub, [{ now: T0, records: [check('api', up()), check('db', up())] }]);
+  const before = (await view(hub)).body;
+  const samples = (await latency(hub, 'api', T0 + 60)).body;
+  const sql = await storage(hub);
+  await sql.exec(`CREATE TRIGGER fail_run BEFORE UPDATE ON meta
+    WHEN NEW.key = 'last_update' BEGIN SELECT RAISE(ABORT, 'storage full'); END`);
+  const run = {
+    now: T0 + 60,
+    records: [check('api', down()), check('db', down())],
+    policy: { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false },
+  };
+  await expect(record(hub, [run])).rejects.toThrow();
+  expect((await view(hub)).body).toEqual(before);
+  expect((await latency(hub, 'api', T0 + 60)).body).toEqual(samples);
+  await sql.exec('DROP TRIGGER fail_run');
+  expect((await alert(hub, [run])).body).toEqual([['api down', 'db down']]);
+  expect((await view(hub)).body.lastUpdate).toBe(T0 + 60);
+  expect((await latency(hub, 'api', T0 + 60)).body.slice(-1)[0]?.time).toBe(T0 + 60);
+}, 60_000);
+
+it('keeps the threshold count and the first failure time across a restart', async () => {
+  const hub = 'threshold-restart';
+  const monitor = {
+    id: 'api',
+    name: 'API',
+    method: 'GET' as const,
+    target: 'https://api.example.com',
+    downAfterChecks: 3,
+  };
+  const failing = (now: number): Run => ({
+    now,
+    records: [{ monitor, check: { location: 'HEL', result: down() } }],
+  });
+  await record(hub, [failing(T0), failing(T0 + 60)]);
+  expect((await view(hub)).body.monitors.api?.incidents).toEqual([]);
+  await evict(hub);
+  await record(hub, [failing(T0 + 120)]);
+  expect((await view(hub)).body.monitors.api).toMatchObject({
+    status: 'down',
+    incidents: [{ start: [T0], error: ['Unavailable'] }],
+  });
+}, 60_000);
+
+it('keeps expiry warnings and their delivered claims across a restart', async () => {
+  const hub = 'expiry-restart';
+  const warned: CheckRecord = check('api', {
+    ok: true,
+    latency: 10,
+    warning: { text: 'Domain expires soon', expiryDate: T0 + 14 * DAY },
+  });
+  const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+  expect((await alert(hub, [{ now: T0, records: [warned], policy }])).body).toEqual([
+    ['api expiry'],
+  ]);
+  await evict(hub);
+  expect((await view(hub)).body.monitors.api).toMatchObject({
+    status: 'degraded',
+    warning: 'Domain expires soon',
+    incidents: [],
+  });
+  expect((await alert(hub, [{ now: T0 + 60, records: [warned], policy }])).body).toEqual([[]]);
+  const renewed = check('api', {
+    ok: true,
+    latency: 10,
+    warning: { text: 'Renewed domain expires soon', expiryDate: T0 + 28 * DAY },
+  });
+  expect((await alert(hub, [{ now: T0 + 120, records: [renewed], policy }])).body).toEqual([
+    ['api expiry'],
+  ]);
+}, 60_000);

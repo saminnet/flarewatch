@@ -222,3 +222,38 @@ it.each(['bootstrap-http', 'bootstrap-json', 'lookup-http', 'network', 'redirect
     );
   },
 );
+
+it.each([
+  [45, 'degraded'],
+  [14, 'up'],
+] as const)('applies a custom RDAP warning window of %i days', async (domainExpiryDays, status) => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  const requests: string[] = [];
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+    const url = input instanceof Request ? input.url : String(input);
+    requests.push(url);
+    return Response.json(url === 'https://data.iana.org/rdap/dns.json' ? bootstrap : reply());
+  });
+  const { hub } = createHub();
+  await runChecks(
+    { MONITOR_HUB: hubNamespace(hub) },
+    createWorkerDeps({
+      monitors: [
+        {
+          ...monitor,
+          domainExpiryDays,
+          checkEveryMinutes: 1,
+        },
+      ],
+    }),
+  );
+  expect(hub.view().monitors.a).toMatchObject({ status, incidents: [] });
+  expect(hub.view().monitors.a?.warning).toBe(
+    status === 'degraded' ? 'Domain expires on 2025-02-14 (30 days remaining)' : undefined,
+  );
+  expect(requests).toEqual([
+    'https://data.iana.org/rdap/dns.json',
+    'https://rdap.example/domain/example.com',
+  ]);
+});

@@ -99,7 +99,11 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
   ],
   ['extra top-level keys ignored', { monitors: [], somethingElse: 42 }, true],
   ['statusPage title must be a string', { monitors: [], statusPage: { title: 5 } }, false],
-  ['statusPage theme must be a string', { monitors: [], statusPage: { theme: 42 } }, false],
+  [
+    'statusPage rejects the retired theme field',
+    { monitors: [], statusPage: { theme: 'dark' } },
+    false,
+  ],
   ['statusPage private visibility', { monitors: [], statusPage: { visibility: 'private' } }, true],
   // A typo must not silently leave a private page public.
   ['statusPage unknown visibility', { monitors: [], statusPage: { visibility: 'Private' } }, false],

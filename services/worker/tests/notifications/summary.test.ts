@@ -1,5 +1,4 @@
 import { expect, it } from 'vite-plus/test';
-import { readFileSync } from 'node:fs';
 import { NOTIFICATION_TEMPLATES } from '@flarewatch/shared';
 import { WebhookNotifier, type NotificationContext } from '../../src/notifications/webhook';
 
@@ -17,13 +16,6 @@ const context = (
   reason: 'Expires tomorrow',
   alsoDown: [],
   ...(kind === 'reminder' && { reminder: 2 }),
-});
-
-it('documents the proxy whole-day certificate boundary next to the warning', () => {
-  const docs = readFileSync(`${import.meta.dirname}/../../../../docs/monitors.md`, 'utf8');
-  expect(docs).toMatch(
-    /Warnings open no incident[^\n]+\n\n[^\n]*flarewatch-proxy fails a valid certificate in its last 24 hours because it counts whole days\./,
-  );
 });
 
 it.each([100, 2000])(

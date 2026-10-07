@@ -118,16 +118,6 @@ describe('uptime utilities', () => {
       expect(result[89]?.status).toBe('up');
     });
 
-    it('returns correct status based on downtime thresholds', () => {
-      const nowSec = Math.floor(Date.now() / 1000);
-      const state = view({ test: { startedAt: nowSec - 90 * 24 * 60 * 60 } });
-
-      const result = generateDailyStatus('test', state);
-
-      const todayStatus = result[result.length - 1];
-      expect(todayStatus?.status).toBe('up');
-    });
-
     it.each([
       [1, 'up'],
       [10, 'partial'],

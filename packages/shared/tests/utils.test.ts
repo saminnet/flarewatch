@@ -12,6 +12,8 @@ import {
   success,
   failure,
   formatUtcShort,
+  timingSafeEqual,
+  readJsonUpTo,
 } from '../src/utils';
 import type { MonitorTarget, SSLCertificateInfo } from '../src/types';
 
@@ -104,11 +106,10 @@ describe('fetchWithTimeout', () => {
   });
 
   it('aborts a pending fetch at the default deadline', async () => {
-    const controller = new AbortController();
-    const deadlines: number[] = [];
     vi.stubGlobal('AbortSignal', {
       timeout: (ms: number) => {
-        deadlines.push(ms);
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), ms);
         return controller.signal;
       },
     });
@@ -122,11 +123,16 @@ describe('fetchWithTimeout', () => {
 
     const pending = fetchWithTimeout('https://example.com');
     const assertion = expect(pending).rejects.toThrow('aborted');
-    controller.abort();
+    let settled = false;
+    void pending.catch(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(DEFAULT_HTTP_TIMEOUT - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
     await assertion;
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(deadlines).toEqual([DEFAULT_HTTP_TIMEOUT]);
     vi.unstubAllGlobals();
   });
 
@@ -149,7 +155,8 @@ describe('fetchWithTimeout', () => {
     globalThis.fetch = resolvingFetch;
     await fetchWithTimeout('https://example.com', { timeout: 5000 });
 
-    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(resolvingFetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
     vi.unstubAllGlobals();
   });
 
@@ -334,29 +341,41 @@ describe('validateHttpResponse', () => {
     });
 
     it('skips the body read without keywords', async () => {
-      const text = vi.fn(async () => {
-        throw new Error('body read must not happen');
-      });
-      const response = new Response('anything', { status: 200 });
-      response.text = text;
+      const response = new Response(
+        new ReadableStream<Uint8Array>(
+          {
+            pull() {
+              throw new Error('body read must not happen');
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+        { status: 200 },
+      );
 
       await expect(validateHttpResponse(createMonitor(), response)).resolves.toBeNull();
-      expect(text).not.toHaveBeenCalled();
+      expect(response.bodyUsed).toBe(false);
     });
   });
 
   describe('combined validation', () => {
     it('returns the status error without reading the body', async () => {
-      const text = vi.fn(async () => {
-        throw new Error('body read must not happen');
-      });
-      const response = new Response('ok', { status: 500 });
-      response.text = text;
+      const response = new Response(
+        new ReadableStream<Uint8Array>(
+          {
+            pull() {
+              throw new Error('body read must not happen');
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+        { status: 500 },
+      );
 
       const result = await validateHttpResponse(createMonitor({ responseKeyword: 'ok' }), response);
 
       expect(result).toBe('Expected 2xx status, got 500');
-      expect(text).not.toHaveBeenCalled();
+      expect(response.bodyUsed).toBe(false);
     });
   });
 });
@@ -423,6 +442,7 @@ describe('response assertions', () => {
         at('$.status', 'ok'),
         json({ status: 'token-1234' }),
       );
+      expect(error).toBe('JSON value at $.status is not "ok"');
       expect(error).not.toContain('token-1234');
     });
 
@@ -642,5 +662,38 @@ describe('formatUtcShort', () => {
   it('matches the status page timestamp shape', () => {
     expect(formatUtcShort(Date.parse('2026-09-16T07:02:42Z') / 1000)).toBe('Sep 16, 07:02 UTC');
     expect(formatUtcShort(Date.parse('2026-01-05T00:00:00Z') / 1000)).toBe('Jan 5, 00:00 UTC');
+  });
+});
+
+describe('timingSafeEqual', () => {
+  it.each([
+    ['equal strings', 'abc', 'abc', true],
+    ['unequal strings', 'abc', 'abd', false],
+    ['different lengths', 'abc', 'ab', false],
+    ['a trailing zero byte', 'abc', 'abc\u0000', false],
+    ['empty strings', '', '', true],
+    ['one empty string', '', 'x', false],
+    ['equal UTF-8', 'café 😀', 'café 😀', true],
+    ['unequal UTF-8', 'é', 'è', false],
+  ] as const)('%s', (_case, a, b, equal) => {
+    expect(timingSafeEqual(a, b)).toBe(equal);
+    expect(timingSafeEqual(b, a)).toBe(equal);
+  });
+});
+
+describe('readJsonUpTo', () => {
+  it.each([
+    ['ASCII', '{"ok":true}', 11, { ok: true }],
+    ['UTF-8', '{"v":"é"}', 10, { v: 'é' }],
+  ] as const)('accepts %s JSON of exactly the byte limit', async (_case, body, limit, value) => {
+    await expect(readJsonUpTo(new Response(body), limit)).resolves.toEqual(value);
+  });
+  it.each([
+    ['ASCII', '{"ok":true} ', 11],
+    ['UTF-8', '{"v":"é"} ', 10],
+  ] as const)('rejects %s JSON one byte past the limit', async (_case, body, limit) => {
+    await expect(readJsonUpTo(new Response(body), limit)).rejects.toThrow(
+      `response is over ${limit} bytes`,
+    );
   });
 });

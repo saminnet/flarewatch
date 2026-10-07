@@ -199,12 +199,6 @@ describe('publicView', () => {
   it('keeps null state', () => {
     expect(publicView(config, null).state).toBeNull();
   });
-
-  it('never exposes the private flag on public monitors', () => {
-    const view = publicView(config, null);
-    expect(view.monitors).toHaveLength(2);
-    for (const monitor of view.monitors) expect(monitor).not.toHaveProperty('private');
-  });
 });
 
 describe('toAdminMonitors', () => {

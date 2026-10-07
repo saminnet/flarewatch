@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { HEARTBEAT_RUN_HISTORY } from '@flarewatch/shared';
 import type { HeartbeatView } from '@/lib/heartbeat';
@@ -31,21 +31,15 @@ const heartbeat: HeartbeatView = {
 
 describe('RunStrip', () => {
   it('renders no mobile cells before the container is measured', () => {
-    const { container } = render(
-      <RunStrip heartbeat={heartbeat} periodSeconds={3600} graceSeconds={0} />,
-    );
+    render(<RunStrip heartbeat={heartbeat} periodSeconds={3600} graceSeconds={0} />);
 
-    const mobileGroup = container.querySelector<HTMLElement>('.sm\\:hidden [role="group"]');
-    expect(mobileGroup).toBeTruthy();
-    expect(mobileGroup!.children).toHaveLength(0);
-
-    const desktopGroup = container.querySelector<HTMLElement>('.sm\\:flex [role="group"]');
-    expect(desktopGroup).toBeTruthy();
-    expect(desktopGroup!.children).toHaveLength(HEARTBEAT_RUN_HISTORY);
+    expect(screen.getAllByRole('button', { name: /^Completed at / })).toHaveLength(90);
+    const groups = screen.getAllByRole('group', { name: /^90 runs, 0 missed, 0 failed/ });
+    expect(groups.some((group) => within(group).queryAllByRole('button').length === 0)).toBe(true);
   });
 
   it('renders the strip and a next cell when empty', () => {
-    const { container } = render(
+    render(
       <RunStrip
         heartbeat={{ phase: 'pending', nowSec: 0 }}
         periodSeconds={3600}
@@ -53,14 +47,15 @@ describe('RunStrip', () => {
       />,
     );
 
-    const desktopGroup = container.querySelector<HTMLElement>('.sm\\:flex [role="group"]');
-    expect(desktopGroup).toBeTruthy();
-    expect(desktopGroup!.children).toHaveLength(HEARTBEAT_RUN_HISTORY);
-
-    const nextCell = desktopGroup!.parentElement!.querySelector(
-      '[aria-label="Waiting for the first ping"]',
+    expect(
+      screen.getAllByRole('group', {
+        name: 'No run recorded yet. The first ping starts the schedule.',
+      }),
+    ).toHaveLength(2);
+    expect(screen.queryAllByRole('button', { name: /^(Completed|Failed|Missed) at/ })).toHaveLength(
+      0,
     );
-    expect(nextCell).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Waiting for the first ping' })).toHaveLength(2);
   });
 
   it('labels a failed run cell with its time and outcome', () => {
