@@ -100,10 +100,14 @@ jobs:
         shell: bash
         env:
           HEARTBEAT_SECRET: ${{ secrets.HEARTBEAT_SECRET }}
+          FLAREWATCH_AUTH_SECRET: ${{ secrets.FLAREWATCH_AUTH_SECRET }}
         run: |
-          # One ping URL lets anyone guess a short secret offline.
+          # A ping URL, or the cookie of any sign-in someone starts, lets them guess a short secret offline.
           if [ -n "${HEARTBEAT_SECRET}" ] && [ ${#HEARTBEAT_SECRET} -lt 32 ]; then
             echo "::warning title=Short HEARTBEAT_SECRET::HEARTBEAT_SECRET has fewer than 32 characters. Replace it with the output of 'openssl rand -base64 32', then update your ping URLs."
+          fi
+          if [ -n "${FLAREWATCH_AUTH_SECRET}" ] && [ ${#FLAREWATCH_AUTH_SECRET} -lt 32 ]; then
+            echo "::warning title=Short FLAREWATCH_AUTH_SECRET::FLAREWATCH_AUTH_SECRET has fewer than 32 characters. Replace it with the output of 'openssl rand -base64 32'. Sign-ins in progress then fail once."
           fi
 
           missing=()

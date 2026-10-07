@@ -36,16 +36,16 @@ Your account ID is under **Workers & Pages > Account details**.
 
 In your fork, open **Settings > Secrets and variables > Actions**. Only the first two are required. The rest turn on optional features.
 
-| Secret                        | What it's for                                                                                     |
-| ----------------------------- | ------------------------------------------------------------------------------------------------- |
-| `CLOUDFLARE_ACCOUNT_ID`       | Required. Your account ID.                                                                        |
-| `CLOUDFLARE_API_TOKEN`        | Required. The token from step 2.                                                                  |
-| `FLAREWATCH_ADMIN_BASIC_AUTH` | Signing in to your status page with a password.                                                   |
-| `FLAREWATCH_AUTH_SECRET`      | [Signing in with a provider](status-page.md#sign-in-with-a-provider). Any long random string.     |
-| `FLAREWATCH_OIDC_SECRETS`     | Your providers' client secrets, as JSON: `{"github": "..."}`.                                     |
-| `HEARTBEAT_SECRET`            | [Heartbeat](monitors.md#heartbeats) ping URLs. At least 32 characters: `openssl rand -base64 32`. |
-| `FLAREWATCH_PROXY_TOKEN`      | A [check proxy](monitors.md#other-regions-and-private-networks).                                  |
-| `FLAREWATCH_WEBHOOKS`         | [Alert webhooks](alerts.md) you keep out of git, as JSON.                                         |
+| Secret                        | What it's for                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `CLOUDFLARE_ACCOUNT_ID`       | Required. Your account ID.                                                                                               |
+| `CLOUDFLARE_API_TOKEN`        | Required. The token from step 2.                                                                                         |
+| `FLAREWATCH_ADMIN_BASIC_AUTH` | Signing in to your status page with a password.                                                                          |
+| `FLAREWATCH_AUTH_SECRET`      | [Signing in with a provider](status-page.md#sign-in-with-a-provider). At least 32 characters: `openssl rand -base64 32`. |
+| `FLAREWATCH_OIDC_SECRETS`     | Your providers' client secrets, as JSON: `{"github": "..."}`.                                                            |
+| `HEARTBEAT_SECRET`            | [Heartbeat](monitors.md#heartbeats) ping URLs. At least 32 characters: `openssl rand -base64 32`.                        |
+| `FLAREWATCH_PROXY_TOKEN`      | A [check proxy](monitors.md#other-regions-and-private-networks).                                                         |
+| `FLAREWATCH_WEBHOOKS`         | [Alert webhooks](alerts.md) you keep out of git, as JSON.                                                                |
 
 With the GitHub CLI, each command prompts for the value:
 
