@@ -99,11 +99,7 @@ export class MonitorHub extends DurableObject<Env> {
       const updates: IncidentUpdate[] = [];
       const samples: Samples = {};
       const warningAlerts: Alert[] = [];
-      const warnings = new Map(
-        rows.size > 0
-          ? [...rows].map(([id, row]) => [id, warningSchema.safeParse(parseJson(row.warning)).data])
-          : [],
-      );
+      const warnings = new Map([...rows].map(([id, row]) => [id, parseWarning(row.warning)]));
       const maintenances = this.maintenances();
       const activeMaintenances = maintenances.filter((maintenance) =>
         isMaintenanceActive(maintenance, now * 1000),
@@ -115,10 +111,11 @@ export class MonitorHub extends DurableObject<Env> {
         let result: CheckResult | undefined;
 
         if (record.monitor.method !== 'HEARTBEAT') {
-          if (!('check' in record) || !record.check) continue;
-          result = record.check.result;
+          const check = 'check' in record ? record.check : undefined;
+          if (!check) continue;
+          result = check.result;
           // A proxy names its own location; a long one would bloat the hour's row.
-          samples[monitor.id] = [result.latency ?? 0, record.check.location.slice(0, 64)];
+          samples[monitor.id] = [result.latency ?? 0, check.location.slice(0, 64)];
           // Left from when this id was a heartbeat monitor; the view would show the job's status.
           if (row?.heartbeat) {
             this.sql.exec('UPDATE monitors SET heartbeat = NULL WHERE id = ?', monitor.id);
@@ -210,11 +207,13 @@ export class MonitorHub extends DurableObject<Env> {
             activeMaintenances.some((maintenance) => coversMonitor(maintenance, monitor.id))
           )
             continue;
+          this.sql.exec(
+            'DELETE FROM expiry_alerts WHERE monitor_id = ? AND expiry_date < ?',
+            monitor.id,
+            now - HISTORY_RETENTION_SECONDS,
+          );
           const claimed = this.sql.exec(
-            // SQL batches bind parameters only in the last statement.
-            `DELETE FROM expiry_alerts WHERE monitor_id = '${monitor.id.replaceAll("'", "''")}'
-               AND expiry_date < ${now - HISTORY_RETENTION_SECONDS};
-             INSERT INTO expiry_alerts (monitor_id, expiry_date, run) VALUES (?, ?, ?)
+            `INSERT INTO expiry_alerts (monitor_id, expiry_date, run) VALUES (?, ?, ?)
                ON CONFLICT DO NOTHING RETURNING monitor_id`,
             monitor.id,
             warning.expiryDate,
@@ -345,9 +344,7 @@ export class MonitorHub extends DurableObject<Env> {
         ? latest[row.id]
         : undefined;
       const down = list[list.length - 1]?.end === undefined && list.length > 0;
-      const warning = row.warning
-        ? warningSchema.safeParse(parseJson(row.warning)).data
-        : undefined;
+      const warning = parseWarning(row.warning);
       monitors[row.id] = {
         status: down ? 'down' : (heartbeat?.status ?? (warning ? 'degraded' : 'up')),
         ...(warning && { warning: warning.text }),
@@ -453,6 +450,10 @@ export class MonitorHub extends DurableObject<Env> {
 /** An hour's check runs: run time to that run's samples. */
 const hourSchema = z.record(z.string(), z.record(z.string(), z.tuple([z.number(), z.string()])));
 const warningSchema = z.object({ text: z.string(), expiryDate: z.number() });
+
+function parseWarning(data: string | null) {
+  return warningSchema.safeParse(parseJson(data)).data;
+}
 
 function parseHour(data: string | null): Record<string, Samples> {
   return hourSchema.safeParse(parseJson(data)).data ?? {};

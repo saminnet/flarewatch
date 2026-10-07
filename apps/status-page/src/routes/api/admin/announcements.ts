@@ -3,7 +3,6 @@ import {
   isJsonObject,
   isNonEmptyString,
   normalizeAnnouncement,
-  readJsonUpTo,
   type Announcement,
   type JsonObject,
   type NormalizedAnnouncement,
@@ -15,19 +14,7 @@ import {
   saveAnnouncement,
 } from '@/lib/monitor-worker';
 import { forgetCachedView } from '@/lib/snapshots';
-
-function jsonError(message: string, status: number): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-const MAX_BODY_BYTES = 64 * 1024;
-
-function readBody(request: Request): Promise<unknown> {
-  return readJsonUpTo(request, MAX_BODY_BYTES).catch(() => null);
-}
+import { jsonError, readBody } from '@/lib/admin-http';
 
 function generateAnnouncementId(): string {
   return `ann_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`;

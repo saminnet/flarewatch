@@ -22,11 +22,6 @@ function vpcFetcher(binding: VpcBinding): Fetcher {
   };
 }
 
-/**
- * Runs one check through the Worker's VPC binding: HTTP methods through the binding's fetch,
- * TCP_PING through its connect. Both follow the direct check's rules, because the check still
- * runs in the Worker. Fails with setup advice when the deployment has no binding.
- */
 export async function checkVpc(
   target: MonitorTarget,
   binding: VpcBinding | undefined,

@@ -66,54 +66,49 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
 export class AnnouncementRefused extends Error {}
 
 export async function saveAnnouncement(announcement: Announcement): Promise<void> {
-  const response = await callMonitorWorker(
-    `/announcements/${encodeURIComponent(announcement.id)}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(announcement),
-    },
-  );
-  if (response.status === 400) {
-    const body: unknown = await response.json().catch(() => null);
-    if (isJsonObject(body) && typeof body.error === 'string') {
-      throw new AnnouncementRefused(body.error);
-    }
-  }
-  if (!response.ok) throw new Error(`Saving announcement answered ${response.status}`);
+  return putRecord('announcements', announcement.id, announcement, AnnouncementRefused);
 }
 
 /** The hub turned a window down, for a reason the operator can act on. */
 export class MaintenanceRefused extends Error {}
 
 export async function saveMaintenance(maintenance: Maintenance): Promise<void> {
-  const response = await callMonitorWorker(`/maintenances/${encodeURIComponent(maintenance.id)}`, {
+  return putRecord('maintenances', maintenance.id, maintenance, MaintenanceRefused);
+}
+
+async function putRecord(
+  kind: 'maintenances' | 'announcements',
+  id: string,
+  record: unknown,
+  Refused: new (message: string) => Error,
+): Promise<void> {
+  const response = await callMonitorWorker(`/${kind}/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    body: JSON.stringify(maintenance),
+    body: JSON.stringify(record),
   });
   if (response.status === 400) {
     const body: unknown = await response.json().catch(() => null);
     if (isJsonObject(body) && typeof body.error === 'string') {
-      throw new MaintenanceRefused(body.error);
+      throw new Refused(body.error);
     }
   }
-  if (!response.ok) throw new Error(`Saving maintenance answered ${response.status}`);
+  if (!response.ok) throw new Error(`Saving ${kind.slice(0, -1)} answered ${response.status}`);
 }
 
 export async function deleteMaintenance(id: string): Promise<boolean> {
-  const response = await callMonitorWorker(`/maintenances/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
-  if (response.status === 404) return false;
-  if (!response.ok) throw new Error(`Deleting maintenance answered ${response.status}`);
-  return true;
+  return deleteRecord('maintenances', id);
 }
 
 export async function deleteAnnouncement(id: string): Promise<boolean> {
-  const response = await callMonitorWorker(`/announcements/${encodeURIComponent(id)}`, {
+  return deleteRecord('announcements', id);
+}
+
+async function deleteRecord(kind: 'maintenances' | 'announcements', id: string): Promise<boolean> {
+  const response = await callMonitorWorker(`/${kind}/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
   if (response.status === 404) return false;
-  if (!response.ok) throw new Error(`Deleting announcement answered ${response.status}`);
+  if (!response.ok) throw new Error(`Deleting ${kind.slice(0, -1)} answered ${response.status}`);
   return true;
 }
 

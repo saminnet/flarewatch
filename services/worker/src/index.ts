@@ -98,13 +98,14 @@ export async function runChecks(
       monitor.method !== 'HEARTBEAT' &&
       checkDue(monitor, Math.floor((scheduledAt ?? startedAt) / 60000)),
   );
+  const dueIds = new Set(due.map((monitor) => monitor.id));
   const budget = runBudget(due, webhooks.length, startedAt);
 
   const ctx: CheckContext = { env, budget };
   const records = await Promise.all(
     config.monitors.map(async (monitor): Promise<CheckRecord> => {
       if (monitor.method === 'HEARTBEAT') return { monitor };
-      if (!due.includes(monitor)) return { monitor };
+      if (!dueIds.has(monitor.id)) return { monitor };
       log.info('Checking monitor', { name: monitor.name });
       return { monitor, check: await deps.checkMonitor(monitor, ctx) };
     }),
@@ -151,86 +152,55 @@ export async function runChecks(
     };
   };
   const deliver = async (batch: Alert[]) => {
-    const summaryAfter = config.notification?.summaryAfter;
-    if (notifier && summaryAfter !== undefined) {
-      const entries = batch.flatMap((alert) => {
-        const ctx = context(alert);
-        return ctx ? [{ alert, ctx, delivered: false, attempted: false }] : [];
-      });
-      for (const webhook of webhooks) {
-        const routed = entries.filter(({ alert }) => routes(webhook, alert.monitorId));
+    const summaryAfter = config.notification?.summaryAfter ?? Infinity;
+    const entries = batch.flatMap((alert) => {
+      const ctx = context(alert);
+      return !ctx && summaryAfter !== Infinity && notifier
+        ? []
+        : [{ alert, ctx, delivered: false, attempted: !notifier || !ctx }];
+    });
+    if (notifier) {
+      const recipients: (Webhook | undefined)[] =
+        summaryAfter === Infinity ? [undefined] : webhooks;
+      for (const webhook of recipients) {
+        const routed = webhook
+          ? entries.filter(({ alert }) => routes(webhook, alert.monitorId))
+          : entries;
         const groups = routed.length >= summaryAfter ? [routed] : routed.map((entry) => [entry]);
         for (const group of groups) {
-          if (budget.deadline <= Date.now()) continue;
-          if (!affordAlert(1)) continue;
+          const ctx = group[0]!.ctx;
+          if (!ctx || (webhook && budget.deadline <= Date.now())) continue;
+          const cost = webhook ? 1 : webhooks.filter((hook) => routes(hook, ctx.monitor.id)).length;
+          if (!affordAlert(cost)) continue;
           for (const entry of group) entry.attempted = true;
           try {
-            const remaining = Math.max(1, budget.deadline - Date.now());
-            const result =
-              group.length >= summaryAfter
-                ? await notifier.sendSummary(
-                    webhook,
-                    group.map(({ ctx }) => ctx),
-                    remaining,
-                  )
-                : (
-                    await notifier.send(
-                      group[0]!.ctx,
-                      formatNotificationMessage(group[0]!.ctx),
+            const remaining = webhook ? Math.max(1, budget.deadline - Date.now()) : undefined;
+            const results =
+              webhook && group.length >= summaryAfter
+                ? [
+                    await notifier.sendSummary(
                       webhook,
-                      remaining,
-                    )
-                  )[0];
-            if (result?.success) for (const entry of group) entry.delivered = true;
+                      group.map(({ ctx }) => ctx!),
+                      remaining!,
+                    ),
+                  ]
+                : await notifier.send(ctx, formatNotificationMessage(ctx), webhook, remaining);
+            if (results.some((result) => result.success))
+              for (const entry of group) entry.delivered = true;
           } catch (error) {
-            log.error('Alert failed', { error: String(error) });
+            log.error('Alert failed', {
+              ...(!webhook && { monitor: ctx.monitor.id }),
+              error: String(error),
+            });
           }
         }
       }
-      return entries.map(({ alert, delivered, attempted }): AlertOutcome => ({
-        ...alert,
-        delivered,
-        ...(!attempted && { deferred: true }),
-      }));
     }
-    const outcomes: AlertOutcome[] = [];
-    for (const alert of batch) {
-      const monitor = monitors.get(alert.monitorId);
-      let delivered = false;
-      if (notifier && monitor) {
-        const cost = webhooks.filter((webhook) => routes(webhook, monitor.id)).length;
-        if (!affordAlert(cost)) {
-          outcomes.push({
-            monitorId: alert.monitorId,
-            ...(alert.expiryDate !== undefined && { expiryDate: alert.expiryDate }),
-            incident: alert.incident,
-            kind: alert.kind,
-            reopenedAt: alert.reopenedAt,
-            run: alert.run,
-            delivered,
-            deferred: true,
-          });
-          continue;
-        }
-        const ctx = context(alert)!;
-        try {
-          const results = await notifier.send(ctx, formatNotificationMessage(ctx));
-          delivered = results.some((result) => result.success);
-        } catch (error) {
-          log.error('Alert failed', { monitor: monitor.id, error: String(error) });
-        }
-      }
-      outcomes.push({
-        monitorId: alert.monitorId,
-        ...(alert.expiryDate !== undefined && { expiryDate: alert.expiryDate }),
-        incident: alert.incident,
-        kind: alert.kind,
-        reopenedAt: alert.reopenedAt,
-        run: alert.run,
-        delivered,
-      });
-    }
-    return outcomes;
+    return entries.map(({ alert, delivered, attempted }): AlertOutcome => ({
+      ...alert,
+      delivered,
+      ...(!attempted && { deferred: true }),
+    }));
   };
   // Reporting a down alert's outcome can turn up the recovery of an outage that ended meanwhile.
   for (let batch = alerts; batch.length > 0;) {

@@ -367,7 +367,6 @@ export interface RunBudget {
   subrequests: number;
 }
 
-/** A Workers VPC network binding (beta): `fetch` for HTTP targets, `connect` for `TCP_PING`. */
 export interface VpcBinding {
   fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
   connect(address: string | { hostname: string; port: number }): Promise<{

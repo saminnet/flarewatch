@@ -30,8 +30,7 @@ export function statusText(ctx: TemplateContext): string {
 }
 
 export function notificationBody(ctx: TemplateContext): string {
-  if (ctx.kind === 'summary') return ctx.reason;
-  if (ctx.kind === 'expiry') return ctx.reason;
+  if (ctx.kind === 'summary' || ctx.kind === 'expiry') return ctx.reason;
   if (ctx.kind === 'recovered') {
     return `Recovered after ${ctx.downtimeMinutes} minutes of downtime.`;
   }

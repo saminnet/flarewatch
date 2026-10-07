@@ -29,15 +29,14 @@ export function normalizeAnnouncement(input: unknown, { capped = true } = {}): N
   const end = input.end === undefined ? undefined : parseTime(input.end);
   if (input.end !== undefined && end === undefined) return { error: 'End must be a date' };
 
+  if (capped && body.length > 2000) return { error: 'Body must be at most 2000 characters' };
+  if (capped && title.length > 200) return { error: 'Title must be at most 200 characters' };
+
   const value = {
     title,
     body,
     ...(end !== undefined && { end: new Date(end).toISOString() }),
   };
-  if (capped && body.length > 2000) return { error: 'Body must be at most 2000 characters' };
-  if (capped && title.length > 200) {
-    return { error: 'Title must be at most 200 characters' };
-  }
   return { value };
 }
 
