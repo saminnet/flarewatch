@@ -93,6 +93,7 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
       PRIMARY KEY (monitor_id, expiry_date)
     ) WITHOUT ROWID`,
   ],
+  [`CREATE TABLE announcements (id TEXT PRIMARY KEY, data TEXT NOT NULL) WITHOUT ROWID`],
 ];
 
 export function migrate(sql: Sql): void {

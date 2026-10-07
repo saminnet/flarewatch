@@ -53,7 +53,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           content: 'Open-source uptime monitoring for Cloudflare',
         },
       ],
-      links: [{ rel: 'stylesheet', href: appCss }],
+      links: [
+        { rel: 'stylesheet', href: appCss },
+        {
+          rel: 'alternate',
+          type: 'application/atom+xml',
+          title: 'Status feed',
+          href: '/feed.atom',
+        },
+      ],
     };
   },
 

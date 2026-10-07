@@ -36,7 +36,7 @@ function setup(saved: Maintenance) {
 }
 
 function snapshotWith(maintenances: Maintenance[]): Snapshot {
-  return { monitors: [], groups: {}, state: null, maintenances };
+  return { monitors: [], groups: {}, state: null, maintenances, announcements: [] };
 }
 
 function operatorMaintenances(queryClient: QueryClient): Maintenance[] | undefined {

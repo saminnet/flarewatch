@@ -18,13 +18,25 @@ async function signIn(page: Page): Promise<void> {
 }
 
 test('visitors of a private page get the sign-in page and nothing else', async ({ request }) => {
-  for (const path of ['/', '/history', '/monitors/demo_example', '/embed/demo_example', '/nope']) {
+  for (const path of [
+    '/',
+    '/history',
+    '/monitors/demo_example',
+    '/embed/demo_example',
+    '/feed.atom',
+    '/nope',
+  ]) {
     const response = await request.get(path, { maxRedirects: 0 });
     expect(response.status(), path).toBe(302);
     expect(response.headers().location, path).toMatch(/\/login$/);
   }
 
-  for (const path of ['/api/data', '/api/maintenances', '/api/badge?id=demo_example']) {
+  for (const path of [
+    '/api/data',
+    '/api/maintenances',
+    '/api/badge?id=demo_example',
+    '/api/badge.svg?id=demo_example',
+  ]) {
     expect((await request.get(path)).status(), path).toBe(404);
   }
 

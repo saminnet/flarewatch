@@ -3,9 +3,11 @@ import { createFileRoute } from '@tanstack/react-router';
 import { OverallStatus } from '@/components/overall-status';
 import { MonitorList, type MonitorKindFilter } from '@/components/monitor-list';
 import { MaintenanceAlerts } from '@/components/maintenance/alerts';
+import { AnnouncementBanner } from '@/components/announcements/announcement-banner';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 import { snapshotQuery, uiPrefsQuery } from '@/lib/query/monitors.queries';
 import { useAudience } from '@/lib/hooks/use-audience';
+import { useNow } from '@/lib/hooks/use-now';
 import { audienceOf } from '@/lib/session';
 
 interface IndexSearch {
@@ -31,9 +33,10 @@ function DashboardPage() {
   const navigate = Route.useNavigate();
   const audience = useAudience();
   const {
-    data: { monitors, groups, state, maintenances },
+    data: { monitors, groups, state, maintenances, announcements },
   } = useSuspenseQuery(snapshotQuery(audience));
   const { data: uiPrefs } = useSuspenseQuery(uiPrefsQuery());
+  const nowMs = useNow({ serverTime: (state?.lastUpdate ?? 0) * 1000 });
 
   // State can be null if KV has no data yet (worker hasn't run)
   if (!state) {
@@ -52,6 +55,12 @@ function DashboardPage() {
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="space-y-3">
+        <AnnouncementBanner
+          announcements={announcements}
+          nowMs={nowMs}
+          operator={audience === 'operator'}
+        />
+
         <OverallStatus monitors={monitors} state={state} maintenances={maintenances} />
 
         <MaintenanceAlerts

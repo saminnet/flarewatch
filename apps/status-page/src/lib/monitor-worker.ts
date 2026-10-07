@@ -3,7 +3,9 @@ import {
   isHubView,
   isJsonObject,
   isLatencySamples,
+  isValidAnnouncement,
   isValidMaintenance,
+  type Announcement,
   type CheckResultWithLocation,
   type HubView,
   type LatencySample,
@@ -53,6 +55,33 @@ export async function fetchMaintenances(): Promise<Maintenance[]> {
   return maintenances;
 }
 
+export async function fetchAnnouncements(): Promise<Announcement[]> {
+  const announcements = await fromMonitorWorker('/announcements');
+  if (!Array.isArray(announcements) || !announcements.every(isValidAnnouncement)) {
+    throw new Error('Monitor worker sent invalid announcements');
+  }
+  return announcements;
+}
+
+export class AnnouncementRefused extends Error {}
+
+export async function saveAnnouncement(announcement: Announcement): Promise<void> {
+  const response = await callMonitorWorker(
+    `/announcements/${encodeURIComponent(announcement.id)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(announcement),
+    },
+  );
+  if (response.status === 400) {
+    const body: unknown = await response.json().catch(() => null);
+    if (isJsonObject(body) && typeof body.error === 'string') {
+      throw new AnnouncementRefused(body.error);
+    }
+  }
+  if (!response.ok) throw new Error(`Saving announcement answered ${response.status}`);
+}
+
 /** The hub turned a window down, for a reason the operator can act on. */
 export class MaintenanceRefused extends Error {}
 
@@ -76,6 +105,15 @@ export async function deleteMaintenance(id: string): Promise<boolean> {
   });
   if (response.status === 404) return false;
   if (!response.ok) throw new Error(`Deleting maintenance answered ${response.status}`);
+  return true;
+}
+
+export async function deleteAnnouncement(id: string): Promise<boolean> {
+  const response = await callMonitorWorker(`/announcements/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error(`Deleting announcement answered ${response.status}`);
   return true;
 }
 

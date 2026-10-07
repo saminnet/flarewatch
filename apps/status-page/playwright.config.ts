@@ -51,12 +51,12 @@ export default defineConfig({
     {
       name: 'chromium-public',
       testIgnore: /private-only/,
-      grepInvert: /operator maintenance lifecycle/,
+      grepInvert: /operator (maintenance|announcement) lifecycle/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'chromium-operator',
-      grep: /operator maintenance lifecycle/,
+      grep: /operator (maintenance|announcement) lifecycle/,
       dependencies: ['chromium-public'],
       use: { ...devices['Desktop Chrome'] },
     },

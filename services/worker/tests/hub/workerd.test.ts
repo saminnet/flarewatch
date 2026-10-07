@@ -98,7 +98,7 @@ async function insertHistory(
 it('keeps what it stored across a cold start in workerd', async () => {
   expect((await view('hub')).body.monitors).toEqual({});
   const sql = await storage('hub');
-  expect(await sql.exec('SELECT id FROM _migrations')).toHaveLength(10);
+  expect(await sql.exec('SELECT id FROM _migrations')).toHaveLength(11);
   await sql.exec("INSERT INTO meta (key, value) VALUES ('marker', '1')");
   await evict('hub');
   expect((await view('hub')).body.monitors).toEqual({});
@@ -118,6 +118,7 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
     await sql.exec('ALTER TABLE monitors DROP COLUMN first_failure_at');
     await sql.exec('ALTER TABLE monitors DROP COLUMN warning');
     await sql.exec('DROP TABLE expiry_alerts');
+    await sql.exec('DROP TABLE announcements');
     await sql.exec('ALTER TABLE meta DROP COLUMN runs');
     await sql.exec('ALTER TABLE incidents DROP COLUMN alert_run');
     await sql.exec('ALTER TABLE incidents DROP COLUMN reminders');
@@ -180,7 +181,7 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
       10, 20,
     ]);
     expect(await sql.exec('SELECT count(*) AS n FROM samples')).toEqual([{ n: 0 }]);
-    expect(await sql.exec('SELECT MAX(id) AS id FROM _migrations')).toEqual([{ id: 10 }]);
+    expect(await sql.exec('SELECT MAX(id) AS id FROM _migrations')).toEqual([{ id: 11 }]);
 
     await record(hub, [{ now: T0 + 60, records: [check('api', up()), check('db', up())] }]);
 

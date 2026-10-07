@@ -2,6 +2,7 @@ import * as z from 'zod/mini';
 import {
   NOTIFICATION_TEMPLATES,
   type AccessConfig,
+  type Announcement,
   type CheckResultWithLocation,
   type HeartbeatSignal,
   type HeartbeatState,
@@ -15,6 +16,7 @@ import {
   type Webhook,
 } from './types';
 import { isNormalizedMaintenance, knownZone, normalizeMaintenance } from './maintenance';
+import { isValidAnnouncement } from './announcement';
 import { isJsonObject, isNonEmptyString, isSecureUrl, jsonPathKeys } from './utils';
 
 const PULL_METHODS = [
@@ -610,6 +612,7 @@ const latencySampleSchema = z.object({ loc: z.string(), ping: z.number(), time: 
 const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
   lastUpdate: z.number(),
   maintenances: z.array(z.custom<Maintenance>(isValidMaintenance)),
+  announcements: z.array(z.custom<Announcement>(isValidAnnouncement)),
   monitors: z.record(
     z.string(),
     z.object({

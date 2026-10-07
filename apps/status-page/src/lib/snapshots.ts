@@ -29,15 +29,15 @@ async function triggerInitialCheck(): Promise<boolean> {
 const VIEW_CACHE_MS = 20_000;
 let cachedView: { atMs: number; view: Promise<HubView> } | null = null;
 
-/** After a maintenance edit, so this isolate's visitors see it at once. */
+/** After an operator edit, so this isolate's visitors see it at once. */
 export function forgetCachedView(): void {
   cachedView = null;
 }
 
 /**
  * Visitors get a view reused for 20 s per isolate, so a busy page does not
- * call the hub on every render. The operator always gets a fresh one, so a
- * maintenance edit shows at once.
+ * call the hub on every render. The operator always gets a fresh one, so an
+ * operator edit shows at once.
  */
 async function readHubView(fresh: boolean): Promise<HubView> {
   const nowMs = Date.now();
@@ -64,7 +64,7 @@ function logAndFallback<T>(promise: Promise<T>, message: string, fallback: T): P
 /** A hub failure degrades to empty data instead of an error page. */
 export async function readVisitorSnapshot(): Promise<Snapshot> {
   const view = await logAndFallback(readHubView(false), 'Error fetching monitor state:', null);
-  return visitorSnapshot(getConfig(), view, view?.maintenances ?? []);
+  return visitorSnapshot(getConfig(), view, view?.maintenances ?? [], view?.announcements ?? []);
 }
 
 /** A private-only page serves the visitor snapshot only to someone signed in, for their Visitor view. */
@@ -80,7 +80,7 @@ export const getOperatorSnapshot = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Snapshot> => {
     await requireOperator();
     const view = await readHubView(true);
-    return operatorSnapshot(getConfig(), view, view.maintenances);
+    return operatorSnapshot(getConfig(), view, view.maintenances, view.announcements);
   },
 );
 
@@ -88,7 +88,7 @@ export const getMemberSnapshot = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Snapshot> => {
     const principal = await requireMember();
     const view = await readHubView(true);
-    return memberSnapshot(getConfig(), view, view.maintenances, principal);
+    return memberSnapshot(getConfig(), view, view.maintenances, principal, view.announcements);
   },
 );
 

@@ -3,29 +3,50 @@ import { describe, expect, it } from 'vite-plus/test';
 import { accessConfigIssues, configIssues } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
+import { workerConfig as demoWorker } from '../../../packages/config/src/demo/worker';
+import { pageConfig as demoPage } from '../../../packages/config/src/demo/public';
 import { accessConfig as accessExample } from '../../../packages/config/src/access.example';
 import { pageConfig as pageExample } from '../../../packages/config/src/public.example';
 import { workerConfig as workerExample } from '../../../packages/config/src/worker.example';
 import { planIssues } from '../src/checkers';
 
-describe('packages/config', () => {
+describe.each([
+  ['starter', workerConfig, pageConfig],
+  ['demo', demoWorker, demoPage],
+])('packages/config %s', (_name, worker, page) => {
   it('is valid, so a broken config fails CI instead of deploying', () => {
     expect(
       configIssues({
-        monitors: workerConfig.monitors,
-        statusPage: pageConfig,
-        notification: workerConfig.notification,
+        monitors: worker.monitors,
+        statusPage: page,
+        notification: worker.notification,
       }),
     ).toEqual([]);
   });
 
   it('asks each check location only for what it can do', () => {
-    const issues = workerConfig.monitors.flatMap((monitor) =>
+    const issues = worker.monitors.flatMap((monitor) =>
       monitor.method === 'HEARTBEAT'
         ? []
         : planIssues(monitor).map((issue) => `monitor "${monitor.id}": ${issue}`),
     );
     expect(issues).toEqual([]);
+  });
+});
+
+it('keeps the six demo history ids and gives the demo its own title and deploy link', () => {
+  expect(demoWorker.monitors.map((monitor) => monitor.id)).toEqual([
+    'demo_example',
+    'demo_cloudflare_trace',
+    'demo_cloudflare_status',
+    'demo_cloudflare_docs',
+    'demo_one_dns_trace',
+    'demo_github_status',
+  ]);
+  expect(demoPage.title).toBe('FlareWatch demo');
+  expect(demoPage.links).toContainEqual({
+    label: 'Deploy your own',
+    link: 'https://flarewatch.app/docs/deploy',
   });
 });
 

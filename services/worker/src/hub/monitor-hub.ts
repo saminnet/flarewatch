@@ -5,8 +5,10 @@ import {
   coversMonitor,
   DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   maintenanceExpiresAt,
+  parseAnnouncements,
   parseHeartbeatSignal,
   parseMaintenances,
+  type Announcement,
   type Maintenance,
   parseHeartbeatState,
   type CheckResult,
@@ -30,6 +32,7 @@ const HISTORY_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
 const HOUR = 60 * 60;
 const MAX_MAINTENANCES = 100;
+const MAX_ANNOUNCEMENTS = 50;
 
 /** A check monitor's result, or a heartbeat monitor, which the hub evaluates from its pings. */
 export type CheckRecord =
@@ -359,6 +362,7 @@ export class MonitorHub extends DurableObject<Env> {
       lastUpdate: meta ? Number(meta.value) : 0,
       monitors,
       maintenances: this.maintenances(),
+      announcements: this.announcements(),
     };
   }
 
@@ -390,6 +394,37 @@ export class MonitorHub extends DurableObject<Env> {
   deleteMaintenance(id: string): boolean {
     const [row] = this.sql.exec<{ id: string }>(
       'DELETE FROM maintenances WHERE id = ? RETURNING id',
+      id,
+    );
+    return row !== undefined;
+  }
+
+  announcements(): Announcement[] {
+    return parseAnnouncements(
+      this.sql
+        .exec<{ data: string }>('SELECT data FROM announcements')
+        .map(({ data }) => parseJson(data)),
+    ).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  putAnnouncement(announcement: Announcement): boolean {
+    const [existing] = this.sql.exec('SELECT 1 FROM announcements WHERE id = ?', announcement.id);
+    if (!existing) {
+      const [row] = this.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM announcements');
+      if ((row?.count ?? 0) >= MAX_ANNOUNCEMENTS) return false;
+    }
+    this.sql.exec(
+      `INSERT INTO announcements (id, data) VALUES (?, ?)
+       ON CONFLICT (id) DO UPDATE SET data = excluded.data`,
+      announcement.id,
+      JSON.stringify(announcement),
+    );
+    return true;
+  }
+
+  deleteAnnouncement(id: string): boolean {
+    const [row] = this.sql.exec<{ id: string }>(
+      'DELETE FROM announcements WHERE id = ? RETURNING id',
       id,
     );
     return row !== undefined;

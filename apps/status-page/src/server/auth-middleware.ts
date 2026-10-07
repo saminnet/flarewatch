@@ -62,10 +62,12 @@ export async function authMiddlewareServer(
   const response = result instanceof Response ? result : result.response;
   const pathname = opts.pathname.toLowerCase();
   // Only the embed belongs in another site's frame; a framed sign-in or admin page invites clickjacking.
-  response.headers.set(
-    'Content-Security-Policy',
-    contentSecurityPolicy(cspNonce(opts.request), pathname.startsWith('/embed/')),
-  );
+  if (response.headers.get('Content-Type') !== 'image/svg+xml') {
+    response.headers.set(
+      'Content-Security-Policy',
+      contentSecurityPolicy(cspNonce(opts.request), pathname.startsWith('/embed/')),
+    );
+  }
   // What a signed-in person or an admin script sees must never be stored by a shared cache.
   const env = await resolveRuntimeEnv();
   if (pathname.startsWith('/api/admin') || (await resolveViewer(env, opts.request)) !== 'visitor') {

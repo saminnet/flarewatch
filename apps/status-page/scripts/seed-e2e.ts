@@ -244,6 +244,30 @@ const fixture: HubFixture = {
   },
   heartbeats: heartbeatState,
   maintenances,
+  announcements: [
+    {
+      id: 'ann_old',
+      title: 'E2E older announcement',
+      body: 'First update.',
+      createdAt: (nowSec - 120) * 1000,
+      updatedAt: (nowSec - 120) * 1000,
+    },
+    {
+      id: 'ann_new',
+      title: 'E2E <script> announcement',
+      body: '<b>Plain text</b> & **no Markdown**',
+      createdAt: (nowSec - 60) * 1000,
+      updatedAt: (nowSec - 60) * 1000,
+    },
+    {
+      id: 'ann_ended',
+      title: 'E2E ended announcement',
+      body: 'This has ended.',
+      end: new Date((nowSec - 1) * 1000).toISOString(),
+      createdAt: (nowSec - 180) * 1000,
+      updatedAt: (nowSec - 180) * 1000,
+    },
+  ],
 };
 
 writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`);

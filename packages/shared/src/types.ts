@@ -79,6 +79,21 @@ export type Maintenance = MaintenanceConfig & {
   updatedAt: number;
 };
 
+export type AnnouncementConfig = {
+  title: string;
+  body: string;
+  /** Unix timestamp (ms) or a date/time string. */
+  end?: number | string;
+};
+
+export type Announcement = AnnouncementConfig & {
+  id: string;
+  /** Unix timestamp (ms) */
+  createdAt: number;
+  /** Unix timestamp (ms) */
+  updatedAt: number;
+};
+
 export type PullMethod =
   | 'GET'
   | 'POST'
@@ -314,7 +329,7 @@ export type StatusView = {
 };
 
 /** What the status page reads from the hub in one call. */
-export type HubView = StatusView & { maintenances: Maintenance[] };
+export type HubView = StatusView & { maintenances: Maintenance[]; announcements: Announcement[] };
 
 export interface SSLCertificateInfo {
   /** Unix timestamp (seconds) */

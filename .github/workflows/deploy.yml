@@ -172,6 +172,12 @@ jobs:
             exit 1
           fi
 
+      - name: Use the upstream demo config
+        if: ${{ github.repository == 'saminnet/flarewatch' }}
+        run: |
+          cp packages/config/src/demo/worker.ts packages/config/src/worker.ts
+          cp packages/config/src/demo/public.ts packages/config/src/public.ts
+
       - name: Deploy with Wrangler
         env:
           FLAREWATCH_PROXY_TOKEN: ${{ secrets.FLAREWATCH_PROXY_TOKEN }}

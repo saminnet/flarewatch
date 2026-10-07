@@ -1052,3 +1052,109 @@ test.describe('provider sign-in', () => {
     await expect(page.getByRole('heading', { name: 'Internal Billing API' })).toHaveCount(0);
   });
 });
+
+test('announcement banners show newest first as plain text and hide ended notices', async ({
+  page,
+}) => {
+  const errors = collectClientErrors(page);
+  await page.goto('/');
+  const banners = page.getByLabel('Announcements');
+  await expect(banners.getByRole('heading')).toHaveText([
+    'E2E <script> announcement',
+    'E2E older announcement',
+  ]);
+  await expect(banners.getByText('<b>Plain text</b> & **no Markdown**')).toBeVisible();
+  await expect(banners.locator('script, b, strong')).toHaveCount(0);
+  await expect(page.getByText('E2E ended announcement')).toHaveCount(0);
+  await expect(banners.getByRole('button', { name: /Edit announcement/ })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test.describe.serial('operator announcement lifecycle', () => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'needs the local seeded Wrangler server');
+  test('creates, edits and deletes announcements beside maintenance', async ({ page }) => {
+    const errors = collectClientErrors(page);
+    await page.goto('/');
+    await signIn(page);
+    // The raw-fetch sign-in sets only the cookie; the operator view needs a full
+    // load, because the hydrated app keeps its visitor session until the sign-in
+    // mutation or a page load resets it.
+    await page.goto('/history');
+    await expect(page.getByRole('button', { name: 'Add maintenance window' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Edit announcement E2E ended announcement' }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Add announcement' }).click();
+    const add = page.getByRole('dialog', { name: 'Add announcement' });
+    await expect(add.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await add.getByLabel('Title', { exact: true }).fill('E2E lifecycle announcement');
+    await add.getByLabel('Body', { exact: true }).fill('Created by the operator.');
+    const created = page.waitForResponse(
+      (r) => r.url().endsWith('/api/admin/announcements') && r.request().method() === 'POST',
+    );
+    await add.getByRole('button', { name: 'Save' }).click();
+    expect((await created).status()).toBe(201);
+    await expect(add).not.toBeVisible();
+    await page.goto('/');
+    await expect(page.getByLabel('Announcements').getByRole('heading').first()).toHaveText(
+      'E2E lifecycle announcement',
+    );
+    await page
+      .getByRole('button', { name: 'Edit announcement E2E lifecycle announcement' })
+      .click();
+    const edit = page.getByRole('dialog', { name: 'Edit announcement' });
+    await expect(edit.getByLabel('Body', { exact: true })).toHaveValue('Created by the operator.');
+    await edit.getByLabel('Title', { exact: true }).fill('E2E lifecycle announcement edited');
+    await edit.getByRole('button', { name: 'Save' }).click();
+    await expect(edit).not.toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: 'E2E lifecycle announcement edited' }),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Delete announcement E2E lifecycle announcement edited' })
+      .click();
+    const deleted = page.waitForResponse(
+      (r) => r.url().endsWith('/api/admin/announcements') && r.request().method() === 'DELETE',
+    );
+    await page
+      .getByRole('dialog', { name: 'Delete announcement' })
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click();
+    expect((await deleted).status()).toBe(204);
+    await expect(page.getByText('E2E lifecycle announcement edited')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+});
+
+test('public feed and SVG badge keep private data out and advertise the feed', async ({
+  request,
+}, testInfo) => {
+  const feed = await request.get('/feed.atom');
+  expect(feed.status()).toBe(200);
+  expect(feed.headers()['content-type']).toBe('application/atom+xml; charset=utf-8');
+  const xml = await feed.text();
+  expect(xml).toContain('<feed xmlns="http://www.w3.org/2005/Atom">');
+  expect(xml).toContain('E2E &lt;script&gt; announcement');
+  expect(xml).toContain('E2E active maintenance');
+  expect(xml).toContain('Cloudflare Status API incident');
+  expectNoPrivateMonitorFields(xml);
+  const html = await (await request.get('/')).text();
+  expect(html).toMatch(
+    /<link[^>]*rel="alternate"[^>]*type="application\/atom\+xml"[^>]*href="\/feed.atom"/,
+  );
+  const badge = await request.get('/api/badge.svg?id=demo_example&label=%3Cscript%3E');
+  expect(badge.status()).toBe(200);
+  expect(badge.headers()['content-type']).toBe('image/svg+xml');
+  expect(badge.headers()['x-content-type-options']).toBe('nosniff');
+  expect(badge.headers()['content-security-policy']).toBe(
+    "default-src 'none'; style-src 'unsafe-inline'",
+  );
+  const svg = await badge.text();
+  expect(svg).toContain('&lt;script&gt;');
+  expect(svg).not.toContain('<script>');
+  expect((await request.get(`/api/badge.svg?id=${privateMonitor.id}`)).status()).toBe(404);
+  await testInfo.attach('status-badge.svg', { body: svg, contentType: 'image/svg+xml' });
+  await testInfo.attach('status-feed.atom', { body: xml, contentType: 'application/atom+xml' });
+  await testInfo.attach('announcements.html', { body: html, contentType: 'text/html' });
+});

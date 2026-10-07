@@ -60,5 +60,12 @@ function seed(sql: SqlStorage, f: HubFixture): void {
       JSON.stringify(maintenance),
     );
   }
+  for (const announcement of f.announcements) {
+    sql.exec(
+      'INSERT INTO announcements (id, data) VALUES (?, ?)',
+      announcement.id,
+      JSON.stringify(announcement),
+    );
+  }
   sql.exec("INSERT INTO meta (key, value) VALUES ('last_update', ?)", String(f.lastUpdate));
 }

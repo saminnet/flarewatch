@@ -475,7 +475,12 @@ describe('MonitorHub storage', () => {
 
   it('reports nothing before the first check run', () => {
     const { hub } = createHub();
-    expect(hub.view()).toEqual({ lastUpdate: 0, monitors: {}, maintenances: [] });
+    expect(hub.view()).toEqual({
+      lastUpdate: 0,
+      monitors: {},
+      maintenances: [],
+      announcements: [],
+    });
   });
 });
 
@@ -646,6 +651,7 @@ describe('MonitorHub after an upgrade from 3.2', () => {
       ALTER TABLE monitors DROP COLUMN first_failure_at;
       ALTER TABLE monitors DROP COLUMN warning;
       DROP TABLE expiry_alerts;
+      DROP TABLE announcements;
       ALTER TABLE meta DROP COLUMN runs;
       ALTER TABLE incidents DROP COLUMN alert_run;
       ALTER TABLE incidents DROP COLUMN reminders;
@@ -673,6 +679,7 @@ function rewindTo31(db: DatabaseSync): void {
     ALTER TABLE monitors DROP COLUMN first_failure_at;
     ALTER TABLE monitors DROP COLUMN warning;
     DROP TABLE expiry_alerts;
+    DROP TABLE announcements;
     ALTER TABLE meta DROP COLUMN runs;
     ALTER TABLE incidents DROP COLUMN alert_run;
     ALTER TABLE incidents DROP COLUMN reminders;

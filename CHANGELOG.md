@@ -24,6 +24,10 @@ The current flarewatch-proxy still rejects valid certificates with less than 24 
 
 - `checkEveryMinutes` sets each check monitor's interval from 1 to 1440 minutes. The default remains one minute. Checks spread across stable slots, and skipped monitors keep their status and history. Reminders still count minute runs.
 
+- The upstream demo has separate config files in `packages/config/src/demo`, the title **FlareWatch demo**, and a **Deploy your own** link. Forks keep their starter config files. The demo keeps all six monitor IDs and their history.
+- `/feed.atom` lists the newest 50 public incidents, maintenance windows and announcements, with stable entry IDs. The page head advertises it to feed readers. See [Atom feed](docs/status-page.md#atom-feed).
+- Operators can post announcements from History or `/api/admin/announcements`. Active announcements appear as plain text banners, newest first. The hub keeps at most 50, with titles up to 200 characters and bodies up to 2000. See [Announcements](docs/status-page.md#announcements).
+- `/api/badge.svg` serves a flat SVG badge directly, with the JSON badge's parameters, bounded text and validated colors. See [API, badges and embeds](docs/status-page.md#api-badges-and-embeds).
 - `responseHeaderEquals` and `responseJsonPath` work through flarewatch-proxy 2.0.0 or later, as `checkProxy` or `confirmVia`. An older proxy fails these checks with a message that asks you to update it, because it would skip them and pass. See the table in [Monitors](docs/monitors.md#other-regions-and-private-networks).
 
 ### Fixed
