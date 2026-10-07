@@ -49,7 +49,7 @@ export function AnnouncementBanner({
             />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2">
-                <h3 className="break-words text-sm font-medium text-foreground">
+                <h3 className="wrap-break-word text-sm font-medium text-foreground">
                   {announcement.title}
                 </h3>
                 {announcement.end !== undefined && (
@@ -58,7 +58,7 @@ export function AnnouncementBanner({
                   </span>
                 )}
               </div>
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">
+              <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-foreground">
                 {announcement.body}
               </p>
             </div>

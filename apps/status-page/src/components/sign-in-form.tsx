@@ -24,6 +24,24 @@ interface SignInFormProps {
   error?: string | undefined;
 }
 
+function SignInHeading({
+  privateOnly,
+  providers,
+}: Pick<SignInFormProps, 'privateOnly' | 'providers'>) {
+  return (
+    <div className="mb-4 text-center">
+      <h1 className="text-2xl font-bold text-foreground">Sign in</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {privateOnly
+          ? 'This status page is private.'
+          : providers.length > 0
+            ? 'Sign in to see more of this status page.'
+            : 'For the operator of this status page.'}
+      </p>
+    </div>
+  );
+}
+
 export function SignInForm({ privateOnly, passwordSignIn, providers, error }: SignInFormProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -47,16 +65,7 @@ export function SignInForm({ privateOnly, passwordSignIn, providers, error }: Si
   return (
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="mx-auto w-full max-w-sm">
-        <div className="mb-4 text-center">
-          <h1 className="text-2xl font-bold text-foreground">Sign in</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {privateOnly
-              ? 'This status page is private.'
-              : providers.length > 0
-                ? 'Sign in to see more of this status page.'
-                : 'For the operator of this status page.'}
-          </p>
-        </div>
+        <SignInHeading privateOnly={privateOnly} providers={providers} />
 
         <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
           {loginError && (

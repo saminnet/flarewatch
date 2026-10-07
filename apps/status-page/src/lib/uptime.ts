@@ -76,6 +76,7 @@ export function formatUptimeDisplay(
 export type DayStatus = 'up' | 'down' | 'partial' | 'unknown';
 
 interface DayIncidentDetail {
+  startSec: number;
   startTime: string;
   endTime: string;
   error: string;
@@ -83,6 +84,7 @@ interface DayIncidentDetail {
 
 export interface AggregatedDayIncident extends DayIncidentDetail {
   monitorName: string;
+  monitorId: string;
 }
 
 export interface AggregatedDayData {
@@ -183,6 +185,7 @@ export function generateDailyStatus(monitorId: string, state: StatusView): Daily
             const errorMsg = incident.error[j];
 
             dayIncidents.push({
+              startSec: partStart,
               startTime: formatUtc(new Date(clampedStart * 1000), 'HH:mm'),
               endTime: formatUtc(new Date(clampedEnd * 1000), 'HH:mm'),
               error: errorMsg ?? 'Unknown error',
@@ -260,7 +263,7 @@ export function generateAggregateDailyStatus(
       totalDowntime += dayData.downtime;
 
       for (const incident of dayData.incidents) {
-        incidents.push({ ...incident, monitorName });
+        incidents.push({ ...incident, monitorName, monitorId });
       }
     }
 

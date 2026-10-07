@@ -100,7 +100,7 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <h2 className="text-base sm:text-lg font-semibold text-balance text-foreground">
               {title}
-              {count && (
+              {Boolean(count) && (
                 <span className="whitespace-nowrap font-normal text-muted-foreground">
                   {' '}
                   {count}

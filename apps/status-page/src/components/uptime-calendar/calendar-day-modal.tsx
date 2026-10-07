@@ -68,9 +68,9 @@ export function CalendarDayModal({ data, open, onOpenChange }: CalendarDayModalP
                 {monitorName}
               </div>
               <div className="space-y-2">
-                {incidents.map((incident, i) => (
+                {incidents.map((incident) => (
                   <div
-                    key={`${incident.startTime}-${incident.endTime}-${i}`}
+                    key={`${incident.monitorId}-${incident.startSec}`}
                     className="rounded-md border border-border p-3"
                   >
                     <div className="flex items-start justify-between gap-3">

@@ -210,6 +210,49 @@ function StripCells({
   );
 }
 
+function runDetail(
+  run: HeartbeatRun,
+  index: number,
+  runs: HeartbeatRun[],
+  periodSeconds: number | undefined,
+  graceSeconds: number | undefined,
+): string {
+  const time = formatUtcShort(run.at);
+  if (run.outcome === 'late') {
+    const lateBySec = runLatenessSec(runs, index, periodSeconds, graceSeconds);
+    if (lateBySec > 0) {
+      return `Received ${formatDuration(lateBySec * 1000)} late`;
+    }
+    return `Completed late at ${time}`;
+  }
+  if (run.outcome === 'fail') return `Failed at ${time}`;
+  if (run.outcome === 'miss') return `Missed, expected ${time}`;
+  return `Completed at ${time}`;
+}
+
+function nextCell(heartbeat: HeartbeatView) {
+  const nextKind: NextCellKind =
+    heartbeat.phase === 'pending'
+      ? 'first'
+      : heartbeat.phase === 'running'
+        ? 'running'
+        : heartbeat.phase === 'late'
+          ? 'late'
+          : heartbeat.phase === 'down' && heartbeat.lastResult !== 'fail'
+            ? 'missed'
+            : 'next';
+
+  const nextTimeSec = heartbeat.nextDueSec ?? heartbeat.deadlineSec;
+  const nextDetail =
+    nextKind === 'first'
+      ? 'Waiting for the first ping'
+      : nextTimeSec === undefined
+        ? 'Next run not scheduled yet'
+        : NEXT_DETAIL[nextKind](formatUtcShort(nextTimeSec));
+
+  return { nextKind, nextDetail };
+}
+
 export function RunStrip({
   heartbeat,
   periodSeconds,
@@ -236,38 +279,7 @@ export function RunStrip({
         ? runningDetail
         : 'No run recorded yet. The first ping starts the schedule.';
 
-  function runDetail(run: HeartbeatRun, index: number): string {
-    const time = formatUtcShort(run.at);
-    if (run.outcome === 'late') {
-      const lateBySec = runLatenessSec(runs, index, periodSeconds, graceSeconds);
-      if (lateBySec > 0) {
-        return `Received ${formatDuration(lateBySec * 1000)} late`;
-      }
-      return `Completed late at ${time}`;
-    }
-    if (run.outcome === 'fail') return `Failed at ${time}`;
-    if (run.outcome === 'miss') return `Missed, expected ${time}`;
-    return `Completed at ${time}`;
-  }
-
-  const nextKind: NextCellKind =
-    heartbeat.phase === 'pending'
-      ? 'first'
-      : heartbeat.phase === 'running'
-        ? 'running'
-        : heartbeat.phase === 'late'
-          ? 'late'
-          : heartbeat.phase === 'down' && heartbeat.lastResult !== 'fail'
-            ? 'missed'
-            : 'next';
-
-  const nextTimeSec = heartbeat.nextDueSec ?? heartbeat.deadlineSec;
-  const nextDetail =
-    nextKind === 'first'
-      ? 'Waiting for the first ping'
-      : nextTimeSec === undefined
-        ? 'Next run not scheduled yet'
-        : NEXT_DETAIL[nextKind](formatUtcShort(nextTimeSec));
+  const { nextKind, nextDetail } = nextCell(heartbeat);
 
   const filled: Slot[] = runs.map((run, index) => ({ kind: 'run', run, index }));
   if (running) filled.push({ kind: 'running' });
@@ -281,7 +293,14 @@ export function RunStrip({
     ? Math.min(Math.floor(width / STATUS_BAR.MOBILE_BAR_WIDTH), slots.length)
     : 0;
 
-  const cells = { nextKind, nextDetail, summary, runDetail, runningDetail };
+  const cells = {
+    nextKind,
+    nextDetail,
+    summary,
+    runningDetail,
+    runDetail: (run: HeartbeatRun, index: number) =>
+      runDetail(run, index, runs, periodSeconds, graceSeconds),
+  };
 
   return (
     <>

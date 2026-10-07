@@ -61,6 +61,7 @@ export function MaintenanceFormDialog({
   const createMutation = useCreateMaintenance(callbacks);
   const updateMutation = useUpdateMaintenance(callbacks);
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const selectedMonitors = new Set(formData.monitors);
 
   function handleSubmit() {
     const { start } = formData;
@@ -266,11 +267,11 @@ export function MaintenanceFormDialog({
               {monitors.map((monitor) => (
                 <Badge
                   key={monitor.id}
-                  variant={formData.monitors.includes(monitor.id) ? 'default' : 'outline'}
+                  variant={selectedMonitors.has(monitor.id) ? 'default' : 'outline'}
                   className="cursor-pointer"
                   onClick={() => toggleMonitor(monitor.id)}
                   render={<button type="button" aria-label={monitor.name} />}
-                  aria-pressed={formData.monitors.includes(monitor.id)}
+                  aria-pressed={selectedMonitors.has(monitor.id)}
                 >
                   {monitor.name}
                 </Badge>

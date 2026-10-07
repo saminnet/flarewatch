@@ -15,6 +15,7 @@ export const Route = createFileRoute('/login')({
 
 function LoginPage() {
   const { session } = Route.useRouteContext();
+  const { error } = Route.useSearch();
 
   if (!session.canSignIn) {
     return (
@@ -33,7 +34,7 @@ function LoginPage() {
       privateOnly={session.privateOnly}
       passwordSignIn={session.passwordSignIn}
       providers={session.providers}
-      error={Route.useSearch().error}
+      error={error}
     />
   );
 }
