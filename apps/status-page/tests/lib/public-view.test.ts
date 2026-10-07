@@ -371,12 +371,14 @@ describe('snapshots', () => {
       up: 1,
       late: 1,
       slow: 0,
+      expiry: 0,
       down: 1,
     });
     expect(countStatuses(visitor.monitors, visitor.state!, [])).toEqual({
       up: 1,
       late: 1,
       slow: 0,
+      expiry: 0,
       down: 0,
     });
   });

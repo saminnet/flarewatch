@@ -47,7 +47,7 @@ function isSlow(
   );
 }
 
-export type StatusCounts = { up: number; late: number; slow: number; down: number };
+export type StatusCounts = { up: number; late: number; slow: number; expiry: number; down: number };
 
 /** Monitors the hub has no data for are left out. Pending and running count as up. */
 export function countStatuses(
@@ -55,13 +55,14 @@ export function countStatuses(
   state: StatusView,
   maintenances: Maintenance[],
 ): StatusCounts {
-  const counts: StatusCounts = { up: 0, late: 0, slow: 0, down: 0 };
+  const counts: StatusCounts = { up: 0, late: 0, slow: 0, expiry: 0, down: 0 };
   for (const monitor of monitors) {
     if (!state.monitors[monitor.id]) continue;
     const shown = monitorState(monitor, state, maintenances);
     if (shown === 'down') counts.down++;
     else if (shown !== 'degraded') counts.up++;
     else if (monitor.method === 'HEARTBEAT') counts.late++;
+    else if (state.monitors[monitor.id]?.warning) counts.expiry++;
     else counts.slow++;
   }
   return counts;
@@ -71,9 +72,10 @@ export function getOverallStatus({
   up,
   late,
   slow,
+  expiry,
   down,
 }: StatusCounts): 'operational' | 'degraded' | 'down' {
-  if (down === 0) return late + slow > 0 ? 'degraded' : 'operational';
-  if (up + late + slow > 0) return 'degraded';
+  if (down === 0) return late + slow + expiry > 0 ? 'degraded' : 'operational';
+  if (up + late + slow + expiry > 0) return 'degraded';
   return 'down';
 }

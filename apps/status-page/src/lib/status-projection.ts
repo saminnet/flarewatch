@@ -76,9 +76,9 @@ export function projectPublicData(
     };
   }
 
-  const { up, late, slow, down } = countStatuses(monitors, state, maintenances);
+  const { up, late, slow, expiry, down } = countStatuses(monitors, state, maintenances);
   return {
-    up: up + late + slow,
+    up: up + late + slow + expiry,
     down,
     updatedAt: state.lastUpdate,
     monitors: projectedMonitors,

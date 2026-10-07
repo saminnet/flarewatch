@@ -11,47 +11,91 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('defers summary delivery after the deadline without consuming the down alert attempt', async () => {
-  vi.useFakeTimers({ toFake: ['Date'] });
-  const start = 1800000000000;
-  vi.setSystemTime(start);
-  let slow = true;
-  const sent: string[] = [];
-  vi.stubGlobal(
-    'fetch',
-    vi.fn<typeof fetch>(async (input, init) => {
-      if (input === 'https://hooks.example/all') {
-        sent.push(typeof init?.body === 'string' ? init.body : '');
-        return new Response('ok');
-      }
-      if (slow) vi.setSystemTime(start + 55000);
-      return new Response('down', { status: 503 });
-    }),
-  );
-  const { hub } = createHub();
-  const env = { MONITOR_HUB: hubNamespace(hub) };
-  const deps = {
-    ...createWorkerDeps({
-      monitors: ['a', 'b'].map((id) => ({
-        id,
-        name: id,
-        method: 'GET' as const,
-        target: `https://${id}.example.com`,
-      })),
-      notification: {
-        summaryAfter: 2,
-        webhook: { url: 'https://hooks.example/all', payload: { text: '$MSG' } },
-      },
-    }),
-    createNotifier,
-  };
-  await runChecks(env, deps);
-  expect(sent).toEqual([]);
-  slow = false;
-  vi.setSystemTime(start + 60000);
-  await runChecks(env, deps);
-  expect(sent).toHaveLength(1);
-});
+it.each([2, 3])(
+  'delivers alerts after the check deadline with summaryAfter=%i',
+  async (summaryAfter) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = 1800000000000;
+    vi.setSystemTime(start);
+    const sent: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async (input, init) => {
+        if (input === 'https://hooks.example/all') {
+          sent.push(typeof init?.body === 'string' ? init.body : '');
+          return new Response('ok');
+        }
+        vi.setSystemTime(start + 55000);
+        return new Response('down', { status: 503 });
+      }),
+    );
+    const { hub } = createHub();
+    const env = { MONITOR_HUB: hubNamespace(hub) };
+    const deps = {
+      ...createWorkerDeps({
+        monitors: ['a', 'b'].map((id) => ({
+          id,
+          name: id,
+          method: 'GET' as const,
+          target: `https://${id}.example.com`,
+        })),
+        notification: {
+          summaryAfter,
+          webhook: { url: 'https://hooks.example/all', payload: { text: '$MSG' } },
+        },
+      }),
+      createNotifier,
+    };
+    await runChecks(env, deps);
+    expect(sent).toHaveLength(summaryAfter === 2 ? 1 : 2);
+    vi.setSystemTime(start + 60000);
+    await runChecks(env, deps);
+    expect(sent).toHaveLength(summaryAfter === 2 ? 1 : 2);
+  },
+);
+
+it.each([undefined, 8000])(
+  'keeps the webhook timeout %s near the check deadline',
+  async (timeout) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = 1800000000000;
+    vi.setSystemTime(start);
+    const timeouts: (number | undefined)[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => {
+        vi.setSystemTime(start + 54999);
+        return new Response('down', { status: 503 });
+      }),
+    );
+    const { hub } = createHub();
+    const deps = {
+      ...createWorkerDeps({
+        monitors: ['a', 'b'].map((id) => ({
+          id,
+          name: id,
+          method: 'GET' as const,
+          target: `https://${id}.example.com`,
+        })),
+        notification: {
+          summaryAfter: 2,
+          webhook: {
+            url: 'https://hooks.example/all',
+            payload: '$MSG',
+            ...(timeout !== undefined && { timeout }),
+          },
+        },
+      }),
+      createNotifier: (webhooks: Parameters<typeof createNotifier>[0]) =>
+        createNotifier(webhooks, async (_url, options) => {
+          timeouts.push(options?.timeout);
+          return new Response('ok');
+        }),
+    };
+    await runChecks({ MONITOR_HUB: hubNamespace(hub) }, deps);
+    expect(timeouts).toEqual([timeout ?? 5000]);
+  },
+);
 
 it('summarizes a mass outage per webhook within fifty requests and confirms every listed alert', async () => {
   const monitors = Array.from({ length: 40 }, (_, i) => ({

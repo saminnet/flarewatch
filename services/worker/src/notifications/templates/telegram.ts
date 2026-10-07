@@ -20,7 +20,8 @@ export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
   const alsoDown = alsoDownList(ctx);
   if (alsoDown) lines.push(`<b>Also down:</b> ${escapeHtml(alsoDown)}`);
 
-  lines.push('', `<code>${escapeHtml(ctx.targetUrl)}</code>`, `<i>${ctx.timestamp}</i>`);
+  if (ctx.targetUrl) lines.push('', `<code>${escapeHtml(ctx.targetUrl)}</code>`);
+  lines.push(`<i>${ctx.timestamp}</i>`);
 
   const payload = {
     text: lines.join('\n'),

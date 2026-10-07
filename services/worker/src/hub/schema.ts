@@ -1,5 +1,22 @@
 import { Incidents } from './incidents';
 import type { Sql } from './sql';
+import { parseJson } from './sql';
+import * as z from 'zod/mini';
+import type { LatencySample } from '@flarewatch/shared';
+
+const hourSchema = z.record(z.string(), z.record(z.string(), z.tuple([z.number(), z.string()])));
+const latestSchema = z.record(
+  z.string(),
+  z.object({ ping: z.number(), loc: z.string(), time: z.number() }),
+);
+
+export function parseHour(data: string | null) {
+  return hourSchema.safeParse(parseJson(data)).data ?? {};
+}
+
+export function parseLatest(data: string | null) {
+  return latestSchema.safeParse(parseJson(data)).data ?? {};
+}
 
 // Durable Object SQLite has no PRAGMA user_version, so applied steps are rows
 // in _migrations. Append new steps; never edit a shipped one.
@@ -94,6 +111,38 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
     ) WITHOUT ROWID`,
   ],
   [`CREATE TABLE announcements (id TEXT PRIMARY KEY, data TEXT NOT NULL) WITHOUT ROWID`],
+  [
+    `ALTER TABLE meta ADD COLUMN latest TEXT NOT NULL DEFAULT '{}'`,
+    (sql) => {
+      const ids = new Set(sql.exec<{ id: string }>('SELECT id FROM monitors').map(({ id }) => id));
+      const latest = new Map<string, LatencySample>();
+      const [newest] = sql.exec<{ hour: number }>(
+        'SELECT hour FROM latency ORDER BY hour DESC LIMIT 1',
+      );
+      if (!newest) return;
+      let before = newest.hour + 1;
+      for (;;) {
+        const [hour] = sql.exec<{ hour: number; data: string }>(
+          'SELECT hour, data FROM latency WHERE hour < ? AND hour >= ? ORDER BY hour DESC LIMIT 1',
+          before,
+          newest.hour - 12,
+        );
+        if (!hour) break;
+        for (const [at, samples] of Object.entries(parseHour(hour.data)).sort(
+          ([a], [b]) => Number(b) - Number(a),
+        )) {
+          for (const [id, [ping, loc]] of Object.entries(samples)) {
+            if (ids.has(id) && !latest.has(id)) latest.set(id, { ping, loc, time: Number(at) });
+          }
+        }
+        before = hour.hour;
+      }
+      sql.exec(
+        "UPDATE meta SET latest = ? WHERE key = 'last_update'",
+        JSON.stringify(Object.fromEntries(latest)),
+      );
+    },
+  ],
 ];
 
 export function migrate(sql: Sql): void {

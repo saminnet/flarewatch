@@ -24,7 +24,7 @@ import type { Env } from '../env';
 import { Alerts, type Alert, type AlertOutcome, type AlertPolicy } from './alerts';
 import { applyPing, evaluateHeartbeat, withMisses, type PingKind } from './heartbeat';
 import { Incidents, type IncidentUpdate } from './incidents';
-import { migrate } from './schema';
+import { migrate, parseHour, parseLatest } from './schema';
 import { durableObjectSql, parseJson, type Sql } from './sql';
 
 /** How long History keeps closed incidents and ended maintenance windows. */
@@ -82,8 +82,8 @@ export class MonitorHub extends DurableObject<Env> {
     policy?: AlertPolicy,
   ): { updates: IncidentUpdate[]; alerts: Alert[] } {
     return this.sql.transaction(() => {
-      const [last] = this.sql.exec<{ value: string; runs: number }>(
-        "SELECT value, runs FROM meta WHERE key = 'last_update'",
+      const [last] = this.sql.exec<{ value: string; runs: number; latest: string }>(
+        "SELECT value, runs, latest FROM meta WHERE key = 'last_update'",
       );
       // A run that outlasted a later one would put older results over newer ones.
       if (last && now < Number(last.value)) return { updates: [], alerts: [] };
@@ -98,6 +98,7 @@ export class MonitorHub extends DurableObject<Env> {
       const open = this.incidents.open();
       const updates: IncidentUpdate[] = [];
       const samples: Samples = {};
+      const latest = new Map(Object.entries(parseLatest(last?.latest ?? null)));
       const warningAlerts: Alert[] = [];
       const warnings = new Map([...rows].map(([id, row]) => [id, parseWarning(row.warning)]));
       const maintenances = this.maintenances();
@@ -116,6 +117,11 @@ export class MonitorHub extends DurableObject<Env> {
           result = check.result;
           // A proxy names its own location; a long one would bloat the hour's row.
           samples[monitor.id] = [result.latency ?? 0, check.location.slice(0, 64)];
+          latest.set(monitor.id, {
+            ping: result.latency ?? 0,
+            loc: check.location.slice(0, 64),
+            time: now,
+          });
           // Left from when this id was a heartbeat monitor; the view would show the job's status.
           if (row?.heartbeat) {
             this.sql.exec('UPDATE monitors SET heartbeat = NULL WHERE id = ?', monitor.id);
@@ -257,10 +263,18 @@ export class MonitorHub extends DurableObject<Env> {
         }
       }
       this.sql.exec(
-        `INSERT INTO meta (key, value, runs) VALUES ('last_update', ?, ?)
-         ON CONFLICT (key) DO UPDATE SET value = excluded.value, runs = excluded.runs`,
+        `INSERT INTO meta (key, value, runs, latest) VALUES ('last_update', ?, ?, ?)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, runs = excluded.runs, latest = excluded.latest`,
         String(now),
         run,
+        JSON.stringify(
+          Object.fromEntries(
+            records.flatMap(({ monitor }) => {
+              const sample = latest.get(monitor.id);
+              return monitor.method !== 'HEARTBEAT' && sample ? [[monitor.id, sample]] : [];
+            }),
+          ),
+        ),
       );
       const alerts = policy
         ? this.alerts.decide(
@@ -323,16 +337,11 @@ export class MonitorHub extends DurableObject<Env> {
   }
 
   view(): HubView {
-    const [meta] = this.sql.exec<{ value: string }>(
-      "SELECT value FROM meta WHERE key = 'last_update'",
+    const [meta] = this.sql.exec<{ value: string; latest: string }>(
+      "SELECT value, latest FROM meta WHERE key = 'last_update'",
     );
     const incidents = this.incidents.byMonitor();
-    const [hour] = this.sql.exec<{ data: string }>(
-      'SELECT data FROM latency ORDER BY hour DESC LIMIT 1',
-    );
-    const runs = parseHour(hour?.data ?? null);
-    const latestAt = Math.max(...Object.keys(runs).map(Number));
-    const latest = runs[latestAt] ?? {};
+    const latest = parseLatest(meta?.latest ?? null);
 
     const monitors: Record<string, MonitorView> = {};
     for (const row of this.sql.exec<MonitorRow>(
@@ -350,7 +359,7 @@ export class MonitorHub extends DurableObject<Env> {
         ...(warning && { warning: warning.text }),
         incidents: list,
         ...(row.started_at !== null && { startedAt: row.started_at }),
-        ...(sample && { latest: { ping: sample[0], loc: sample[1], time: latestAt } }),
+        ...(sample && { latest: sample }),
         ...(heartbeat && { heartbeat }),
       };
     }
@@ -447,14 +456,8 @@ export class MonitorHub extends DurableObject<Env> {
   }
 }
 
-/** An hour's check runs: run time to that run's samples. */
-const hourSchema = z.record(z.string(), z.record(z.string(), z.tuple([z.number(), z.string()])));
 const warningSchema = z.object({ text: z.string(), expiryDate: z.number() });
 
 function parseWarning(data: string | null) {
   return warningSchema.safeParse(parseJson(data)).data;
-}
-
-function parseHour(data: string | null): Record<string, Samples> {
-  return hourSchema.safeParse(parseJson(data)).data ?? {};
 }

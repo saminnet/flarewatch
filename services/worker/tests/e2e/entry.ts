@@ -67,5 +67,15 @@ function seed(sql: SqlStorage, f: HubFixture): void {
       JSON.stringify(announcement),
     );
   }
-  sql.exec("INSERT INTO meta (key, value) VALUES ('last_update', ?)", String(f.lastUpdate));
+  const latest = Object.fromEntries(
+    Object.entries(f.latency).flatMap(([id, recent]) => {
+      const last = [...recent].sort((a, b) => b.time - a.time)[0];
+      return last ? [[id, last]] : [];
+    }),
+  );
+  sql.exec(
+    "INSERT INTO meta (key, value, latest) VALUES ('last_update', ?, ?)",
+    String(f.lastUpdate),
+    JSON.stringify(latest),
+  );
 }

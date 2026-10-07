@@ -43,7 +43,7 @@ const statusConfig = {
 
 export function OverallStatus({ monitors, state, maintenances }: OverallStatusProps) {
   const counts = countStatuses(monitors, state, maintenances);
-  const { up, late, slow, down } = counts;
+  const { up, late, slow, expiry, down } = counts;
   const monitorCount = monitors.length;
   const jobCount = monitors.filter((monitor) => monitor.method === 'HEARTBEAT').length;
   const status = getOverallStatus(counts);
@@ -60,6 +60,14 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
     if (status !== 'degraded') return [config.title];
 
     if (down === 0) {
+      if (expiry > 0) {
+        if (late + slow === 0)
+          return [
+            'Some systems have expiry warnings',
+            `(${expiry} out of ${monitorCount - jobCount})`,
+          ];
+        return ['Some systems are degraded', `(${late + slow + expiry} out of ${monitorCount})`];
+      }
       if (slow === 0) return ['Some jobs are running late', `(${late} out of ${jobCount})`];
       if (late === 0) {
         return ['Some systems are slow', `(${slow} out of ${monitorCount - jobCount})`];
@@ -100,7 +108,13 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
               )}
             </h2>
             <Badge variant={config.badgeVariant} className="shrink-0">
-              {[`${up} up`, late > 0 && `${late} late`, slow > 0 && `${slow} slow`, `${down} down`]
+              {[
+                `${up} up`,
+                late > 0 && `${late} late`,
+                slow > 0 && `${slow} slow`,
+                expiry > 0 && `${expiry} expiry warning${expiry === 1 ? '' : 's'}`,
+                `${down} down`,
+              ]
                 .filter(Boolean)
                 .join(' / ')}
             </Badge>

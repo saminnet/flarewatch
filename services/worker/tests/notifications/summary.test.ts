@@ -30,7 +30,7 @@ it.each([100, 2000])(
     const contexts = Array.from({ length: 50 }, (_, i) =>
       context(i < 25 ? 'down' : 'expiry', `${i}`.padEnd(length, 'x')),
     );
-    expect((await notifier.sendSummary(webhook, contexts, 1000)).success).toBe(true);
+    expect((await notifier.sendSummary(webhook, contexts)).success).toBe(true);
     expect(text.length).toBeLessThanOrEqual(1900);
     const listed = text.split('\n').filter((line) => line.startsWith('- '));
     expect(text.split('\n').pop()).toBe(`and ${50 - listed.length} more`);
@@ -66,7 +66,7 @@ it.each(NOTIFICATION_TEMPLATES)(
       context('recovered', 'Recovered', 60),
       context('down', 'Down'),
     ];
-    expect((await notifier.sendSummary(webhook, contexts, 1000)).success).toBe(true);
+    expect((await notifier.sendSummary(webhook, contexts)).success).toBe(true);
     const text = requests[0]?.text ?? '';
     for (const name of ['Certificate', 'Reminder', 'Changed', 'Recovered', 'Down'])
       expect(text).toContain(name);
@@ -75,8 +75,19 @@ it.each(NOTIFICATION_TEMPLATES)(
     expect(text.indexOf('Still down')).toBeLessThan(text.indexOf('Reminders'));
     expect(text.indexOf('Reminders')).toBeLessThan(text.indexOf('Expiry warnings'));
     expect(text).not.toContain('https://example.com');
+    if (template === 'discord') {
+      const payload = JSON.parse(text) as {
+        embeds: { fields: { name: string; value: string }[] }[];
+      };
+      expect(payload.embeds[0]?.fields.some((field) => field.name === 'Target')).toBe(false);
+      expect(payload.embeds[0]?.fields.every((field) => field.value.length > 0)).toBe(true);
+    }
+    if (template === 'pushover')
+      expect(new URLSearchParams(requests[0]?.text).has('url')).toBe(false);
+    if (template === 'telegram') expect(text).not.toContain('<code></code>');
+    if (template === 'zulip') expect(text).not.toContain('- Target: ');
     if (template === 'matrix') {
-      await notifier.sendSummary(webhook, contexts, 1000);
+      await notifier.sendSummary(webhook, contexts);
       expect(requests[0]?.url).not.toBe(requests[1]?.url);
     }
   },

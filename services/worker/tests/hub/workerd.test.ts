@@ -1,6 +1,12 @@
 import { createTestHarness } from 'wrangler';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vite-plus/test';
-import type { CheckResult, HubView, Incident, LatencySample } from '@flarewatch/shared';
+import type {
+  CheckResult,
+  HubView,
+  Incident,
+  LatencySample,
+  MonitorTarget,
+} from '@flarewatch/shared';
 import type { CheckRecord } from '../../src/hub/monitor-hub';
 import type { Rows, Run } from '../workerd/entry';
 
@@ -23,7 +29,7 @@ const FLAP_SECONDS = 15 * 60;
 const up = (latency = 10): CheckResult => ({ ok: true, latency });
 const down = (error = 'Unavailable'): CheckResult => ({ ok: false, error });
 
-function check(id: string, result: CheckResult): CheckRecord {
+function check(id: string, result: CheckResult): CheckRecord & { monitor: MonitorTarget } {
   return {
     monitor: { id, name: id, method: 'GET', target: `https://${id}.example.com` },
     check: { location: 'HEL', result },
@@ -62,6 +68,51 @@ const storage = (hub: string) =>
   server.getWorker().getDurableObjectStorage('MONITOR_HUB', { name: hub });
 
 const closed = (incidents: Incident[]) => incidents.filter(({ end }) => end !== undefined);
+
+it('keeps each skipped monitor’s latest sample across hours, retention and restart', async () => {
+  const hub = 'skipped-latest';
+  const slow = check('constructor', up(900));
+  slow.monitor.checkEveryMinutes = 1440;
+  const skipped = { monitor: slow.monitor };
+  await record(hub, [{ now: T0, records: [slow, check('api', up(10))] }]);
+  for (const now of [T0 + 60, T0 + HOUR, T0 + 13 * HOUR]) {
+    await record(hub, [{ now, records: [skipped, check('api', up(20))] }]);
+    await evict(hub);
+    const result = await view(hub);
+    expect(result.body.monitors[slow.monitor.id]?.latest).toEqual({
+      ping: 900,
+      loc: 'HEL',
+      time: T0,
+    });
+    expect(result.body.monitors.api?.latest).toEqual({ ping: 20, loc: 'HEL', time: now });
+    expect(result.rows.read).toBeLessThanOrEqual(6);
+  }
+  expect((await latency(hub, 'constructor', T0 + 13 * HOUR)).body).toEqual([]);
+}, 60_000);
+
+it('backfills each monitor’s latest sample on upgrade before any new check', async () => {
+  const hub = 'latest-upgrade';
+  await record(hub, [{ now: T0, records: [check('api', up(900)), check('db', up(10))] }]);
+  await record(hub, [
+    { now: T0 + HOUR, records: [{ monitor: check('api', up()).monitor }, check('db', up(20))] },
+  ]);
+  const sql = await storage(hub);
+  await sql.exec('DELETE FROM _migrations WHERE id >= 12');
+  const columns = await sql.exec('PRAGMA table_info(meta)');
+  if (columns.some(({ name }) => name === 'latest'))
+    await sql.exec('ALTER TABLE meta DROP COLUMN latest');
+  await sql.exec(
+    'INSERT INTO latency (hour, data) VALUES (?, ?)',
+    Math.floor(T0 / HOUR) - 1,
+    'not json',
+  );
+  await evict(hub);
+  const upgraded = await view(hub);
+  expect(upgraded.body.monitors.api?.latest).toEqual({ ping: 900, loc: 'HEL', time: T0 });
+  expect(upgraded.body.monitors.db?.latest).toEqual({ ping: 20, loc: 'HEL', time: T0 + HOUR });
+  await evict(hub);
+  expect((await view(hub)).body).toEqual(upgraded.body);
+}, 60_000);
 
 async function insertHistory(
   sql: Awaited<ReturnType<typeof storage>>,
@@ -110,6 +161,7 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
     await sql.exec('DROP TABLE expiry_alerts');
     await sql.exec('DROP TABLE announcements');
     await sql.exec('ALTER TABLE meta DROP COLUMN runs');
+    await sql.exec('ALTER TABLE meta DROP COLUMN latest');
     await sql.exec('ALTER TABLE incidents DROP COLUMN alert_run');
     await sql.exec('ALTER TABLE incidents DROP COLUMN reminders');
     await sql.exec('DROP TABLE incident_lists');
@@ -482,7 +534,7 @@ describe('MonitorHub in workerd row budgets', () => {
 
   it('reads the same few rows for a view at 300 and 3,000 incidents', () => {
     expect(large.view, report()).toEqual(small.view);
-    expect(small.view.read, report()).toBeLessThanOrEqual(10 + 2 * MONITORS.length);
+    expect(small.view.read, report()).toBeLessThanOrEqual(16);
   });
 
   it('reads a row per hour for a monitor’s latency, however long the history', () => {

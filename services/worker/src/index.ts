@@ -169,22 +169,20 @@ export async function runChecks(
         const groups = routed.length >= summaryAfter ? [routed] : routed.map((entry) => [entry]);
         for (const group of groups) {
           const ctx = group[0]!.ctx;
-          if (!ctx || (webhook && budget.deadline <= Date.now())) continue;
+          if (!ctx) continue;
           const cost = webhook ? 1 : webhooks.filter((hook) => routes(hook, ctx.monitor.id)).length;
           if (!affordAlert(cost)) continue;
           for (const entry of group) entry.attempted = true;
           try {
-            const remaining = webhook ? Math.max(1, budget.deadline - Date.now()) : undefined;
             const results =
               webhook && group.length >= summaryAfter
                 ? [
                     await notifier.sendSummary(
                       webhook,
                       group.map(({ ctx }) => ctx!),
-                      remaining!,
                     ),
                   ]
-                : await notifier.send(ctx, formatNotificationMessage(ctx), webhook, remaining);
+                : await notifier.send(ctx, formatNotificationMessage(ctx), webhook);
             if (results.some((result) => result.success))
               for (const entry of group) entry.delivered = true;
           } catch (error) {

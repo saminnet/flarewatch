@@ -252,34 +252,24 @@ export class WebhookNotifier {
     private readonly fetcher: Fetcher = fetchWithTimeout,
   ) {}
 
-  async send(
-    ctx: NotificationContext,
-    message: string,
-    only?: Webhook,
-    remainingMs?: number,
-  ): Promise<WebhookResult[]> {
+  async send(ctx: NotificationContext, message: string, only?: Webhook): Promise<WebhookResult[]> {
     const configs = only ? [only] : Array.isArray(this.config) ? this.config : [this.config];
     return Promise.all(
       configs
         .filter((webhook) => routes(webhook, ctx.monitor.id))
-        .map((webhook) => this.sendSingle(webhook, ctx, message, remainingMs)),
+        .map((webhook) => this.sendSingle(webhook, ctx, message)),
     );
   }
 
-  async sendSummary(
-    webhook: Webhook,
-    contexts: NotificationContext[],
-    remainingMs: number,
-  ): Promise<WebhookResult> {
+  async sendSummary(webhook: Webhook, contexts: NotificationContext[]): Promise<WebhookResult> {
     const ctx = summaryContext(contexts);
-    return this.sendSingle(webhook, ctx, formatNotificationMessage(ctx), remainingMs);
+    return this.sendSingle(webhook, ctx, formatNotificationMessage(ctx));
   }
 
   private async sendSingle(
     webhook: Webhook,
     ctx: NotificationContext,
     message: string,
-    remainingMs?: number,
   ): Promise<WebhookResult> {
     const { url, template, method, headers, payload, payloadType, timeout = 5000 } = webhook;
     let finalUrl = url;
@@ -328,7 +318,7 @@ export class WebhookNotifier {
 
       const response = await this.fetcher(finalUrl, {
         ...requestInit,
-        timeout: Math.min(timeout, remainingMs ?? timeout),
+        timeout,
       });
 
       if (!response.ok) {

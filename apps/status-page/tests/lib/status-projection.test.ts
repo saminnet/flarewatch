@@ -49,6 +49,7 @@ describe('status projection', () => {
       message: 'Certificate expires soon',
     });
     expect(projectBadgeStatus(publicMonitor('api'), state, [])).toEqual({ status: 'degraded' });
+    expect(projectPublicData([publicMonitor('api')], state, [])).toMatchObject({ up: 1, down: 0 });
   });
   it('projects public data without exposing raw monitor state', () => {
     const state = createState({

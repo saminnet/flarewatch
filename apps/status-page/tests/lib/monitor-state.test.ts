@@ -157,35 +157,49 @@ describe('countStatuses', () => {
       },
     };
 
-    expect(countStatuses(monitors, state, [])).toEqual({ up: 3, late: 1, slow: 1, down: 2 });
+    expect(countStatuses(monitors, state, [])).toEqual({
+      up: 3,
+      late: 1,
+      slow: 1,
+      expiry: 0,
+      down: 2,
+    });
   });
 });
 
 describe('getOverallStatus', () => {
   const overall: Array<[string, StatusCounts, ReturnType<typeof getOverallStatus>]> = [
-    ['operational when all monitors are up', { up: 3, late: 0, slow: 0, down: 0 }, 'operational'],
+    [
+      'operational when all monitors are up',
+      { up: 3, late: 0, slow: 0, expiry: 0, down: 0 },
+      'operational',
+    ],
     [
       'degraded when a job is late and none are down',
-      { up: 3, late: 1, slow: 0, down: 0 },
+      { up: 3, late: 1, slow: 0, expiry: 0, down: 0 },
       'degraded',
     ],
     [
       'degraded when a check is slow and none are down',
-      { up: 3, late: 0, slow: 1, down: 0 },
+      { up: 3, late: 0, slow: 1, expiry: 0, down: 0 },
       'degraded',
     ],
-    ['degraded when some monitors are down', { up: 2, late: 0, slow: 0, down: 1 }, 'degraded'],
+    [
+      'degraded when some monitors are down',
+      { up: 2, late: 0, slow: 0, expiry: 0, down: 1 },
+      'degraded',
+    ],
     [
       'degraded when the only monitors not down are late',
-      { up: 0, late: 1, slow: 0, down: 2 },
+      { up: 0, late: 1, slow: 0, expiry: 0, down: 2 },
       'degraded',
     ],
     [
       'degraded when the only monitors not down are slow',
-      { up: 0, late: 0, slow: 1, down: 2 },
+      { up: 0, late: 0, slow: 1, expiry: 0, down: 2 },
       'degraded',
     ],
-    ['down when all monitors are down', { up: 0, late: 0, slow: 0, down: 3 }, 'down'],
+    ['down when all monitors are down', { up: 0, late: 0, slow: 0, expiry: 0, down: 3 }, 'down'],
   ];
 
   it.each(overall)('is %s', (_name, counts, expected) => {
