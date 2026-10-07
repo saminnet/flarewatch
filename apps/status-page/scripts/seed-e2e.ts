@@ -254,8 +254,8 @@ const fixture: HubFixture = {
     },
     {
       id: 'ann_new',
-      title: 'E2E <script> announcement',
-      body: '<b>Plain text</b> & **no Markdown**',
+      title: 'E2E support hours',
+      body: 'Support is closed on Friday.',
       createdAt: (nowSec - 60) * 1000,
       updatedAt: (nowSec - 60) * 1000,
     },

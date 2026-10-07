@@ -1041,18 +1041,15 @@ test.describe('provider sign-in', () => {
   });
 });
 
-test('announcement banners show newest first as plain text and hide ended notices', async ({
-  page,
-}) => {
+test('announcement banners show newest first and hide ended notices', async ({ page }) => {
   const errors = collectClientErrors(page);
   await page.goto('/');
   const banners = page.getByLabel('Announcements');
   await expect(banners.getByRole('heading')).toHaveText([
-    'E2E <script> announcement',
+    'E2E support hours',
     'E2E older announcement',
   ]);
-  await expect(banners.getByText('<b>Plain text</b> & **no Markdown**')).toBeVisible();
-  await expect(banners.locator('script, b, strong')).toHaveCount(0);
+  await expect(banners.getByText('Support is closed on Friday.')).toBeVisible();
   await expect(page.getByText('E2E ended announcement')).toHaveCount(0);
   await expect(banners.getByRole('button', { name: /Edit announcement/ })).toHaveCount(0);
   expect(errors).toEqual([]);
@@ -1060,6 +1057,8 @@ test('announcement banners show newest first as plain text and hide ended notice
 
 test.describe.serial('operator announcement lifecycle', () => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'needs the local seeded Wrangler server');
+  const MARKUP_BODY = '<script>alert(1)</script> <b>Created</b> by **the operator**.';
+
   test('creates, edits and deletes announcements beside maintenance', async ({ page }) => {
     const errors = collectClientErrors(page);
     await page.goto('/');
@@ -1076,7 +1075,7 @@ test.describe.serial('operator announcement lifecycle', () => {
     const add = page.getByRole('dialog', { name: 'Add announcement' });
     await expect(add.getByRole('button', { name: 'Save' })).toBeDisabled();
     await add.getByLabel('Title', { exact: true }).fill('E2E lifecycle announcement');
-    await add.getByLabel('Body', { exact: true }).fill('Created by the operator.');
+    await add.getByLabel('Body', { exact: true }).fill(MARKUP_BODY);
     const created = page.waitForResponse(
       (r) => r.url().endsWith('/api/admin/announcements') && r.request().method() === 'POST',
     );
@@ -1084,16 +1083,17 @@ test.describe.serial('operator announcement lifecycle', () => {
     expect((await created).status()).toBe(201);
     await expect(add).not.toBeVisible();
     await page.goto('/');
-    await expect(page.getByLabel('Announcements').getByRole('heading').first()).toHaveText(
-      'E2E lifecycle announcement',
-    );
+    const banners = page.getByLabel('Announcements');
+    await expect(banners.getByRole('heading').first()).toHaveText('E2E lifecycle announcement');
+    await expect(banners.getByText(MARKUP_BODY)).toBeVisible();
+    await expect(banners.locator('script, b, strong')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Edit announcement/ })).toHaveCount(0);
     await page.goto('/history');
     await page
       .getByRole('button', { name: 'Edit announcement E2E lifecycle announcement' })
       .click();
     const edit = page.getByRole('dialog', { name: 'Edit announcement' });
-    await expect(edit.getByLabel('Body', { exact: true })).toHaveValue('Created by the operator.');
+    await expect(edit.getByLabel('Body', { exact: true })).toHaveValue(MARKUP_BODY);
     await edit.getByLabel('Title', { exact: true }).fill('E2E lifecycle announcement edited');
     await edit.getByRole('button', { name: 'Save' }).click();
     await expect(edit).not.toBeVisible();
@@ -1125,7 +1125,6 @@ test('public feed and SVG badge keep private data out and advertise the feed', a
   expect(feed.headers()['content-type']).toBe('application/atom+xml; charset=utf-8');
   const xml = await feed.text();
   expect(xml).toContain('<feed xmlns="http://www.w3.org/2005/Atom">');
-  expect(xml).toContain('E2E &lt;script&gt; announcement');
   expect(xml).toContain('E2E active maintenance');
   expect(xml).toContain('Cloudflare Status API incident');
   expectNoPrivateMonitorFields(xml);
