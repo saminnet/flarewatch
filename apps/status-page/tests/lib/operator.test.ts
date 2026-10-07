@@ -6,7 +6,7 @@ import {
   passwordIdentity,
   resolvePrincipal,
   resolveViewer,
-  sessionName,
+  signedInAs,
   startSession,
 } from '@/lib/operator.server';
 import { isSessionExpiredError, SessionExpiredError } from '@/lib/query/auth.mutations';
@@ -182,7 +182,22 @@ describe('provider sessions', () => {
     await expect(
       resolvePrincipal(providerEnv(kv), requestWithCookie(cookie), { ...access, members: [] }),
     ).resolves.toBeNull();
-    await expect(sessionName(providerEnv(kv), requestWithCookie(cookie))).resolves.toBe('Kim');
+    await expect(signedInAs(providerEnv(kv), requestWithCookie(cookie))).resolves.toMatchObject({
+      name: 'Kim',
+    });
+  });
+
+  it('tells two sign-ins with the same name apart', async () => {
+    const kv = memoryKv();
+    const first = `flarewatch_admin_session=${await startSession(kv, null, kim)}`;
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    const second = `flarewatch_admin_session=${await startSession(kv, null, kim)}`;
+
+    const [a, b] = await Promise.all(
+      [first, second].map((cookie) => signedInAs(providerEnv(kv), requestWithCookie(cookie))),
+    );
+    expect(a?.name).toBe(b?.name);
+    expect(a?.since).not.toBe(b?.since);
   });
 
   it('treats a session whose identity is malformed as a visitor', async () => {

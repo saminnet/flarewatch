@@ -4,12 +4,14 @@ import { getConfig, isPrivateOnly } from './config';
 import { resolveRuntimeEnv } from './runtime-env';
 import { getRequest } from '@tanstack/react-start/server';
 import { accessConfig } from '@flarewatch/config/access';
-import { getViewer, isSignInConfigured, sessionName, type Viewer } from './operator.server';
+import { getViewer, isSignInConfigured, signedInAs, type Viewer } from './operator.server';
 
 export type Session = {
   viewer: Viewer;
   /** Who is signed in; null for visitors and in dev without sign-in. */
   name: string | null;
+  /** When this sign-in started, which tells two sign-ins with the same name apart. */
+  signedInAt: number | null;
   canSignIn: boolean;
   passwordSignIn: boolean;
   providers: { id: string; name: string }[];
@@ -22,11 +24,12 @@ export const getSessionServerFn = createServerFn({ method: 'GET' }).handler(
     const env = await resolveRuntimeEnv();
     const viewer = await getViewer();
     const secret = env.FLAREWATCH_ADMIN_BASIC_AUTH;
-    const providerName = viewer === 'visitor' ? null : await sessionName(env, getRequest());
+    const signedIn = viewer === 'visitor' ? null : await signedInAs(env, getRequest());
     const passwordName = secret ? (parseAuthSecret(secret)?.username ?? null) : null;
     return {
       viewer,
-      name: viewer === 'visitor' ? null : (providerName ?? passwordName),
+      name: viewer === 'visitor' ? null : (signedIn?.name ?? passwordName),
+      signedInAt: signedIn?.since ?? null,
       canSignIn: isSignInConfigured(env),
       passwordSignIn: Boolean(secret),
       providers: (accessConfig.providers ?? []).map(({ id, name }) => ({ id, name })),

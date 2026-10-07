@@ -31,11 +31,11 @@ You can roll back to 3.3.0 on the same storage. Take the new fields out of your 
 
 ### Fixed
 
-- When someone else signs in on the same browser, an open tab now drops the private data of the account before. Before, leaving visitor view in that tab could show it again.
+- When someone else signs in on the same browser, every open tab of the status page reloads as that account. Before, an open tab could still show the private monitors of the account before, for example after leaving visitor view.
 - The first check run that a page view starts on a fresh deploy now runs once, even when several status-page instances serve the first visitors.
 - A repeating maintenance window with a start date near the end of the JavaScript date range no longer stops the check runs of every monitor.
 - When the Worker can't find its data center, the checks of one run share that failed lookup, and the next run tries again. Before, each check tried again and spent requests that the run keeps for checks and alerts.
-- A proxy that sends back its `FLAREWATCH_PROXY_TOKEN` in its location no longer shows the token on the status page or in latency history.
+- A proxy that sends back its `FLAREWATCH_PROXY_TOKEN` in its location, or as a reply that isn't JSON, no longer shows the token on the status page or in latency history.
 - A sign-in link with a `next` path such as `/.//example.com/` no longer sends you to another site after you sign in.
 - A config with `expectedCodes: []`, an empty `responseKeyword` or `responseForbiddenKeyword`, or `responseHeaderEquals: {}` now fails the config check, so the unit tests fail and the deploy stops. Before, an empty `expectedCodes` failed every check with "Expected status , got 200", and the other three checked nothing.
 - A target URL with a username and password, such as `https://user:secret@example.com`, now fails the config check. A Worker dropped them and sent the request without them, so the check never signed in. Send them in `headers` instead.

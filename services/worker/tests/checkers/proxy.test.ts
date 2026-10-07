@@ -247,6 +247,20 @@ describe('checkExternalProxy', () => {
     });
   });
 
+  it('keeps the proxy token out of the error when the proxy answers with no JSON', async () => {
+    fetchMock.mockResolvedValue(new Response('Bearer proxy-secret', { status: 200 }));
+
+    const { result } = await checkExternalProxy(
+      createTarget(),
+      PROXY_URL,
+      { FLAREWATCH_PROXY_TOKEN: 'proxy-secret' },
+      fetchMock,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain('proxy-secret');
+  });
+
   describe('header and JSON checks', () => {
     const TOO_OLD = {
       location: 'ERROR',

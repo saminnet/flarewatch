@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { isJsonObject } from '@flarewatch/shared';
 import type { Session } from '@/lib/session';
@@ -59,41 +59,30 @@ export function useSignOut() {
     mutationFn: async (): Promise<void> => {
       await fetch('/api/admin/session', { method: 'DELETE' });
     },
-    // Even when the request fails, drop the operator view from this tab.
-    onSettled: () => forgetAccount(queryClient, router),
+    // Even when the request fails, drop the operator view from this tab. The
+    // operator snapshot goes last: the page still reads it until it reloads.
+    onSettled: async () => {
+      queryClient.removeQueries({ queryKey: qk.session });
+      await router.navigate({ to: '.', search: (prev) => ({ ...prev, view: undefined }) });
+      queryClient.removeQueries({ queryKey: qk.operatorSnapshot });
+      queryClient.removeQueries({ queryKey: qk.memberSnapshot });
+      queryClient.removeQueries({ queryKey: qk.allLatency });
+    },
   });
 }
 
-/** The private snapshots go last: the page still reads them until it reloads. */
-async function forgetAccount(
-  queryClient: QueryClient,
-  router: ReturnType<typeof useRouter>,
-): Promise<void> {
-  queryClient.removeQueries({ queryKey: qk.session });
-  await router.navigate({ to: '.', search: (prev) => ({ ...prev, view: undefined }) });
-  queryClient.removeQueries({ queryKey: qk.operatorSnapshot });
-  queryClient.removeQueries({ queryKey: qk.memberSnapshot });
-  queryClient.removeQueries({ queryKey: qk.allLatency });
-}
-
-/**
- * Tabs share one cookie, so a sign-in or sign-out in one tab changes the
- * account of all. Each tab says who it shows, and a tab that hears someone
- * else forgets its account, so it cannot show that account's data again.
- */
+/** Tabs share one cookie. A tab that hears another account reloads, because its cache still holds the old one. */
 export function useAccountSync(session: Session): void {
-  const queryClient = useQueryClient();
-  const router = useRouter();
-  const account = `${session.viewer}:${session.name ?? ''}`;
+  const account = JSON.stringify([session.viewer, session.name, session.signedInAt]);
 
   useEffect(() => {
     const channel = new BroadcastChannel('flarewatch-account');
     channel.onmessage = ({ data }) => {
-      if (data !== account) void forgetAccount(queryClient, router);
+      if (data !== account) window.location.reload();
     };
     channel.postMessage(account);
     return () => channel.close();
-  }, [account, queryClient, router]);
+  }, [account]);
 }
 
 export function isSessionExpiredError(error: unknown): boolean {
