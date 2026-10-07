@@ -208,7 +208,11 @@ export class MonitorHub extends DurableObject<Env> {
           )
             continue;
           const claimed = this.sql.exec(
-            'INSERT INTO expiry_alerts (monitor_id, expiry_date, run) VALUES (?, ?, ?) ON CONFLICT DO NOTHING RETURNING monitor_id',
+            // SQL batches bind parameters only in the last statement.
+            `DELETE FROM expiry_alerts WHERE monitor_id = '${monitor.id.replaceAll("'", "''")}'
+               AND expiry_date < ${now - HISTORY_RETENTION_SECONDS};
+             INSERT INTO expiry_alerts (monitor_id, expiry_date, run) VALUES (?, ?, ?)
+               ON CONFLICT DO NOTHING RETURNING monitor_id`,
             monitor.id,
             warning.expiryDate,
             run,

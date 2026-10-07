@@ -21,7 +21,7 @@ export class MonitorHub extends Hub {
     Object.defineProperty(ctx.storage, 'sql', {
       value: {
         exec: (query: string, ...bindings: unknown[]) => {
-          if (migrated) {
+          if (migrated && query.includes('incidents')) {
             const plan = sql.exec(`EXPLAIN QUERY PLAN ${query}`, ...bindings).toArray();
             if (
               plan.some(

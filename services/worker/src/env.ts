@@ -1,7 +1,14 @@
+import type { VpcBinding } from '@flarewatch/shared';
 import type { MonitorHub } from './hub/monitor-hub';
 
 export interface Env {
   MONITOR_HUB?: DurableObjectNamespace<MonitorHub>;
+  /**
+   * Runs `checkProxy: 'vpc'` checks through a Workers VPC network. Optional on purpose: the
+   * committed wrangler.toml has no [[vpc_networks]] block, so a fork without a tunnel deploys it
+   * unchanged and every vpc monitor fails with an error that says to add the binding.
+   */
+  VPC?: VpcBinding;
   /** Sent as `Authorization: Bearer <token>` on every external proxy check. */
   FLAREWATCH_PROXY_TOKEN?: string;
   /** Webhooks as JSON, one or a list, that get alerts alongside `notification.webhook`. */

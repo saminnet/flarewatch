@@ -204,15 +204,16 @@ function optionalBoolean(field: string) {
 
 /** Where a check runs. The message never quotes the value: a Globalping URL holds a token. */
 function checkLocation(field: string) {
-  const error = `${field} must be an http(s) URL or globalping://<token>`;
+  const error = `${field} must be an http(s) URL, globalping://<token> or 'vpc'`;
   return z
     .string({ error })
     .check(
       z.refine(
         (value) =>
-          value.startsWith('globalping://')
+          value === 'vpc' ||
+          (value.startsWith('globalping://')
             ? Boolean(URL.parse(value)?.hostname)
-            : isValidHttpUrl(value),
+            : isValidHttpUrl(value)),
         { error },
       ),
     );
@@ -241,9 +242,7 @@ const pullMonitorShape = {
       }),
     ),
   ),
-  domainExpiryDays: z.optional(
-    z.number().check(z.gte(0, { error: 'domainExpiryDays must be a non-negative number' })),
-  ),
+  domainExpiryDays: z.optional(intInRange('domainExpiryDays', 1, 365)),
   tooltip: optionalString('tooltip'),
   hideLatencyChart: optionalBoolean('hideLatencyChart'),
   expectedCodes: z.optional(

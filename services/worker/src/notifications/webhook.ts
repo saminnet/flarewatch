@@ -118,10 +118,20 @@ function summaryContext(contexts: NotificationContext[]): NotificationContext {
           : '';
     groups.get(group)!.push(`- ${singleLine(ctx.monitor.name)}${detail}`);
   }
-  const reason = [...groups]
-    .filter(([, lines]) => lines.length > 0)
-    .map(([name, lines]) => `${name}\n${lines.join('\n')}`)
-    .join('\n\n');
+  let reason = '';
+  let included = 0;
+  groups: for (const [name, lines] of groups) {
+    for (const [index, line] of lines.entries()) {
+      const next = `${reason}${index === 0 ? `${reason ? '\n\n' : ''}${name}\n` : '\n'}${line}`;
+      const remaining = contexts.length - included - 1;
+      const tail = remaining > 0 ? `\nand ${remaining} more` : '';
+      if (next.length + tail.length > 1900) break groups;
+      reason = next;
+      included++;
+    }
+  }
+  if (included < contexts.length)
+    reason += `${reason ? '\n' : ''}and ${contexts.length - included} more`;
   return {
     monitor: {
       id: 'summary',

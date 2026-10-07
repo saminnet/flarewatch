@@ -2,6 +2,30 @@ import { expect, it } from 'vite-plus/test';
 import type { CheckResult, PullMonitor } from '@flarewatch/shared';
 import { createHub } from '../helpers/hub';
 
+it('executes expiry cleanup before the bound claim in the SQLite adapter', () => {
+  const { hub, db } = createHub();
+  const id = "api'; --";
+  db.prepare('INSERT INTO expiry_alerts VALUES (?, 1, 1)').run(id);
+  const monitor: PullMonitor = { id, name: 'API', method: 'GET', target: 'https://example.com' };
+  const { alerts } = hub.record(
+    10_000_000,
+    [
+      {
+        monitor,
+        check: {
+          location: 'HEL',
+          result: { ok: true, latency: 1, warning: { text: 'Expiry', expiryDate: 11_000_000 } },
+        },
+      },
+    ],
+    { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false },
+  );
+  expect(alerts.map(({ kind }) => kind)).toEqual(['expiry']);
+  expect(db.prepare('SELECT expiry_date FROM expiry_alerts').all()).toEqual([
+    { expiry_date: 11_000_000 },
+  ]);
+});
+
 it('closes old certificate downtime, persists a warning and alerts once per expiry date after maintenance', () => {
   const { hub } = createHub();
   const monitor: PullMonitor = {

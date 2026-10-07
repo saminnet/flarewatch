@@ -78,7 +78,7 @@ Set `dnsResolver` to another HTTPS endpoint with the same JSON API. A DNS status
 
 Use a registrable domain, such as `example.com` or `example.co.uk`. FlareWatch reads the TLD's service from the [IANA RDAP bootstrap file](https://www.iana.org/assignments/rdap-dns) and checks its expiration event. The default interval is 1440 minutes, with the same stable slots as other checks. Override it with `checkEveryMinutes`.
 
-`domainExpiryDays` defaults to 30 and accepts a non-negative number. Inside the window, the monitor shows as degraded and sends one warning per expiry date, as certificate warnings do. An expired domain fails. A missing RDAP service, failed lookup, missing expiration event or invalid reply also fails, with the cause in the error. Bootstrap and RDAP responses are capped at 1 MiB. Some TLDs publish only an HTTP service; FlareWatch prefers HTTPS when IANA lists both.
+`domainExpiryDays` defaults to 30 and accepts an integer from 1 to 365. Inside the window, the monitor shows as degraded and sends one warning per expiry date, as certificate warnings do. An expired domain fails. A missing RDAP service, failed lookup, missing expiration event or invalid reply also fails, with the cause in the error. Bootstrap and RDAP responses are capped at 1 MiB. FlareWatch uses only HTTPS services and redirects. A TLD with only an HTTP service fails the check.
 
 Each lookup reserves two subrequests. Redirects spend spare requests and stop at the run deadline. DOMAIN monitors use the RDAP service directly and refuse proxies, HTTP request settings and HTTP assertions.
 
@@ -169,27 +169,57 @@ By default the Worker runs each check itself. `checkProxy` runs it somewhere els
 
 - `globalping://<token>?magic=fra&ipVersion=4` runs it from [Globalping](https://www.jsdelivr.com/globalping) probes in that location. `TCP_PING` monitors can then set `pingProtocol: 'icmp'`. Keep the token out of git.
 - `https://your-proxy.example.com/check` sends it to [flarewatch-proxy](https://github.com/saminnet/flarewatch-proxy), which you run where it can reach your private network. Set the `FLAREWATCH_PROXY_TOKEN` secret to the proxy's token.
+- `vpc` runs it through the Worker's `VPC` binding. See [Check a private network through Workers VPC](#check-a-private-network-through-workers-vpc) below.
 
-When the proxy fails, the check fails. Set `checkProxyFallback: true` to fall back to a direct check.
+When the proxy fails, the check fails. Set `checkProxyFallback: true` to fall back to a direct check. This applies to `vpc` too: the fallback then runs from the Worker itself, over the public internet.
+
+### Check a private network through Workers VPC
+
+Set `checkProxy: 'vpc'`, or `confirmVia: 'vpc'`, to check a target the Worker reaches through a [Workers VPC](https://developers.cloudflare.com/workers-vpc/) network: HTTP through the binding's `fetch`, `TCP_PING` through its `connect`. The check runs in the Worker and follows the same rules as a direct one, including redirects, keywords, headers and JSON. Workers VPC is in beta and free on every Workers plan.
+
+The binding is yours to add, because the committed `services/worker/wrangler.toml` stays without one: a fork without a tunnel deploys it unchanged. Put this block in that file, with your tunnel's UUID:
+
+```toml
+[[vpc_networks]]
+binding = "VPC"
+tunnel_id = "550e8400-e29b-41d4-a716-446655440000"
+remote = true
+```
+
+The tunnel needs a running `cloudflared` that can reach your target, and routes for its private addresses. `remote = true` lets `wrangler dev` use the real network. Deploy, then point a monitor at a private address:
+
+```ts
+{
+  id: 'redis',
+  name: 'Redis',
+  method: 'TCP_PING',
+  target: '10.0.1.50:6379',
+  checkProxy: 'vpc',
+}
+```
+
+A monitor set to `vpc` on a Worker without the binding fails every check with an error that says to add it. With `checkProxyFallback: true`, it runs the direct check instead and records that result.
+
+Releases change `wrangler.toml` too. When a release touches the file, GitHub can't sync your fork and offers a pull request instead. Merge from a clone as [Update your fork](deploy.md#update-your-fork) describes, keep your `[[vpc_networks]]` block, and take the release's side everywhere else.
 
 For certificate expiry, set `sslCheckEnabled: true` and `sslCheckDaysBeforeExpiry: 14`. This needs Globalping or a proxy, because the Worker can't see the certificate. `sslCheckDaysBeforeExpiry` must be a whole number from 0 to 3650.
 
 A valid certificate inside this window marks the monitor as degraded, with its expiry date. FlareWatch sends one warning per monitor and expiry date, without retrying a failed delivery. A covering maintenance window pauses the alert. Renewal clears the warning, and the renewed certificate sends its own warning when it enters the window. Warnings open no incident and do not affect uptime. An expired or invalid certificate still fails the check.
 
-FlareWatch sends a threshold of zero to flarewatch-proxy. The current proxy rounds remaining days down and still rejects a valid certificate with less than 24 hours left. That boundary needs a proxy update. Globalping uses the exact expiry time.
+FlareWatch sends a threshold of zero to flarewatch-proxy. flarewatch-proxy fails a valid certificate in its last 24 hours because it counts whole days. Globalping uses the exact expiry time.
 
 After upgrading, the next successful check closes an incident caused only by the old certificate threshold. Its closed history stays. Rollback keeps the stored history, but restores the old rule: a near-expiry certificate fails again and can reopen that incident. Remove the new config fields before deploying older code.
 
 Not every place can run every check:
 
-| Setting                | From the Worker             | Globalping                   | External proxy |
-| ---------------------- | --------------------------- | ---------------------------- | -------------- |
-| `method`               | HTTP, TCP_PING, DNS, DOMAIN | GET, HEAD, OPTIONS, TCP_PING | HTTP, TCP_PING |
-| `body`                 | yes                         | no                           | yes            |
-| `sslCheckEnabled`      | no                          | yes                          | yes            |
-| `pingProtocol: 'icmp'` | no                          | yes                          | no             |
-| `responseHeaderEquals` | yes                         | no                           | 2.0.0 or later |
-| `responseJsonPath`     | yes                         | yes                          | 2.0.0 or later |
+| Setting                | From the Worker             | VPC binding    | Globalping                   | External proxy |
+| ---------------------- | --------------------------- | -------------- | ---------------------------- | -------------- |
+| `method`               | HTTP, TCP_PING, DNS, DOMAIN | HTTP, TCP_PING | GET, HEAD, OPTIONS, TCP_PING | HTTP, TCP_PING |
+| `body`                 | yes                         | yes            | no                           | yes            |
+| `sslCheckEnabled`      | no                          | no             | yes                          | yes            |
+| `pingProtocol: 'icmp'` | no                          | no             | yes                          | no             |
+| `responseHeaderEquals` | yes                         | yes            | no                           | 2.0.0 or later |
+| `responseJsonPath`     | yes                         | yes            | yes                          | 2.0.0 or later |
 
 A monitor that asks a place for something it can't do fails on every check, with an error that names the setting, such as `sslCheckEnabled is not supported by a direct check`. This counts the fallback too: `sslCheckEnabled` with `checkProxyFallback: true` fails, because the fallback runs from the Worker. The unit tests run the same rules on your config, so the deploy stops before such a monitor goes live.
 

@@ -38,6 +38,15 @@ function createConfigWithMonitor(monitor: MonitorOverrides) {
 const isValid = (value: unknown) => configIssues(value).length === 0;
 
 describe('config validation', () => {
+  it('accepts only domain expiry integers from 1 to 365', () => {
+    const config = (domainExpiryDays: number) =>
+      createConfigWithMonitor({ method: 'DOMAIN', target: 'example.com', domainExpiryDays });
+    for (const days of [1, 30, 365]) expect(configIssues(config(days))).toEqual([]);
+    for (const days of [-1, 0, 1.5, 366, Infinity, NaN])
+      expect(configIssues(config(days)).join()).toContain(
+        'domainExpiryDays must be an integer from 1 to 365',
+      );
+  });
   it('accepts summaryAfter from two to fifty and leaves it off when absent', () => {
     for (const summaryAfter of [2, 50])
       expect(configIssues({ monitors: [], notification: { summaryAfter } })).toEqual([]);
@@ -492,14 +501,25 @@ describe('config validation', () => {
     ],
     [{ responseHeaderEquals: { 'Bad Name': 'x' } }, 'responseHeaderEquals: bad header name'],
     [{ responseHeaderEquals: { 'X-A': 1 } }, 'responseHeaderEquals values must be strings'],
-    [{ checkProxy: 'worker://local' }, 'checkProxy must be an http(s) URL or globalping://<token>'],
-    [{ checkProxy: 'globalping://' }, 'checkProxy must be an http(s) URL or globalping://<token>'],
+    [
+      { checkProxy: 'worker://local' },
+      "checkProxy must be an http(s) URL, globalping://<token> or 'vpc'",
+    ],
+    [
+      { checkProxy: 'globalping://' },
+      "checkProxy must be an http(s) URL, globalping://<token> or 'vpc'",
+    ],
+    [{ checkProxy: 'vpc ' }, "checkProxy must be an http(s) URL, globalping://<token> or 'vpc'"],
     [{ pingProtocol: 'udp' }, "pingProtocol must be 'tcp' or 'icmp'"],
-    [{ confirmVia: 'worker://local' }, 'confirmVia must be an http(s) URL or globalping://<token>'],
+    [
+      { confirmVia: 'worker://local' },
+      "confirmVia must be an http(s) URL, globalping://<token> or 'vpc'",
+    ],
     [
       { checkProxy: 'globalping://T?magic=fra', confirmVia: 'globalping://T?magic=fra' },
       'confirmVia must be another place than checkProxy',
     ],
+    [{ checkProxy: 'vpc', confirmVia: 'vpc' }, 'confirmVia must be another place than checkProxy'],
   ])('rejects the monitor field %j and names the rule', (overrides, rule) => {
     expect(configIssues(createConfigWithMonitor(overrides)).join('\n')).toContain(rule);
   });
@@ -509,6 +529,8 @@ describe('config validation', () => {
     { responseKeyword: 'x' },
     { responseForbiddenKeyword: 'x' },
     { responseHeaderEquals: { 'X-A': '' } },
+    { checkProxy: 'vpc' },
+    { confirmVia: 'vpc' },
   ])('accepts the shortest useful value %j', (overrides) => {
     expect(configIssues(createConfigWithMonitor(overrides))).toEqual([]);
   });

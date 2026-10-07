@@ -1,4 +1,5 @@
 import { expect, it } from 'vite-plus/test';
+import { readFileSync } from 'node:fs';
 import { NOTIFICATION_TEMPLATES } from '@flarewatch/shared';
 import { WebhookNotifier, type NotificationContext } from '../../src/notifications/webhook';
 
@@ -17,6 +18,40 @@ const context = (
   alsoDown: [],
   ...(kind === 'reminder' && { reminder: 2 }),
 });
+
+it('documents the proxy whole-day certificate boundary next to the warning', () => {
+  const docs = readFileSync(`${import.meta.dirname}/../../../../docs/monitors.md`, 'utf8');
+  expect(docs).toMatch(
+    /Warnings open no incident[^\n]+\n\n[^\n]*flarewatch-proxy fails a valid certificate in its last 24 hours because it counts whole days\./,
+  );
+});
+
+it.each([100, 2000])(
+  'bounds summaries with %i-character names and counts omitted alerts',
+  async (length) => {
+    let text = '';
+    const webhook = { url: 'https://hooks.example/summary', payload: '$MSG' };
+    const notifier = new WebhookNotifier(webhook, async (_url, options) => {
+      text = JSON.parse(typeof options?.body === 'string' ? options.body : '') as string;
+      return new Response('ok');
+    });
+    const contexts = Array.from({ length: 50 }, (_, i) =>
+      context(i < 25 ? 'down' : 'expiry', `${i}`.padEnd(length, 'x')),
+    );
+    expect((await notifier.sendSummary(webhook, contexts, 1000)).success).toBe(true);
+    expect(text.length).toBeLessThanOrEqual(1900);
+    const listed = text.split('\n').filter((line) => line.startsWith('- '));
+    expect(text.split('\n').pop()).toBe(`and ${50 - listed.length} more`);
+    for (const line of listed)
+      expect(
+        contexts.some(
+          (ctx) =>
+            line === `- ${ctx.monitor.name}` || line === `- ${ctx.monitor.name}: Expires tomorrow`,
+        ),
+      ).toBe(true);
+    expect(listed).toHaveLength(length === 100 ? 18 : 0);
+  },
+);
 
 it.each(NOTIFICATION_TEMPLATES)(
   'sends the five summary groups through %s without a monitor-specific target',

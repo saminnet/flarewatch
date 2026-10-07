@@ -17,6 +17,7 @@ import { PREPAID_REQUESTS } from './globalping';
 import { checkExternalProxy } from './proxy';
 import { checkDns } from './dns';
 import { checkDomain } from './domain';
+import { checkVpc } from './vpc';
 
 const log = createLogger('Check');
 
@@ -40,7 +41,7 @@ const ALL_METHODS: readonly PullMethod[] = [
   'TCP_PING',
 ];
 
-type Adapter = 'direct' | 'globalping' | 'proxy';
+type Adapter = 'direct' | 'globalping' | 'proxy' | 'vpc';
 
 interface Capabilities {
   label: string;
@@ -89,13 +90,27 @@ const CAPABILITIES: Record<Adapter, Capabilities> = {
     responseHeaders: true,
     responseJson: true,
   },
+  // Like a direct check, but through the tunnel: the binding's fetch exposes no certificate,
+  // and its connect speaks TCP only.
+  vpc: {
+    label: 'the VPC binding',
+    subrequests: 1,
+    methods: ALL_METHODS,
+    body: true,
+    sslCheck: false,
+    icmp: false,
+    responseHeaders: true,
+    responseJson: true,
+  },
 };
 
 type Attempt =
   | { adapter: 'direct'; via?: 'checkProxyFallback' }
+  | { adapter: 'vpc'; via: 'checkProxy' | 'confirmVia' }
   | { adapter: 'globalping' | 'proxy'; url: string; via: 'checkProxy' | 'confirmVia' };
 
 function locate(url: string, via: 'checkProxy' | 'confirmVia'): Attempt {
+  if (url === 'vpc') return { adapter: 'vpc', via };
   return { adapter: url.startsWith('globalping://') ? 'globalping' : 'proxy', url, via };
 }
 
@@ -191,6 +206,9 @@ async function run(
   }
   if (attempt.adapter === 'proxy') {
     return checkExternalProxy(target, attempt.url, ctx.env, deps.fetcher);
+  }
+  if (attempt.adapter === 'vpc') {
+    return checkVpc(target, ctx.env.VPC, deps.getEdgeLocation);
   }
   const location = await deps.getEdgeLocation();
   if (target.method === 'DNS') return { location, result: await checkDns(target, deps.fetcher) };

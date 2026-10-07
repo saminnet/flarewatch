@@ -7,8 +7,17 @@ function createStorage(db: DatabaseSync, onQuery: (query: string) => void) {
   return {
     sql: {
       exec: (query: string, ...bindings: SQLInputValue[]) => {
-        onQuery(query);
-        const rows = db.prepare(query).all(...bindings);
+        let statement = db.prepare(query);
+        let rest = query.slice(statement.sourceSQL.length).trim();
+        while (rest) {
+          onQuery(statement.sourceSQL);
+          statement.run();
+          query = rest;
+          statement = db.prepare(query);
+          rest = query.slice(statement.sourceSQL.length).trim();
+        }
+        onQuery(statement.sourceSQL);
+        const rows = statement.all(...bindings);
         return { toArray: () => rows };
       },
     },

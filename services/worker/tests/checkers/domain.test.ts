@@ -22,6 +22,39 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it.each(['server', 'redirect'])('refuses an HTTP RDAP %s without fetching it', async (cause) => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  const fetched: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      fetched.push(url);
+      if (url === 'https://data.iana.org/rdap/dns.json')
+        return Response.json(
+          cause === 'server' ? { services: [[['com'], ['http://rdap.example/']]] } : bootstrap,
+        );
+      if (url.startsWith('https://rdap.example/'))
+        return new Response(null, {
+          status: 302,
+          headers: { location: 'http://rdap.example/next' },
+        });
+      return Response.json(reply());
+    }),
+  );
+  const { hub } = createHub();
+  await runChecks(
+    { MONITOR_HUB: hubNamespace(hub) },
+    createWorkerDeps({ monitors: [{ ...monitor, checkEveryMinutes: 1 }] }),
+  );
+  expect(hub.view().monitors.a?.status).toBe('down');
+  expect(hub.view().monitors.a?.incidents[0]?.error[0]).toContain(
+    cause === 'server' ? 'No HTTPS RDAP service for TLD com' : 'Invalid RDAP redirect',
+  );
+  expect(fetched.some((url) => url.startsWith('http:'))).toBe(false);
+});
+
 it('checks a domain once daily by default and warns once at the thirty-day boundary', async () => {
   vi.useFakeTimers();
   const requests: string[] = [];

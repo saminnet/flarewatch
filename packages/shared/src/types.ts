@@ -352,12 +352,21 @@ export interface RunBudget {
   subrequests: number;
 }
 
+/** A Workers VPC network binding (beta): `fetch` for HTTP targets, `connect` for `TCP_PING`. */
+export interface VpcBinding {
+  fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
+  connect(address: string | { hostname: string; port: number }): Promise<{
+    opened: Promise<unknown>;
+    close(): Promise<void>;
+  }>;
+}
+
 export interface CheckContext {
   /**
    * Worker bindings a checker may need. Kept structural and narrow so shared
    * does not depend on the worker's Env type.
    */
-  env: { FLAREWATCH_PROXY_TOKEN?: string };
+  env: { FLAREWATCH_PROXY_TOKEN?: string; VPC?: VpcBinding };
   budget: RunBudget;
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test';
-import type { CheckContext, Fetcher, MonitorTarget } from '@flarewatch/shared';
+import type { CheckContext, Fetcher, MonitorTarget, VpcBinding } from '@flarewatch/shared';
 import { checkMonitor, planIssues, runBudget } from '../../src/checkers';
 import type { CheckDeps } from '../../src/checkers/deps';
 import { GlobalPingChecker } from '../../src/checkers/globalping';
@@ -203,6 +203,85 @@ describe('checkMonitor', () => {
     });
   });
 
+  describe('VPC', () => {
+    const socket = () => ({ opened: Promise.resolve({}), close: async () => {} });
+
+    function vpcCtx(binding: VpcBinding): CheckContext {
+      return { ...createCtx(), env: { VPC: binding } };
+    }
+
+    it('fails with setup advice when the VPC binding is absent', async () => {
+      const result = await checkMonitor(createTarget({ checkProxy: 'vpc' }), createCtx(), deps);
+
+      expect(result).toEqual({
+        location: 'ERROR',
+        result: {
+          ok: false,
+          error:
+            'The VPC binding is missing: add [[vpc_networks]] to services/worker/wrangler.toml',
+        },
+      });
+      expect(httpCheckMock).not.toHaveBeenCalled();
+      expect(tcpCheckMock).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('checks HTTP through the binding, following redirects by the Worker rules', async () => {
+      const fetch = vi
+        .fn<VpcBinding['fetch']>(
+          async () => new Response(null, { status: 302, headers: { location: '/moved' } }),
+        )
+        .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: '/moved' } }))
+        .mockResolvedValueOnce(new Response('ok'));
+
+      const result = await checkMonitor(
+        createTarget({ checkProxy: 'vpc' }),
+        vpcCtx({ fetch, connect: vi.fn<VpcBinding['connect']>(async () => socket()) }),
+        deps,
+      );
+
+      expect(result.location).toBe('SFO');
+      expect(result.result).toMatchObject({ ok: true });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(fetch.mock.calls[0]?.[0]).toBe('https://example.com');
+      expect(fetch.mock.calls[0]?.[1]?.redirect).toBe('manual');
+      expect(fetch.mock.calls[1]?.[0]).toBe('https://example.com/moved');
+      expect(httpCheckMock).not.toHaveBeenCalled();
+    });
+
+    it('checks TCP_PING through the binding', async () => {
+      const connect = vi.fn<VpcBinding['connect']>(async () => socket());
+
+      const result = await checkMonitor(
+        createTarget({ method: 'TCP_PING', target: '10.0.1.50:6379', checkProxy: 'vpc' }),
+        vpcCtx({ fetch: vi.fn<VpcBinding['fetch']>(), connect }),
+        deps,
+      );
+
+      expect(result.location).toBe('SFO');
+      expect(result.result).toMatchObject({ ok: true });
+      expect(connect).toHaveBeenCalledWith({ hostname: '10.0.1.50', port: 6379 });
+      expect(tcpCheckMock).not.toHaveBeenCalled();
+    });
+
+    it('falls back to a direct check when the binding cannot reach the target', async () => {
+      const fetch = vi.fn(async () => {
+        throw new Error('VPC Network cannot connect');
+      });
+      httpCheckMock.mockResolvedValue({ ok: true, latency: 9 });
+
+      const result = await checkMonitor(
+        createTarget({ checkProxy: 'vpc', checkProxyFallback: true }),
+        vpcCtx({ fetch, connect: vi.fn<VpcBinding['connect']>(async () => socket()) }),
+        deps,
+      );
+
+      expect(result).toEqual({ location: 'SFO', result: { ok: true, latency: 9 } });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(httpCheckMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('capabilities', () => {
     it.each([
       [
@@ -265,6 +344,11 @@ describe('checkMonitor', () => {
         'expected status codes on a TCP_PING',
         { method: 'TCP_PING', target: 'example.com:443', expectedCodes: [200] },
         'expectedCodes is not supported by TCP_PING',
+      ],
+      [
+        'a certificate check through the VPC binding',
+        { sslCheckEnabled: true, checkProxy: 'vpc' },
+        'checkProxy: sslCheckEnabled is not supported by the VPC binding',
       ],
       [
         'a certificate check whose fallback is the Worker',
@@ -630,6 +714,12 @@ describe('runBudget', () => {
   it('counts a Globalping check as at least two subrequests: create and poll', () => {
     const { subrequests } = runBudget(monitors(1, { checkProxy: 'globalping://TOKEN' }), 0);
     expect(subrequests).toBeLessThanOrEqual(runBudget([], 0).subrequests - 2);
+  });
+
+  it('counts a VPC check as one subrequest, like a direct check', () => {
+    expect(runBudget(monitors(1, { checkProxy: 'vpc' }), 0).subrequests).toBe(
+      runBudget(monitors(1), 0).subrequests,
+    );
   });
 
   it('holds one request for each webhook', () => {

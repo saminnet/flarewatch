@@ -12,6 +12,8 @@ The current flarewatch-proxy still rejects valid certificates with less than 24 
 
 - Set `notification.summaryAfter` from 2 to 50 to send one grouped message when that many alerts route to a webhook in one run. Below the threshold, messages stay individual. An accepted summary confirms every listed alert and costs one webhook request.
 
+- `checkProxy: 'vpc'` and `confirmVia: 'vpc'` check a target the Worker reaches through its `VPC` binding, a Workers VPC network behind a Cloudflare Tunnel. Workers VPC is in beta and free on every Workers plan. The committed `wrangler.toml` stays without a `[[vpc_networks]]` block, so a fork without a tunnel deploys unchanged; a `vpc` monitor there fails with an error that says to add the binding. See [Monitors](docs/monitors.md#other-regions-and-private-networks).
+
 - `DOMAIN` monitors check registration expiry through RDAP. They default to a daily check and a 30-day warning window. Near expiry sends one warning per date without downtime; an expired domain or failed lookup fails the check.
 
 - `DNS` monitors check records through DNS-over-HTTPS, with an optional resolver and expected values. They support A, AAAA, CNAME, MX, TXT, NS and CAA records.
@@ -25,6 +27,10 @@ The current flarewatch-proxy still rejects valid certificates with less than 24 
 - `responseHeaderEquals` and `responseJsonPath` work through flarewatch-proxy 2.0.0 or later, as `checkProxy` or `confirmVia`. An older proxy fails these checks with a message that asks you to update it, because it would skip them and pass. See the table in [Monitors](docs/monitors.md#other-regions-and-private-networks).
 
 ### Fixed
+
+- RDAP checks now require HTTPS services and redirects. `domainExpiryDays` accepts integers from 1 to 365.
+- Expiry alert claims remove that monitor's dates more than 90 days in the past when claiming a warning.
+- Summary text stays within 1,900 characters and ends with the exact count of omitted alerts when needed.
 
 - A config with `expectedCodes: []`, an empty `responseKeyword` or `responseForbiddenKeyword`, or `responseHeaderEquals: {}` now fails the config check, so the unit tests fail and the deploy stops. Before, an empty `expectedCodes` failed every check with "Expected status , got 200", and the other three checked nothing.
 - A target URL with a username and password, such as `https://user:secret@example.com`, now fails the config check. A Worker dropped them and sent the request without them, so the check never signed in. Send them in `headers` instead.

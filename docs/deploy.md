@@ -117,7 +117,7 @@ git switch main
 git merge upstream/main
 ```
 
-Git lists each file in conflict. In `worker.ts`, `public.ts` and `access.ts`, keep your monitors and settings, and make any config change the changelog asks for. In `apps/status-page/wrangler.jsonc`, take the release's version and put your [custom domain](#custom-domain) back if you set one. Take the release's side everywhere else. Commit the merge, then push to `main`.
+Git lists each file in conflict. In `worker.ts`, `public.ts` and `access.ts`, keep your monitors and settings, and make any config change the changelog asks for. In `services/worker/wrangler.toml`, keep your `[[vpc_networks]]` block if you added one. In `apps/status-page/wrangler.jsonc`, take the release's version and put your [custom domain](#custom-domain) back if you set one. Take the release's side everywhere else. Commit the merge, then push to `main`.
 
 Don't pick the option in the **Sync fork** menu that discards your commits, and don't run `gh repo sync --force`. Both throw away your config. Your secrets are safe either way: they live in the repo settings, not in git.
 

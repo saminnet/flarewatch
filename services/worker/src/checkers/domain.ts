@@ -50,10 +50,14 @@ export async function checkDomain(
     );
     if (!bootstrap.success) return failure('Invalid RDAP bootstrap response', latency());
     const servers = bootstrap.data.services.find(([tlds]) => tlds.includes(tld))?.[1] ?? [];
-    const server =
-      servers.find((url) => URL.parse(url)?.protocol === 'https:') ??
-      servers.find((url) => URL.parse(url)?.protocol === 'http:');
-    if (!server) return failure(`No RDAP service for TLD ${tld}`, latency());
+    const server = servers.find((url) => URL.parse(url)?.protocol === 'https:');
+    if (!server)
+      return failure(
+        servers.length > 0
+          ? `No HTTPS RDAP service for TLD ${tld}`
+          : `No RDAP service for TLD ${tld}`,
+        latency(),
+      );
     let url = new URL(
       `domain/${encodeURIComponent(domain)}`,
       server.endsWith('/') ? server : `${server}/`,
@@ -63,7 +67,7 @@ export async function checkDomain(
       await response.body?.cancel();
       const location = response.headers.get('location');
       const next = location ? URL.parse(location, url.toString()) : null;
-      if (!next || !['https:', 'http:'].includes(next.protocol) || next.username || next.password)
+      if (!next || next.protocol !== 'https:' || next.username || next.password)
         return failure('Invalid RDAP redirect', latency());
       if (redirects >= 20) return failure('Too many RDAP redirects', latency());
       if (budget.subrequests < 1 || budget.deadline <= Date.now())

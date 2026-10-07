@@ -192,6 +192,49 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
 });
 
 describe('MonitorHub in workerd row budgets', () => {
+  it('prunes only the claiming monitor dates older than ninety days and leaves quiet runs alone', async () => {
+    const hub = 'expiry-retention';
+    const id = "api'; --";
+    await view(hub);
+    const sql = await storage(hub);
+    const cutoff = T0 - 90 * DAY;
+    for (const [monitorId, expiry] of [
+      [id, cutoff - 1],
+      [id, cutoff],
+      [id, T0 + DAY],
+      ['other', cutoff - 1],
+    ] as const)
+      await sql.exec(
+        'INSERT INTO expiry_alerts (monitor_id, expiry_date, run) VALUES (?, ?, 1)',
+        monitorId,
+        expiry,
+      );
+    const quiet = {
+      now: T0,
+      records: [check(id, up())],
+      policy: { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false },
+    };
+    await alert(hub, [quiet]);
+    expect(await sql.exec('SELECT count(*) AS n FROM expiry_alerts')).toEqual([{ n: 4 }]);
+    const warning = {
+      ok: true as const,
+      latency: 1,
+      warning: { text: 'Domain expires soon', expiryDate: T0 + 2 * DAY },
+    };
+    expect((await alert(hub, [{ ...quiet, records: [check(id, warning)] }])).body).toEqual([
+      [`${id} expiry`],
+    ]);
+    expect(
+      await sql.exec(
+        'SELECT monitor_id, expiry_date FROM expiry_alerts ORDER BY monitor_id, expiry_date',
+      ),
+    ).toEqual([
+      { monitor_id: id, expiry_date: cutoff },
+      { monitor_id: id, expiry_date: T0 + DAY },
+      { monitor_id: id, expiry_date: T0 + 2 * DAY },
+      { monitor_id: 'other', expiry_date: cutoff - 1 },
+    ]);
+  }, 60_000);
   it('writes warning state only when it changes and one claim per expiry date', async () => {
     const hub = 'warning-budget';
     const run = (now: number, days: number): Run => ({
