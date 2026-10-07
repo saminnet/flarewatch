@@ -49,6 +49,26 @@ const row = (maintenances: Maintenance[] = []) =>
   withProviders(<MonitorRow monitor={api} state={slowState} maintenances={maintenances} />);
 
 describe('MonitorRow for a check slower than its maxLatencyMs', () => {
+  it('shows an expiry warning with degraded status and unchanged uptime', () => {
+    const state: StatusView = {
+      lastUpdate: LAST_UPDATE,
+      monitors: {
+        api: {
+          status: 'degraded',
+          warning: 'Certificate expires soon',
+          startedAt: LAST_UPDATE - 86400,
+          incidents: [],
+        },
+      },
+    };
+    const { container } = renderWithProviders(
+      withProviders(<MonitorRow monitor={api} state={state} maintenances={[]} />),
+    );
+    expect(screen.getByText('Certificate expires soon')).toBeTruthy();
+    expect(screen.queryByText('Slow response, over 500ms')).toBeNull();
+    expect(screen.getByText('100.00%')).toBeTruthy();
+    expect(container.querySelector('svg.text-status-degraded-text')).not.toBeNull();
+  });
   it('shows degraded without touching uptime', () => {
     const { container } = renderWithProviders(row());
 

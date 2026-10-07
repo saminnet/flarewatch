@@ -218,14 +218,17 @@ function rowLabel({
   heartbeat,
   shown,
   uptime,
+  warning,
 }: {
   name: string;
   heartbeat: HeartbeatView | null;
   shown: MonitorState;
   uptime: string;
+  warning: string | undefined;
 }): string {
   if (!heartbeat) {
-    const status = CHECK_STATUS_LABELS[shown] ?? 'operational';
+    const status =
+      shown === 'degraded' && warning ? warning : (CHECK_STATUS_LABELS[shown] ?? 'operational');
     return `${name}, ${status}, ${uptime}`;
   }
 
@@ -239,12 +242,14 @@ function rowLabel({
 
 function MonitorSubLines({
   error,
+  warning,
   heartbeat,
   latency,
   slowOverMs,
   operator,
 }: {
   error: string | null;
+  warning: string | undefined;
   heartbeat: HeartbeatView | null;
   latency: { ping: number; loc: string } | null;
   slowOverMs: number | undefined;
@@ -260,6 +265,11 @@ function MonitorSubLines({
 
   return (
     <>
+      {warning && (
+        <p className="text-xs text-status-degraded-text line-clamp-2 wrap-break-word mt-0.5">
+          {warning}
+        </p>
+      )}
       {error && !reportedFailure && !(overdueDeadline !== undefined && !operator) && (
         <p className="text-xs text-status-down-text line-clamp-2 wrap-break-word mt-0.5">{error}</p>
       )}
@@ -413,7 +423,9 @@ function MonitorSummary({
   const { uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
   const shown = monitorState(monitor, state, maintenances);
   const heartbeat = deriveHeartbeat(monitor, state);
-  const slowOverMs = !heartbeat && shown === 'degraded' ? monitor.maxLatencyMs : undefined;
+  const warning = shown === 'degraded' ? state.monitors[monitor.id]?.warning : undefined;
+  const slowOverMs =
+    !heartbeat && shown === 'degraded' && !warning ? monitor.maxLatencyMs : undefined;
   const hasStarted = state.monitors[monitor.id]?.startedAt !== undefined;
   const uptimeDisplay = formatUptimeDisplay(uptimePercent, hasStarted, 2);
 
@@ -439,7 +451,7 @@ function MonitorSummary({
           to="/monitors/$monitorId"
           params={{ monitorId: monitor.id }}
           className="absolute inset-0 z-10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
-          aria-label={`${rowLabel({ name: monitor.name, heartbeat, shown, uptime: uptimeDisplay })}, ${history}`}
+          aria-label={`${rowLabel({ name: monitor.name, heartbeat, shown, uptime: uptimeDisplay, warning })}, ${history}`}
         />
       )}
       <div className="shrink-0 mt-0.5">
@@ -453,6 +465,7 @@ function MonitorSummary({
 
         <MonitorSubLines
           error={shown === 'down' && error ? error : null}
+          warning={warning}
           heartbeat={heartbeat}
           latency={latency}
           slowOverMs={slowOverMs}

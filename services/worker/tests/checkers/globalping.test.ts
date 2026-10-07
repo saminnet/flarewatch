@@ -233,7 +233,7 @@ describe('GlobalPingChecker', () => {
     });
   });
 
-  it('fails when certificate expiry reaches the configured threshold', async () => {
+  it('passes when certificate expiry reaches the configured warning threshold', async () => {
     mockCompletedMeasurement(
       finishedHttpMeasurement({
         tls: {
@@ -250,12 +250,25 @@ describe('GlobalPingChecker', () => {
     expect(result).toEqual({
       location: 'FI/Helsinki',
       result: {
-        ok: false,
-        error: 'Certificate expires in 14 days (threshold: 14)',
+        ok: true,
+        ssl: { expiryDate: 1738152000, daysUntilExpiry: 14 },
         latency: 13,
       },
     });
   });
+
+  it.each(['2025-01-15T12:00:00Z', '2025-01-14T12:00:00Z'])(
+    'fails an expired certificate at %s',
+    async (expiresAt) => {
+      mockCompletedMeasurement(
+        finishedHttpMeasurement({ tls: { authorized: true, certificate: { expiresAt } } }),
+      );
+      expect((await check(createMonitor({ sslCheckEnabled: true }))).result).toMatchObject({
+        ok: false,
+        error: 'Certificate has expired',
+      });
+    },
+  );
 
   it('fails an unauthorized TLS certificate by default', async () => {
     mockCompletedMeasurement(

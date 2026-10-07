@@ -24,6 +24,13 @@ import {
 import type { Alert, AlertOutcome, AlertPolicy } from './hub/alerts';
 import type { CheckRecord } from './hub/monitor-hub';
 
+function checkDue(monitor: MonitorTarget, minute: number): boolean {
+  let hash = 0;
+  for (const char of monitor.id) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
+  const interval = monitor.checkEveryMinutes ?? (monitor.method === 'DOMAIN' ? 1440 : 1);
+  return minute % interval === hash % interval;
+}
+
 // Durable Object classes must be exports of the Worker's main module.
 export { MonitorHub } from './hub/monitor-hub';
 
@@ -71,22 +78,33 @@ const defaultWorkerDeps: WorkerDeps = {
   staticConfig: workerConfig,
 };
 
-export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps): Promise<void> {
+export async function runChecks(
+  env: Env,
+  deps: WorkerDeps = defaultWorkerDeps,
+  scheduledAt?: number,
+): Promise<void> {
+  const startedAt = Date.now();
   const location = await deps.getEdgeLocation();
   log.info('Starting checks', { location });
 
   const config = deps.staticConfig;
   const hub = getHub(env);
 
-  const currentTime = Math.floor(Date.now() / 1000);
+  const currentTime = Math.floor(startedAt / 1000);
   const webhooks = alertWebhooks(config, env.FLAREWATCH_WEBHOOKS);
   const notifier = deps.createNotifier(webhooks);
-  const budget = runBudget(config.monitors, webhooks.length);
+  const due = config.monitors.filter(
+    (monitor) =>
+      monitor.method !== 'HEARTBEAT' &&
+      checkDue(monitor, Math.floor((scheduledAt ?? startedAt) / 60000)),
+  );
+  const budget = runBudget(due, webhooks.length, startedAt);
 
   const ctx: CheckContext = { env, budget };
   const records = await Promise.all(
     config.monitors.map(async (monitor): Promise<CheckRecord> => {
       if (monitor.method === 'HEARTBEAT') return { monitor };
+      if (!due.includes(monitor)) return { monitor };
       log.info('Checking monitor', { name: monitor.name });
       return { monitor, check: await deps.checkMonitor(monitor, ctx) };
     }),
@@ -108,19 +126,83 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
   const { updates, alerts } = await hub.record(currentTime, records, policy);
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
-  // runBudget held one request per webhook, so the first alert is paid for.
-  let prepaid = true;
+  let prepaid = webhooks.length;
+  const affordAlert = (cost: number): boolean => {
+    const extra = Math.max(0, cost - prepaid);
+    if (budget.subrequests < extra) return false;
+    prepaid = Math.max(0, prepaid - cost);
+    budget.subrequests -= extra;
+    return true;
+  };
+  const context = (alert: Alert): NotificationContext | undefined => {
+    const monitor = monitors.get(alert.monitorId);
+    if (!monitor) return undefined;
+    const at = alert.at ?? currentTime;
+    return {
+      monitor,
+      kind: alert.kind,
+      incidentStartTime: alert.incidentStartTime,
+      currentTime: at,
+      downtimeSeconds: at - alert.incidentStartTime,
+      reason: alert.error,
+      timeZone: config.notification?.timeZone ?? 'UTC',
+      alsoDown: alert.alsoDown,
+      ...(alert.reminder !== undefined && { reminder: alert.reminder }),
+    };
+  };
   const deliver = async (batch: Alert[]) => {
+    const summaryAfter = config.notification?.summaryAfter;
+    if (notifier && summaryAfter !== undefined) {
+      const entries = batch.flatMap((alert) => {
+        const ctx = context(alert);
+        return ctx ? [{ alert, ctx, delivered: false, attempted: false }] : [];
+      });
+      for (const webhook of webhooks) {
+        const routed = entries.filter(({ alert }) => routes(webhook, alert.monitorId));
+        const groups = routed.length >= summaryAfter ? [routed] : routed.map((entry) => [entry]);
+        for (const group of groups) {
+          if (budget.deadline <= Date.now()) continue;
+          if (!affordAlert(1)) continue;
+          for (const entry of group) entry.attempted = true;
+          try {
+            const remaining = Math.max(1, budget.deadline - Date.now());
+            const result =
+              group.length >= summaryAfter
+                ? await notifier.sendSummary(
+                    webhook,
+                    group.map(({ ctx }) => ctx),
+                    remaining,
+                  )
+                : (
+                    await notifier.send(
+                      group[0]!.ctx,
+                      formatNotificationMessage(group[0]!.ctx),
+                      webhook,
+                      remaining,
+                    )
+                  )[0];
+            if (result?.success) for (const entry of group) entry.delivered = true;
+          } catch (error) {
+            log.error('Alert failed', { error: String(error) });
+          }
+        }
+      }
+      return entries.map(({ alert, delivered, attempted }): AlertOutcome => ({
+        ...alert,
+        delivered,
+        ...(!attempted && { deferred: true }),
+      }));
+    }
     const outcomes: AlertOutcome[] = [];
     for (const alert of batch) {
       const monitor = monitors.get(alert.monitorId);
       let delivered = false;
       if (notifier && monitor) {
         const cost = webhooks.filter((webhook) => routes(webhook, monitor.id)).length;
-        if (prepaid) prepaid = false;
-        else if (budget.subrequests >= cost) budget.subrequests -= cost;
-        else {
+        if (!affordAlert(cost)) {
           outcomes.push({
+            monitorId: alert.monitorId,
+            ...(alert.expiryDate !== undefined && { expiryDate: alert.expiryDate }),
             incident: alert.incident,
             kind: alert.kind,
             reopenedAt: alert.reopenedAt,
@@ -130,18 +212,7 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
           });
           continue;
         }
-        const at = alert.at ?? currentTime;
-        const ctx: NotificationContext = {
-          monitor,
-          kind: alert.kind,
-          incidentStartTime: alert.incidentStartTime,
-          currentTime: at,
-          downtimeSeconds: at - alert.incidentStartTime,
-          reason: alert.error,
-          timeZone: config.notification?.timeZone ?? 'UTC',
-          alsoDown: alert.alsoDown,
-          ...(alert.reminder !== undefined && { reminder: alert.reminder }),
-        };
+        const ctx = context(alert)!;
         try {
           const results = await notifier.send(ctx, formatNotificationMessage(ctx));
           delivered = results.some((result) => result.success);
@@ -150,6 +221,8 @@ export async function runChecks(env: Env, deps: WorkerDeps = defaultWorkerDeps):
         }
       }
       outcomes.push({
+        monitorId: alert.monitorId,
+        ...(alert.expiryDate !== undefined && { expiryDate: alert.expiryDate }),
         incident: alert.incident,
         kind: alert.kind,
         reopenedAt: alert.reopenedAt,
@@ -230,8 +303,8 @@ const Worker = {
     return new Response('Not Found', { status: 404 });
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
-    await runChecks(env);
+  async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    await runChecks(env, defaultWorkerDeps, event.scheduledTime);
   },
 };
 

@@ -26,6 +26,8 @@ const PULL_METHODS = [
   'HEAD',
   'OPTIONS',
   'TCP_PING',
+  'DNS',
+  'DOMAIN',
 ] as const;
 const MONITOR_METHODS = new Set<string>([...PULL_METHODS, 'HEARTBEAT']);
 const HEARTBEAT_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -88,6 +90,17 @@ function isValidHostPort(value: string): boolean {
 }
 
 function targetIssue(method: string, target: string): string | null {
+  if (method === 'DNS' || method === 'DOMAIN') {
+    const host =
+      /^(?=.{1,253}\.?$)[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?(?:\.[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?)*\.?$/i.test(
+        target,
+      );
+    if (method === 'DOMAIN')
+      return host && target.includes('.') && !target.endsWith('.') && !target.includes('_')
+        ? null
+        : 'DOMAIN target must be a registrable domain, such as example.com';
+    return host ? null : 'DNS target must be a host name';
+  }
   if (method === 'TCP_PING') {
     return isValidHostPort(target)
       ? null
@@ -213,6 +226,24 @@ const pullMonitorShape = {
   ...monitorCommon,
   method: z.enum(PULL_METHODS),
   target: z.string({ error: 'target must be a string' }),
+  checkEveryMinutes: z.optional(intInRange('checkEveryMinutes', 1, 1440)),
+  downAfterChecks: z.optional(intInRange('downAfterChecks', 1, 10)),
+  dnsRecordType: z.optional(z.enum(['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'CAA'])),
+  dnsExpected: z.optional(
+    z
+      .array(nonEmptyString('dnsExpected'))
+      .check(z.minLength(1, { error: 'dnsExpected must list at least one value' })),
+  ),
+  dnsResolver: z.optional(
+    z.string().check(
+      z.refine((value) => URL.parse(value)?.protocol === 'https:', {
+        error: 'dnsResolver must be an https URL',
+      }),
+    ),
+  ),
+  domainExpiryDays: z.optional(
+    z.number().check(z.gte(0, { error: 'domainExpiryDays must be a non-negative number' })),
+  ),
   tooltip: optionalString('tooltip'),
   hideLatencyChart: optionalBoolean('hideLatencyChart'),
   expectedCodes: z.optional(
@@ -285,6 +316,7 @@ const pullMonitorSchema = z.strictObject(pullMonitorShape, unknownFieldError).ch
   const { method, target, responseJsonPath, responseJsonValue, checkProxy, confirmVia } = ctx.value;
   const issues = [
     targetIssue(method, target),
+    networkMonitorIssue(ctx.value),
     (responseJsonPath === undefined) !== (responseJsonValue === undefined)
       ? 'responseJsonPath and responseJsonValue go together'
       : null,
@@ -296,6 +328,29 @@ const pullMonitorSchema = z.strictObject(pullMonitorShape, unknownFieldError).ch
     if (message) ctx.issues.push({ code: 'custom', message, input: ctx.value });
   }
 });
+
+export function networkMonitorIssue(target: SchemaOutput<PullMonitor>): string | null {
+  if (target.method !== 'DNS' && target.method !== 'DOMAIN') return null;
+  const fields = [
+    'checkProxy',
+    'checkProxyFallback',
+    'confirmVia',
+    'expectedCodes',
+    'headers',
+    'body',
+    'responseKeyword',
+    'responseForbiddenKeyword',
+    'responseJsonPath',
+    'responseJsonValue',
+    'responseHeaderEquals',
+    'sslCheckEnabled',
+    'sslCheckDaysBeforeExpiry',
+    'sslIgnoreSelfSigned',
+    'pingProtocol',
+  ] as const;
+  const field = fields.find((name) => target[name] !== undefined);
+  return field ? `${field} is not supported by ${target.method}` : null;
+}
 
 const heartbeatMonitorSchema = z.strictObject(
   {
@@ -435,6 +490,7 @@ const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
   .check(z.refine((webhook) => isAllowedPayload(webhook.payloadType, webhook.payload)));
 
 const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.object({
+  summaryAfter: z.optional(intInRange('summaryAfter', 2, 50)),
   webhook: z.optional(z.union([webhookSchema, z.array(webhookSchema)])),
   timeZone: z.optional(timeZone('timeZone')),
   gracePeriod: z.optional(z.number()),
@@ -558,7 +614,8 @@ const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
   monitors: z.record(
     z.string(),
     z.object({
-      status: z.enum(['up', 'late', 'pending', 'running', 'down']),
+      status: z.enum(['up', 'late', 'pending', 'running', 'down', 'degraded']),
+      warning: z.exactOptional(z.string()),
       startedAt: z.exactOptional(z.number()),
       incidents: z.array(incidentSchema),
       latest: z.exactOptional(latencySampleSchema),
@@ -684,6 +741,7 @@ const checkResultWithLocationSchema: z.ZodMiniType<SchemaOutput<CheckResultWithL
       z.object({
         ok: z.literal(true),
         latency: z.number(),
+        warning: z.exactOptional(z.object({ text: z.string(), expiryDate: z.number() })),
         ssl: z.exactOptional(
           z.object({
             expiryDate: z.number(),

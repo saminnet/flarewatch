@@ -4,7 +4,23 @@ All notable changes to FlareWatch will be documented in this file.
 
 ## Unreleased
 
+Certificate expiry now warns instead of causing downtime. On the next successful check, an incident caused only by the old certificate threshold closes and stays in history. Rollback preserves storage but restores the old failure rule and can reopen that incident. Remove new config fields before deploying older code.
+
+The current flarewatch-proxy still rejects valid certificates with less than 24 hours left, even with the new zero threshold. That boundary needs a separate proxy fix.
+
 ### Added
+
+- Set `notification.summaryAfter` from 2 to 50 to send one grouped message when that many alerts route to a webhook in one run. Below the threshold, messages stay individual. An accepted summary confirms every listed alert and costs one webhook request.
+
+- `DOMAIN` monitors check registration expiry through RDAP. They default to a daily check and a 30-day warning window. Near expiry sends one warning per date without downtime; an expired domain or failed lookup fails the check.
+
+- `DNS` monitors check records through DNS-over-HTTPS, with an optional resolver and expected values. They support A, AAAA, CNAME, MX, TXT, NS and CAA records.
+
+- Valid certificates inside `sslCheckDaysBeforeExpiry` show as degraded and send one warning per monitor and expiry date. They open no incident and leave uptime unchanged. Maintenance pauses warning alerts. Expired or invalid certificates still fail checks.
+
+- `downAfterChecks` requires 1 to 10 consecutive failed checks before opening an incident. The default remains 1. Success resets the streak, skipped runs do not count, and the incident starts at its first failed check.
+
+- `checkEveryMinutes` sets each check monitor's interval from 1 to 1440 minutes. The default remains one minute. Checks spread across stable slots, and skipped monitors keep their status and history. Reminders still count minute runs.
 
 - `responseHeaderEquals` and `responseJsonPath` work through flarewatch-proxy 2.0.0 or later, as `checkProxy` or `confirmVia`. An older proxy fails these checks with a message that asks you to update it, because it would skip them and pass. See the table in [Monitors](docs/monitors.md#other-regions-and-private-networks).
 

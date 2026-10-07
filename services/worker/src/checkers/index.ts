@@ -10,10 +10,13 @@ import {
   createLogger,
   failure,
   withTimeout,
+  networkMonitorIssue,
 } from '@flarewatch/shared';
 import { defaultCheckDeps, type CheckDeps } from './deps';
 import { PREPAID_REQUESTS } from './globalping';
 import { checkExternalProxy } from './proxy';
+import { checkDns } from './dns';
+import { checkDomain } from './domain';
 
 const log = createLogger('Check');
 
@@ -56,7 +59,7 @@ const CAPABILITIES: Record<Adapter, Capabilities> = {
   direct: {
     label: 'a direct check',
     subrequests: 1,
-    methods: ALL_METHODS,
+    methods: [...ALL_METHODS, 'DNS', 'DOMAIN'],
     body: true,
     sslCheck: false,
     icmp: false,
@@ -141,9 +144,11 @@ function refusal(target: MonitorTarget, attempt: Attempt): string | undefined {
 
 /** What this monitor asks of a place that cannot honour it. Empty when every attempt can run. */
 export function planIssues(target: MonitorTarget): string[] {
-  return [methodRefusal(target), ...plan(target).map((attempt) => refusal(target, attempt))].filter(
-    (issue) => issue !== undefined,
-  );
+  return [
+    networkMonitorIssue(target) ?? undefined,
+    methodRefusal(target),
+    ...plan(target).map((attempt) => refusal(target, attempt)),
+  ].filter((issue) => issue !== undefined);
 }
 
 /**
@@ -158,7 +163,8 @@ export function runBudget(
   let primaries = 0;
   for (const monitor of monitors) {
     if (monitor.method !== 'HEARTBEAT') {
-      primaries += CAPABILITIES[plan(monitor)[0].adapter].subrequests;
+      primaries +=
+        monitor.method === 'DOMAIN' ? 2 : CAPABILITIES[plan(monitor)[0].adapter].subrequests;
     }
   }
   return {
@@ -187,6 +193,9 @@ async function run(
     return checkExternalProxy(target, attempt.url, ctx.env, deps.fetcher);
   }
   const location = await deps.getEdgeLocation();
+  if (target.method === 'DNS') return { location, result: await checkDns(target, deps.fetcher) };
+  if (target.method === 'DOMAIN')
+    return { location, result: await checkDomain(target, ctx.budget, deps.fetcher) };
   const checker = target.method === 'TCP_PING' ? deps.tcp : deps.http;
   return { location, result: await checker.check(target) };
 }

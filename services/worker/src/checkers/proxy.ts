@@ -29,7 +29,18 @@ function isCheckResult(value: unknown): value is CheckResult {
   if (!isJsonObject(value)) return false;
 
   if (value.ok === true) {
-    return isLatency(value.latency);
+    const ssl = value.ssl;
+    return (
+      value.warning === undefined &&
+      isLatency(value.latency) &&
+      (ssl === undefined ||
+        (isJsonObject(ssl) &&
+          typeof ssl.expiryDate === 'number' &&
+          Number.isFinite(ssl.expiryDate) &&
+          Math.abs(ssl.expiryDate) <= 8.64e12 &&
+          typeof ssl.daysUntilExpiry === 'number' &&
+          Number.isFinite(ssl.daysUntilExpiry)))
+    );
   }
 
   if (value.ok === false) {
@@ -72,7 +83,10 @@ export async function checkExternalProxy(
           ? { Authorization: `Bearer ${env.FLAREWATCH_PROXY_TOKEN}` }
           : {}),
       },
-      body: JSON.stringify(monitor),
+      body: JSON.stringify({
+        ...monitor,
+        ...(monitor.sslCheckEnabled && { sslCheckDaysBeforeExpiry: 0 }),
+      }),
       timeout,
     });
 

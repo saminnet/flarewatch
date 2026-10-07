@@ -17,6 +17,32 @@ function createTarget(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
 }
 
 describe('checkExternalProxy', () => {
+  it.each([
+    { ssl: { expiryDate: 9e12, daysUntilExpiry: 4 } },
+    { warning: { text: {}, expiryDate: 123 } },
+  ])('rejects expiry metadata that cannot safely reach the hub: %j', async (metadata) => {
+    fetchMock.mockResolvedValue(
+      Response.json({ location: 'FRA', result: { ok: true, latency: 1, ...metadata } }),
+    );
+    const { result } = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
+    expect(result).toMatchObject({ ok: false, error: 'Proxy returned invalid response' });
+  });
+  it('asks the proxy to fail expired certificates only and rejects malformed SSL metadata', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        location: 'FRA',
+        result: { ok: true, latency: 1, ssl: { expiryDate: 'bad', daysUntilExpiry: 4 } },
+      }),
+    );
+    const result = await checkExternalProxy(
+      createTarget({ sslCheckEnabled: true, sslCheckDaysBeforeExpiry: 14 }),
+      PROXY_URL,
+      undefined,
+      fetchMock,
+    );
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toContain('"sslCheckDaysBeforeExpiry":0');
+    expect(result.result).toMatchObject({ ok: false, error: 'Proxy returned invalid response' });
+  });
   beforeEach(() => {
     fetchMock.mockReset();
   });

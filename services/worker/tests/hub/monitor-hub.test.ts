@@ -642,6 +642,10 @@ describe('MonitorHub after an upgrade from 3.2', () => {
     // The schema 3.2.0 left behind.
     db.exec(`
       DELETE FROM _migrations WHERE id >= 8;
+      ALTER TABLE monitors DROP COLUMN failure_count;
+      ALTER TABLE monitors DROP COLUMN first_failure_at;
+      ALTER TABLE monitors DROP COLUMN warning;
+      DROP TABLE expiry_alerts;
       ALTER TABLE meta DROP COLUMN runs;
       ALTER TABLE incidents DROP COLUMN alert_run;
       ALTER TABLE incidents DROP COLUMN reminders;
@@ -665,6 +669,10 @@ describe('MonitorHub after an upgrade from 3.2', () => {
 function rewindTo31(db: DatabaseSync): void {
   db.exec(`
     DELETE FROM _migrations WHERE id >= 7;
+    ALTER TABLE monitors DROP COLUMN failure_count;
+    ALTER TABLE monitors DROP COLUMN first_failure_at;
+    ALTER TABLE monitors DROP COLUMN warning;
+    DROP TABLE expiry_alerts;
     ALTER TABLE meta DROP COLUMN runs;
     ALTER TABLE incidents DROP COLUMN alert_run;
     ALTER TABLE incidents DROP COLUMN reminders;

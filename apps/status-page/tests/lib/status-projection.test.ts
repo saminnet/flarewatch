@@ -39,6 +39,17 @@ function maintenance(id: string, start: string, end?: string, monitors?: string[
 }
 
 describe('status projection', () => {
+  it('projects expiry warnings as degraded in data and badge output', () => {
+    const state = createState({
+      api: { status: 'degraded', warning: 'Certificate expires soon', startedAt: 1788000000 },
+    });
+    expect(projectPublicData([publicMonitor('api')], state, []).monitors.api).toMatchObject({
+      status: 'degraded',
+      up: true,
+      message: 'Certificate expires soon',
+    });
+    expect(projectBadgeStatus(publicMonitor('api'), state, [])).toEqual({ status: 'degraded' });
+  });
   it('projects public data without exposing raw monitor state', () => {
     const state = createState({
       api: { startedAt: 1_788_000_000, latest: { loc: 'SFO', ping: 42, time: 1_789_000_000 } },

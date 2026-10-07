@@ -64,7 +64,7 @@ A monitor only operators and members see, or an audience whose page group holds 
 _Avoid_: Hidden monitor, internal monitor
 
 **Degraded**:
-What the page shows for a check monitor that is up but slower than its `maxLatencyMs`, or a heartbeat monitor that is late. Not an incident: no alert, and uptime is unchanged.
+What the page shows for a check monitor slower than its `maxLatencyMs`, a monitor with an expiry warning, or a heartbeat monitor that is late. It opens no incident and leaves uptime unchanged. Only expiry warnings send an alert.
 _Avoid_: Slow, warning, yellow
 
 **Confirmation**:

@@ -10,7 +10,6 @@ import {
   validateHttpResponse,
   parseTcpTarget,
   DEFAULT_HTTP_TIMEOUT,
-  DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   createLogger,
   getErrorMessage,
   readJsonUpTo,
@@ -159,9 +158,8 @@ async function validateHttpResult(
       }
 
       if (!error && target.sslCheckEnabled) {
-        const threshold = target.sslCheckDaysBeforeExpiry ?? DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS;
-        if (daysUntilExpiry <= threshold) {
-          error = `Certificate expires in ${daysUntilExpiry} days (threshold: ${threshold})`;
+        if (expiryDate <= Math.floor(Date.now() / 1000)) {
+          error = 'Certificate has expired';
         }
       }
     }

@@ -80,6 +80,19 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
     `ALTER TABLE incidents ADD COLUMN alert_run INTEGER`,
     `ALTER TABLE incidents ADD COLUMN reminders INTEGER NOT NULL DEFAULT 0`,
   ],
+  [
+    `ALTER TABLE monitors ADD COLUMN failure_count INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE monitors ADD COLUMN first_failure_at INTEGER`,
+  ],
+  [
+    `ALTER TABLE monitors ADD COLUMN warning TEXT`,
+    `CREATE TABLE expiry_alerts (
+      monitor_id TEXT NOT NULL,
+      expiry_date INTEGER NOT NULL,
+      run INTEGER NOT NULL,
+      PRIMARY KEY (monitor_id, expiry_date)
+    ) WITHOUT ROWID`,
+  ],
 ];
 
 export function migrate(sql: Sql): void {

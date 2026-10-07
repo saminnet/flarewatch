@@ -72,7 +72,7 @@ export function projectPublicData(
       status,
       latency: latestLatency?.ping ?? null,
       location: latestLatency?.loc ?? null,
-      message: up ? 'OK' : (error ?? 'Unknown error'),
+      message: up ? (state.monitors[monitor.id]?.warning ?? 'OK') : (error ?? 'Unknown error'),
     };
   }
 

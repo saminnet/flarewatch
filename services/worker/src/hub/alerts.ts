@@ -12,8 +12,7 @@ const ALERT_CLAIM_SECONDS = 20 * 60;
 /** Error-change alerts per incident, so a target whose error keeps changing cannot spam. */
 const MAX_ERROR_ALERTS = 5;
 
-/** What an alert says: the outage began, its error changed, it goes on, or it ended. */
-export type AlertKind = 'down' | 'error' | 'reminder' | 'recovered';
+export type AlertKind = 'down' | 'error' | 'reminder' | 'recovered' | 'expiry';
 
 /**
  * Whether the incident's down alert reached a webhook: 'pending', 'sending'
@@ -71,6 +70,7 @@ export interface AlertPolicy {
 }
 
 export interface Alert {
+  expiryDate?: number;
   monitorId: string;
   incident: number;
   kind: AlertKind;
@@ -96,6 +96,8 @@ export interface Alert {
 
 /** Whether any webhook accepted an alert. */
 export interface AlertOutcome {
+  monitorId?: string;
+  expiryDate?: number;
   incident: number;
   kind: AlertKind;
   /** The alert's reopenedAt, handed back unchanged. */
@@ -254,7 +256,24 @@ export class Alerts {
    */
   record(outcomes: AlertOutcome[]): Alert[] {
     const recoveries: Alert[] = [];
-    for (const { incident, kind, reopenedAt, run, delivered, deferred } of outcomes) {
+    for (const {
+      incident,
+      kind,
+      reopenedAt,
+      run,
+      delivered,
+      deferred,
+      monitorId,
+      expiryDate,
+    } of outcomes) {
+      if (kind === 'expiry' && deferred && monitorId !== undefined && expiryDate !== undefined) {
+        this.sql.exec(
+          'DELETE FROM expiry_alerts WHERE monitor_id = ? AND expiry_date = ? AND run = ?',
+          monitorId,
+          expiryDate,
+          run,
+        );
+      }
       if (kind === 'error' && !delivered) {
         this.sql.exec(
           `UPDATE incidents SET error_alerts = error_alerts - 1

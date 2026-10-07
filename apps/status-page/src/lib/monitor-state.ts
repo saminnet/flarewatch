@@ -14,7 +14,7 @@ type StateMonitor = Pick<PublicMonitor, 'id' | 'method' | 'maxLatencyMs'>;
 
 /**
  * Down means an open incident, as the hub decides. A late job, or a check
- * slower than its maxLatencyMs, is degraded. A monitor without data, or a job
+ * slower than its maxLatencyMs, or a monitor with an expiry warning, is degraded. A monitor without data, or a job
  * that never pinged, is pending.
  */
 export function monitorState(

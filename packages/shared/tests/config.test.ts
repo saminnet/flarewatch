@@ -38,6 +38,128 @@ function createConfigWithMonitor(monitor: MonitorOverrides) {
 const isValid = (value: unknown) => configIssues(value).length === 0;
 
 describe('config validation', () => {
+  it('accepts summaryAfter from two to fifty and leaves it off when absent', () => {
+    for (const summaryAfter of [2, 50])
+      expect(configIssues({ monitors: [], notification: { summaryAfter } })).toEqual([]);
+    for (const summaryAfter of [1, 51, 2.5])
+      expect(configIssues({ monitors: [], notification: { summaryAfter } }).join()).toContain(
+        'summaryAfter',
+      );
+  });
+  it('accepts domain expiry settings and rejects invalid domain targets or windows', () => {
+    expect(
+      configIssues(
+        createConfigWithMonitor({
+          method: 'DOMAIN',
+          target: 'example.co.uk',
+          domainExpiryDays: 30,
+        }),
+      ),
+    ).toEqual([]);
+    for (const target of ['https://example.com', 'localhost', '-bad.com', 'example.com/path'])
+      expect(configIssues(createConfigWithMonitor({ method: 'DOMAIN', target })).join()).toContain(
+        'target',
+      );
+    expect(
+      configIssues(
+        createConfigWithMonitor({ method: 'DOMAIN', target: 'example.com', domainExpiryDays: -1 }),
+      ).join(),
+    ).toContain('domainExpiryDays');
+  });
+  it('validates DNS targets, record types, resolver URLs and HTTP field refusals', () => {
+    for (const dnsRecordType of ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'CAA'])
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method: 'DNS', target: 'example.com', dnsRecordType }),
+        ),
+      ).toEqual([]);
+    for (const field of [
+      'checkProxy',
+      'confirmVia',
+      'expectedCodes',
+      'responseKeyword',
+      'responseForbiddenKeyword',
+      'responseJsonPath',
+      'responseJsonValue',
+      'responseHeaderEquals',
+      'sslCheckEnabled',
+    ]) {
+      expect(
+        configIssues(
+          createConfigWithMonitor({
+            method: 'DNS',
+            target: 'example.com',
+            [field]:
+              field === 'expectedCodes'
+                ? [200]
+                : field === 'responseHeaderEquals'
+                  ? { Server: 'x' }
+                  : field === 'sslCheckEnabled'
+                    ? true
+                    : field === 'responseJsonPath'
+                      ? '$.ok'
+                      : 'https://example.com',
+          }),
+        ).join(),
+      ).toContain(field);
+    }
+    for (const overrides of [
+      { target: 'https://example.com' },
+      { dnsResolver: 'http://resolver.example/dns' },
+      { dnsRecordType: 'PTR' },
+    ])
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method: 'DNS', target: 'example.com', ...overrides }),
+        ).length,
+      ).toBeGreaterThan(0);
+  });
+  it('bounds downAfterChecks and refuses it on heartbeats', () => {
+    for (const downAfterChecks of [1, 10])
+      expect(configIssues(createConfigWithMonitor({ downAfterChecks }))).toEqual([]);
+    for (const downAfterChecks of [0, 11, 1.5])
+      expect(configIssues(createConfigWithMonitor({ downAfterChecks })).join()).toContain(
+        'downAfterChecks',
+      );
+    expect(
+      configIssues({
+        monitors: [
+          {
+            id: 'job',
+            name: 'Job',
+            method: 'HEARTBEAT',
+            periodSeconds: 60,
+            graceSeconds: 0,
+            downAfterChecks: 2,
+          },
+        ],
+      }).join(),
+    ).toContain('downAfterChecks');
+  });
+  it('bounds checkEveryMinutes and refuses it on heartbeats', () => {
+    for (const checkEveryMinutes of [1, 1440]) {
+      expect(configIssues(createConfigWithMonitor({ checkEveryMinutes }))).toEqual([]);
+    }
+    for (const checkEveryMinutes of [0, 1441, 1.5]) {
+      expect(configIssues(createConfigWithMonitor({ checkEveryMinutes })).join()).toContain(
+        'checkEveryMinutes',
+      );
+    }
+    expect(
+      configIssues({
+        monitors: [
+          {
+            id: 'job',
+            name: 'Job',
+            method: 'HEARTBEAT',
+            periodSeconds: 60,
+            graceSeconds: 0,
+            checkEveryMinutes: 1,
+          },
+        ],
+      }).join(),
+    ).toContain('checkEveryMinutes');
+  });
   it('accepts a direct runtime config', () => {
     const config = createRuntimeConfig({
       statusPage: {

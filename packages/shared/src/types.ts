@@ -87,13 +87,21 @@ export type PullMethod =
   | 'DELETE'
   | 'HEAD'
   | 'OPTIONS'
-  | 'TCP_PING';
+  | 'TCP_PING'
+  | 'DNS'
+  | 'DOMAIN';
 
 export type PullMonitor = {
   id: string;
   name: string;
   method: PullMethod;
   target: string;
+  checkEveryMinutes?: number;
+  downAfterChecks?: number;
+  dnsRecordType?: 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT' | 'NS' | 'CAA';
+  dnsExpected?: string[];
+  dnsResolver?: string;
+  domainExpiryDays?: number;
   tooltip?: string;
   /**
    * Clickable link on the monitor name: auto-links to `target` if HTTP/HTTPS
@@ -181,6 +189,7 @@ export type WorkerConfig = {
 };
 
 export type NotificationConfig = {
+  summaryAfter?: number;
   webhook?: WebhookConfig;
   timeZone?: string;
   gracePeriod?: number;
@@ -288,7 +297,8 @@ export type LatencySample = {
 
 /** One monitor as the hub knows it. Down means an open incident. */
 export type MonitorView = {
-  status: HeartbeatStatus;
+  status: HeartbeatStatus | 'degraded';
+  warning?: string;
   /** Unix timestamp (seconds) of the first check result. */
   startedAt?: number;
   /** Oldest first, kept 90 days after they end. */
@@ -318,6 +328,7 @@ export interface CheckSuccess {
   ok: true;
   latency: number;
   ssl?: SSLCertificateInfo;
+  warning?: { text: string; expiryDate: number };
 }
 
 export interface CheckFailure {

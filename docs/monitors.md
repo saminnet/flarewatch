@@ -44,6 +44,14 @@ A field FlareWatch doesn't know, such as a misspelt `expectedCode`, fails the co
 
 The monitor name links to its target on the status page, without the query string. A target can't hold a username and password. Send them in `headers`. Set `link: false` to hide the URL, or `link: 'https://...'` to link somewhere else.
 
+## Check intervals
+
+Set `checkEveryMinutes` on a check monitor to an integer from 1 to 1440. The default is 1. The minute cron spreads checks across slots using a stable hash of each monitor's ID. A skipped monitor records no result and keeps its status and incidents. Heartbeats refuse this setting.
+
+`reminderEveryChecks` still counts minute check runs, including runs that skip the monitor.
+
+Set `downAfterChecks` to an integer from 1 to 10 to require consecutive failed checks before opening an incident. The default is 1. A skipped run does not count. A successful check resets the streak. Until the threshold, the monitor stays up. The incident starts at the first failure in the streak. An open incident keeps the usual flap rules.
+
 ## TCP ports
 
 ```ts
@@ -51,6 +59,28 @@ The monitor name links to its target on the status page, without the query strin
 ```
 
 The Worker opens a TCP connection to the host and port. A connection is all it checks, so `expectedCodes`, the keyword and JSON settings, `responseHeaderEquals` and `sslCheckEnabled` fail a `TCP_PING` monitor's config.
+
+## DNS records
+
+```ts
+{ id: 'dns', name: 'DNS', method: 'DNS', target: 'example.com', dnsRecordType: 'A', dnsExpected: ['192.0.2.1'] }
+```
+
+DNS checks query Cloudflare's [DoH JSON endpoint](https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/). `dnsRecordType` accepts `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS` and `CAA`, and defaults to `A`. Without `dnsExpected`, at least one record of that type must exist. With it, every listed value must match the answer's text exactly. This includes quotes in TXT records and priorities in MX records.
+
+Set `dnsResolver` to another HTTPS endpoint with the same JSON API. A DNS status other than NOERROR fails the check with its name, such as NXDOMAIN. HTTP errors, malformed replies and replies over 1 MiB fail too. DNS monitors refuse proxies, confirmation, HTTP request settings and HTTP assertions.
+
+## Domain expiry
+
+```ts
+{ id: 'domain', name: 'Domain registration', method: 'DOMAIN', target: 'example.com', domainExpiryDays: 30 }
+```
+
+Use a registrable domain, such as `example.com` or `example.co.uk`. FlareWatch reads the TLD's service from the [IANA RDAP bootstrap file](https://www.iana.org/assignments/rdap-dns) and checks its expiration event. The default interval is 1440 minutes, with the same stable slots as other checks. Override it with `checkEveryMinutes`.
+
+`domainExpiryDays` defaults to 30 and accepts a non-negative number. Inside the window, the monitor shows as degraded and sends one warning per expiry date, as certificate warnings do. An expired domain fails. A missing RDAP service, failed lookup, missing expiration event or invalid reply also fails, with the cause in the error. Bootstrap and RDAP responses are capped at 1 MiB. Some TLDs publish only an HTTP service; FlareWatch prefers HTTPS when IANA lists both.
+
+Each lookup reserves two subrequests. Redirects spend spare requests and stop at the run deadline. DOMAIN monitors use the RDAP service directly and refuse proxies, HTTP request settings and HTTP assertions.
 
 ## Private monitors
 
@@ -144,16 +174,22 @@ When the proxy fails, the check fails. Set `checkProxyFallback: true` to fall ba
 
 For certificate expiry, set `sslCheckEnabled: true` and `sslCheckDaysBeforeExpiry: 14`. This needs Globalping or a proxy, because the Worker can't see the certificate. `sslCheckDaysBeforeExpiry` must be a whole number from 0 to 3650.
 
+A valid certificate inside this window marks the monitor as degraded, with its expiry date. FlareWatch sends one warning per monitor and expiry date, without retrying a failed delivery. A covering maintenance window pauses the alert. Renewal clears the warning, and the renewed certificate sends its own warning when it enters the window. Warnings open no incident and do not affect uptime. An expired or invalid certificate still fails the check.
+
+FlareWatch sends a threshold of zero to flarewatch-proxy. The current proxy rounds remaining days down and still rejects a valid certificate with less than 24 hours left. That boundary needs a proxy update. Globalping uses the exact expiry time.
+
+After upgrading, the next successful check closes an incident caused only by the old certificate threshold. Its closed history stays. Rollback keeps the stored history, but restores the old rule: a near-expiry certificate fails again and can reopen that incident. Remove the new config fields before deploying older code.
+
 Not every place can run every check:
 
-| Setting                | From the Worker | Globalping                   | External proxy |
-| ---------------------- | --------------- | ---------------------------- | -------------- |
-| `method`               | any             | GET, HEAD, OPTIONS, TCP_PING | any            |
-| `body`                 | yes             | no                           | yes            |
-| `sslCheckEnabled`      | no              | yes                          | yes            |
-| `pingProtocol: 'icmp'` | no              | yes                          | no             |
-| `responseHeaderEquals` | yes             | no                           | 2.0.0 or later |
-| `responseJsonPath`     | yes             | yes                          | 2.0.0 or later |
+| Setting                | From the Worker             | Globalping                   | External proxy |
+| ---------------------- | --------------------------- | ---------------------------- | -------------- |
+| `method`               | HTTP, TCP_PING, DNS, DOMAIN | GET, HEAD, OPTIONS, TCP_PING | HTTP, TCP_PING |
+| `body`                 | yes                         | no                           | yes            |
+| `sslCheckEnabled`      | no                          | yes                          | yes            |
+| `pingProtocol: 'icmp'` | no                          | yes                          | no             |
+| `responseHeaderEquals` | yes                         | no                           | 2.0.0 or later |
+| `responseJsonPath`     | yes                         | yes                          | 2.0.0 or later |
 
 A monitor that asks a place for something it can't do fails on every check, with an error that names the setting, such as `sslCheckEnabled is not supported by a direct check`. This counts the fallback too: `sslCheckEnabled` with `checkProxyFallback: true` fails, because the fallback runs from the Worker. The unit tests run the same rules on your config, so the deploy stops before such a monitor goes live.
 
@@ -175,6 +211,6 @@ A monitor that asks a place for something it can't do fails on every check, with
 
 This is how to use your own [flarewatch-proxy](https://github.com/saminnet/flarewatch-proxy) as a second vantage point: a blip between Cloudflare and your site no longer opens an incident unless the proxy sees it too. `confirmVia: 'globalping://<token>?magic=fra'` does the same from a Globalping probe. `confirmVia` must name a different place than `checkProxy`, and the table above applies to it too. A confirmation that fails for any reason counts as down, so a proxy older than 2.0.0 can't clear a failed header or JSON check.
 
-The free plan allows a check run 50 subrequests. Each check is one, a Globalping check two plus one per extra poll, and the hub and each alert webhook need their own. A confirmation, a `checkProxyFallback` check or an extra Globalping poll runs only while the run has some to spare, so with many monitors failing at once, the later ones keep their first result. FlareWatch holds back one request per webhook, which covers the first alert of a run; with many monitors going down in the same minute, later alerts can still go over the limit.
+The free plan allows a check run 50 subrequests. An HTTP, TCP or DNS check reserves one, a DOMAIN check two, and a Globalping check two plus one per extra poll. The hub and each alert webhook need their own. A confirmation, a `checkProxyFallback` check or an extra Globalping poll runs only while the run has some to spare. FlareWatch holds back one request per webhook for alerts. When more alerts are due than the run can afford, later down alerts wait for the next runs without using an attempt. Summary alerts use one request per webhook.
 
 A site in the same Cloudflare zone as the monitor Worker also needs a proxy. Cloudflare sends a Worker's requests for its own zone straight to the origin, so a direct check gets a 503 even when the site is up.

@@ -98,7 +98,7 @@ async function insertHistory(
 it('keeps what it stored across a cold start in workerd', async () => {
   expect((await view('hub')).body.monitors).toEqual({});
   const sql = await storage('hub');
-  expect(await sql.exec('SELECT id FROM _migrations')).toHaveLength(8);
+  expect(await sql.exec('SELECT id FROM _migrations')).toHaveLength(10);
   await sql.exec("INSERT INTO meta (key, value) VALUES ('marker', '1')");
   await evict('hub');
   expect((await view('hub')).body.monitors).toEqual({});
@@ -114,6 +114,10 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
     const sql = await storage(hub);
     // The schema 3.1.0 left behind.
     await sql.exec('DELETE FROM _migrations WHERE id >= 7');
+    await sql.exec('ALTER TABLE monitors DROP COLUMN failure_count');
+    await sql.exec('ALTER TABLE monitors DROP COLUMN first_failure_at');
+    await sql.exec('ALTER TABLE monitors DROP COLUMN warning');
+    await sql.exec('DROP TABLE expiry_alerts');
     await sql.exec('ALTER TABLE meta DROP COLUMN runs');
     await sql.exec('ALTER TABLE incidents DROP COLUMN alert_run');
     await sql.exec('ALTER TABLE incidents DROP COLUMN reminders');
@@ -176,7 +180,7 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
       10, 20,
     ]);
     expect(await sql.exec('SELECT count(*) AS n FROM samples')).toEqual([{ n: 0 }]);
-    expect(await sql.exec('SELECT MAX(id) AS id FROM _migrations')).toEqual([{ id: 8 }]);
+    expect(await sql.exec('SELECT MAX(id) AS id FROM _migrations')).toEqual([{ id: 10 }]);
 
     await record(hub, [{ now: T0 + 60, records: [check('api', up()), check('db', up())] }]);
 
@@ -188,6 +192,77 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
 });
 
 describe('MonitorHub in workerd row budgets', () => {
+  it('writes warning state only when it changes and one claim per expiry date', async () => {
+    const hub = 'warning-budget';
+    const run = (now: number, days: number): Run => ({
+      now,
+      policy: { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false },
+      records: [
+        {
+          monitor: {
+            id: 'api',
+            name: 'API',
+            method: 'GET',
+            target: 'https://example.com',
+            sslCheckEnabled: true,
+            sslCheckDaysBeforeExpiry: 14,
+          },
+          check: {
+            location: 'HEL',
+            result: {
+              ok: true,
+              latency: 1,
+              ssl: { expiryDate: T0 + 86400 * 15, daysUntilExpiry: days },
+            },
+          },
+        },
+      ],
+    });
+    await alert(hub, [run(T0, 20)]);
+    const first = await alert(hub, [run(T0 + 60, 14)]);
+    const steady = await alert(hub, [run(T0 + 120, 14)]);
+    const clear = await alert(hub, [run(T0 + 180, 20)]);
+    const after = await alert(hub, [run(T0 + 240, 20)]);
+    expect(first.body).toEqual([['api expiry']]);
+    expect(first.rows.written).toBe(4);
+    expect(steady.rows.written).toBe(2);
+    expect(clear.rows.written).toBe(3);
+    expect(after.rows.written).toBe(2);
+    expect(steady.rows.read).toBeLessThanOrEqual(10);
+  }, 60_000);
+  it('writes the failure counter only as it grows and once on reset', async () => {
+    const hub = 'threshold-budget';
+    const run = (now: number, result: CheckResult): Run => {
+      const entry = check('api', result);
+      return {
+        now,
+        records: [
+          {
+            ...entry,
+            monitor: {
+              ...entry.monitor,
+              method: 'GET',
+              target: 'https://example.com',
+              downAfterChecks: 3,
+            },
+          },
+        ],
+      };
+    };
+    await record(hub, [run(T0, up())]);
+    const steady = await record(hub, [run(T0 + 60, up())]);
+    const first = await record(hub, [run(T0 + 120, down())]);
+    const second = await record(hub, [run(T0 + 180, down())]);
+    const reset = await record(hub, [run(T0 + 240, up())]);
+    const after = await record(hub, [run(T0 + 300, up())]);
+    expect(steady.rows.written).toBe(2);
+    expect(first.rows.written).toBe(3);
+    expect(second.rows.written).toBe(3);
+    expect(reset.rows.written).toBe(3);
+    expect(after.rows.written).toBe(2);
+    expect(first.rows.read).toBeLessThanOrEqual(8);
+    expect((await view(hub)).body.monitors.api?.incidents).toEqual([]);
+  }, 60_000);
   const MONITORS = Array.from({ length: 6 }, (_, i) => `m${i}`);
   // Half a minute into an hour, so the first measured runs fall in the hour now is in.
   const NOW = T0 + 30;

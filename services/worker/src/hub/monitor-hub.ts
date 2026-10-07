@@ -2,6 +2,8 @@ import { DurableObject } from 'cloudflare:workers';
 import * as z from 'zod/mini';
 import {
   isMaintenanceActive,
+  coversMonitor,
+  DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   maintenanceExpiresAt,
   parseHeartbeatSignal,
   parseMaintenances,
@@ -31,10 +33,17 @@ const MAX_MAINTENANCES = 100;
 
 /** A check monitor's result, or a heartbeat monitor, which the hub evaluates from its pings. */
 export type CheckRecord =
-  | { monitor: MonitorTarget; check: CheckResultWithLocation }
+  | { monitor: MonitorTarget; check?: CheckResultWithLocation }
   | { monitor: HeartbeatMonitor };
 
-type MonitorRow = { id: string; started_at: number | null; heartbeat: string | null };
+type MonitorRow = {
+  id: string;
+  started_at: number | null;
+  heartbeat: string | null;
+  failure_count: number;
+  first_failure_at: number | null;
+  warning: string | null;
+};
 
 /** One check run's samples: monitor id to [latency, location]. */
 type Samples = Record<string, [number, string]>;
@@ -78,12 +87,20 @@ export class MonitorHub extends DurableObject<Env> {
       const run = (last?.runs ?? 0) + 1;
       const rows = new Map(
         this.sql
-          .exec<MonitorRow>('SELECT id, started_at, heartbeat FROM monitors')
+          .exec<MonitorRow>(
+            'SELECT id, started_at, heartbeat, failure_count, first_failure_at, warning FROM monitors',
+          )
           .map((row) => [row.id, row]),
       );
       const open = this.incidents.open();
       const updates: IncidentUpdate[] = [];
       const samples: Samples = {};
+      const warningAlerts: Alert[] = [];
+      const warnings = new Map(
+        rows.size > 0
+          ? [...rows].map(([id, row]) => [id, warningSchema.safeParse(parseJson(row.warning)).data])
+          : [],
+      );
       const maintenances = this.maintenances();
       const activeMaintenances = maintenances.filter((maintenance) =>
         isMaintenanceActive(maintenance, now * 1000),
@@ -94,7 +111,8 @@ export class MonitorHub extends DurableObject<Env> {
         const row = rows.get(monitor.id);
         let result: CheckResult | undefined;
 
-        if ('check' in record) {
+        if (record.monitor.method !== 'HEARTBEAT') {
+          if (!('check' in record) || !record.check) continue;
           result = record.check.result;
           // A proxy names its own location; a long one would bloat the hour's row.
           samples[monitor.id] = [result.latency ?? 0, record.check.location.slice(0, 64)];
@@ -125,7 +143,47 @@ export class MonitorHub extends DurableObject<Env> {
             now,
           );
         }
-        updates.push(this.incidents.apply(monitor.id, result, open.get(monitor.id), now));
+        let warning = result.ok ? result.warning : undefined;
+        if (result.ok && monitor.method !== 'HEARTBEAT' && monitor.sslCheckEnabled && result.ssl) {
+          const ssl = result.ssl;
+          if (ssl.expiryDate <= now)
+            result = { ok: false, error: 'Certificate has expired', latency: result.latency };
+          else if (
+            ssl.daysUntilExpiry <=
+            (monitor.sslCheckDaysBeforeExpiry ?? DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS)
+          ) {
+            warning = {
+              text: `Certificate expires on ${new Date(ssl.expiryDate * 1000).toISOString().slice(0, 10)} (${ssl.daysUntilExpiry} days remaining)`,
+              expiryDate: ssl.expiryDate,
+            };
+          }
+        }
+        const warningJson = warning ? JSON.stringify(warning) : null;
+        if (warningJson !== (row?.warning ?? null))
+          this.sql.exec('UPDATE monitors SET warning = ? WHERE id = ?', warningJson, monitor.id);
+        warnings.set(monitor.id, warning);
+        let firstFailure = now;
+        if (monitor.method !== 'HEARTBEAT') {
+          const count = row?.failure_count ?? 0;
+          if (result.ok && count > 0) {
+            this.sql.exec(
+              'UPDATE monitors SET failure_count = 0, first_failure_at = NULL WHERE id = ?',
+              monitor.id,
+            );
+          } else if (!result.ok && !open.has(monitor.id) && (monitor.downAfterChecks ?? 1) > 1) {
+            firstFailure = row?.first_failure_at ?? now;
+            this.sql.exec(
+              'UPDATE monitors SET failure_count = ?, first_failure_at = ? WHERE id = ?',
+              count + 1,
+              firstFailure,
+              monitor.id,
+            );
+            if (count + 1 < monitor.downAfterChecks!) continue;
+          }
+        }
+        updates.push(
+          this.incidents.apply(monitor.id, result, open.get(monitor.id), now, firstFailure),
+        );
       }
 
       if (Object.keys(samples).length > 0) {
@@ -139,6 +197,35 @@ export class MonitorHub extends DurableObject<Env> {
           `$."${now}"`,
           json,
         );
+      }
+      if (policy) {
+        for (const { monitor } of records) {
+          const warning = warnings.get(monitor.id);
+          if (
+            !warning ||
+            policy.skipIds.includes(monitor.id) ||
+            activeMaintenances.some((maintenance) => coversMonitor(maintenance, monitor.id))
+          )
+            continue;
+          const claimed = this.sql.exec(
+            'INSERT INTO expiry_alerts (monitor_id, expiry_date, run) VALUES (?, ?, ?) ON CONFLICT DO NOTHING RETURNING monitor_id',
+            monitor.id,
+            warning.expiryDate,
+            run,
+          );
+          if (claimed.length > 0)
+            warningAlerts.push({
+              monitorId: monitor.id,
+              incident: 0,
+              kind: 'expiry',
+              incidentStartTime: now,
+              error: warning.text,
+              alsoDown: [],
+              reopenedAt: null,
+              run,
+              expiryDate: warning.expiryDate,
+            });
+        }
       }
       this.sql.exec(
         'DELETE FROM latency WHERE hour < ?',
@@ -183,7 +270,7 @@ export class MonitorHub extends DurableObject<Env> {
             policy,
           )
         : [];
-      return { updates, alerts };
+      return { updates, alerts: [...alerts, ...warningAlerts] };
     });
   }
 
@@ -242,15 +329,21 @@ export class MonitorHub extends DurableObject<Env> {
     const latest = runs[latestAt] ?? {};
 
     const monitors: Record<string, MonitorView> = {};
-    for (const row of this.sql.exec<MonitorRow>('SELECT id, started_at, heartbeat FROM monitors')) {
+    for (const row of this.sql.exec<MonitorRow>(
+      'SELECT id, started_at, heartbeat, warning FROM monitors',
+    )) {
       const list = incidents.get(row.id) ?? [];
       const heartbeat = readHeartbeat(row);
       const sample = Object.prototype.hasOwnProperty.call(latest, row.id)
         ? latest[row.id]
         : undefined;
       const down = list[list.length - 1]?.end === undefined && list.length > 0;
+      const warning = row.warning
+        ? warningSchema.safeParse(parseJson(row.warning)).data
+        : undefined;
       monitors[row.id] = {
-        status: down ? 'down' : (heartbeat?.status ?? 'up'),
+        status: down ? 'down' : (heartbeat?.status ?? (warning ? 'degraded' : 'up')),
+        ...(warning && { warning: warning.text }),
         incidents: list,
         ...(row.started_at !== null && { startedAt: row.started_at }),
         ...(sample && { latest: { ping: sample[0], loc: sample[1], time: latestAt } }),
@@ -320,6 +413,7 @@ export class MonitorHub extends DurableObject<Env> {
 
 /** An hour's check runs: run time to that run's samples. */
 const hourSchema = z.record(z.string(), z.record(z.string(), z.tuple([z.number(), z.string()])));
+const warningSchema = z.object({ text: z.string(), expiryDate: z.number() });
 
 function parseHour(data: string | null): Record<string, Samples> {
   return hourSchema.safeParse(parseJson(data)).data ?? {};
