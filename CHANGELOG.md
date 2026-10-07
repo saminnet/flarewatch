@@ -25,7 +25,8 @@ You can roll back to 3.3.0 on the same storage. Take the new fields out of your 
 
 ### Changed
 
-- The deploy warns when `HEARTBEAT_SECRET` is shorter than 32 characters, because anyone with one ping URL can guess a short secret offline. Replace it with the output of `openssl rand -base64 32`, then update your ping URLs. The next major release will refuse to deploy with a short secret.
+- The deploy workflow deploys only from `main`. Before, running it by hand on another branch deployed that branch.
+- The deploy warns when `HEARTBEAT_SECRET` is shorter than 32 characters, because anyone with one ping URL can guess a short secret offline. Replace it with the output of `openssl rand -base64 32`, then update your ping URLs.
 
 ### Fixed
 

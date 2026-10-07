@@ -17,9 +17,11 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-26.04
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb #v1.15.0
@@ -81,12 +83,13 @@ jobs:
 
   build-and-deploy:
     name: Deploy to Cloudflare
-    if: ${{ github.event_name != 'pull_request' }}
+    # A manual run on another branch would otherwise deploy that branch.
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     concurrency:
       group: deploy-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 5
     needs: quality
     # Only this job gets the token: the quality job installs and runs third-party code.
     env:
@@ -98,7 +101,7 @@ jobs:
         env:
           HEARTBEAT_SECRET: ${{ secrets.HEARTBEAT_SECRET }}
         run: |
-          # One ping URL lets anyone guess a short secret offline. The next major release fails here instead.
+          # One ping URL lets anyone guess a short secret offline.
           if [ -n "${HEARTBEAT_SECRET}" ] && [ ${#HEARTBEAT_SECRET} -lt 32 ]; then
             echo "::warning title=Short HEARTBEAT_SECRET::HEARTBEAT_SECRET has fewer than 32 characters. Replace it with the output of 'openssl rand -base64 32', then update your ping URLs."
           fi
@@ -117,6 +120,8 @@ jobs:
           fi
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb #v1.15.0
