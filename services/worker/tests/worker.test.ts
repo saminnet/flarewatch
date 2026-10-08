@@ -167,6 +167,39 @@ describe('subrequests per check run', () => {
     },
   );
 
+  it('stays within 50 when an overlapping run ends the outages while their alerts go out', async () => {
+    const monitors = Array.from({ length: 40 }, (_, i) => createMonitor(`m${i}`));
+    const { hub, env } = createEnv();
+    const otherRun = hub.record.bind(hub);
+    let overlapped = false;
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url !== HOOK) return new Response('down', { status: 503 });
+      if (!overlapped) {
+        overlapped = true;
+        otherRun(
+          Math.floor(Date.now() / 1000) + 60,
+          monitors.map((monitor) => ({
+            monitor,
+            check: { location: 'FRA', result: { ok: true as const, latency: 10 } },
+          })),
+          { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false },
+        );
+      }
+      return new Response('ok');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const record = vi.spyOn(hub, 'record');
+    const confirmAlerts = vi.spyOn(hub, 'confirmAlerts');
+
+    await runChecks(env, createWorkerDeps({ monitors, notification: { webhook: { url: HOOK } } }));
+
+    expect(overlapped).toBe(true);
+    const total =
+      fetchMock.mock.calls.length + record.mock.calls.length + confirmAlerts.mock.calls.length + 1;
+    expect(total).toBeLessThanOrEqual(50);
+  });
+
   /** Fetches and hub calls in one run of 45 monitors that confirm through a proxy. */
   async function countSubrequests(failing: number, notification?: NotificationConfig) {
     const monitors = Array.from({ length: 45 }, (_, i) => ({
@@ -217,7 +250,7 @@ describe('subrequests per check run', () => {
     expect(alerts).toBeGreaterThan(0);
   });
 
-  it('sends a mass outage over the next runs and loses no alert to the request cap', async () => {
+  it('sends a mass outage in its first run within the request cap', async () => {
     const monitors = Array.from({ length: 40 }, (_, i) => createMonitor(`m${i}`));
     const hooks = ['https://a.example.com/alert', 'https://b.example.com/alert'];
     const alerted = new Map(hooks.map((hook) => [hook, [] as string[]]));
@@ -236,7 +269,7 @@ describe('subrequests per check run', () => {
         if (!hook) return new Response('down', { status: 503 });
         const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
         const text = isJsonObject(body) && typeof body.text === 'string' ? body.text : '';
-        hook.push(/Monitor (m\d+)(?!\d)/.exec(text)?.[1] ?? '?');
+        for (const [, id] of text.matchAll(/Monitor (m\d+)(?!\d)/g)) hook.push(id!);
         return new Response('ok');
       }),
     );
@@ -249,17 +282,11 @@ describe('subrequests per check run', () => {
       createNotifier,
     };
 
-    let runs = 0;
-    do {
-      requests = 0;
-      await runChecks(env, deps);
-    } while (++runs < 20 && requests > monitors.length);
+    await runChecks(env, deps);
 
     expect(refused).toBe(0);
-    // 40 checks leave 7 requests: the prepaid alert and two more at two webhooks each.
-    expect(runs).toBeLessThanOrEqual(15);
     const ids = monitors.map((monitor) => monitor.id).sort();
-    for (const hook of hooks) expect(alerted.get(hook)?.sort()).toEqual(ids);
+    for (const hook of hooks) expect([...new Set(alerted.get(hook))].sort()).toEqual(ids);
   });
 
   it('spends nothing on confirmations while every monitor is up', async () => {

@@ -129,12 +129,16 @@ export async function runChecks(
   const { updates, alerts } = await hub.record(currentTime, records, policy);
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
-  let prepaid = webhooks.length;
-  const affordAlert = (cost: number): boolean => {
-    const extra = Math.max(0, cost - prepaid);
-    if (budget.subrequests < extra) return false;
-    prepaid = Math.max(0, prepaid - cost);
-    budget.subrequests -= extra;
+  // The run held back one request per webhook. Each webhook spends it last, so the alerts that
+  // the spare budget cannot send one by one still go out, together as one summary.
+  let reserved = webhooks.length;
+  const spend = (fromReserve: boolean): boolean => {
+    if (fromReserve && reserved > 0) {
+      reserved--;
+      return true;
+    }
+    if (budget.subrequests < 1) return false;
+    budget.subrequests--;
     return true;
   };
   const context = (alert: Alert): NotificationContext | undefined => {
@@ -162,38 +166,38 @@ export async function runChecks(
         : [{ alert, ctx, delivered: false, attempted: !notifier || !ctx }];
     });
     if (notifier) {
-      const recipients: (Webhook | undefined)[] =
-        summaryAfter === Infinity ? [undefined] : webhooks;
-      for (const webhook of recipients) {
-        const routed = webhook
-          ? entries.filter(({ alert }) => routes(webhook, alert.monitorId))
-          : entries;
-        const groups = routed.length >= summaryAfter ? [routed] : routed.map((entry) => [entry]);
-        for (const group of groups) {
-          const ctx = group[0]!.ctx;
-          if (!ctx) continue;
-          const cost = webhook ? 1 : webhooks.filter((hook) => routes(hook, ctx.monitor.id)).length;
-          if (!affordAlert(cost)) continue;
-          for (const entry of group) entry.attempted = true;
-          try {
-            const results =
-              webhook && group.length >= summaryAfter
-                ? [
-                    await notifier.sendSummary(
-                      webhook,
-                      group.map(({ ctx }) => ctx!),
-                    ),
-                  ]
-                : await notifier.send(ctx, formatNotificationMessage(ctx), webhook);
-            if (results.some((result) => result.success))
-              for (const entry of group) entry.delivered = true;
-          } catch (error) {
-            log.error('Alert failed', {
-              ...(!webhook && { monitor: ctx.monitor.id }),
-              error: String(error),
-            });
-          }
+      type Entry = (typeof entries)[number];
+      const send = async (webhook: Webhook, group: Entry[]) => {
+        for (const entry of group) entry.attempted = true;
+        try {
+          const results =
+            group.length > 1
+              ? [
+                  await notifier.sendSummary(
+                    webhook,
+                    group.map(({ ctx }) => ctx!),
+                  ),
+                ]
+              : await notifier.send(
+                  group[0]!.ctx!,
+                  formatNotificationMessage(group[0]!.ctx!),
+                  webhook,
+                );
+          if (results.some((result) => result.success))
+            for (const entry of group) entry.delivered = true;
+        } catch (error) {
+          log.error('Alert failed', { error: String(error) });
         }
+      };
+      for (const webhook of webhooks) {
+        const routed = entries.filter(({ alert, ctx }) => ctx && routes(webhook, alert.monitorId));
+        if (routed.length === 0) continue;
+        let next = 0;
+        if (routed.length < summaryAfter) {
+          for (; next < routed.length - 1 && spend(false); next++)
+            await send(webhook, [routed[next]!]);
+        }
+        if (spend(true)) await send(webhook, routed.slice(next));
       }
     }
     return entries.map(({ alert, delivered, attempted }): AlertOutcome => ({
@@ -202,9 +206,11 @@ export async function runChecks(
       ...(!attempted && { deferred: true }),
     }));
   };
-  // Reporting a down alert's outcome can turn up the recovery of an outage that ended meanwhile.
-  for (let batch = alerts; batch.length > 0;) {
-    batch = await hub.confirmAlerts(await deliver(batch));
+  if (alerts.length > 0) {
+    // Reporting a down alert's outcome can turn up the recovery of an outage that ended meanwhile.
+    // The hub keeps nothing about a recovery, so its outcome is not reported.
+    const recoveries = await hub.confirmAlerts(await deliver(alerts));
+    if (recoveries.length > 0) await deliver(recoveries);
   }
 
   for (const update of updates) {

@@ -198,3 +198,52 @@ it('keeps routing below the threshold and retries down alerts after a refused su
   await runChecks(env, deps);
   expect(sent).toHaveLength(4);
 });
+
+it('sends the alerts that a run cannot fit one by one as a summary, for an outage and its recovery', async () => {
+  const monitors = Array.from({ length: 40 }, (_, i) => ({
+    id: `m${i}`,
+    name: `Monitor ${i}`,
+    method: 'GET' as const,
+    target: `https://m${i}.example.com`,
+  }));
+  let down = true;
+  let requests = 0;
+  const sent: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init) => {
+      requests++;
+      if (input === 'https://cloudflare.com/cdn-cgi/trace') return new Response('colo=HEL');
+      if (input === 'https://hooks.example/all') {
+        sent.push(typeof init?.body === 'string' ? init.body : '');
+        return new Response('ok');
+      }
+      return down ? new Response('down', { status: 503 }) : new Response('ok');
+    }),
+  );
+  const { hub } = createHub();
+  const deps = {
+    ...createWorkerDeps({
+      monitors,
+      notification: { webhook: { url: 'https://hooks.example/all', payload: { text: '$MSG' } } },
+    }),
+    createNotifier,
+    getEdgeLocation,
+  };
+  const run = async () => {
+    sent.length = 0;
+    requests = 0;
+    await runChecks({ MONITOR_HUB: hubNamespace(hub) }, deps);
+    expect(requests).toBeLessThanOrEqual(50);
+    return sent.join('\n');
+  };
+
+  const outage = await run();
+  for (const monitor of monitors) expect(outage).toContain(monitor.name);
+
+  down = false;
+  vi.setSystemTime(Date.now() + 60_000);
+  const recovery = await run();
+  for (const monitor of monitors) expect(recovery).toContain(monitor.name);
+  expect(sent.length).toBeGreaterThan(1);
+});

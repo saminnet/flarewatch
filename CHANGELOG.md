@@ -32,6 +32,7 @@ You can roll back to 3.3.0 on the same storage. Take the new fields out of your 
 
 ### Fixed
 
+- When a check run can't afford one request per alert, each webhook now gets the alerts that don't fit as one summary in the same run. Before, recovery alerts past the run's 50 requests were never sent, and down alerts waited for later runs.
 - Returning to the dashboard from a monitor page or History no longer makes an extra server call to load collapsed groups.
 - Hovering a monitor on the dashboard no longer loads its latency. The monitor page loads it once you open it.
 - A Globalping check with `sslCheckEnabled` now fails with `Invalid certificate expiry date` when Globalping reports an expiry that isn't a date. Before, the check passed and stored the broken date.
