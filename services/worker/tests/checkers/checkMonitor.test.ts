@@ -302,6 +302,26 @@ describe('checkMonitor', () => {
       expect(connect).toHaveBeenCalledWith({ hostname: '10.0.1.50', port: 6379 });
     });
 
+    it('aborts a hanging binding request and fails the check with a timeout', async () => {
+      const inits: RequestInit[] = [];
+      const fetch = vi.fn<VpcBinding['fetch']>(async (_input, init) => {
+        inits.push(init ?? {});
+        return new Promise<never>((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        });
+      });
+
+      const result = await checkMonitor(
+        createTarget({ checkProxy: 'vpc', timeout: 40 }),
+        vpcCtx({ fetch, connect: vi.fn<VpcBinding['connect']>(async () => socket()) }),
+        deps,
+      );
+
+      expect(inits[0]?.signal).toBeInstanceOf(AbortSignal);
+      expect(inits[0]?.signal?.aborted).toBe(true);
+      expect(result.result).toMatchObject({ ok: false, error: 'Timeout after 40ms' });
+    });
+
     it('falls back to a direct check when the binding cannot reach the target', async () => {
       const fetch = vi.fn<VpcBinding['fetch']>(async () => {
         throw new Error('VPC Network cannot connect');

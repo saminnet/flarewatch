@@ -185,6 +185,42 @@ it('charges each RDAP redirect to the shared run budget', async () => {
   expect(hub.view().monitors.a?.warning).toBeUndefined();
 });
 
+it.each([20, 21] as const)('follows at most 20 RDAP redirects (%j hops)', async (hops) => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+  const rdap: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === 'https://data.iana.org/rdap/dns.json') return Response.json(bootstrap);
+      if (url.startsWith('https://rdap.example/')) {
+        rdap.push(url);
+        const hop = Number(/\/r(\d+)$/.exec(url)?.[1] ?? 0);
+        if (hop < 20 || (hop === 20 && hops === 21))
+          return new Response(null, { status: 302, headers: { location: `/r${hop + 1}` } });
+        return Response.json(reply('2026-01-01T00:00:00Z'));
+      }
+      return new Response('colo=HEL');
+    }),
+  );
+  const { hub } = createHub();
+  await runChecks(
+    { MONITOR_HUB: hubNamespace(hub) },
+    createWorkerDeps({ monitors: [{ ...monitor, checkEveryMinutes: 1 }] }),
+  );
+
+  expect(rdap).toHaveLength(21);
+  expect(rdap).not.toContain('https://rdap.example/r21');
+  const view = hub.view().monitors.a;
+  if (hops === 20) {
+    expect(view).toMatchObject({ status: 'up', incidents: [] });
+  } else {
+    expect(view?.status).toBe('down');
+    expect(view?.incidents[0]?.error[0]).toContain('Too many RDAP redirects');
+  }
+});
+
 it.each(['bootstrap-http', 'bootstrap-json', 'lookup-http', 'network', 'redirect'])(
   'names an RDAP %s failure',
   async (cause) => {

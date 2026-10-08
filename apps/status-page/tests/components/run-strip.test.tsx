@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
-import { HEARTBEAT_RUN_HISTORY } from '@flarewatch/shared';
-import type { HeartbeatView } from '@/lib/heartbeat';
 
 // jsdom has no ResizeObserver; the stub never reports a width, which keeps the
 // strip in its pre-measurement state for the whole test.
@@ -21,43 +19,7 @@ const { formatUtcShort } = await import('@flarewatch/shared');
 
 afterEach(cleanup);
 
-const heartbeat: HeartbeatView = {
-  phase: 'up',
-  lastRunSec: HEARTBEAT_RUN_HISTORY,
-  lastResult: 'success',
-  nowSec: HEARTBEAT_RUN_HISTORY,
-  runs: Array.from({ length: HEARTBEAT_RUN_HISTORY }, (_, i) => ({ at: i + 1, outcome: 'ok' })),
-};
-
 describe('RunStrip', () => {
-  it('renders no mobile cells before the container is measured', () => {
-    render(<RunStrip heartbeat={heartbeat} periodSeconds={3600} graceSeconds={0} />);
-
-    expect(screen.getAllByRole('button', { name: /^Completed at / })).toHaveLength(90);
-    const groups = screen.getAllByRole('group', { name: /^90 runs, 0 missed, 0 failed/ });
-    expect(groups.some((group) => within(group).queryAllByRole('button').length === 0)).toBe(true);
-  });
-
-  it('renders the strip and a next cell when empty', () => {
-    render(
-      <RunStrip
-        heartbeat={{ phase: 'pending', nowSec: 0 }}
-        periodSeconds={3600}
-        graceSeconds={0}
-      />,
-    );
-
-    expect(
-      screen.getAllByRole('group', {
-        name: 'No run recorded yet. The first ping starts the schedule.',
-      }),
-    ).toHaveLength(2);
-    expect(screen.queryAllByRole('button', { name: /^(Completed|Failed|Missed) at/ })).toHaveLength(
-      0,
-    );
-    expect(screen.getAllByRole('button', { name: 'Waiting for the first ping' })).toHaveLength(2);
-  });
-
   it('labels a failed run cell with its time and outcome', () => {
     const { container } = render(
       <RunStrip

@@ -41,6 +41,31 @@ describe('MonitorHub incidents', () => {
     });
   });
 
+  it('marks a monitor down when a successful check carries an expired certificate', () => {
+    const { hub } = createHub();
+    const ssl = { ...monitor('ssl'), sslCheckEnabled: true } as const;
+    const result: CheckResult = {
+      ok: true,
+      latency: 5,
+      ssl: { expiryDate: T0 - DAY, daysUntilExpiry: -1 },
+    };
+
+    const [update] = hub.record(T0, [
+      { monitor: ssl, check: { location: 'PROXY', result } },
+    ]).updates;
+
+    expect(update).toMatchObject({
+      changeType: 'down',
+      isUp: false,
+      error: 'Certificate has expired',
+      incidentStartTime: T0,
+    });
+    expect(hub.view().monitors.ssl).toMatchObject({
+      status: 'down',
+      incidents: [{ start: [T0], error: ['Certificate has expired'] }],
+    });
+  });
+
   it('adds a segment only when the error changes, then closes on recovery', () => {
     const { hub } = createHub();
     hub.record(T0, [check('api', down('Timeout'))]);

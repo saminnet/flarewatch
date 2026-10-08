@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIResponse, type Page } from '@playwright/test';
 import { isJsonObject } from '@flarewatch/shared';
+import { collectClientErrors } from './client-errors';
 import { workerConfig } from './config/worker';
 
 type SeededMonitor = {
@@ -78,15 +79,6 @@ const privateMonitorFields = [
 
 function expectNoPrivateMonitorFields(body: string): void {
   for (const field of privateMonitorFields) expect(body).not.toContain(field);
-}
-
-function collectClientErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  return errors;
 }
 
 async function readOkJson<T>(
