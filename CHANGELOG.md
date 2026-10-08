@@ -31,6 +31,7 @@ You can roll back to 3.3.0 on the same storage. Take the new fields out of your 
 
 ### Fixed
 
+- Returning to the dashboard from a monitor page or History no longer makes an extra server call to load collapsed groups.
 - A Globalping check with `sslCheckEnabled` now fails with `Invalid certificate expiry date` when Globalping reports an expiry that isn't a date. Before, the check passed and stored the broken date.
 - A monitor id of `__proto__` now fails the config check with `id cannot be __proto__`.
 - When someone else signs in on the same browser, every open tab of the status page reloads as that account. Before, an open tab could still show the previous account's private monitors, for example after leaving visitor view.

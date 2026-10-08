@@ -3,7 +3,7 @@ import { createRootRouteWithContext, redirect, retainSearchParams } from '@tanst
 import { createMiddleware } from '@tanstack/react-start';
 import { RootComponent } from '@/components/routes/root-component';
 import { getThemePreferenceServerFn } from '@/lib/theme-server';
-import { configQuery, sessionQuery } from '@/lib/query/monitors.queries';
+import { configQuery, sessionQuery, uiPrefsQuery } from '@/lib/query/monitors.queries';
 
 import '@fontsource-variable/inter/wght.css';
 
@@ -40,6 +40,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     const [theme, config] = await Promise.all([
       getThemePreferenceServerFn(),
       context.queryClient.ensureQueryData(configQuery()),
+      context.queryClient.ensureQueryData(uiPrefsQuery()),
     ]);
     return { theme, statusPage: config.statusPage };
   },

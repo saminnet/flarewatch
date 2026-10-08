@@ -20,10 +20,9 @@ export const Route = createFileRoute('/')({
   }),
   loaderDeps: ({ search }) => ({ view: search.view }),
   loader: async ({ context, deps }) => {
-    await Promise.all([
-      context.queryClient.ensureQueryData(snapshotQuery(audienceOf(context.session, deps.view))),
-      context.queryClient.ensureQueryData(uiPrefsQuery()),
-    ]);
+    await context.queryClient.ensureQueryData(
+      snapshotQuery(audienceOf(context.session, deps.view)),
+    );
   },
   component: DashboardPage,
 });
