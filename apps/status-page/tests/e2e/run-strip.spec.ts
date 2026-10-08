@@ -4,6 +4,45 @@ import { collectClientErrors } from './client-errors';
 /** The width one mobile run cell takes: `w-2.5` plus the `gap-0.5` between cells. */
 const MOBILE_CELL_PX = 12;
 
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 1280, height: 720 },
+]) {
+  test(`run history wraps arrow keys and supports Home and End at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/monitors/demo_nightly_compactor');
+    const strip = page.getByRole('group', { name: /90 runs, 1 missed, 1 failed, last run/ });
+    const cells = strip.getByRole('button');
+    const next = page.getByRole('button', { name: /^Next run/ });
+    await expect(cells.first()).toBeVisible();
+
+    // SSR renders the group before hydration attaches its keyboard handler.
+    await expect(async () => {
+      await strip.focus();
+      await strip.press('ArrowRight');
+      await expect(cells.first()).toBeFocused({ timeout: 1000 });
+    }).toPass({ timeout: 15_000 });
+    await cells.first().press('ArrowLeft');
+    await expect(next).toBeFocused();
+    await next.press('ArrowRight');
+    await expect(cells.first()).toBeFocused();
+    await cells.first().press('ArrowRight');
+    await expect(cells.nth(1)).toBeFocused();
+    await cells.nth(1).press('ArrowLeft');
+    await expect(cells.first()).toBeFocused();
+    await cells.first().press('End');
+    await expect(next).toBeFocused();
+    await next.press('ArrowLeft');
+    await expect(cells.last()).toBeFocused();
+    await cells.last().press('ArrowRight');
+    await expect(next).toBeFocused();
+    await next.press('Home');
+    await expect(cells.first()).toBeFocused();
+  });
+}
+
 test('a full heartbeat history fills one measured strip on a phone, without duplicated runs', async ({
   page,
 }) => {

@@ -33,6 +33,18 @@ describe('uptime utilities', () => {
   });
 
   describe('calculateUptimePercent', () => {
+    it('changes from unknown to known at exactly sixty seconds of monitor age', () => {
+      const before = view({ test: { startedAt: 100 } }, 159);
+      const boundary = view({ test: { startedAt: 100 } }, 160);
+
+      expect(calculateUptimePercent('test', before)).toBeNull();
+      expect(generateDailyStatus('test', before).every((day) => day.status === 'unknown')).toBe(
+        true,
+      );
+      expect(calculateUptimePercent('test', boundary)).toBe(100);
+      expect(generateDailyStatus('test', boundary).at(-1)?.status).toBe('up');
+    });
+
     it('returns 100% when there are no incidents', () => {
       const state = view({ test: { startedAt: Math.floor(Date.now() / 1000) - 86400 } });
 

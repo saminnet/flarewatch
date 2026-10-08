@@ -396,6 +396,42 @@ describe('worker', () => {
       });
     });
 
+    it('calls status callbacks on up/down transitions and incident callbacks on every down run with their arguments', async () => {
+      const monitor = createMonitor();
+      const { env } = createEnv();
+      const statusEvents: unknown[][] = [];
+      const incidentEvents: unknown[][] = [];
+      workerConfigMock.callbacks = {
+        onStatusChange: async (...args) => {
+          statusEvents.push(args);
+        },
+        onIncident: async (...args) => {
+          incidentEvents.push(args);
+        },
+      };
+
+      await runScheduled(env);
+      expect(statusEvents).toEqual([]);
+      expect(incidentEvents).toEqual([]);
+      mockDown();
+      vi.setSystemTime((NOW_SECONDS + 60) * 1000);
+      await runScheduled(env);
+      vi.setSystemTime((NOW_SECONDS + 120) * 1000);
+      await runScheduled(env);
+      mockUp();
+      vi.setSystemTime((NOW_SECONDS + 180) * 1000);
+      await runScheduled(env);
+
+      expect(statusEvents).toEqual([
+        [env, monitor, false, NOW_SECONDS + 60, NOW_SECONDS + 60, 'Unavailable'],
+        [env, monitor, true, NOW_SECONDS + 60, NOW_SECONDS + 180, ''],
+      ]);
+      expect(incidentEvents).toEqual([
+        [env, monitor, NOW_SECONDS + 60, NOW_SECONDS + 60, 'Unavailable'],
+        [env, monitor, NOW_SECONDS + 60, NOW_SECONDS + 120, 'Unavailable'],
+      ]);
+    });
+
     it('records the run despite a throwing status callback', async () => {
       mockDown();
       workerConfigMock.callbacks = {

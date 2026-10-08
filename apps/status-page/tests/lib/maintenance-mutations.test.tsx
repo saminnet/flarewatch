@@ -46,7 +46,15 @@ function snapshotWith(maintenances: Maintenance[]): Snapshot {
   return { monitors: [], groups: {}, state: null, maintenances, announcements: [] };
 }
 
-function AdminList({ saved, remove = false }: { saved: Maintenance; remove?: boolean }) {
+function AdminList({
+  saved,
+  remove = false,
+  edit = false,
+}: {
+  saved: Maintenance;
+  remove?: boolean;
+  edit?: boolean;
+}) {
   const snapshot = useQuery({
     queryKey: qk.operatorSnapshot,
     queryFn: async (): Promise<Snapshot> => (await (await fetch('/snapshot')).json()) as Snapshot,
@@ -54,14 +62,26 @@ function AdminList({ saved, remove = false }: { saved: Maintenance; remove?: boo
   });
   const create = useCreateMaintenance();
   const deleteWindow = useDeleteMaintenance();
+  const update = useUpdateMaintenance();
   return (
     <>
       <button
-        onClick={() =>
-          remove
-            ? deleteWindow.mutate(saved.id)
-            : create.mutate({ body: saved.body, start: saved.start })
-        }
+        onClick={() => {
+          if (edit) {
+            update.mutate({
+              id: saved.id,
+              updates: {
+                title: null,
+                body: saved.body,
+                start: String(saved.start),
+                end: null,
+                monitors: null,
+                color: null,
+              },
+            });
+          } else if (remove) deleteWindow.mutate(saved.id);
+          else create.mutate({ body: saved.body, start: saved.start });
+        }}
       >
         Save
       </button>
@@ -129,6 +149,28 @@ describe('maintenance mutations', () => {
       expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
         'Window new',
         'Window old',
+      ]),
+    );
+  });
+
+  it('reorders an edited start immediately while keeping the other windows', async () => {
+    const latest = maintenance('latest', '2026-03-01T00:00:00.000Z');
+    const middle = maintenance('middle', '2026-02-01T00:00:00.000Z');
+    const earliest = maintenance('earliest', '2026-01-01T00:00:00.000Z');
+    const edited = { ...middle, body: 'Moved window', start: '2025-12-01T00:00:00.000Z' };
+    const { wrapper } = setup(edited, [latest, middle, earliest]);
+    vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) =>
+      init?.method === 'PUT' ? Response.json(edited) : new Promise<Response>(() => {}),
+    );
+    render(<AdminList saved={edited} edit />, { wrapper });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+        'Window latest',
+        'Window earliest',
+        'Moved window',
       ]),
     );
   });

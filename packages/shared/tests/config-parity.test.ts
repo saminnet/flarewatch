@@ -172,6 +172,17 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
 const maintenanceBase = { id: 'x', body: 'b', createdAt: 1, updatedAt: 2, start: 3 };
 
 const maintenanceCases: Array<[string, unknown, boolean]> = [
+  ['duplicate monitor IDs rejected', { ...maintenanceBase, monitors: ['api', 'api'] }, false],
+  [
+    'unsorted weekdays rejected',
+    { ...maintenanceBase, end: 9, repeat: { every: 'week', weekdays: [5, 1] } },
+    false,
+  ],
+  [
+    'noncanonical zone rejected',
+    { ...maintenanceBase, end: 9, repeat: { every: 'day', timeZone: 'europe/berlin' } },
+    false,
+  ],
   ['minimal valid', maintenanceBase, true],
   ['string start accepted', { ...maintenanceBase, start: '2026-01-01' }, true],
   ['empty id rejected', { ...maintenanceBase, id: '' }, false],

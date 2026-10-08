@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
-import { fetchHubView, fetchPingUrl, forwardPing, triggerCheckRun } from '@/lib/monitor-worker';
+import {
+  fetchAnnouncements,
+  fetchHubView,
+  fetchLatency,
+  fetchMaintenances,
+  fetchPingUrl,
+  forwardPing,
+  triggerCheckRun,
+} from '@/lib/monitor-worker';
 
 function stubEnv() {
   const fetch = vi.fn(
@@ -18,6 +26,108 @@ describe('reading the hub', () => {
     vi.stubGlobal('__env__', {});
 
     await expect(fetchHubView()).rejects.toThrow('MONITOR_WORKER binding not found');
+  });
+});
+
+const hubView = {
+  lastUpdate: 1,
+  maintenances: [],
+  announcements: [],
+  monitors: {
+    api: { status: 'up', incidents: [], latest: { loc: 'HEL', ping: 5, time: 1 } },
+  },
+};
+const storedMaintenance = {
+  id: 'm1',
+  body: 'Upgrade',
+  start: '2026-01-01T00:00:00.000Z',
+  createdAt: 0,
+  updatedAt: 0,
+};
+const storedAnnouncement = {
+  id: 'a1',
+  title: 'Notice',
+  body: 'Scheduled work.',
+  createdAt: 0,
+  updatedAt: 0,
+};
+
+describe('hub answers that arrive broken', () => {
+  it('accepts valid latency samples and an empty sample list', async () => {
+    const { fetch } = stubEnv();
+    const samples = [{ loc: 'HEL', ping: 5, time: 1 }];
+    fetch.mockResolvedValueOnce(Response.json(samples));
+    await expect(fetchLatency('api')).resolves.toEqual(samples);
+    fetch.mockResolvedValueOnce(Response.json([]));
+    await expect(fetchLatency('api')).resolves.toEqual([]);
+  });
+
+  it.each(
+    [
+      {},
+      [null],
+      [{ loc: 1, ping: 5, time: 1 }],
+      [{ loc: 'HEL', ping: '5', time: 1 }],
+      [{ loc: 'HEL', ping: 5 }],
+      [{ loc: 'HEL', ping: 5, time: 'now' }],
+    ].map((payload) => ({ payload })),
+  )('rejects malformed latency samples %j', async ({ payload }) => {
+    stubEnv().fetch.mockResolvedValueOnce(Response.json(payload));
+    await expect(fetchLatency('api')).rejects.toThrow('Monitor worker sent invalid latency');
+  });
+  it('accepts each well-formed payload', async () => {
+    const { fetch } = stubEnv();
+
+    fetch.mockResolvedValueOnce(Response.json(hubView));
+    await expect(fetchHubView()).resolves.toEqual(hubView);
+
+    fetch.mockResolvedValueOnce(Response.json([storedMaintenance]));
+    await expect(fetchMaintenances()).resolves.toHaveLength(1);
+
+    fetch.mockResolvedValueOnce(Response.json([storedAnnouncement]));
+    await expect(fetchAnnouncements()).resolves.toHaveLength(1);
+  });
+
+  it.each([
+    {
+      name: 'a view whose lastUpdate is not a number',
+      payload: { ...hubView, lastUpdate: 'now' },
+      read: fetchHubView,
+    },
+    {
+      name: 'a view that is not an object',
+      payload: [],
+      read: fetchHubView,
+    },
+    {
+      name: 'a view with an unknown monitor status',
+      payload: { ...hubView, monitors: { api: { status: 'paused', incidents: [] } } },
+      read: fetchHubView,
+    },
+    {
+      name: 'a maintenance list that is not a list',
+      payload: {},
+      read: fetchMaintenances,
+    },
+    {
+      name: 'a maintenance list holding an invalid window',
+      payload: [storedMaintenance, { id: 'm2' }],
+      read: fetchMaintenances,
+    },
+    {
+      name: 'an announcement list holding a string',
+      payload: ['downtime'],
+      read: fetchAnnouncements,
+    },
+    {
+      name: 'an announcement list holding a blank body',
+      payload: [{ ...storedAnnouncement, id: 'a2', body: '  ' }],
+      read: fetchAnnouncements,
+    },
+  ])('rejects $name', async ({ payload, read }) => {
+    stubEnv().fetch.mockResolvedValueOnce(Response.json(payload));
+
+    await expect(read()).rejects.toThrow('Monitor worker sent');
   });
 });
 

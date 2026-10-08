@@ -93,6 +93,9 @@ describe('announcement hub routes', () => {
     expect((await send('/announcements/%ZZ', 'DELETE'))?.status).toBe(400);
     expect((await send('/announcements/other', 'PUT', announcement('a')))?.status).toBe(400);
     for (const patch of [
+      { id: undefined },
+      { createdAt: 'yesterday' },
+      { updatedAt: null },
       { title: true },
       { body: 1 },
       { end: {} },
@@ -105,5 +108,25 @@ describe('announcement hub routes', () => {
       ).toBe(400);
     }
     expect(hub.view().announcements).toEqual([]);
+  });
+
+  it('drops malformed stored rows and serves uncapped legacy records', async () => {
+    const { hub, db, send } = fixture();
+    const legacy = { ...announcement('legacy', 2), body: 'x'.repeat(3000) };
+    hub.putAnnouncement(legacy);
+    const insert = (id: string, data: unknown) =>
+      db
+        .prepare('INSERT INTO announcements (id, data) VALUES (?, ?)')
+        .run(id, JSON.stringify(data));
+    db.prepare("INSERT INTO announcements (id, data) VALUES ('garbage', 'not json')").run();
+    insert('no-id', { title: 'Title', body: 'Body', createdAt: 1, updatedAt: 1 });
+    insert('bad-time', { ...announcement('bad-time'), createdAt: 'x' });
+
+    expect(hub.view().announcements).toEqual([legacy]);
+    expect(await (await send('/announcements'))?.json()).toEqual([legacy]);
+    expect(createHub({}, db).hub.view().announcements).toEqual([legacy]);
+    expect(
+      (await send('/announcements/legacy', 'PUT', { ...legacy, body: 'y'.repeat(2001) }))?.status,
+    ).toBe(400);
   });
 });

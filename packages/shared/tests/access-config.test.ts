@@ -2,6 +2,32 @@ import { describe, expect, it } from 'vite-plus/test';
 import { accessConfigIssues } from '../src/config';
 
 describe('accessConfigIssues', () => {
+  it.each(['github', 'oidc'])('rejects empty names and client IDs for %s providers', (type) => {
+    const provider = {
+      id: 'id',
+      name: 'ID',
+      type,
+      clientId: 'fw',
+      ...(type === 'oidc' && { issuer: 'https://id.example' }),
+    };
+    for (const field of ['name', 'clientId']) {
+      expect(accessConfigIssues({ providers: [{ ...provider, [field]: '' }] }, [])).not.toEqual([]);
+    }
+  });
+
+  it.each([
+    { members: ['everyone'] },
+    { members: 'me@example.com' },
+    { members: [1] },
+    { audiences: { acme: { members: ['everyone'], groups: ['Acme'] } } },
+    { audiences: { acme: { members: 'me@example.com', groups: ['Acme'] } } },
+    { audiences: { acme: { members: ['*@acme.example'], groups: 'Acme' } } },
+    { audiences: { acme: { members: ['*@acme.example'], groups: [1] } } },
+    { audiences: { acme: { groups: ['Acme'] } } },
+    { audiences: { acme: { members: ['*@acme.example'] } } },
+  ])('rejects malformed member or audience rules %j', (access) => {
+    expect(accessConfigIssues(access, ['Acme'])).not.toEqual([]);
+  });
   it('accepts OIDC and GitHub providers with each kind of rule', () => {
     expect(
       accessConfigIssues(

@@ -67,6 +67,43 @@ describe('getUtcMonthBounds', () => {
 });
 
 describe('generateCalendarGrids', () => {
+  it.each([
+    {
+      month: '2024-02',
+      weeks: 5,
+      first: [null, null, null, 1, 2, 3, 4],
+      last: [26, 27, 28, 29, null, null, null],
+    },
+    {
+      month: '2023-10',
+      weeks: 6,
+      first: [null, null, null, null, null, null, 1],
+      last: [30, 31, null, null, null, null, null],
+    },
+    {
+      month: '2024-04',
+      weeks: 5,
+      first: [1, 2, 3, 4, 5, 6, 7],
+      last: [29, 30, null, null, null, null, null],
+    },
+  ])(
+    'aligns $month Monday-first and marks UTC today and future days',
+    ({ month, weeks, first, last }) => {
+      const [grid] = generateCalendarGrids(new Date(`${month}-15T23:59:59Z`), 1);
+
+      expect(grid?.yearMonth).toBe(month);
+      expect(grid?.weeks).toHaveLength(weeks);
+      expect(grid?.weeks.every((week) => week.length === 7)).toBe(true);
+      expect(grid?.weeks[0]?.map((day) => day?.date.getUTCDate() ?? null)).toEqual(first);
+      expect(grid?.weeks.at(-1)?.map((day) => day?.date.getUTCDate() ?? null)).toEqual(last);
+      const days = grid?.weeks.flat().filter((day) => day !== null) ?? [];
+      expect(days.filter((day) => day.isToday).map((day) => day.date.toISOString())).toEqual([
+        `${month}-15T00:00:00.000Z`,
+      ]);
+      for (const day of days) expect(day.isFuture).toBe(day.date.getUTCDate() > 15);
+    },
+  );
+
   it('rolls months back across a year boundary', () => {
     const grids = generateCalendarGrids(new Date('2025-03-15T12:00:00Z'), 3, '2025-01');
 

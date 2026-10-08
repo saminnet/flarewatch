@@ -3,7 +3,6 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
   createLogger,
-  DEFAULT_HTTP_TIMEOUT,
   fetchWithTimeout,
   TimeoutError,
   toHeaders,
@@ -156,7 +155,7 @@ describe('fetchWithTimeout', () => {
     void pending.catch(() => {
       settled = true;
     });
-    await vi.advanceTimersByTimeAsync(DEFAULT_HTTP_TIMEOUT - 1);
+    await vi.advanceTimersByTimeAsync(9999);
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     await assertion;
@@ -257,6 +256,18 @@ describe('validateHttpResponse', () => {
   });
 
   describe('keyword validation', () => {
+    it('matches UTF-8 characters split across stream chunks', async () => {
+      const bytes = new TextEncoder().encode('café 😀');
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+          controller.close();
+        },
+      });
+      await expect(
+        validateHttpResponse(createMonitor({ responseKeyword: 'café 😀' }), new Response(body)),
+      ).resolves.toBeNull();
+    });
     it('reads at most 1 MiB of the body, so an endless one cannot exhaust memory', async () => {
       const chunk = new TextEncoder().encode('x'.repeat(64 * 1024));
       const endless = new ReadableStream<Uint8Array>({
@@ -402,6 +413,20 @@ describe('response assertions', () => {
   describe('responseJsonPath', () => {
     const at = (responseJsonPath: string, responseJsonValue: MonitorTarget['responseJsonValue']) =>
       createMonitor({ responseJsonPath, responseJsonValue });
+
+    it.each(['$.a[', "$['a']", '$a', '$.a[-1]', '$.a[x]'])(
+      'reports malformed response path %s',
+      async (path) => {
+        await expect(validateHttpResponse(at(path, 'ok'), json({ a: 'ok' }))).resolves.toBe(
+          `responseJsonPath ${path} is not a $.a.b[0] path`,
+        );
+      },
+    );
+
+    it('selects multiple array indices including a multidigit index', async () => {
+      const body = [[], [], [...Array.from({ length: 10 }, () => 'wrong'), 'ok']];
+      await expect(validateHttpResponse(at('$[2][10]', 'ok'), json(body))).resolves.toBeNull();
+    });
 
     it.each([
       ['a nested string', { a: { b: [{ c: 'ok' }] } }, '$.a.b[0].c', 'ok'],
@@ -590,9 +615,19 @@ describe('toHeaders', () => {
 });
 
 describe('createLogger', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-10T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   it('caller data cannot overwrite the envelope fields', () => {
     const lines: string[] = [];
-    const spy = vi.spyOn(console, 'info').mockImplementation((output: unknown) => {
+    vi.spyOn(console, 'info').mockImplementation((output: unknown) => {
       if (typeof output === 'string') lines.push(output);
     });
     const log = createLogger('Test');
@@ -615,10 +650,8 @@ describe('createLogger', () => {
       level: 'info',
       message: 'real message',
       component: 'Test',
-      timestamp: entry.timestamp,
+      timestamp: '2026-06-10T12:00:00.000Z',
     });
-    expect(typeof entry.timestamp).toBe('string');
-    spy.mockRestore();
   });
 });
 

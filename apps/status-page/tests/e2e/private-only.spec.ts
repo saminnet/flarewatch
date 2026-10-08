@@ -1,4 +1,5 @@
 import { expect, request as playwrightRequest, test, type Page } from '@playwright/test';
+import { captureLatencyCall } from './latency-call';
 
 test.skip(
   Boolean(process.env.PLAYWRIGHT_BASE_URL),
@@ -92,4 +93,26 @@ test('the visitor data call refuses anyone but the operator', async ({ page, bas
   expect(await replay(true)).toContain('Example Domain');
   const anonymous = await replay(false);
   for (const name of publishedNames) expect(anonymous).not.toContain(name);
+});
+
+test('the latency call serves the operator and refuses visitors', async ({ page, baseURL }) => {
+  await signIn(page);
+
+  const captured = await captureLatencyCall(page, 'demo_example', /^Example Domain, operational, /);
+
+  const { cookie, ...headers } = await captured.allHeaders();
+  const replay = async (withCookie: boolean) => {
+    const context = await playwrightRequest.newContext({ baseURL });
+    const response = await context.get(captured.url(), {
+      headers: withCookie && cookie ? { ...headers, cookie } : headers,
+    });
+    const body = await response.text();
+    await context.dispose();
+    return body;
+  };
+
+  expect(await replay(true)).toContain('HEL');
+  const anonymous = await replay(false);
+  expect(anonymous).not.toContain('"loc"');
+  expect(anonymous).toContain('"a":[]');
 });

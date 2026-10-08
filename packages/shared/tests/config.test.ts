@@ -38,6 +38,60 @@ function createConfigWithMonitor(monitor: MonitorOverrides) {
 const isValid = (value: unknown) => configIssues(value).length === 0;
 
 describe('config validation', () => {
+  it.each([[], [''], [1], '192.0.2.1', [null]].map((dnsExpected) => ({ dnsExpected })))(
+    'rejects DNS expected values %j',
+    ({ dnsExpected }) => {
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method: 'DNS', target: 'example.com', dnsExpected }),
+        ),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each(['DNS', 'DOMAIN'])('rejects the remaining forbidden fields on %s', (method) => {
+    const fields = {
+      checkProxyFallback: false,
+      headers: { Accept: 'text/plain' },
+      body: '',
+      sslCheckDaysBeforeExpiry: 0,
+      sslIgnoreSelfSigned: false,
+      pingProtocol: 'tcp',
+      ...(method === 'DOMAIN' && {
+        checkProxy: 'https://proxy.example',
+        confirmVia: 'https://confirm.example',
+        expectedCodes: [200],
+        responseKeyword: 'ok',
+        responseForbiddenKeyword: 'bad',
+        responseHeaderEquals: { Server: 'x' },
+        sslCheckEnabled: true,
+      }),
+    };
+    for (const [field, value] of Object.entries(fields)) {
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method, target: 'example.com', [field]: value }),
+        ).join(),
+      ).toContain(`${field} is not supported by ${method}`);
+    }
+    if (method === 'DOMAIN') {
+      expect(
+        configIssues(
+          createConfigWithMonitor({
+            method,
+            target: 'example.com',
+            responseJsonPath: '$.ok',
+            responseJsonValue: true,
+          }),
+        ).join(),
+      ).toContain('responseJsonPath is not supported by DOMAIN');
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method, target: 'example.com', responseJsonValue: true }),
+        ).join(),
+      ).toContain('responseJsonValue is not supported by DOMAIN');
+    }
+  });
   it('accepts only domain expiry integers from 1 to 365', () => {
     const config = (domainExpiryDays: number) =>
       createConfigWithMonitor({ method: 'DOMAIN', target: 'example.com', domainExpiryDays });
