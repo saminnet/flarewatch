@@ -25,6 +25,7 @@ You can roll back to 3.3.0 on the same storage. Take the new fields out of your 
 
 ### Changed
 
+- `callbacks.onStatusChange` runs only when a monitor goes down or comes back up. Before, it also ran when the error text of a down monitor changed. `onIncident` still runs on every down run.
 - The deploy workflow deploys only from `main`. Before, running it by hand on another branch deployed that branch.
 - The deploy warns when `HEARTBEAT_SECRET` or `FLAREWATCH_AUTH_SECRET` is shorter than 32 characters, because anyone with one ping URL, or who starts a sign-in, can guess a short secret offline. Replace it with the output of `openssl rand -base64 32`. A new `HEARTBEAT_SECRET` changes every ping URL. A new `FLAREWATCH_AUTH_SECRET` only fails the sign-ins in progress.
 - Webhook, `checkProxy` and Globalping requests no longer follow redirects. A redirect fails the request, because each hop spends one of the requests that a check run keeps for checks and alerts. If your webhook or proxy URL redirects, set it to the URL it redirects to.

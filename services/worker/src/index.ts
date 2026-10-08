@@ -211,7 +211,7 @@ export async function runChecks(
     const monitor = monitors.get(update.monitorId);
     if (!monitor) continue;
 
-    if (update.statusChanged) {
+    if (update.changeType === 'up' || update.changeType === 'down') {
       await safeCallback(
         config.callbacks?.onStatusChange,
         'Callback',

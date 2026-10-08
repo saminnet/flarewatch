@@ -31,7 +31,6 @@ const IMPORT_PAGE = 100;
 
 export interface IncidentUpdate {
   monitorId: string;
-  statusChanged: boolean;
   changeType: 'none' | 'up' | 'down' | 'error';
   isUp: boolean;
   incidentStartTime: number;
@@ -122,10 +121,9 @@ export class Incidents {
     const incidentStartTime = open?.incident.start[0] ?? now;
 
     if (result.ok) {
-      const up = (statusChanged: boolean): IncidentUpdate => ({
+      const up = (changed: boolean): IncidentUpdate => ({
         monitorId,
-        statusChanged,
-        changeType: statusChanged ? 'up' : 'none',
+        changeType: changed ? 'up' : 'none',
         isUp: true,
         incidentStartTime,
         error: '',
@@ -169,7 +167,6 @@ export class Incidents {
       this.setNewest(monitorId, { start: [firstFailure], error: [error] }, false);
       return {
         monitorId,
-        statusChanged: true,
         changeType: 'down',
         isUp: false,
         incidentStartTime: firstFailure,
@@ -200,7 +197,6 @@ export class Incidents {
     }
     return {
       monitorId,
-      statusChanged: segments !== null,
       changeType: segments ? 'error' : 'none',
       isUp: false,
       incidentStartTime,
@@ -311,7 +307,6 @@ export class Incidents {
     this.setNewest(monitorId, reopened, true);
     return {
       monitorId,
-      statusChanged: true,
       changeType: 'down',
       isUp: false,
       incidentStartTime: incident.start[0] ?? now,

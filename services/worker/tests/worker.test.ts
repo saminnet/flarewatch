@@ -432,6 +432,34 @@ describe('worker', () => {
       ]);
     });
 
+    it('does not call the status callback when only the error text of a down monitor changes', async () => {
+      const { env } = createEnv();
+      const statusEvents: unknown[][] = [];
+      const incidentEvents: unknown[][] = [];
+      workerConfigMock.callbacks = {
+        onStatusChange: async (...args) => {
+          statusEvents.push(args);
+        },
+        onIncident: async (...args) => {
+          incidentEvents.push(args);
+        },
+      };
+
+      mockDown();
+      await runScheduled(env);
+      network.mockImplementation(async () => {
+        throw new Error('Still unavailable');
+      });
+      vi.setSystemTime((NOW_SECONDS + 60) * 1000);
+      await runScheduled(env);
+
+      expect(statusEvents.map(([, , isUp]) => isUp)).toEqual([false]);
+      expect(incidentEvents.map(([, , , , reason]) => reason)).toEqual([
+        'Unavailable',
+        'Still unavailable',
+      ]);
+    });
+
     it('records the run despite a throwing status callback', async () => {
       mockDown();
       workerConfigMock.callbacks = {

@@ -28,7 +28,6 @@ describe('MonitorHub incidents', () => {
 
     expect(update).toEqual({
       monitorId: 'api',
-      statusChanged: true,
       changeType: 'down',
       isUp: false,
       incidentStartTime: T0,
@@ -74,14 +73,12 @@ describe('MonitorHub incidents', () => {
     const [changed] = hub.record(T0 + 120, [check('api', down('HTTP 502'))]).updates;
     const [recovered] = hub.record(T0 + 180, [check('api', up())]).updates;
 
-    expect(same).toMatchObject({ statusChanged: false, changeType: 'none', incidentStartTime: T0 });
+    expect(same).toMatchObject({ changeType: 'none', incidentStartTime: T0 });
     expect(changed).toMatchObject({
-      statusChanged: true,
       changeType: 'error',
       incidentStartTime: T0,
     });
     expect(recovered).toMatchObject({
-      statusChanged: true,
       changeType: 'up',
       incidentStartTime: T0,
     });
@@ -119,10 +116,8 @@ describe('MonitorHub incidents', () => {
     const held = createHub({}, db).hub.record(lastUp + 14 * 60, [check('api', up())]).updates;
     const closed = createHub({}, db).hub.record(lastUp + 15 * 60, [check('api', up())]).updates;
 
-    expect(held).toMatchObject([{ statusChanged: false, isUp: true }]);
-    expect(closed).toMatchObject([
-      { statusChanged: true, changeType: 'up', incidentStartTime: T0 },
-    ]);
+    expect(held).toMatchObject([{ changeType: 'none', isUp: true }]);
+    expect(closed).toMatchObject([{ changeType: 'up', incidentStartTime: T0 }]);
     expect(hub.view().monitors.api).toMatchObject({
       status: 'up',
       incidents: [{ start: [T0], error: ['Unavailable'], end: lastUp }],
@@ -184,7 +179,6 @@ describe('MonitorHub incidents', () => {
 
     expect(update).toMatchObject({
       changeType: 'down',
-      statusChanged: true,
       incidentStartTime: T0,
     });
     expect(hub.view().monitors.api?.incidents).toEqual([
@@ -225,7 +219,7 @@ describe('MonitorHub incidents', () => {
     const [same] = hub.record(T0 + 60, [check('api', down(`${long}y`))]).updates;
 
     expect(first?.error).toBe('x'.repeat(500));
-    expect(same?.statusChanged).toBe(false);
+    expect(same?.changeType).toBe('none');
     expect(hub.view().monitors.api?.incidents).toEqual([{ start: [T0], error: ['x'.repeat(500)] }]);
   });
 
