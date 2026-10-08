@@ -1,11 +1,9 @@
-import { afterEach, expect, it, vi } from 'vite-plus/test';
+import { expect, it, vi } from 'vite-plus/test';
 import type { PullMonitor } from '@flarewatch/shared';
 import { runChecks } from '../../src/index';
 import { createNotifier } from '../../src/notifications/webhook';
 import { createHub, hubNamespace } from '../helpers/hub';
 import { createWorkerDeps } from '../helpers/worker-deps';
-
-afterEach(() => vi.unstubAllGlobals());
 
 it('checks every expected DNS value and queries the configured JSON resolver', async () => {
   const monitors: PullMonitor[] = [

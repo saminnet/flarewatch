@@ -3,25 +3,13 @@
 import { act } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { cleanup, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { screen } from '@testing-library/react';
+import { describe, expect, it } from 'vite-plus/test';
 import type { Maintenance, StatusView } from '@flarewatch/shared';
 import type { AdminMonitor } from '@/lib/public-view';
 import { renderWithProviders, withProviders } from '../helpers/render';
 
-// jsdom has no ResizeObserver; the card body only measures its container width.
-vi.stubGlobal(
-  'ResizeObserver',
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  },
-);
-
-const { MonitorRow } = await import('@/components/monitor-card');
-
-afterEach(cleanup);
+import { MonitorRow } from '@/components/monitor-card';
 
 const LAST_UPDATE = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const api: AdminMonitor = { id: 'api', name: 'API', method: 'GET', maxLatencyMs: 500 };

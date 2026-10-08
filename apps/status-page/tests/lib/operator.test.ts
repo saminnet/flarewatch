@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import type { AccessConfig } from '@flarewatch/shared';
 import type { Identity } from '@/lib/auth/access';
 import {
@@ -11,10 +11,6 @@ import {
 } from '@/lib/operator.server';
 import { isSessionExpiredError, SessionExpiredError } from '@/lib/query/auth.mutations';
 import { memoryKv } from '../helpers/kv';
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
 
 function envWith(kv: KVNamespace): Cloudflare.Env {
   return { FLAREWATCH_ADMIN_BASIC_AUTH: 'configured', FLAREWATCH_STATE: kv };

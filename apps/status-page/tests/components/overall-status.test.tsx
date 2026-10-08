@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vite-plus/test';
+import { screen } from '@testing-library/react';
+import { describe, expect, it } from 'vite-plus/test';
 import type { HeartbeatStatus, StatusView } from '@flarewatch/shared';
 import { OverallStatus } from '@/components/overall-status';
 import type { PublicMonitor } from '@/lib/public-view';
 import { renderWithProviders } from '../helpers/render';
-
-afterEach(cleanup);
 
 /** A page whose last `jobs` monitors are heartbeats. */
 function page(statuses: Array<HeartbeatStatus | 'slow' | 'expiry'>, jobs: number) {

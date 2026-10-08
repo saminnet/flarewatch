@@ -1,14 +1,9 @@
-import { afterEach, expect, it, vi } from 'vite-plus/test';
+import { expect, it, vi } from 'vite-plus/test';
 import Worker, { runChecks } from '../src/index';
 import { checkMonitor } from '../src/checkers';
 import { createNotifier } from '../src/notifications/webhook';
 import { getEdgeLocation } from '../src/utils/location';
 import { createHub, hubNamespace } from './helpers/hub';
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
-});
 
 it.each([0, 60_001])(
   'two page isolates share initialization admission; retry after %i ms',

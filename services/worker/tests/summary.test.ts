@@ -1,15 +1,10 @@
-import { afterEach, expect, it, vi } from 'vite-plus/test';
+import { expect, it, vi } from 'vite-plus/test';
 import { isJsonObject } from '@flarewatch/shared';
 import { runChecks } from '../src/index';
 import { createNotifier } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
 import { createWorkerDeps } from './helpers/worker-deps';
 import { getEdgeLocation } from '../src/utils/location';
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
-});
 
 it.each([2, 3])(
   'delivers alerts after the check deadline with summaryAfter=%i',

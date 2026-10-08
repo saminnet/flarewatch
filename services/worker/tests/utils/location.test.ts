@@ -38,6 +38,5 @@ describe('getEdgeLocation', () => {
     vi.advanceTimersByTime(24 * 60 * 60 * 1000);
     expect(await getEdgeLocation(fetcher)).toBe('HEL');
     expect(fetcher).toHaveBeenCalledTimes(2);
-    vi.useRealTimers();
   });
 });

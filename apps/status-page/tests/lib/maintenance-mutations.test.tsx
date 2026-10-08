@@ -2,8 +2,8 @@
 
 import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import type { Maintenance } from '@flarewatch/shared';
 import { qk } from '@/lib/query/keys';
 import type { Snapshot } from '@/lib/public-view';
@@ -12,11 +12,6 @@ import {
   useDeleteMaintenance,
   useUpdateMaintenance,
 } from '@/lib/query/maintenance.mutations';
-
-afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
-});
 
 const maintenance = (id: string, start: string): Maintenance => ({
   id,

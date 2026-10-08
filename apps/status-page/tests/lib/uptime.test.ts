@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test';
+import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import type { MonitorView, StatusView } from '@flarewatch/shared';
 import {
   calculateUptimePercent,
@@ -26,10 +26,6 @@ describe('uptime utilities', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-01-15T12:00:00Z'));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   describe('calculateUptimePercent', () => {

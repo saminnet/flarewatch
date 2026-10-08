@@ -5,11 +5,6 @@ import { passwordIdentity } from '@/lib/operator.server';
 import { authMiddlewareServer } from '@/server/auth-middleware';
 import { buildAuthSecret } from '../helpers/auth-secret';
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
-});
-
 function call(pathname: string, init?: RequestInit) {
   const next = vi.fn(async () => new Response('next'));
   const request = new Request(`https://status.test${pathname}`, init);

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   parseHeartbeatSignal,
   type HeartbeatMonitor,
@@ -104,10 +104,6 @@ describe('ping routes', () => {
     vi.setSystemTime(new Date(NOW * 1000));
     workerConfigMock.monitors = [heartbeat, pullMonitor];
     hub = createHub().hub;
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it.each(['GET', 'POST', 'HEAD'])('records a success ping via %s', async (method) => {
@@ -429,10 +425,6 @@ describe('ping to scheduled check end to end', () => {
     vi.setSystemTime(new Date(NOW * 1000));
     workerConfigMock.monitors = [heartbeat];
     hub = createHub().hub;
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it('marks the monitor up after a ping inside the period', async () => {

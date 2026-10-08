@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import {
   fetchAnnouncements,
   fetchHubView,
@@ -16,10 +16,6 @@ function stubEnv() {
   vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
   return { fetch };
 }
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
 
 describe('reading the hub', () => {
   it('fails without the MONITOR_WORKER binding', async () => {

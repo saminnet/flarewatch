@@ -7,8 +7,6 @@ import { Route } from '@/routes/api/badge[.]svg';
 const T = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const originalMonitors = workerConfig.monitors;
 afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
   workerConfig.monitors = originalMonitors;
   forgetCachedView();
 });

@@ -1,18 +1,16 @@
-import { beforeEach, afterEach, vi, type MockInstance } from 'vite-plus/test';
+import { afterEach, vi } from 'vite-plus/test';
 
-let spies: MockInstance[] = [];
+// Not spies: restoreMocks undoes spies before each test.
+for (const level of ['log', 'info', 'debug', 'warn', 'error'] as const) {
+  console[level] = () => {};
+}
 
-beforeEach(() => {
-  spies = [
-    vi.spyOn(console, 'log').mockImplementation(() => {}),
-    vi.spyOn(console, 'info').mockImplementation(() => {}),
-    vi.spyOn(console, 'debug').mockImplementation(() => {}),
-    vi.spyOn(console, 'warn').mockImplementation(() => {}),
-    vi.spyOn(console, 'error').mockImplementation(() => {}),
-  ];
-});
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 
 afterEach(() => {
-  for (const spy of spies) spy.mockRestore();
-  spies = [];
+  vi.useRealTimers();
 });

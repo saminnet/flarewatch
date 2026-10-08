@@ -34,10 +34,6 @@ describe('withTimeout', () => {
     vi.useFakeTimers();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('resolves when promise completes before timeout', async () => {
     const promise = Promise.resolve('success');
 
@@ -111,7 +107,6 @@ describe('fetchWithTimeout', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    vi.useRealTimers();
   });
 
   it('calls fetch with provided URL and options', async () => {
@@ -161,7 +156,6 @@ describe('fetchWithTimeout', () => {
     await assertion;
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    vi.unstubAllGlobals();
   });
 
   it('bounds fetch without AbortSignal.timeout', async () => {
@@ -185,7 +179,6 @@ describe('fetchWithTimeout', () => {
 
     await vi.advanceTimersByTimeAsync(5000);
     expect(resolvingFetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
-    vi.unstubAllGlobals();
   });
 
   it('passes body when provided', async () => {
@@ -618,11 +611,6 @@ describe('createLogger', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-10T12:00:00Z'));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
   });
 
   it('caller data cannot overwrite the envelope fields', () => {

@@ -1,23 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vite-plus/test';
 
-// jsdom has no ResizeObserver; the stub never reports a width, which keeps the
-// strip in its pre-measurement state for the whole test.
-vi.stubGlobal(
-  'ResizeObserver',
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  },
-);
-
-const { RunStrip } = await import('../../src/components/run-strip');
-const { formatUtcShort } = await import('@flarewatch/shared');
-
-afterEach(cleanup);
+import { RunStrip } from '../../src/components/run-strip';
+import { formatUtcShort } from '@flarewatch/shared';
 
 describe('RunStrip', () => {
   it('labels a failed run cell with its time and outcome', () => {

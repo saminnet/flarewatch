@@ -1,5 +1,5 @@
 import { getEdgeLocation as locateEdge } from '../src/utils/location';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   type Fetcher,
   isJsonObject,
@@ -91,10 +91,6 @@ async function runScheduled(env: Env): Promise<void> {
 }
 
 describe('scheduled handler', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it('forwards its env into runChecks', async () => {
     vi.stubGlobal(
       'fetch',
@@ -110,11 +106,6 @@ describe('scheduled handler', () => {
 
 describe('subrequests per check run', () => {
   const PROXY = 'https://proxy.example.com/check';
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
 
   const HOOK = 'https://hooks.example.com/alert';
 
@@ -308,10 +299,6 @@ describe('worker', () => {
     delete workerConfigMock.callbacks;
 
     mockUp();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   describe('notifications', () => {
@@ -523,10 +510,6 @@ describe('hub routes for the status page', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(NOW_SECONDS * 1000));
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   const fetchRoute = (env: Env, path: string) =>

@@ -163,9 +163,9 @@ describe('checkExternalProxy', () => {
       new Response('Authorization: Bearer proxy-secret', { status: 503 }),
     );
     const logged: unknown[] = [];
-    const spies = (['info', 'warn', 'error'] as const).map((level) =>
-      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line)),
-    );
+    for (const level of ['info', 'warn', 'error'] as const) {
+      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line));
+    }
 
     await checkExternalProxy(
       createTarget(),
@@ -173,7 +173,6 @@ describe('checkExternalProxy', () => {
       { FLAREWATCH_PROXY_TOKEN: 'proxy-secret' },
       fetchMock,
     );
-    for (const spy of spies) spy.mockRestore();
 
     expect(JSON.stringify(logged)).toContain('Bearer <proxy token>');
     expect(JSON.stringify(logged)).not.toContain('proxy-secret');

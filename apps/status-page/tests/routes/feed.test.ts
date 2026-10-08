@@ -12,7 +12,6 @@ const T = 1736942400;
 afterEach(() => {
   workerConfig.monitors = originalMonitors;
   pageConfig.title = originalTitle;
-  vi.unstubAllGlobals();
   forgetCachedView();
 });
 

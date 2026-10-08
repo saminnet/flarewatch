@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   HEARTBEAT_RUN_HISTORY,
   formatUtcShort,
@@ -68,10 +68,6 @@ describe('heartbeat scheduled checks', () => {
       gracePeriod: 60,
     };
     delete workerConfigMock.callbacks;
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it('opens once after the deadline and closes once after recovery', async () => {

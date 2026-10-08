@@ -14,8 +14,6 @@ const current: Announcement = {
   updatedAt: 1,
 };
 afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
   forgetCachedView();
 });
 

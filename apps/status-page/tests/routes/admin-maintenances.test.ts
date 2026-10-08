@@ -5,8 +5,6 @@ import { normalizeMaintenanceUpdates, Route } from '@/routes/api/admin/maintenan
 const originalEnv = globalThis.__env__;
 
 afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
   globalThis.__env__ = originalEnv;
 });
 

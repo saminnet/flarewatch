@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vite-plus/test';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import type { Announcement } from '@flarewatch/shared';
 import { AnnouncementBanner } from '@/components/announcements/announcement-banner';
@@ -21,10 +21,6 @@ const announcements: Announcement[] = [
   { id: 'old', title: 'Older update', body: 'Details', createdAt: 1, updatedAt: 1, end: 101 },
   { id: 'ended', title: 'Ended update', body: 'Old details', createdAt: 0, updatedAt: 0, end: 100 },
 ];
-afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
-});
 describe('AnnouncementBanner', () => {
   it('renders active announcements in order as plain text during SSR and in the browser', () => {
     const ui = <AnnouncementBanner announcements={announcements} nowMs={100} operator={false} />;

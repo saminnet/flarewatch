@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vite-plus/test';
+import { expect, it, vi } from 'vite-plus/test';
 import type { PullMonitor } from '@flarewatch/shared';
 import { runChecks } from '../../src/index';
 import { createNotifier } from '../../src/notifications/webhook';
@@ -17,11 +17,6 @@ const reply = (date = '2025-02-14T01:37:00Z') => ({
     { eventAction: 'expiration', eventDate: date },
   ],
 });
-afterEach(() => {
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-});
-
 it.each(['server', 'redirect'])('refuses an HTTP RDAP %s without fetching it', async (cause) => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);

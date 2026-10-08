@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { Fetcher, JsonValue, MonitorTarget } from '@flarewatch/shared';
 import { GlobalPingChecker } from '../../src/checkers/globalping';
 
@@ -54,10 +54,6 @@ describe('GlobalPingChecker', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-01-15T12:00:00Z'));
     fetchMock.mockReset();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it('parses proxy settings and builds an HTTP measurement request', async () => {

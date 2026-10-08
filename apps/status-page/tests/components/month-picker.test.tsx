@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vite-plus/test';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vite-plus/test';
 
 import { MonthPicker } from '@/components/ui/month-picker';
-
-afterEach(cleanup);
 
 describe('MonthPicker', () => {
   it('selects a month from the displayed year', async () => {

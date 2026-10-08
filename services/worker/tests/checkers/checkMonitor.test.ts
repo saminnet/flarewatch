@@ -1,5 +1,5 @@
 import { getEdgeLocation as locateEdge } from '../../src/utils/location';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test';
+import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import type { CheckContext, Fetcher, MonitorTarget, VpcBinding } from '@flarewatch/shared';
 import { checkMonitor, planIssues, runBudget } from '../../src/checkers';
 import type { CheckDeps } from '../../src/checkers/deps';
@@ -631,10 +631,6 @@ describe('checkMonitor', () => {
       vi.useFakeTimers();
     });
 
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
     async function confirmThroughGlobalping(subrequests: number) {
       let polls = 0;
       fetchMock.mockImplementation(async (url) => {
@@ -688,10 +684,6 @@ describe('checkMonitor', () => {
   });
 
   describe('run budget', () => {
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
     describe.each(['direct', 'vpc'])('%s HTTP redirects', (adapter) => {
       function context(subrequests: number): CheckContext {
         const ctx = createCtx({ subrequests });

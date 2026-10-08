@@ -8,12 +8,10 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router';
-import { act, cleanup, render, screen } from '@testing-library/react';
-import { afterEach, expect, it } from 'vite-plus/test';
+import { act, render, screen } from '@testing-library/react';
+import { expect, it } from 'vite-plus/test';
 import { Route } from '@/routes/login';
 import type { Session } from '@/lib/session';
-
-afterEach(cleanup);
 
 it('keeps hook order when sign-in becomes available on the login page', async () => {
   const session: Session = {

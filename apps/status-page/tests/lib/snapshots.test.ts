@@ -18,8 +18,6 @@ beforeEach(() => {
 
 afterEach(() => {
   forgetCachedView();
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 describe('visitor snapshots', () => {

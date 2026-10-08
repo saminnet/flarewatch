@@ -1,6 +1,6 @@
 import { getEdgeLocation as locateEdge } from '../src/utils/location';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type {
   Fetcher,
   HeartbeatMonitor,
@@ -182,10 +182,6 @@ function deployment(
 
 beforeEach(() => {
   vi.useFakeTimers();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
 });
 
 describe('alerts for monitors with dependencies', () => {
@@ -1181,10 +1177,6 @@ describe('webhooks in the FLAREWATCH_WEBHOOKS secret', () => {
     vi.spyOn(console, 'error').mockImplementation((line: unknown) => logged.push(line));
     return logged;
   }
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
 
   it('alerts through the secret when the config has no webhook', async () => {
     const d = deployment(

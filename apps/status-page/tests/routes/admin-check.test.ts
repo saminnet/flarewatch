@@ -73,7 +73,6 @@ async function stubEnv({
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals();
   delete accessConfig.providers;
   delete accessConfig.members;
 });

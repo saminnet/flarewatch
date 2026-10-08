@@ -1,15 +1,10 @@
-import { afterEach, expect, it, vi } from 'vite-plus/test';
+import { expect, it, vi } from 'vite-plus/test';
 import type { PullMonitor } from '@flarewatch/shared';
 import { runChecks } from '../src/index';
 import { createHub, hubNamespace } from './helpers/hub';
 import { createWorkerDeps } from './helpers/worker-deps';
 import { getEdgeLocation } from '../src/utils/location';
 import { createNotifier } from '../src/notifications/webhook';
-
-afterEach(() => {
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-});
 
 it('spreads checks by id, preserves skipped incidents and still counts reminder runs', async () => {
   vi.useFakeTimers();

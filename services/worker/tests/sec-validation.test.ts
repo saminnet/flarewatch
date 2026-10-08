@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vite-plus/test';
+import { expect, it, vi } from 'vite-plus/test';
 import type { MonitorTarget, FetchOptions } from '@flarewatch/shared';
 import {
   normalizeMaintenance,
@@ -26,11 +26,6 @@ const monitor = (id: string): MonitorTarget => ({
   target: `https://${id}.test`,
 });
 const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
-});
 
 it('stored boundary recurrence cannot stop unrelated monitor recording', () => {
   const input = {
