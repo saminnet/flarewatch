@@ -1,4 +1,9 @@
-import { queryOptions } from '@tanstack/react-query';
+import {
+  queryOptions,
+  type QueryClient,
+  type QueryExecuteOptions,
+  type QueryKey,
+} from '@tanstack/react-query';
 import {
   getMemberSnapshot,
   getMonitorLatency,
@@ -53,3 +58,11 @@ export const uiPrefsQuery = () =>
     queryKey: qk.uiPrefs,
     staleTime: Infinity, // Only changes via user action, not refetch
   });
+
+/** For route loaders: cached data of any age, fetched only when the cache has none. */
+export function loadQuery<TQueryFnData, TError, TData, TQueryKey extends QueryKey>(
+  queryClient: QueryClient,
+  options: QueryExecuteOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
+): Promise<TData> {
+  return queryClient.query({ ...options, staleTime: 'static' });
+}

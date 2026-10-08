@@ -5,7 +5,7 @@ import { MonitorList, type MonitorKindFilter } from '@/components/monitor-list';
 import { MaintenanceAlerts } from '@/components/maintenance/alerts';
 import { AnnouncementBanner } from '@/components/announcements/announcement-banner';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
-import { snapshotQuery, uiPrefsQuery } from '@/lib/query/monitors.queries';
+import { snapshotQuery, uiPrefsQuery, loadQuery } from '@/lib/query/monitors.queries';
 import { useAudience } from '@/lib/hooks/use-audience';
 import { useNow } from '@/lib/hooks/use-now';
 import { audienceOf } from '@/lib/session';
@@ -20,9 +20,7 @@ export const Route = createFileRoute('/')({
   }),
   loaderDeps: ({ search }) => ({ view: search.view }),
   loader: async ({ context, deps }) => {
-    await context.queryClient.ensureQueryData(
-      snapshotQuery(audienceOf(context.session, deps.view)),
-    );
+    await loadQuery(context.queryClient, snapshotQuery(audienceOf(context.session, deps.view)));
   },
   component: DashboardPage,
 });

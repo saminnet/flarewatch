@@ -3,7 +3,7 @@ import { createRootRouteWithContext, redirect, retainSearchParams } from '@tanst
 import { createMiddleware } from '@tanstack/react-start';
 import { RootComponent } from '@/components/routes/root-component';
 import { getThemePreferenceServerFn } from '@/lib/theme-server';
-import { configQuery, sessionQuery, uiPrefsQuery } from '@/lib/query/monitors.queries';
+import { configQuery, sessionQuery, uiPrefsQuery, loadQuery } from '@/lib/query/monitors.queries';
 
 import '@fontsource-variable/inter/wght.css';
 
@@ -29,7 +29,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     middlewares: [retainSearchParams<RootSearch>(['view'])],
   },
   beforeLoad: async ({ context, location }) => {
-    const session = await context.queryClient.ensureQueryData(sessionQuery());
+    const session = await loadQuery(context.queryClient, sessionQuery());
     // The server enforces this too; here it covers client-side navigation after sign-out.
     if (session.privateOnly && session.viewer === 'visitor' && location.pathname !== '/login') {
       throw redirect({ to: '/login' });
@@ -39,8 +39,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   loader: async ({ context }) => {
     const [theme, config] = await Promise.all([
       getThemePreferenceServerFn(),
-      context.queryClient.ensureQueryData(configQuery()),
-      context.queryClient.ensureQueryData(uiPrefsQuery()),
+      loadQuery(context.queryClient, configQuery()),
+      loadQuery(context.queryClient, uiPrefsQuery()),
     ]);
     return { theme, statusPage: config.statusPage };
   },

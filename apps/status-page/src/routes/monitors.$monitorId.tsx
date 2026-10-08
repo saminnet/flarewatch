@@ -10,7 +10,7 @@ import { useAudience } from '@/lib/hooks/use-audience';
 import { useNow } from '@/lib/hooks/use-now';
 import type { AdminMonitor, Snapshot } from '@/lib/public-view';
 import { projectTimeline } from '@/lib/status-projection';
-import { latencyQuery, snapshotQuery } from '@/lib/query/monitors.queries';
+import { latencyQuery, snapshotQuery, loadQuery } from '@/lib/query/monitors.queries';
 import { audienceOf } from '@/lib/session';
 
 function drawsLatency(monitor: AdminMonitor): boolean {
@@ -20,7 +20,8 @@ function drawsLatency(monitor: AdminMonitor): boolean {
 export const Route = createFileRoute('/monitors/$monitorId')({
   loaderDeps: ({ search }) => ({ view: search.view }),
   loader: async ({ context, deps, params, preload }) => {
-    const snapshot = await context.queryClient.ensureQueryData(
+    const snapshot = await loadQuery(
+      context.queryClient,
       snapshotQuery(audienceOf(context.session, deps.view)),
     );
     // A visitor asking for a private monitor gets the same answer as for a missing one.
@@ -28,7 +29,7 @@ export const Route = createFileRoute('/monitors/$monitorId')({
     if (!monitor) throw notFound();
     // A hover preloads the route; the latency waits for a real visit, which reads it once.
     if (drawsLatency(monitor) && !preload) {
-      await context.queryClient.ensureQueryData(latencyQuery(monitor.id));
+      await loadQuery(context.queryClient, latencyQuery(monitor.id));
     }
     return { loaderNowMs: Date.now() };
   },
