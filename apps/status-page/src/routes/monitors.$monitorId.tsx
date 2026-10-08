@@ -19,14 +19,15 @@ function drawsLatency(monitor: AdminMonitor): boolean {
 
 export const Route = createFileRoute('/monitors/$monitorId')({
   loaderDeps: ({ search }) => ({ view: search.view }),
-  loader: async ({ context, deps, params }) => {
+  loader: async ({ context, deps, params, preload }) => {
     const snapshot = await context.queryClient.ensureQueryData(
       snapshotQuery(audienceOf(context.session, deps.view)),
     );
     // A visitor asking for a private monitor gets the same answer as for a missing one.
     const monitor = snapshot.monitors.find((candidate) => candidate.id === params.monitorId);
     if (!monitor) throw notFound();
-    if (drawsLatency(monitor)) {
+    // A hover preloads the route; the latency waits for a real visit, which reads it once.
+    if (drawsLatency(monitor) && !preload) {
       await context.queryClient.ensureQueryData(latencyQuery(monitor.id));
     }
     return { loaderNowMs: Date.now() };

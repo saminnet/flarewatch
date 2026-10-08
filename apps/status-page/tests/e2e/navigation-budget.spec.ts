@@ -63,3 +63,24 @@ test('a cached monitor hover and navigation reuse its latency without server cal
   await expect(page.getByTestId('latency-chart').first()).toBeVisible();
   expect(calls).toEqual(['GET /monitors/demo_cloudflare_docs']);
 });
+
+test('hovering a monitor that was never opened adds no server call, and opening it loads its latency once', async ({
+  page,
+}) => {
+  const calls = trackServerCalls(page);
+  await page.goto('/');
+  await settle(page, calls);
+  expect(calls).toEqual(['GET /']);
+
+  const docs = page.getByRole('link', { name: /^Cloudflare Docs, operational, / });
+  await docs.hover();
+  await page.waitForTimeout(800);
+  expect(calls).toEqual(['GET /']);
+
+  await docs.click();
+  await expect(page).toHaveURL(/\/monitors\/demo_cloudflare_docs$/);
+  await expect(page.getByTestId('latency-chart').first()).toBeVisible();
+  await settle(page, calls);
+  expect(calls.filter((call) => call.startsWith('GET /_serverFn/'))).toHaveLength(1);
+  expect(calls).toHaveLength(2);
+});
