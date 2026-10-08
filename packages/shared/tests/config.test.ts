@@ -284,6 +284,7 @@ describe('config validation', () => {
 
   it.each([
     [{ id: '' }, 'id must be a non-empty string'],
+    [{ id: '__proto__' }, 'id cannot be __proto__'],
     [{ name: '' }, 'name must be a non-empty string'],
     [{ method: 42 }, 'method must be a string'],
     [{ target: undefined }, 'target must be a string'],
@@ -375,6 +376,7 @@ describe('config validation', () => {
     [{ graceSeconds: 0.5 }, 'graceSeconds'],
     [{ id: 'backup/01' }, 'HEARTBEAT id'],
     [{ id: 'a'.repeat(65) }, 'HEARTBEAT id'],
+    [{ id: '__proto__' }, 'id cannot be __proto__'],
     [{ target: 'https://example.com' }, 'must not define target'],
     [{ checkProxy: 'https://proxy.example.com' }, 'must not define checkProxy'],
     [{ maxLatencyMs: 500 }, 'must not define maxLatencyMs'],

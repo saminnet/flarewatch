@@ -149,17 +149,21 @@ async function validateHttpResult(
 
     if (tls.certificate?.expiresAt) {
       const { expiryDate, daysUntilExpiry } = calculateCertExpiry(tls.certificate.expiresAt);
-      ssl = { expiryDate, daysUntilExpiry };
-      if (tls.certificate.issuer?.commonName) {
-        ssl.issuer = tls.certificate.issuer.commonName;
-      }
-      if (tls.certificate.subject?.commonName) {
-        ssl.subject = tls.certificate.subject.commonName;
-      }
+      if (!Number.isFinite(expiryDate)) {
+        if (!error && target.sslCheckEnabled) error = 'Invalid certificate expiry date';
+      } else {
+        ssl = { expiryDate, daysUntilExpiry };
+        if (tls.certificate.issuer?.commonName) {
+          ssl.issuer = tls.certificate.issuer.commonName;
+        }
+        if (tls.certificate.subject?.commonName) {
+          ssl.subject = tls.certificate.subject.commonName;
+        }
 
-      if (!error && target.sslCheckEnabled) {
-        if (expiryDate <= Math.floor(Date.now() / 1000)) {
-          error = 'Certificate has expired';
+        if (!error && target.sslCheckEnabled) {
+          if (expiryDate <= Math.floor(Date.now() / 1000)) {
+            error = 'Certificate has expired';
+          }
         }
       }
     }

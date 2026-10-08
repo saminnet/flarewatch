@@ -176,8 +176,13 @@ function intInRange(field: string, min: number, max: number) {
 
 const reminderError = `reminderEveryChecks must be an integer of at least ${MIN_REMINDER_CHECKS}`;
 
+// Views map monitor ids to objects, and `__proto__` is not an ordinary key there.
+const notProto = z.refine<string>((value) => value !== '__proto__', {
+  error: 'id cannot be __proto__',
+});
+
 const monitorCommon = {
-  id: nonEmptyString('id'),
+  id: nonEmptyString('id').check(notProto),
   name: nonEmptyString('name'),
   private: z.optional(z.boolean({ error: 'private must be a boolean' })),
   dependsOn: z.optional(z.array(z.string(), { error: 'dependsOn must be a list of monitor ids' })),
@@ -358,7 +363,10 @@ const heartbeatMonitorSchema = z.strictObject(
     ...monitorCommon,
     id: z
       .string()
-      .check(z.regex(HEARTBEAT_ID, { error: 'HEARTBEAT id must match ^[A-Za-z0-9_-]{1,64}$' })),
+      .check(
+        z.regex(HEARTBEAT_ID, { error: 'HEARTBEAT id must match ^[A-Za-z0-9_-]{1,64}$' }),
+        notProto,
+      ),
     method: z.literal('HEARTBEAT'),
     periodSeconds: intInRange('periodSeconds', 60, MAX_HEARTBEAT_PERIOD_SECONDS),
     graceSeconds: intInRange('graceSeconds', 0, MAX_HEARTBEAT_GRACE_SECONDS),

@@ -271,6 +271,30 @@ describe('GlobalPingChecker', () => {
     },
   );
 
+  it('fails a certificate check whose expiry date does not parse, without NaN metadata', async () => {
+    mockCompletedMeasurement(
+      finishedHttpMeasurement({
+        tls: { authorized: true, certificate: { expiresAt: 'not-a-date' } },
+      }),
+    );
+
+    const result = await check(createMonitor({ sslCheckEnabled: true }));
+
+    expect(result.result).toMatchObject({ ok: false, error: 'Invalid certificate expiry date' });
+    expect(JSON.stringify(result)).not.toContain('NaN');
+  });
+
+  it('fails a measurement that finishes without a probe result', async () => {
+    mockCompletedMeasurement({ status: 'finished', results: [] });
+
+    const result = await check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'ERROR',
+      result: { ok: false, error: 'GlobalPing: No probe result returned' },
+    });
+  });
+
   it('fails an unauthorized TLS certificate by default', async () => {
     mockCompletedMeasurement(
       finishedHttpMeasurement({
