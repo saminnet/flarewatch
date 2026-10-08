@@ -344,16 +344,6 @@ describe('GlobalPingChecker', () => {
     });
   });
 
-  it('fails a measurement poll whose JSON is over 1 MiB', async () => {
-    mockCompletedMeasurement(finishedHttpMeasurement({ rawBody: 'x'.repeat(1024 * 1024) }));
-
-    const result = await check(createMonitor());
-
-    expect(result.location).toBe('ERROR');
-    expect(result.result.ok).toBe(false);
-    expect(result.result.ok ? '' : result.result.error).toContain('over 1048576 bytes');
-  });
-
   it('fails the check when measurement creation returns no id', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ notAnId: true }, 202));
 

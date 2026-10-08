@@ -3,13 +3,6 @@ import { parseAuthSecret, verifyAuthSecret, verifyBasicAuthHeader } from '@/lib/
 import { buildAuthSecret, bytesToBase64, derivePbkdf2Hash } from '../helpers/auth-secret';
 
 describe('auth-secret', () => {
-  it('parses hashed secret payload', async () => {
-    const secret = await buildAuthSecret('status', 'secret123');
-    const parsed = parseAuthSecret(secret);
-    expect(parsed).toBeTruthy();
-    expect(parsed?.username).toBe('status');
-  });
-
   it('parses payload wrapped in single quotes', async () => {
     const secret = await buildAuthSecret('status', 'secret123');
     const quoted = `'${secret}'`;

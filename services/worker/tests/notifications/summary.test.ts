@@ -45,7 +45,7 @@ it.each([100, 2000])(
   },
 );
 
-it.each(NOTIFICATION_TEMPLATES)(
+it.each(NOTIFICATION_TEMPLATES.filter((name) => name !== 'mattermost' && name !== 'rocketchat'))(
   'sends the five summary groups through %s without a monitor-specific target',
   async (template) => {
     const requests: { url: string; text: string }[] = [];

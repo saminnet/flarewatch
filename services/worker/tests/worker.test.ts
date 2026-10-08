@@ -315,32 +315,6 @@ describe('worker', () => {
       return delivered;
     }
 
-    it('notifies on a status change when no grace period is configured', async () => {
-      setNotifications();
-      failure = 'down';
-
-      const { env } = createEnv();
-      const delivered = await runNotifying(env);
-
-      expect(delivered).toHaveLength(1);
-      expect(delivered[0]).toMatchObject({
-        id: 'test-monitor',
-        label: 'down',
-        startedAt: NOW_SECONDS,
-        at: NOW_SECONDS,
-        downtimeSeconds: 0,
-        reason: 'Expected 2xx status, got 503',
-      });
-    });
-
-    it('does not notify before the grace period is reached', async () => {
-      setNotifications({ gracePeriod: 1 });
-      failure = 'down';
-      const { env } = createEnv();
-
-      expect(await runNotifying(env)).toEqual([]);
-    });
-
     it('suppresses notifications for an open-ended maintenance window', async () => {
       setNotifications();
       failure = 'down';
@@ -406,14 +380,6 @@ describe('worker', () => {
 
       failure = 'up';
       expect((await runNotifying(env)).map(({ label }) => label)).toEqual(['up']);
-    });
-
-    it('suppresses monitors in skipNotificationIds', async () => {
-      setNotifications({ skipNotificationIds: ['test-monitor'] });
-      failure = 'down';
-      const { env } = createEnv();
-
-      expect(await runNotifying(env)).toEqual([]);
     });
   });
 

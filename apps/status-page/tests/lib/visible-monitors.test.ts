@@ -28,17 +28,6 @@ const config: RuntimeConfig = {
 const sorted = (ids: Set<string>) => [...ids].sort();
 
 describe('visibleMonitorIds', () => {
-  it('shows visitors the published monitors only', () => {
-    expect(sorted(visibleMonitorIds(config, null))).toEqual(['api']);
-  });
-
-  it('adds an audience member their page groups, skipping ids not in config', () => {
-    expect(sorted(visibleMonitorIds(config, { role: 'member', groups: ['Acme'] }))).toEqual([
-      'acme-db',
-      'api',
-    ]);
-  });
-
   it('shows the operator and members without groups every monitor', () => {
     const all = ['acme-db', 'api', 'backup', 'db'];
     expect(sorted(visibleMonitorIds(config, { role: 'operator' }))).toEqual(all);

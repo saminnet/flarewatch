@@ -215,16 +215,33 @@ describe('checkMonitor', () => {
     expect(options?.redirect).toBe('manual');
   });
 
-  it('returns a located failure instead of throwing when a checker crashes', async () => {
-    const ctx = createCtx();
-    const clock = vi.spyOn(Date, 'now').mockImplementationOnce(() => {
-      throw new Error('Check crashed');
-    });
-    const result = await checkMonitor(createTarget(), ctx, deps);
-    clock.mockRestore();
+  it('returns a located failure instead of throwing when a TCP connection rejects', async () => {
+    connectMock.mockRejectedValueOnce(new Error('Connection refused'));
+    const result = await checkMonitor(
+      createTarget({ method: 'TCP_PING', target: 'example.com:80' }),
+      createCtx(),
+      deps,
+    );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       location: 'SFO',
+      result: { ok: false, error: 'Connection refused' },
+    });
+    expect(result.result.latency).toBeTypeOf('number');
+    expect(connectMock).toHaveBeenCalledExactlyOnceWith({ hostname: 'example.com', port: 80 });
+  });
+
+  it('returns a located failure instead of throwing when a checker crashes', async () => {
+    const crashing: CheckDeps = {
+      ...deps,
+      http: new (class extends HttpChecker {
+        override check(): never {
+          throw new Error('Check crashed');
+        }
+      })(),
+    };
+
+    await expect(checkMonitor(createTarget(), createCtx(), crashing)).resolves.toMatchObject({
       result: { ok: false, error: 'Check failed: Error: Check crashed' },
     });
   });

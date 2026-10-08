@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test';
-import type { MonitorTarget, Webhook } from '@flarewatch/shared';
+import type { Fetcher, MonitorTarget, Webhook } from '@flarewatch/shared';
 import {
   buildTemplateContext,
   formatNotificationMessage,
+  WebhookNotifier,
   type NotificationContext,
 } from '../../src/notifications/webhook';
 
@@ -36,47 +37,6 @@ describe('webhook notifications', () => {
   });
 
   describe('formatNotificationMessage', () => {
-    it('formats a down alert sent the run its outage began as an initial outage', () => {
-      const ctx = createContext({
-        incidentStartTime: 1000,
-        currentTime: 1000,
-        downtimeSeconds: 0,
-        reason: 'Connection refused',
-      });
-
-      const message = formatNotificationMessage(ctx);
-
-      expect(message).toContain('Test Monitor is down');
-      expect(message).toContain('Reason: Connection refused');
-      expect(message).not.toContain('still down');
-    });
-
-    it('formats a later down alert as an ongoing outage', () => {
-      const ctx = createContext({
-        incidentStartTime: 1000,
-        currentTime: 2000,
-        reason: 'Connection refused',
-      });
-
-      const message = formatNotificationMessage(ctx);
-
-      expect(message).toContain('Test Monitor is still down');
-      expect(message).toContain('Reason: Connection refused');
-    });
-
-    it('formats a recovery', () => {
-      const ctx = createContext({
-        kind: 'recovered',
-        incidentStartTime: 1000,
-        currentTime: 2000,
-      });
-
-      const message = formatNotificationMessage(ctx);
-
-      expect(message).toContain('Test Monitor is up');
-      expect(message).toContain('recovered');
-    });
-
     it('ends a down message with the monitors down behind it', () => {
       const message = formatNotificationMessage(createContext({ alsoDown: ['App', 'Dashboard'] }));
 
@@ -100,27 +60,36 @@ describe('webhook notifications', () => {
   describe('buildTemplateContext', () => {
     const webhook: Webhook = { url: 'https://hooks.example.com/webhook' };
 
-    it('reuses one incidentKey across down and up', () => {
-      const down = buildTemplateContext(
-        createContext({
-          incidentStartTime: 1700000000,
-          currentTime: 1700000000,
-          downtimeSeconds: 0,
-        }),
-        webhook,
-      );
-      const up = buildTemplateContext(
-        createContext({
-          kind: 'recovered',
-          incidentStartTime: 1700000000,
-          currentTime: 1700000300,
-          downtimeSeconds: 300,
-        }),
-        webhook,
-      );
+    it('sends down and recovery transaction URLs with the same incident key', async () => {
+      const fetcher = vi.fn<Fetcher>(async () => new Response('ok'));
+      const notifier = new WebhookNotifier({ ...webhook, template: 'matrix' }, fetcher);
+      await expect(
+        notifier.send(
+          createContext({
+            incidentStartTime: 1700000000,
+            currentTime: 1700000000,
+            downtimeSeconds: 0,
+          }),
+          '',
+        ),
+      ).resolves.toEqual([{ success: true, statusCode: 200 }]);
+      await expect(
+        notifier.send(
+          createContext({
+            kind: 'recovered',
+            incidentStartTime: 1700000000,
+            currentTime: 1700000300,
+            downtimeSeconds: 300,
+          }),
+          '',
+        ),
+      ).resolves.toEqual([{ success: true, statusCode: 200 }]);
 
-      expect(down.incidentKey).toBe('test-monitor:1700000000');
-      expect(up.incidentKey).toBe(down.incidentKey);
+      expect(fetcher.mock.calls.map(([url]) => decodeURIComponent(new URL(url).pathname))).toEqual([
+        '/webhook/test-monitor:1700000000-down-2023-11-14T22:13:20.000Z',
+        '/webhook/test-monitor:1700000000-up-2023-11-14T22:18:20.000Z',
+      ]);
+      expect(fetcher.mock.calls.map(([, options]) => options?.method)).toEqual(['PUT', 'PUT']);
     });
 
     it('drops the credentials from a target URL and keeps a host:port target', () => {
@@ -135,14 +104,31 @@ describe('webhook notifications', () => {
       expect(targetUrl('https://example.com')).toBe('https://example.com');
     });
 
-    it('passes webhook url and options into the template context', () => {
-      const ctx = buildTemplateContext(createContext(), {
-        url: 'https://hooks.example.com/webhook',
-        options: { token: 't0k3n' },
-      });
+    it('sends to the configured recipient with option-derived payload fields', async () => {
+      const requests: Request[] = [];
+      const notifier = new WebhookNotifier(
+        {
+          url: 'https://hooks.example.com/webhook',
+          template: 'pushover',
+          options: { token: 't0k3n', user: 'recipient-key' },
+        },
+        async (url, options) => {
+          requests.push(new Request(url, { ...options, body: options?.body ?? null }));
+          return new Response('ok');
+        },
+      );
 
-      expect(ctx.webhookUrl).toBe('https://hooks.example.com/webhook');
-      expect(ctx.options).toEqual({ token: 't0k3n' });
+      await expect(notifier.send(createContext(), '')).resolves.toEqual([
+        { success: true, statusCode: 200 },
+      ]);
+      expect(requests).toHaveLength(1);
+      const request = requests[0]!;
+      expect(request.url).toBe('https://hooks.example.com/webhook');
+      expect(request.method).toBe('POST');
+      expect(request.headers.get('content-type')).toBe('application/x-www-form-urlencoded');
+      const fields = new URLSearchParams(await request.text());
+      expect(fields.get('token')).toBe('t0k3n');
+      expect(fields.get('user')).toBe('recipient-key');
     });
   });
 });

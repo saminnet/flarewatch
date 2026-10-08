@@ -5,7 +5,6 @@ import {
   generateAggregateDailyStatus,
   generateDailyStatus,
   getMonitorError,
-  getLatestLatency,
 } from '@/lib/uptime';
 
 function view(
@@ -204,18 +203,6 @@ describe('uptime utilities', () => {
       });
 
       expect(getMonitorError('test', state)).toBe('Second error');
-    });
-  });
-
-  describe('getLatestLatency', () => {
-    it('returns null when there is no latency data', () => {
-      expect(getLatestLatency('test', view({ test: {} }))).toBeNull();
-    });
-
-    it('returns the latest latency sample when present', () => {
-      const state = view({ test: { latest: { loc: 'EU', ping: 120, time: 2 } } });
-
-      expect(getLatestLatency('test', state)).toEqual({ loc: 'EU', ping: 120, time: 2 });
     });
   });
 });

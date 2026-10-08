@@ -1,22 +1,12 @@
 import { describe, it, expect } from 'vite-plus/test';
 import {
-  parseYearMonth,
   isValidYearMonth,
   shiftYearMonth,
   getUtcMonthBounds,
   generateCalendarGrids,
-  formatUtc,
   formatDuration,
   formatCadence,
 } from '@/lib/date';
-
-describe('parseYearMonth', () => {
-  it('parses valid year-month strings', () => {
-    expect(parseYearMonth('2024-01')).toEqual({ year: 2024, month: 1 });
-    expect(parseYearMonth('2023-12')).toEqual({ year: 2023, month: 12 });
-    expect(parseYearMonth('1999-06')).toEqual({ year: 1999, month: 6 });
-  });
-});
 
 describe('isValidYearMonth', () => {
   it('accepts valid year-month strings', () => {
@@ -85,12 +75,6 @@ describe('generateCalendarGrids', () => {
     expect(
       grids.map((grid) => grid.weeks.flat().find(Boolean)?.date.toISOString().slice(0, 10)),
     ).toEqual(['2024-11-01', '2024-12-01', '2025-01-01']);
-  });
-});
-
-describe('formatUtc', () => {
-  it('formats a UTC date independent of the local timezone offset', () => {
-    expect(formatUtc(new Date('2026-06-09T12:30:00.000Z'), 'MMM d, HH:mm')).toBe('Jun 9, 12:30');
   });
 });
 

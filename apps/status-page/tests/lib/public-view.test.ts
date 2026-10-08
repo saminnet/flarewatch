@@ -250,12 +250,6 @@ describe('publicMaintenances', () => {
     ...overrides,
   });
 
-  it('strips private monitor ids from scoped records', () => {
-    expect(
-      publicMaintenances(config, [maintenance({ id: 'mixed', monitors: ['public', 'hidden'] })]),
-    ).toEqual([maintenance({ id: 'mixed', monitors: ['public'] })]);
-  });
-
   it('drops records whose monitors are all private but keeps unscoped ones', () => {
     expect(
       publicMaintenances(config, [

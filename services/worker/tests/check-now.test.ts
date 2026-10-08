@@ -1,6 +1,12 @@
 import { getEdgeLocation as locateEdge } from '../src/utils/location';
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
-import type { Fetcher, HeartbeatMonitor, MonitorTarget, WorkerConfig } from '@flarewatch/shared';
+import {
+  isCheckResultWithLocation,
+  type Fetcher,
+  type HeartbeatMonitor,
+  type MonitorTarget,
+  type WorkerConfig,
+} from '@flarewatch/shared';
 import { checkMonitor } from '../src/checkers';
 import { createNotifier } from '../src/notifications/webhook';
 import { HttpChecker } from '../src/checkers/http';
@@ -108,11 +114,9 @@ describe('check now route for the status page', () => {
     expect(hub.view()).toEqual(before);
   });
 
-  it('answers a crashed check as a failure from this location', async () => {
+  it('answers a rejected network request as a failure from this location', async () => {
     const { env } = createEnv();
-    const clock = vi.spyOn(Date, 'now').mockImplementationOnce(() => {
-      throw new Error('socket hang up');
-    });
+    fetchMock.mockRejectedValueOnce(new Error('socket hang up'));
     const { checkProxy: _proxy, ...direct } = api;
     const response = await checkNow(
       env,
@@ -124,7 +128,30 @@ describe('check now route for the status page', () => {
       },
     );
 
-    clock.mockRestore();
+    expect(response.status).toBe(200);
+    const result: unknown = await response.json();
+    expect(result).toMatchObject({
+      location: 'HEL',
+      result: { ok: false, error: 'socket hang up' },
+    });
+    if (!isCheckResultWithLocation(result)) throw new Error('Expected a located check result');
+    expect(result.result.latency).toBeTypeOf('number');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example.com/health');
+  });
+
+  it('answers a crashed check as a failure from this location', async () => {
+    const { env } = createEnv();
+    const response = await checkNow(
+      env,
+      '/check/api%20v2',
+      { method: 'POST' },
+      {
+        ...deps,
+        checkMonitor: () => Promise.reject(new Error('socket hang up')),
+      },
+    );
+
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       location: 'HEL',

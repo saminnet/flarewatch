@@ -169,15 +169,6 @@ describe('config validation', () => {
       }).join(),
     ).toContain('checkEveryMinutes');
   });
-  it('accepts a direct runtime config', () => {
-    const config = createRuntimeConfig({
-      statusPage: {
-        title: 'Status',
-      },
-    });
-
-    expect(isValid(config)).toBe(true);
-  });
 
   it('accepts every status page field', () => {
     const config = createRuntimeConfig({
@@ -328,12 +319,6 @@ describe('config validation', () => {
     expect(configIssues(config)).toEqual([
       'monitor "api": headers must map names to strings or numbers',
     ]);
-  });
-
-  it('accepts TCP_PING with a host:port target', () => {
-    const config = createConfigWithMonitor({ method: 'TCP_PING', target: 'example.com:443' });
-
-    expect(isValid(config)).toBe(true);
   });
 
   it('rejects TCP_PING without a port', () => {

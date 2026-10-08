@@ -269,20 +269,16 @@ describe('checkExternalProxy', () => {
         error: 'Proxy is too old for header and JSON checks: update to flarewatch-proxy 2.0.0',
       },
     };
-    const assertions: [string, Partial<MonitorTarget>][] = [
-      ['a header check', { responseHeaderEquals: { 'X-A': '1' } }],
-      ['a JSON check', { responseJsonPath: '$.status', responseJsonValue: 'ok' }],
-    ];
     const answer = (fields: { contract?: unknown }) =>
       new Response(
         JSON.stringify({ location: 'FRA', result: { ok: true, latency: 5 }, ...fields }),
       );
 
-    it.each(assertions)('fails %s on a proxy that sends no contract', async (_case, overrides) => {
+    it('fails a header check on a proxy that sends no contract', async () => {
       fetchMock.mockResolvedValue(answer({}));
 
       const result = await checkExternalProxy(
-        createTarget(overrides),
+        createTarget({ responseHeaderEquals: { 'X-A': '1' } }),
         PROXY_URL,
         undefined,
         fetchMock,

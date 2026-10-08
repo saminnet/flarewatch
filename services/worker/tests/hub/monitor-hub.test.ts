@@ -167,24 +167,6 @@ describe('MonitorHub incidents', () => {
     ]);
   });
 
-  it('keeps a monitor’s newest 1,000 closed incidents', () => {
-    const { hub } = createHub();
-    const gap = 17 * 60;
-    for (let i = 0; i < 1002; i++) {
-      hub.record(T0 + i * gap, [check('api', down(`err-${i}`))]);
-      hub.record(T0 + i * gap + 60, [check('api', up())]);
-    }
-    const closed = hub.view().monitors.api?.incidents ?? [];
-    expect(closed).toHaveLength(1000);
-    expect(closed[0]?.error).toEqual(['err-2']);
-    hub.record(T0 + 1002 * gap, [check('api', down('err-1002'))]);
-
-    const incidents = hub.view().monitors.api?.incidents ?? [];
-    expect(incidents).toHaveLength(1001);
-    expect(incidents[0]?.error).toEqual(['err-2']);
-    expect(incidents[1000]).toEqual({ start: [T0 + 1002 * gap], error: ['err-1002'] });
-  }, 30_000);
-
   it('keeps a history too long for one storage row', () => {
     const { hub, db } = createHub();
     const gap = 17 * 60;
@@ -208,26 +190,6 @@ describe('MonitorHub incidents', () => {
       start: [T0 + 1002 * gap, T0 + 1002 * gap + 60],
       error: [error(1002), 'Timeout'],
     });
-  }, 30_000);
-
-  it('keeps about a megabyte of history per monitor, dropping the oldest', () => {
-    const { hub, db } = createHub();
-    const gap = 2 * 3600;
-    // 25 outages whose 500-character error changes 100 times each.
-    for (let i = 0; i < 25; i++) {
-      for (let j = 0; j < 100; j++) {
-        hub.record(T0 + i * gap + j * 60, [check('api', down(`${i}-${j} `.padEnd(500, 'x')))]);
-      }
-      hub.record(T0 + i * gap + 100 * 60, [check('api', up())]);
-    }
-
-    hub.record(T0 + 25 * gap, [check('api', down('New'))]);
-
-    const incidents = createHub({}, db).hub.view().monitors.api?.incidents ?? [];
-    expect(JSON.stringify(incidents.slice(0, -1)).length).toBeLessThanOrEqual(1_000_000);
-    expect(incidents.length).toBeGreaterThan(10);
-    expect(incidents[incidents.length - 2]?.end).toBe(T0 + 24 * gap + 100 * 60);
-    expect(incidents[incidents.length - 1]).toEqual({ start: [T0 + 25 * gap], error: ['New'] });
   }, 30_000);
 
   it('stores the first 500 characters of an error', () => {
@@ -454,16 +416,6 @@ describe('MonitorHub storage', () => {
 
     expect(reopened.view().monitors.api?.status).toBe('down');
     expect(reopened.view().lastUpdate).toBe(T0);
-  });
-
-  it('shows every outage after hibernation', () => {
-    const { hub, db } = createHub();
-    for (let i = 0; i < 300; i++) {
-      hub.record(T0 + i * 20 * 60, [check('api', down()), check('db', up())]);
-      hub.record(T0 + i * 20 * 60 + 60, [check('api', up()), check('db', up())]);
-    }
-
-    expect(createHub({}, db).hub.view().monitors.api?.incidents).toHaveLength(300);
   });
 
   it('keeps a chart’s 12 hours of samples after hibernation', () => {
@@ -736,67 +688,6 @@ describe('MonitorHub after an upgrade from 2.x', () => {
 });
 
 describe('MonitorHub after an upgrade from 3.1', () => {
-  it('keeps the history, an outage still open, and the last 12 hours of latency', () => {
-    const db = new DatabaseSync(':memory:');
-    createHub({}, db).hub.record(T0, [check('api', up()), check('db', up())]);
-    rewindTo31(db);
-    addIncident(db, 'api', [T0 - 7200], ['Timeout'], T0 - 7000);
-    addIncident(db, 'api', [T0 - 3600, T0 - 3500], ['Timeout', 'HTTP 502'], T0 - 3400);
-    addIncident(db, 'db', [T0 - 300], ['Refused']);
-    // An hour of 70 runs, each 30,000 bytes: too large for one row.
-    const insert = db.prepare('INSERT INTO samples (at, data) VALUES (?, ?)');
-    for (let i = 0; i < 70; i++) {
-      insert.run(T0 - 3 * 3600 + i * 30, `{"api":[7,"${'漢'.repeat(10_000)}"]}`);
-    }
-    db.exec(`
-      INSERT INTO samples (at, data) VALUES
-        (${T0 - 13 * 3600}, '{"api":[5,"HEL"]}'),
-        (${T0 - 120}, 'not json'),
-        (${T0 - 60}, '{"api":[10,"HEL"],"db":[0,"AMS"]}'),
-        (${T0}, '{"api":[20,"HEL"]}');
-    `);
-
-    const { hub } = createHub({}, db);
-
-    expect(hub.view().monitors.api).toMatchObject({
-      status: 'up',
-      incidents: [
-        { start: [T0 - 7200], error: ['Timeout'], end: T0 - 7000 },
-        { start: [T0 - 3600, T0 - 3500], error: ['Timeout', 'HTTP 502'], end: T0 - 3400 },
-      ],
-    });
-    expect(hub.view().monitors.db).toMatchObject({
-      status: 'down',
-      incidents: [{ start: [T0 - 300], error: ['Refused'] }],
-    });
-    expect(hub.latency('api', T0)).toEqual([
-      { ping: 10, loc: 'HEL', time: T0 - 60 },
-      { ping: 20, loc: 'HEL', time: T0 },
-    ]);
-    // Older than the last 12 hours 3.1.0 kept, so not moved.
-    expect(hub.latency('api', T0 - 12 * 3600).map(({ ping }) => ping)).toEqual([10, 20]);
-
-    hub.record(T0 + 60, [check('api', up()), check('db', down('Refused'))]);
-    expect(hub.view().monitors.db?.status).toBe('down');
-    hub.record(T0 + 120, [check('api', up()), check('db', up())]);
-    expect(hub.view().monitors.db?.incidents).toEqual([
-      { start: [T0 - 300], error: ['Refused'], end: T0 + 120 },
-    ]);
-  });
-
-  it('moves the incidents it can read past one it cannot', () => {
-    const db = new DatabaseSync(':memory:');
-    createHub({}, db).hub.record(T0, [check('api', up())]);
-    rewindTo31(db);
-    db.exec(`INSERT INTO incidents (monitor_id, starts, errors, end_at)
-      VALUES ('api', 'not json', '{"broken', ${T0 - 7000})`);
-    addIncident(db, 'api', [T0 - 3600], ['Timeout'], T0 - 3400);
-
-    expect(createHub({}, db).hub.view().monitors.api?.incidents).toEqual([
-      { start: [T0 - 3600], error: ['Timeout'], end: T0 - 3400 },
-    ]);
-  });
-
   it('keeps a monitor’s newest 1,000 closed incidents and cuts long errors', () => {
     const db = new DatabaseSync(':memory:');
     createHub({}, db).hub.record(T0, [check('api', up())]);

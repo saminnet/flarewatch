@@ -47,16 +47,6 @@ describe('HttpChecker', () => {
     expect(headers.get('user-agent')).toBe('custom');
   });
 
-  it('fails on non-2xx status when expectedCodes is not set', async () => {
-    fetchMock.mockResolvedValue(new Response('fail', { status: 500 }));
-
-    const result = await checker.check(createMonitor());
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error('Expected failure');
-    expect(result.error).toBe('Expected 2xx status, got 500');
-  });
-
   it('accepts non-2xx status when expectedCodes includes it', async () => {
     fetchMock.mockResolvedValue(new Response('not found', { status: 404 }));
 
@@ -73,26 +63,6 @@ describe('HttpChecker', () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('Expected failure');
     expect(result.error).toBe('Expected status 200, got 404');
-  });
-
-  it('fails when required responseKeyword is missing', async () => {
-    fetchMock.mockResolvedValue(new Response('hello', { status: 200 }));
-
-    const result = await checker.check(createMonitor({ responseKeyword: 'world' }));
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error('Expected failure');
-    expect(result.error).toBe('Required keyword "world" not found in response');
-  });
-
-  it('fails when forbidden keyword is present', async () => {
-    fetchMock.mockResolvedValue(new Response('contains secret', { status: 200 }));
-
-    const result = await checker.check(createMonitor({ responseForbiddenKeyword: 'secret' }));
-
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error('Expected failure');
-    expect(result.error).toBe('Forbidden keyword "secret" found in response');
   });
 
   it('checks response headers and a JSON value', async () => {

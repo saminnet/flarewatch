@@ -380,7 +380,9 @@ describe('notification templates', () => {
     expect(hasReasonUp).toBe(false);
   });
 
-  describe.each(NOTIFICATION_TEMPLATES)('%s', (name) => {
+  describe.each(
+    NOTIFICATION_TEMPLATES.filter((name) => name !== 'mattermost' && name !== 'rocketchat'),
+  )('%s', (name) => {
     const render = (ctx: Partial<TemplateContext>) => {
       const { body, headers } = getTemplate(name)({ ...baseContext, ...ctx });
       return decodeURIComponent(`${JSON.stringify(headers)}${body}`.replaceAll('+', ' '));

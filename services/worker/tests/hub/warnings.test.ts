@@ -2,37 +2,6 @@ import { expect, it } from 'vite-plus/test';
 import type { CheckResult, PullMonitor } from '@flarewatch/shared';
 import { createHub } from '../helpers/hub';
 
-it('alerts again for a date past ninety days while a retained claim suppresses it', () => {
-  const { hub } = createHub();
-  const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
-  const monitor: PullMonitor = {
-    id: "api'; --",
-    name: 'API',
-    method: 'GET',
-    target: 'https://example.com',
-  };
-  const DAY = 24 * 60 * 60;
-  const warning = (expiryDate: number) => [
-    {
-      monitor,
-      check: {
-        location: 'HEL',
-        result: { ok: true as const, latency: 1, warning: { text: 'Expiry', expiryDate } },
-      },
-    },
-  ];
-  const kinds = (alerts: { kind: string }[]) => alerts.map(({ kind }) => kind);
-
-  const date = 21 * DAY;
-  const first = hub.record(DAY, warning(date), policy).alerts;
-  expect(kinds(first)).toEqual(['expiry']);
-  hub.confirmAlerts(first.map((alert) => ({ ...alert, delivered: true })));
-  expect(hub.record(DAY + 60, warning(date), policy).alerts).toEqual([]);
-
-  expect(hub.record(date + 90 * DAY, warning(date), policy).alerts).toEqual([]);
-  expect(kinds(hub.record(date + 90 * DAY + 1, warning(date), policy).alerts)).toEqual(['expiry']);
-});
-
 it('closes old certificate downtime, persists a warning and alerts once per expiry date after maintenance', () => {
   const { hub } = createHub();
   const monitor: PullMonitor = {

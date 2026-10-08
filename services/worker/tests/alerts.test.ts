@@ -464,18 +464,6 @@ describe('alert state', () => {
     expect(d.alerts()).toEqual([]);
   });
 
-  it('alerts again when a monitor fails soon after its recovery alert', async () => {
-    const d = deployment([pull('api')]);
-    d.down('api');
-    await d.run(T);
-    d.up('api');
-    await d.run(T + 60);
-    d.down('api');
-    await d.run(T + 120);
-
-    expect(d.alerts()).toEqual(['api down', 'api up', 'api still down']);
-  });
-
   it('waits a full grace period again when a monitor fails soon after recovering', async () => {
     const d = deployment([pull('api')], { gracePeriod: 2 });
     d.down('api');

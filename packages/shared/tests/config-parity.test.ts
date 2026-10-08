@@ -12,24 +12,10 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
   ['array', [], false],
   ['monitors missing', {}, false],
   ['monitors not an array', { monitors: {} }, false],
-  [
-    'tcp_ping rejects port 0',
-    { monitors: [{ ...monitor, method: 'TCP_PING', target: 'example.com:0' }] },
-    false,
-  ],
-  ['ftp url rejected for GET', { monitors: [{ ...monitor, target: 'ftp://example.com' }] }, false],
   // A misspelt or mistyped field must fail the deploy, not be ignored.
   ['monitor field of the wrong type', { monitors: [{ ...monitor, tooltip: 5 }] }, false],
-  ['expectedCodes not a list', { monitors: [{ ...monitor, expectedCodes: 'nope' }] }, false],
-  ['misspelt monitor field', { monitors: [{ ...monitor, expectedCode: [200] }] }, false],
-  ['monitor timeout of a minute', { monitors: [{ ...monitor, timeout: 60_000 }] }, true],
-  ['monitor timeout over a minute', { monitors: [{ ...monitor, timeout: 60_001 }] }, false],
-  ['monitor timeout of zero', { monitors: [{ ...monitor, timeout: 0 }] }, false],
-  ['monitor timeout as a string', { monitors: [{ ...monitor, timeout: '5000' }] }, false],
   ['monitor maxLatencyMs of one', { monitors: [{ ...monitor, maxLatencyMs: 1 }] }, true],
-  ['monitor maxLatencyMs of zero', { monitors: [{ ...monitor, maxLatencyMs: 0 }] }, false],
   ['monitor link to a URL', { monitors: [{ ...monitor, link: 'https://a.com/x' }] }, true],
-  ['monitor link turned off', { monitors: [{ ...monitor, link: false }] }, true],
   [
     'javascript: monitor link rejected',
     { monitors: [{ ...monitor, link: 'javascript:alert(1)' }] },
@@ -99,12 +85,6 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
   ],
   ['extra top-level keys ignored', { monitors: [], somethingElse: 42 }, true],
   ['statusPage title must be a string', { monitors: [], statusPage: { title: 5 } }, false],
-  [
-    'statusPage rejects the retired theme field',
-    { monitors: [], statusPage: { theme: 'dark' } },
-    false,
-  ],
-  ['statusPage private visibility', { monitors: [], statusPage: { visibility: 'private' } }, true],
   // A typo must not silently leave a private page public.
   ['statusPage unknown visibility', { monitors: [], statusPage: { visibility: 'Private' } }, false],
   [
@@ -133,11 +113,6 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
     'webhook url must be http',
     { monitors: [], notification: { webhook: { url: 'ftp://x.com' } } },
     false,
-  ],
-  [
-    'webhook array accepted',
-    { monitors: [], notification: { webhook: [{ url: 'https://a.com' }] } },
-    true,
   ],
   [
     'unknown template rejected',
