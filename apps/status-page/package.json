@@ -10,7 +10,8 @@
     "deploy:wrangler": "vp build && wrangler deploy --config dist/server/wrangler.json",
     "preview": "vp build && vp preview",
     "test": "vp test run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "doctor": "react-doctor . --blocking warning --no-telemetry --no-supply-chain"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -50,6 +51,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "jsdom": "^30.0.1",
+    "react-doctor": "0.9.17",
     "typescript": "catalog:",
     "vite": "catalog:",
     "wrangler": "catalog:"

@@ -46,6 +46,10 @@ jobs:
         timeout-minutes: 5
         run: vp run test
 
+      - name: Check React code
+        timeout-minutes: 5
+        run: vp run --filter status-page doctor
+
       - name: Restore browser cache
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
