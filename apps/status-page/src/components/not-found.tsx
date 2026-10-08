@@ -3,8 +3,10 @@ import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 
 export function NotFound({ message }: { message?: string }) {
+  usePageHydrated();
   return (
     <div className="container mx-auto flex min-h-[60vh] max-w-5xl items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md text-center">

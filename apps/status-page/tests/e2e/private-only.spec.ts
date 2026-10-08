@@ -1,4 +1,5 @@
-import { expect, request as playwrightRequest, test, type Page } from '@playwright/test';
+import { expect, request as playwrightRequest, type Page } from '@playwright/test';
+import { test } from './fixtures';
 import { captureLatencyCall } from './latency-call';
 
 test.skip(

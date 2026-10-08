@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { test } from './fixtures';
 import { captureLatencyCall } from './latency-call';
 
 test.skip(
@@ -44,7 +45,6 @@ test('serves a private monitor and its latency to a member', async ({ page }) =>
     page.getByRole('button', { name: /Account menu, signed in as member/ }),
   ).toBeVisible();
 
-  // page.request now carries the member session, so its replay is the member's call.
   const response = await page.request.get(
     captured.url().replaceAll(ALLOWED, 'demo_private_internal'),
     { headers },

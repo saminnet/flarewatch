@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
+import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 import { getRouteApi } from '@tanstack/react-router';
 import { IconChevronLeft, IconChevronRight, IconCalendar, IconPlus } from '@tabler/icons-react';
 import type { Maintenance } from '@flarewatch/shared';
@@ -41,6 +42,7 @@ type DialogTarget = { open: boolean; maintenance?: Maintenance; key: number };
 const CLOSED: DialogTarget = { open: false, key: 0 };
 
 export function HistoryPage() {
+  usePageHydrated();
   const audience = useAudience();
   const operator = audience === 'operator';
   const {

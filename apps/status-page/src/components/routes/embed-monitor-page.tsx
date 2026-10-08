@@ -7,6 +7,7 @@ import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import { monitorState, type MonitorState } from '@/lib/monitor-state';
 import { formatUptimeDisplay } from '@/lib/uptime';
 import { cn } from '@/lib/utils';
+import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 
 const embedRoute = getRouteApi('/embed/$monitorId');
 
@@ -21,6 +22,7 @@ const STATE_CLASSES: Record<MonitorState, { dot: string; chip: string }> = {
 };
 
 export function EmbedPage() {
+  usePageHydrated();
   const { monitorId } = embedRoute.useParams();
   const {
     data: { state, monitors, maintenances },

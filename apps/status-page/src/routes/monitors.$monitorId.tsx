@@ -12,6 +12,7 @@ import type { AdminMonitor, Snapshot } from '@/lib/public-view';
 import { projectTimeline } from '@/lib/status-projection';
 import { latencyQuery, snapshotQuery, loadQuery } from '@/lib/query/monitors.queries';
 import { audienceOf } from '@/lib/session';
+import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 
 function drawsLatency(monitor: AdminMonitor): boolean {
   return monitor.method !== 'HEARTBEAT' && !monitor.hideLatencyChart;
@@ -37,6 +38,7 @@ export const Route = createFileRoute('/monitors/$monitorId')({
 });
 
 function MonitorPage() {
+  usePageHydrated();
   const { monitorId } = Route.useParams();
   const audience = useAudience();
   const { data: snapshot } = useSuspenseQuery(snapshotQuery(audience));

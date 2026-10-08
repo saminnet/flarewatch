@@ -9,6 +9,7 @@ import { snapshotQuery, uiPrefsQuery, loadQuery } from '@/lib/query/monitors.que
 import { useAudience } from '@/lib/hooks/use-audience';
 import { useNow } from '@/lib/hooks/use-now';
 import { audienceOf } from '@/lib/session';
+import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 
 interface IndexSearch {
   kind?: MonitorKindFilter;
@@ -26,6 +27,7 @@ export const Route = createFileRoute('/')({
 });
 
 function DashboardPage() {
+  usePageHydrated();
   const { kind } = Route.useSearch();
   const navigate = Route.useNavigate();
   const audience = useAudience();

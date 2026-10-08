@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { test } from './fixtures';
 
 for (const [name, exchanged, method, status] of [
   ['matching verifier', 'test-verifier', 'S256', 200],

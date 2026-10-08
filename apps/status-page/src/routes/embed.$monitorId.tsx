@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { EmbedPage } from '@/components/routes/embed-monitor-page';
 import { snapshotQuery, loadQuery } from '@/lib/query/monitors.queries';
+import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 
 interface EmbedSearch {
   theme?: 'light' | 'dark' | 'auto';
@@ -19,11 +20,14 @@ export const Route = createFileRoute('/embed/$monitorId')({
     await loadQuery(context.queryClient, snapshotQuery('visitor'));
   },
   component: EmbedPage,
-  errorComponent: ({ error }) => (
-    <div className="h-full flex items-center justify-center p-4">
-      <div className="text-sm text-destructive">
-        {error instanceof Error ? error.message : 'Failed to load monitor status'}
+  errorComponent: function EmbedError({ error }) {
+    usePageHydrated();
+    return (
+      <div className="h-full flex items-center justify-center p-4">
+        <div className="text-sm text-destructive">
+          {error instanceof Error ? error.message : 'Failed to load monitor status'}
+        </div>
       </div>
-    </div>
-  ),
+    );
+  },
 });

@@ -62,6 +62,23 @@ export default defineConfig({
           'anti-slop/require-safety-comment-for-type-assertion': 'off',
         },
       },
+      {
+        files: ['apps/status-page/tests/e2e/**/*.spec.ts'],
+        rules: {
+          'no-restricted-imports': [
+            'error',
+            {
+              paths: [
+                {
+                  name: '@playwright/test',
+                  importNames: ['test'],
+                  message: "Import test from './fixtures': it fails a test on a client error.",
+                },
+              ],
+            },
+          ],
+        },
+      },
     ],
     options: {
       typeAware: true,

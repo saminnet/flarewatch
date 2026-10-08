@@ -6,6 +6,7 @@ import { createQueryClient } from '@/lib/query/client';
 import { DefaultCatchBoundary } from '@/components/default-catch-boundary';
 import { NotFound } from '@/components/not-found';
 import { PageSkeleton } from '@/components/page-skeleton';
+import { pageHydrated } from '@/lib/hooks/use-page-hydration';
 import { cspNonce } from '@/server/csp-nonce';
 import { routeTree } from './routeTree.gen';
 
@@ -31,6 +32,15 @@ export function getRouter() {
   });
 
   setupRouterSsrQueryIntegration({ queryClient, router });
+
+  // The header hydrates before the page under it, and a navigation in between makes the page throw.
+  if (!router.isServer) {
+    const unblock = router.history.block({
+      blockerFn: () => pageHydrated.then(() => false),
+      enableBeforeUnload: false,
+    });
+    void pageHydrated.then(unblock);
+  }
 
   return router;
 }

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
+import { test } from './fixtures';
 
 // Static assets bypass the Worker, so they do not spend the request budget.
 function trackServerCalls(page: Page): string[] {
