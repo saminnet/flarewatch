@@ -907,6 +907,9 @@ test.describe.serial('operator maintenance lifecycle', () => {
 
     await page.getByRole('button', { name: 'Delete E2E lifecycle maintenance updated' }).click();
     const deleteDialog = page.getByRole('dialog', { name: 'Delete maintenance window' });
+    await expect(deleteDialog).toContainText(
+      'Delete "E2E lifecycle maintenance updated"? This cannot be undone.',
+    );
     const deleted = page.waitForResponse(
       (response) =>
         response.url().endsWith('/api/admin/maintenances') &&
@@ -960,15 +963,16 @@ test.describe.serial('operator maintenance lifecycle', () => {
     await expect(page.getByText('Every week on Mon, Wed').first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Delete E2E weekly maintenance' }).first().click();
+    const deleteDialog = page.getByRole('dialog', { name: 'Delete maintenance window' });
+    await expect(deleteDialog).toContainText(
+      'Delete "E2E weekly maintenance" and every occurrence? Every week on Mon, Wed. This cannot be undone.',
+    );
     const deleted = page.waitForResponse(
       (response) =>
         response.url().endsWith('/api/admin/maintenances') &&
         response.request().method() === 'DELETE',
     );
-    await page
-      .getByRole('dialog', { name: 'Delete maintenance window' })
-      .getByRole('button', { name: 'Delete' })
-      .click();
+    await deleteDialog.getByRole('button', { name: 'Delete' }).click();
     expect((await deleted).status()).toBe(204);
     await expect(page.getByText('E2E weekly maintenance')).toHaveCount(0);
   });

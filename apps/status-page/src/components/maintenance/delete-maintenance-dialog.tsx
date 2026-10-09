@@ -9,8 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { describeRepeat } from '@/lib/maintenance';
 import { useDeleteMaintenance } from '@/lib/query/maintenance.mutations';
 import { mutationErrorMessage } from '@/lib/query/auth.mutations';
+
+function deleteMessage(title: string, repeat: Maintenance['repeat']): string {
+  if (!repeat) return `Delete "${title}"? This cannot be undone.`;
+  return `Delete "${title}" and every occurrence? ${describeRepeat(repeat)}. This cannot be undone.`;
+}
 
 interface DeleteMaintenanceDialogProps {
   open: boolean;
@@ -41,7 +47,7 @@ export function DeleteMaintenanceDialog({
           </Alert>
         )}
         <p className="py-4 text-muted-foreground">
-          {`Delete "${maintenance?.title ?? 'Scheduled Maintenance'}"? This cannot be undone.`}
+          {deleteMessage(maintenance?.title ?? 'Scheduled Maintenance', maintenance?.repeat)}
         </p>
         <div className="flex justify-end gap-2">
           <DialogClose render={<Button variant="outline">Cancel</Button>} />
