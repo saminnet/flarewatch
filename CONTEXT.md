@@ -5,7 +5,9 @@ FlareWatch checks websites and background jobs from Cloudflare Workers and shows
 ## People
 
 **Operator**:
-Someone who signs in and can change things: maintenance windows. Only an operator can copy a heartbeat's ping URL. The person who deploys FlareWatch is one, through the password or a provider.
+Someone who signs in and can change maintenance windows and announcements. Only an operator can copy a heartbeat's ping URL.
+
+The person who deploys FlareWatch is an operator, through the password or a provider.
 _Avoid_: Admin, user, owner
 
 **Member**:
@@ -23,7 +25,8 @@ _Avoid_: Public user, guest, customer
 ## Pages
 
 **Status page**:
-The site the status-page worker serves: the dashboard, History and monitor pages. Operators and visitors see the same routes; operators see more.
+The site the status-page worker serves: the dashboard, History and monitor pages. Operators and visitors see the same routes. Operators see more.
+
 _Avoid_: Public page, frontend
 
 **Signed-in mode**:
@@ -48,7 +51,7 @@ A monitor that the worker probes on a schedule over HTTP or TCP.
 _Avoid_: Pull monitor, web monitor, endpoint
 
 **Heartbeat monitor**:
-A monitor for a scheduled job. The job reports in by pinging FlareWatch; silence past the grace period means down.
+A monitor for a scheduled job. The job reports in with a ping to FlareWatch. Silence past the grace period means down.
 _Avoid_: Cron monitor, push monitor, job monitor
 
 **Ping**:
@@ -64,7 +67,7 @@ A monitor only operators and members see, or an audience whose page group holds 
 _Avoid_: Hidden monitor, internal monitor
 
 **Degraded**:
-What the page shows for a check monitor that is up but slower than its `maxLatencyMs`, or a heartbeat monitor that is late. Not an incident: no alert, and uptime is unchanged.
+What the page shows for a check monitor slower than its `maxLatencyMs`, a monitor with an expiry warning, or a heartbeat monitor that is late. It opens no incident and leaves uptime unchanged. Only expiry warnings send an alert.
 _Avoid_: Slow, warning, yellow
 
 **Confirmation**:
@@ -87,7 +90,7 @@ The deadline and spare subrequests one check run shares. A fallback, a confirmat
 The monitor IDs a webhook gets alerts for, set by its `monitors`. Without it, the webhook gets every monitor's alerts.
 
 **Alert claim**:
-A check run's temporary right to send an incident's down alert, so an overlapping run doesn't send it too.
+A check run's temporary right to send an incident's down alert, so an overlapping run does not send it too.
 
 **Reminder**:
 A repeat of a down alert while the monitor stays down, every `reminderEveryChecks` check runs. Per monitor, off by default.
@@ -100,8 +103,11 @@ The page that lists incidents and maintenance windows by month, at `/history`.
 _Avoid_: Events page, timeline
 
 **Maintenance window**:
-A planned period, with start, end and affected monitors, that the operator adds on History. It can repeat daily, weekly or monthly in a chosen time zone; each run is an occurrence. The only thing editable at runtime.
+A planned period, with start, end and affected monitors, that the operator adds on History. It can repeat daily, weekly or monthly in a chosen time zone. Each run is an occurrence.
 _Avoid_: Maintenance event, scheduled maintenance
+
+**Announcement**:
+A notice with a title, body and optional end time that the operator posts on History. Active announcements appear on the dashboard.
 
 **Incident**:
 A stretch of downtime FlareWatch recorded for a monitor. A failure within 15 minutes after a recovery reopens the incident, and a reopened incident ends only after 15 minutes up. The up minutes between count as downtime.
@@ -110,5 +116,5 @@ _Avoid_: Outage, event
 ## Storage
 
 **Hub**:
-The Durable Object in the monitor Worker that stores incidents, latency samples, heartbeat pings and maintenance windows. The status page reads it through the monitor Worker.
+The Durable Object in the monitor Worker that stores incidents, latency samples, heartbeat pings, maintenance windows and announcements. The status page reads it through the monitor Worker.
 _Avoid_: State, KV state, database

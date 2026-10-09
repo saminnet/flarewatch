@@ -17,9 +17,11 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-26.04
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb #v1.15.0
@@ -28,13 +30,15 @@ jobs:
           cache: true
           run-install: true
 
+      # A key per run, because GitHub never overwrites a saved key. Vite+ fingerprints the inputs.
       - name: Restore task cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: task-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/.vite/task-cache
-          key: ${{ runner.os }}-vite-task-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'vite.config.ts', 'apps/status-page/vite.config.ts', 'apps/status-page/vitest.config.ts', 'services/worker/vitest.config.ts', 'packages/shared/vitest.config.ts') }}
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ${{ runner.os }}-vite-task-
+            vite-task-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Check formatting, types, and lint
         timeout-minutes: 5
@@ -43,6 +47,16 @@ jobs:
       - name: Run unit tests
         timeout-minutes: 5
         run: vp run test
+
+      - name: Save task cache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.task-cache.outputs.cache-primary-key }}
+
+      - name: Check React code
+        timeout-minutes: 5
+        run: vp run --filter status-page doctor
 
       - name: Restore browser cache
         if: ${{ github.event_name == 'pull_request' }}
@@ -81,12 +95,12 @@ jobs:
 
   build-and-deploy:
     name: Deploy to Cloudflare
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     concurrency:
       group: deploy-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: false
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 5
     needs: quality
     # Only this job gets the token: the quality job installs and runs third-party code.
     env:
@@ -95,7 +109,18 @@ jobs:
     steps:
       - name: Validate required secrets
         shell: bash
+        env:
+          HEARTBEAT_SECRET: ${{ secrets.HEARTBEAT_SECRET }}
+          FLAREWATCH_AUTH_SECRET: ${{ secrets.FLAREWATCH_AUTH_SECRET }}
         run: |
+          # A ping URL, or the cookie of any sign-in someone starts, lets them guess a short secret offline.
+          if [ -n "${HEARTBEAT_SECRET}" ] && [ ${#HEARTBEAT_SECRET} -lt 32 ]; then
+            echo "::warning title=Short HEARTBEAT_SECRET::HEARTBEAT_SECRET has fewer than 32 characters. Replace it with the output of 'openssl rand -base64 32', then update your ping URLs."
+          fi
+          if [ -n "${FLAREWATCH_AUTH_SECRET}" ] && [ ${#FLAREWATCH_AUTH_SECRET} -lt 32 ]; then
+            echo "::warning title=Short FLAREWATCH_AUTH_SECRET::FLAREWATCH_AUTH_SECRET has fewer than 32 characters. Replace it with the output of 'openssl rand -base64 32'. Sign-ins in progress then fail once."
+          fi
+
           missing=()
 
           [ -z "${CLOUDFLARE_ACCOUNT_ID}" ] && missing+=(CLOUDFLARE_ACCOUNT_ID)
@@ -110,6 +135,8 @@ jobs:
           fi
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb #v1.15.0
@@ -171,6 +198,12 @@ jobs:
             echo "KV namespace placeholder was not fully replaced"
             exit 1
           fi
+
+      - name: Use the upstream demo config
+        if: ${{ github.repository == 'saminnet/flarewatch' }}
+        run: |
+          cp packages/config/src/demo/worker.ts packages/config/src/worker.ts
+          cp packages/config/src/demo/public.ts packages/config/src/public.ts
 
       - name: Deploy with Wrangler
         env:

@@ -1,22 +1,12 @@
 import { describe, it, expect } from 'vite-plus/test';
 import {
-  parseYearMonth,
   isValidYearMonth,
   shiftYearMonth,
   getUtcMonthBounds,
   generateCalendarGrids,
-  formatUtc,
   formatDuration,
   formatCadence,
 } from '@/lib/date';
-
-describe('parseYearMonth', () => {
-  it('parses valid year-month strings', () => {
-    expect(parseYearMonth('2024-01')).toEqual({ year: 2024, month: 1 });
-    expect(parseYearMonth('2023-12')).toEqual({ year: 2023, month: 12 });
-    expect(parseYearMonth('1999-06')).toEqual({ year: 1999, month: 6 });
-  });
-});
 
 describe('isValidYearMonth', () => {
   it('accepts valid year-month strings', () => {
@@ -77,6 +67,43 @@ describe('getUtcMonthBounds', () => {
 });
 
 describe('generateCalendarGrids', () => {
+  it.each([
+    {
+      month: '2024-02',
+      weeks: 5,
+      first: [null, null, null, 1, 2, 3, 4],
+      last: [26, 27, 28, 29, null, null, null],
+    },
+    {
+      month: '2023-10',
+      weeks: 6,
+      first: [null, null, null, null, null, null, 1],
+      last: [30, 31, null, null, null, null, null],
+    },
+    {
+      month: '2024-04',
+      weeks: 5,
+      first: [1, 2, 3, 4, 5, 6, 7],
+      last: [29, 30, null, null, null, null, null],
+    },
+  ])(
+    'aligns $month Monday-first and marks UTC today and future days',
+    ({ month, weeks, first, last }) => {
+      const [grid] = generateCalendarGrids(new Date(`${month}-15T23:59:59Z`), 1);
+
+      expect(grid?.yearMonth).toBe(month);
+      expect(grid?.weeks).toHaveLength(weeks);
+      expect(grid?.weeks.every((week) => week.length === 7)).toBe(true);
+      expect(grid?.weeks[0]?.map((day) => day?.date.getUTCDate() ?? null)).toEqual(first);
+      expect(grid?.weeks.at(-1)?.map((day) => day?.date.getUTCDate() ?? null)).toEqual(last);
+      const days = grid?.weeks.flat().filter((day) => day !== null) ?? [];
+      expect(days.filter((day) => day.isToday).map((day) => day.date.toISOString())).toEqual([
+        `${month}-15T00:00:00.000Z`,
+      ]);
+      for (const day of days) expect(day.isFuture).toBe(day.date.getUTCDate() > 15);
+    },
+  );
+
   it('rolls months back across a year boundary', () => {
     const grids = generateCalendarGrids(new Date('2025-03-15T12:00:00Z'), 3, '2025-01');
 
@@ -85,12 +112,6 @@ describe('generateCalendarGrids', () => {
     expect(
       grids.map((grid) => grid.weeks.flat().find(Boolean)?.date.toISOString().slice(0, 10)),
     ).toEqual(['2024-11-01', '2024-12-01', '2025-01-01']);
-  });
-});
-
-describe('formatUtc', () => {
-  it('formats a UTC date independent of the local timezone offset', () => {
-    expect(formatUtc(new Date('2026-06-09T12:30:00.000Z'), 'MMM d, HH:mm')).toBe('Jun 9, 12:30');
   });
 });
 

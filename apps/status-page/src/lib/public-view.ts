@@ -1,5 +1,6 @@
 import {
   isPublicMonitor,
+  type Announcement,
   type Maintenance,
   type Monitor,
   type MonitorView,
@@ -25,6 +26,8 @@ export type Snapshot = {
   groups: PageConfigGroup;
   state: StatusView | null;
   maintenances: Maintenance[];
+  /** Announcements have no monitor scope, so every audience receives them. */
+  announcements: Announcement[];
 };
 
 type PublicView = {
@@ -159,6 +162,7 @@ export function visitorSnapshot(
   config: RuntimeConfig,
   state: StatusView | null,
   maintenances: Maintenance[],
+  announcements: Announcement[] = [],
 ): Snapshot {
   const view = publicView(config, state);
   return {
@@ -166,6 +170,7 @@ export function visitorSnapshot(
     groups: view.statusPage?.group ?? {},
     state: view.state,
     maintenances: publicMaintenances(config, maintenances),
+    announcements,
   };
 }
 
@@ -173,6 +178,7 @@ export function operatorSnapshot(
   config: RuntimeConfig,
   state: StatusView | null,
   maintenances: Maintenance[],
+  announcements: Announcement[] = [],
 ): Snapshot {
   const monitors = toAdminMonitors(config);
   const monitorIds = new Set(monitors.map((monitor) => monitor.id));
@@ -181,6 +187,7 @@ export function operatorSnapshot(
     groups: groupsOf(config, monitorIds),
     state: state && viewOf(state, monitorIds, true),
     maintenances,
+    announcements,
   };
 }
 
@@ -193,6 +200,7 @@ export function memberSnapshot(
   state: StatusView | null,
   maintenances: Maintenance[],
   principal: Extract<Principal, { role: 'member' }>,
+  announcements: Announcement[] = [],
 ): Snapshot {
   const monitorIds = visibleMonitorIds(config, principal);
   return {
@@ -200,6 +208,7 @@ export function memberSnapshot(
     groups: groupsOf(config, monitorIds),
     state: state && viewOf(state, monitorIds, principal.groups === 'all'),
     maintenances: maintenancesFor(maintenances, monitorIds),
+    announcements,
   };
 }
 

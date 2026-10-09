@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vite-plus/test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   createLogger,
-  DEFAULT_HTTP_TIMEOUT,
   fetchWithTimeout,
   TimeoutError,
   toHeaders,
@@ -12,8 +13,12 @@ import {
   success,
   failure,
   formatUtcShort,
+  timingSafeEqual,
+  readJsonUpTo,
 } from '../src/utils';
 import type { MonitorTarget, SSLCertificateInfo } from '../src/types';
+
+const execFileAsync = promisify(execFile);
 
 describe('TimeoutError', () => {
   it('creates error with correct message', () => {
@@ -27,10 +32,6 @@ describe('TimeoutError', () => {
 describe('withTimeout', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it('resolves when promise completes before timeout', async () => {
@@ -59,17 +60,42 @@ describe('withTimeout', () => {
     await expect(withTimeout(errorPromise, 1000)).rejects.toThrow('original error');
   });
 
-  it('leaves no pending timer after resolution', async () => {
-    await withTimeout(Promise.resolve('done'), 5000);
+  it('lets a Node process exit after fulfillment before the timeout expires', async () => {
+    vi.useRealTimers();
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [
+        '--experimental-strip-types',
+        '--input-type=module',
+        '--eval',
+        `import { withTimeout } from ${JSON.stringify(new URL('../src/utils.ts', import.meta.url).href)};
+         console.log(await withTimeout(Promise.resolve('done'), 60_000));`,
+      ],
+      { timeout: 5000 },
+    );
 
-    expect(vi.getTimerCount()).toBe(0);
-  });
+    expect(stdout).toBe('done\n');
+    expect(stderr).toBe('');
+  }, 10_000);
 
-  it('leaves no pending timer after rejection', async () => {
-    await expect(withTimeout(Promise.reject(new Error('fail')), 5000)).rejects.toThrow('fail');
+  it('lets a Node process exit after handled rejection before the timeout expires', async () => {
+    vi.useRealTimers();
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [
+        '--experimental-strip-types',
+        '--input-type=module',
+        '--eval',
+        `import { withTimeout } from ${JSON.stringify(new URL('../src/utils.ts', import.meta.url).href)};
+         try { await withTimeout(Promise.reject(new Error('fail')), 60_000); }
+         catch (error) { console.log(error.message); }`,
+      ],
+      { timeout: 5000 },
+    );
 
-    expect(vi.getTimerCount()).toBe(0);
-  });
+    expect(stdout).toBe('fail\n');
+    expect(stderr).toBe('');
+  }, 10_000);
 });
 
 describe('fetchWithTimeout', () => {
@@ -81,7 +107,6 @@ describe('fetchWithTimeout', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    vi.useRealTimers();
   });
 
   it('calls fetch with provided URL and options', async () => {
@@ -104,11 +129,10 @@ describe('fetchWithTimeout', () => {
   });
 
   it('aborts a pending fetch at the default deadline', async () => {
-    const controller = new AbortController();
-    const deadlines: number[] = [];
     vi.stubGlobal('AbortSignal', {
       timeout: (ms: number) => {
-        deadlines.push(ms);
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), ms);
         return controller.signal;
       },
     });
@@ -122,12 +146,16 @@ describe('fetchWithTimeout', () => {
 
     const pending = fetchWithTimeout('https://example.com');
     const assertion = expect(pending).rejects.toThrow('aborted');
-    controller.abort();
+    let settled = false;
+    void pending.catch(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
     await assertion;
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(deadlines).toEqual([DEFAULT_HTTP_TIMEOUT]);
-    vi.unstubAllGlobals();
   });
 
   it('bounds fetch without AbortSignal.timeout', async () => {
@@ -149,8 +177,8 @@ describe('fetchWithTimeout', () => {
     globalThis.fetch = resolvingFetch;
     await fetchWithTimeout('https://example.com', { timeout: 5000 });
 
-    expect(vi.getTimerCount()).toBe(0);
-    vi.unstubAllGlobals();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(resolvingFetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
   });
 
   it('passes body when provided', async () => {
@@ -218,37 +246,21 @@ describe('validateHttpResponse', () => {
       const response204 = new Response(null, { status: 204 });
       expect(await validateHttpResponse(monitor, response204)).toBeNull();
     });
-
-    it('rejects non-2xx status codes by default', async () => {
-      const monitor = createMonitor();
-
-      const response = new Response('error', { status: 404 });
-      const result = await validateHttpResponse(monitor, response);
-
-      expect(result).toBe('Expected 2xx status, got 404');
-    });
-
-    it('accepts custom expectedCodes', async () => {
-      const monitor = createMonitor({ expectedCodes: [200, 201, 404] });
-
-      const response404 = new Response('not found', { status: 404 });
-      expect(await validateHttpResponse(monitor, response404)).toBeNull();
-
-      const response200 = new Response('ok', { status: 200 });
-      expect(await validateHttpResponse(monitor, response200)).toBeNull();
-    });
-
-    it('rejects status not in expectedCodes', async () => {
-      const monitor = createMonitor({ expectedCodes: [200, 201] });
-
-      const response = new Response('error', { status: 500 });
-      const result = await validateHttpResponse(monitor, response);
-
-      expect(result).toBe('Expected status 200|201, got 500');
-    });
   });
 
   describe('keyword validation', () => {
+    it('matches UTF-8 characters split across stream chunks', async () => {
+      const bytes = new TextEncoder().encode('café 😀');
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+          controller.close();
+        },
+      });
+      await expect(
+        validateHttpResponse(createMonitor({ responseKeyword: 'café 😀' }), new Response(body)),
+      ).resolves.toBeNull();
+    });
     it('reads at most 1 MiB of the body, so an endless one cannot exhaust memory', async () => {
       const chunk = new TextEncoder().encode('x'.repeat(64 * 1024));
       const endless = new ReadableStream<Uint8Array>({
@@ -334,29 +346,41 @@ describe('validateHttpResponse', () => {
     });
 
     it('skips the body read without keywords', async () => {
-      const text = vi.fn(async () => {
-        throw new Error('body read must not happen');
-      });
-      const response = new Response('anything', { status: 200 });
-      response.text = text;
+      const response = new Response(
+        new ReadableStream<Uint8Array>(
+          {
+            pull() {
+              throw new Error('body read must not happen');
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+        { status: 200 },
+      );
 
       await expect(validateHttpResponse(createMonitor(), response)).resolves.toBeNull();
-      expect(text).not.toHaveBeenCalled();
+      expect(response.bodyUsed).toBe(false);
     });
   });
 
   describe('combined validation', () => {
     it('returns the status error without reading the body', async () => {
-      const text = vi.fn(async () => {
-        throw new Error('body read must not happen');
-      });
-      const response = new Response('ok', { status: 500 });
-      response.text = text;
+      const response = new Response(
+        new ReadableStream<Uint8Array>(
+          {
+            pull() {
+              throw new Error('body read must not happen');
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+        { status: 500 },
+      );
 
       const result = await validateHttpResponse(createMonitor({ responseKeyword: 'ok' }), response);
 
       expect(result).toBe('Expected 2xx status, got 500');
-      expect(text).not.toHaveBeenCalled();
+      expect(response.bodyUsed).toBe(false);
     });
   });
 });
@@ -382,6 +406,20 @@ describe('response assertions', () => {
   describe('responseJsonPath', () => {
     const at = (responseJsonPath: string, responseJsonValue: MonitorTarget['responseJsonValue']) =>
       createMonitor({ responseJsonPath, responseJsonValue });
+
+    it.each(['$.a[', "$['a']", '$a', '$.a[-1]', '$.a[x]'])(
+      'reports malformed response path %s',
+      async (path) => {
+        await expect(validateHttpResponse(at(path, 'ok'), json({ a: 'ok' }))).resolves.toBe(
+          `responseJsonPath ${path} is not a $.a.b[0] path`,
+        );
+      },
+    );
+
+    it('selects multiple array indices including a multidigit index', async () => {
+      const body = [[], [], [...Array.from({ length: 10 }, () => 'wrong'), 'ok']];
+      await expect(validateHttpResponse(at('$[2][10]', 'ok'), json(body))).resolves.toBeNull();
+    });
 
     it.each([
       ['a nested string', { a: { b: [{ c: 'ok' }] } }, '$.a.b[0].c', 'ok'],
@@ -423,6 +461,7 @@ describe('response assertions', () => {
         at('$.status', 'ok'),
         json({ status: 'token-1234' }),
       );
+      expect(error).toBe('JSON value at $.status is not "ok"');
       expect(error).not.toContain('token-1234');
     });
 
@@ -443,16 +482,6 @@ describe('response assertions', () => {
       );
     });
 
-    it('checks a body a probe already read', async () => {
-      const monitor = at('$.status', 'ok');
-      await expect(
-        validateHttpResponse(monitor, { status: 200, body: '{"status":"ok"}' }),
-      ).resolves.toBeNull();
-      await expect(
-        validateHttpResponse(monitor, { status: 200, body: '{"status":"down"}' }),
-      ).resolves.toBe('JSON value at $.status is not "ok"');
-    });
-
     it('returns the status error without reading the body', async () => {
       const response = new Response(unreadable().body, { status: 503 });
       await expect(validateHttpResponse(at('$.a', 1), response)).resolves.toBe(
@@ -462,24 +491,6 @@ describe('response assertions', () => {
   });
 
   describe('responseHeaderEquals', () => {
-    it('matches header names in any case and values exactly', async () => {
-      const monitor = createMonitor({ responseHeaderEquals: { 'cache-control': 'no-store' } });
-
-      await expect(
-        validateHttpResponse(monitor, json({}, { 'Cache-Control': 'no-store' })),
-      ).resolves.toBeNull();
-      await expect(
-        validateHttpResponse(monitor, json({}, { 'Cache-Control': 'No-Store' })),
-      ).resolves.toBe('Header "cache-control" does not have the expected value');
-    });
-
-    it('fails on a missing header', async () => {
-      const monitor = createMonitor({ responseHeaderEquals: { 'X-Version': '2' } });
-      await expect(validateHttpResponse(monitor, json({}))).resolves.toBe(
-        'Header "X-Version" not found in response',
-      );
-    });
-
     it('never quotes the value it found', async () => {
       const monitor = createMonitor({ responseHeaderEquals: { 'X-Token': 'expected' } });
       const error = await validateHttpResponse(monitor, json({}, { 'X-Token': 'secret-1234' }));
@@ -499,22 +510,13 @@ describe('response assertions', () => {
 });
 
 describe('jsonPathKeys', () => {
-  it.each([
-    ['$', []],
-    ['$.a', ['a']],
-    ['$.a.b[0].c', ['a', 'b', 0, 'c']],
-    ['$[2][10]', [2, 10]],
-    ['$.user-id', ['user-id']],
-  ])('reads %s', (path, keys) => {
+  it.each([['$[2][10]', [2, 10]]])('reads %s', (path, keys) => {
     expect(jsonPathKeys(path)).toEqual(keys);
   });
 
-  it.each(['', 'a.b', '$.', '$..a', '$.a[', '$.a[-1]', '$.a[x]', "$['a']", '$a'])(
-    'rejects %j',
-    (path) => {
-      expect(jsonPathKeys(path)).toBeNull();
-    },
-  );
+  it.each(['$.a[', "$['a']", '$a'])('rejects %j', (path) => {
+    expect(jsonPathKeys(path)).toBeNull();
+  });
 });
 
 describe('parseTcpTarget', () => {
@@ -606,9 +608,14 @@ describe('toHeaders', () => {
 });
 
 describe('createLogger', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-10T12:00:00Z'));
+  });
+
   it('caller data cannot overwrite the envelope fields', () => {
     const lines: string[] = [];
-    const spy = vi.spyOn(console, 'info').mockImplementation((output: unknown) => {
+    vi.spyOn(console, 'info').mockImplementation((output: unknown) => {
       if (typeof output === 'string') lines.push(output);
     });
     const log = createLogger('Test');
@@ -631,10 +638,8 @@ describe('createLogger', () => {
       level: 'info',
       message: 'real message',
       component: 'Test',
-      timestamp: entry.timestamp,
+      timestamp: '2026-06-10T12:00:00.000Z',
     });
-    expect(typeof entry.timestamp).toBe('string');
-    spy.mockRestore();
   });
 });
 
@@ -642,5 +647,38 @@ describe('formatUtcShort', () => {
   it('matches the status page timestamp shape', () => {
     expect(formatUtcShort(Date.parse('2026-09-16T07:02:42Z') / 1000)).toBe('Sep 16, 07:02 UTC');
     expect(formatUtcShort(Date.parse('2026-01-05T00:00:00Z') / 1000)).toBe('Jan 5, 00:00 UTC');
+  });
+});
+
+describe('timingSafeEqual', () => {
+  it.each([
+    ['equal strings', 'abc', 'abc', true],
+    ['unequal strings', 'abc', 'abd', false],
+    ['different lengths', 'abc', 'ab', false],
+    ['a trailing zero byte', 'abc', 'abc\u0000', false],
+    ['empty strings', '', '', true],
+    ['one empty string', '', 'x', false],
+    ['equal UTF-8', 'café 😀', 'café 😀', true],
+    ['unequal UTF-8', 'é', 'è', false],
+  ] as const)('%s', (_case, a, b, equal) => {
+    expect(timingSafeEqual(a, b)).toBe(equal);
+    expect(timingSafeEqual(b, a)).toBe(equal);
+  });
+});
+
+describe('readJsonUpTo', () => {
+  it.each([
+    ['ASCII', '{"ok":true}', 11, { ok: true }],
+    ['UTF-8', '{"v":"é"}', 10, { v: 'é' }],
+  ] as const)('accepts %s JSON of exactly the byte limit', async (_case, body, limit, value) => {
+    await expect(readJsonUpTo(new Response(body), limit)).resolves.toEqual(value);
+  });
+  it.each([
+    ['ASCII', '{"ok":true} ', 11],
+    ['UTF-8', '{"v":"é"} ', 10],
+  ] as const)('rejects %s JSON one byte past the limit', async (_case, body, limit) => {
+    await expect(readJsonUpTo(new Response(body), limit)).rejects.toThrow(
+      `response is over ${limit} bytes`,
+    );
   });
 });

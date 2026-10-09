@@ -3,10 +3,13 @@ import { createFileRoute } from '@tanstack/react-router';
 import { OverallStatus } from '@/components/overall-status';
 import { MonitorList, type MonitorKindFilter } from '@/components/monitor-list';
 import { MaintenanceAlerts } from '@/components/maintenance/alerts';
+import { AnnouncementBanner } from '@/components/announcements/announcement-banner';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
-import { snapshotQuery, uiPrefsQuery } from '@/lib/query/monitors.queries';
+import { snapshotQuery, uiPrefsQuery, loadQuery } from '@/lib/query/monitors.queries';
 import { useAudience } from '@/lib/hooks/use-audience';
+import { useNow } from '@/lib/hooks/use-now';
 import { audienceOf } from '@/lib/session';
+import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 
 interface IndexSearch {
   kind?: MonitorKindFilter;
@@ -18,22 +21,21 @@ export const Route = createFileRoute('/')({
   }),
   loaderDeps: ({ search }) => ({ view: search.view }),
   loader: async ({ context, deps }) => {
-    await Promise.all([
-      context.queryClient.ensureQueryData(snapshotQuery(audienceOf(context.session, deps.view))),
-      context.queryClient.ensureQueryData(uiPrefsQuery()),
-    ]);
+    await loadQuery(context.queryClient, snapshotQuery(audienceOf(context.session, deps.view)));
   },
   component: DashboardPage,
 });
 
 function DashboardPage() {
+  usePageHydrated();
   const { kind } = Route.useSearch();
   const navigate = Route.useNavigate();
   const audience = useAudience();
   const {
-    data: { monitors, groups, state, maintenances },
+    data: { monitors, groups, state, maintenances, announcements },
   } = useSuspenseQuery(snapshotQuery(audience));
   const { data: uiPrefs } = useSuspenseQuery(uiPrefsQuery());
+  const nowMs = useNow({ serverTime: (state?.lastUpdate ?? 0) * 1000 });
 
   // State can be null if KV has no data yet (worker hasn't run)
   if (!state) {
@@ -53,6 +55,8 @@ function DashboardPage() {
     <div className={PAGE_CONTAINER_CLASSES}>
       <div className="space-y-3">
         <OverallStatus monitors={monitors} state={state} maintenances={maintenances} />
+
+        <AnnouncementBanner announcements={announcements} nowMs={nowMs} />
 
         <MaintenanceAlerts
           maintenances={maintenances}

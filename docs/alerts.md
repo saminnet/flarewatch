@@ -38,6 +38,14 @@ webhook: [
 
 Here Slack gets everything and ntfy gets only `db` and `backup`. An empty list sends a channel nothing. The config check rejects an ID that isn't one of your monitors. A monitor that no channel takes doesn't alert at all. `skipNotificationIds` wins over `monitors`: a skipped monitor sends nothing, even to a channel that lists it.
 
+## Summary alerts
+
+Set `notification.summaryAfter` to an integer from 2 to 50 to combine a busy run's alerts. Leave it out to keep one message per alert, as long as the check run can afford one request for each.
+
+FlareWatch counts alerts after routing to each webhook. At or above the threshold, that webhook gets one message listing its alerts, grouped as down, recovered, still down, reminders and expiry warnings. A webhook below the threshold keeps individual messages. When the run can't afford them all, the ones that don't fit go out as one summary, with or without `summaryAfter`. Summaries use each template's existing message or reason text, with no new payload fields. The title names FlareWatch and the alert count. The target field is empty and the duration is zero.
+
+If a webhook accepts a summary, every listed alert counts as delivered. A refused summary keeps the existing rules for each alert: down alerts retry, and recoveries, error changes, reminders and expiry warnings do not. A summary costs one subrequest per webhook. A channel can refuse a summary that is over its message limit, as it can an individual alert.
+
 ## Dependencies
 
 Some monitors reach their target through something else, like a reverse proxy, a VPN or one server that runs several apps. When that goes down, every monitor behind it fails too. Put it in `dependsOn` and you get one alert, not one per monitor:
@@ -59,7 +67,7 @@ Dependencies can have their own dependencies, and heartbeats can use `dependsOn`
 
 A monitor that fails again within 15 minutes of recovering reopens the same outage, so a flapping target doesn't fill History. It sends a new down alert once it has been down for the whole grace period again. A reopened outage ends only after the monitor has stayed up for 15 minutes. Its recovery alert goes out then, and the outage counts as ending when the monitor came back up.
 
-If no webhook accepts a down alert, FlareWatch tries it again on each check run, up to 10 times. After that it stops alerting about that outage. A check run can make a fixed number of requests, and the checks use most of them. When more down alerts are due than the run can send, the rest go out on the following runs, in config order. Waiting doesn't count as a try. Recovery alerts, error changes and [reminders](monitors.md#reminders) are sent once, without retries. An outage sends at most 5 error changes, and 5 more each time it reopens. An error change that no webhook accepts doesn't count toward the 5.
+If no webhook accepts a down alert, FlareWatch tries it again on each check run, up to 10 times. After that it stops alerting about that outage. A check run can make a fixed number of requests, and the checks use most of them. When more down alerts are due than the run can send, the rest go out on the following runs, in config order. Waiting doesn't count as a try. Recovery alerts, error changes and [reminders](monitors.md#reminders) are sent once, without retries. A recovery that a run has no requests left for waits for a later run. So does the recovery of an outage that ends while its down alert is still going out. A waiting recovery is dropped if the monitor goes down again first, stops alerting, or every webhook is removed. An outage sends at most 5 error changes, and 5 more each time it reopens. An error change that no webhook accepts doesn't count toward the 5.
 
 A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced.
 

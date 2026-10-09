@@ -17,18 +17,19 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/how-it-works.svg" alt="How FlareWatch works. Inside your Cloudflare account, a monitor Worker runs every minute. It checks your sites and APIs, saves the results in a Durable Object, and sends alerts when something goes down or comes back up. Your scheduled jobs ping the status page Worker when they finish. The status page Worker reads the Durable Object through the monitor Worker and serves the status page. Visitors see what you publish, and you sign in to see everything. Checks can also run from other regions or private networks through Globalping or your own proxy, and a failing check can be confirmed there before it counts." />
+  <img src="docs/assets/how-it-works.svg" alt="How FlareWatch works. Inside your Cloudflare account, a monitor Worker runs every minute. It checks your sites, APIs and domains, saves the results in a Durable Object, and sends alerts when something goes down or comes back up. Your scheduled jobs ping the status page Worker when they finish. The status page Worker reads the Durable Object through the monitor Worker and serves the status page. Visitors see what you publish, and you sign in to see everything. Checks can also run from other regions or private networks through Globalping, your own proxy or Workers VPC, and a failing check can be confirmed there before it counts." />
 </p>
 
 ## What you get
 
-- Checks every minute for websites, APIs and TCP ports. Match a status code, a keyword, a header or a JSON value, and get a warning before an SSL certificate expires.
-- A failing check can be confirmed from a second place first, through Globalping or your own proxy, so one bad network path doesn't open an incident.
+- Checks for websites, APIs, TCP ports, DNS records and domain expiry, every minute or less often if you like. Match a status code, a keyword, a header or a JSON value, and get a warning before a certificate or a domain expires.
+- A failing check can be confirmed from a second place first, through Globalping or your own proxy, so one bad network path doesn't open an incident. You can also wait for a few failed checks in a row.
+- Checks inside your private network, through Workers VPC and a Cloudflare Tunnel.
 - Heartbeats for backups, cron jobs and CI. They ping when they finish, and you hear about it when one doesn't.
-- Alerts to Slack, Discord, Telegram, ntfy, email and [more](docs/alerts.md). When a shared proxy or server goes down, you get one alert, not ten. Each channel can watch only the monitors you pick, and you can ask for a reminder while something stays down.
-- A status page with uptime, response times and incident history. A slow monitor shows as degraded, maintenance windows can repeat, and operators can run a check on the spot.
+- Alerts to Slack, Discord, Telegram, ntfy, email and [more](docs/alerts.md). When a shared proxy or server goes down, you get one alert, not ten. Each channel can watch only the monitors you pick, you can ask for a reminder while something stays down, and a run with many alerts can send one summary instead.
+- A status page with uptime, response times and incident history. A slow monitor shows as degraded, maintenance windows can repeat, announcements show under the status banner, and operators can run a check on the spot.
 - Sign-in with a password or your own identity provider (Pocket ID, Google, GitHub and others), for you and anyone you choose to let in. The whole page can be private too.
-- Badges, embeds and a JSON API.
+- Badges as JSON or SVG, embeds, an Atom feed and a JSON API.
 
 ## Deploy
 
@@ -57,9 +58,9 @@ Nothing, for a personal or small-team page. FlareWatch uses two Workers, a Durab
 ## Docs
 
 - [Deploy](docs/deploy.md): API token, secrets, custom domain, cost, uninstall
-- [Monitors](docs/monitors.md): websites, TCP ports, heartbeats, private monitors, proxies
+- [Monitors](docs/monitors.md): websites, TCP ports, DNS, domains, heartbeats, private monitors, proxies, private networks
 - [Alerts](docs/alerts.md): every channel and its setup
-- [Status page](docs/status-page.md): sign-in, maintenance, private pages, API, embeds
+- [Status page](docs/status-page.md): sign-in, maintenance, announcements, private pages, API, badges, feed, embeds
 - [Development](DEVELOPMENT.md): working on FlareWatch itself
 
 MIT licensed. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

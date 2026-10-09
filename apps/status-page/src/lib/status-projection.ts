@@ -72,13 +72,13 @@ export function projectPublicData(
       status,
       latency: latestLatency?.ping ?? null,
       location: latestLatency?.loc ?? null,
-      message: up ? 'OK' : (error ?? 'Unknown error'),
+      message: up ? (state.monitors[monitor.id]?.warning ?? 'OK') : (error ?? 'Unknown error'),
     };
   }
 
-  const { up, late, slow, down } = countStatuses(monitors, state, maintenances);
+  const { up, late, slow, expiry, down } = countStatuses(monitors, state, maintenances);
   return {
-    up: up + late + slow,
+    up: up + late + slow + expiry,
     down,
     updatedAt: state.lastUpdate,
     monitors: projectedMonitors,

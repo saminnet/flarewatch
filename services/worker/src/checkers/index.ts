@@ -10,10 +10,14 @@ import {
   createLogger,
   failure,
   withTimeout,
+  networkMonitorIssue,
 } from '@flarewatch/shared';
 import { defaultCheckDeps, type CheckDeps } from './deps';
 import { PREPAID_REQUESTS } from './globalping';
 import { checkExternalProxy } from './proxy';
+import { checkDns } from './dns';
+import { checkDomain } from './domain';
+import { checkVpc } from './vpc';
 
 const log = createLogger('Check');
 
@@ -37,7 +41,7 @@ const ALL_METHODS: readonly PullMethod[] = [
   'TCP_PING',
 ];
 
-type Adapter = 'direct' | 'globalping' | 'proxy';
+type Adapter = 'direct' | 'globalping' | 'proxy' | 'vpc';
 
 interface Capabilities {
   label: string;
@@ -56,7 +60,7 @@ const CAPABILITIES: Record<Adapter, Capabilities> = {
   direct: {
     label: 'a direct check',
     subrequests: 1,
-    methods: ALL_METHODS,
+    methods: [...ALL_METHODS, 'DNS', 'DOMAIN'],
     body: true,
     sslCheck: false,
     icmp: false,
@@ -86,13 +90,27 @@ const CAPABILITIES: Record<Adapter, Capabilities> = {
     responseHeaders: true,
     responseJson: true,
   },
+  // Like a direct check, but through the tunnel: the binding's fetch exposes no certificate,
+  // and its connect speaks TCP only.
+  vpc: {
+    label: 'the VPC binding',
+    subrequests: 1,
+    methods: ALL_METHODS,
+    body: true,
+    sslCheck: false,
+    icmp: false,
+    responseHeaders: true,
+    responseJson: true,
+  },
 };
 
 type Attempt =
   | { adapter: 'direct'; via?: 'checkProxyFallback' }
+  | { adapter: 'vpc'; via: 'checkProxy' | 'confirmVia' }
   | { adapter: 'globalping' | 'proxy'; url: string; via: 'checkProxy' | 'confirmVia' };
 
 function locate(url: string, via: 'checkProxy' | 'confirmVia'): Attempt {
+  if (url === 'vpc') return { adapter: 'vpc', via };
   return { adapter: url.startsWith('globalping://') ? 'globalping' : 'proxy', url, via };
 }
 
@@ -141,9 +159,57 @@ function refusal(target: MonitorTarget, attempt: Attempt): string | undefined {
 
 /** What this monitor asks of a place that cannot honour it. Empty when every attempt can run. */
 export function planIssues(target: MonitorTarget): string[] {
-  return [methodRefusal(target), ...plan(target).map((attempt) => refusal(target, attempt))].filter(
-    (issue) => issue !== undefined,
-  );
+  return [
+    networkMonitorIssue(target) ?? undefined,
+    methodRefusal(target),
+    ...plan(target).map((attempt) => refusal(target, attempt)),
+  ].filter((issue) => issue !== undefined);
+}
+
+export function checkInterval(monitor: MonitorTarget): number {
+  return monitor.checkEveryMinutes ?? (monitor.method === 'DOMAIN' ? 1440 : 1);
+}
+
+function primaryCost(monitor: Monitor): number {
+  if (monitor.method === 'HEARTBEAT') return 0;
+  return monitor.method === 'DOMAIN' ? 2 : CAPABILITIES[plan(monitor)[0].adapter].subrequests;
+}
+
+/** Subrequests a run has for its checks once the hub and each webhook have theirs. */
+function checkRoom(webhooks: number): number {
+  return SUBREQUEST_LIMIT - RESERVED_SUBREQUESTS - webhooks;
+}
+
+/**
+ * The due checks a run can afford. The list starts at a point that moves each minute,
+ * so a run that is short of requests skips different checks each time.
+ */
+export function affordableChecks<T extends Monitor>(
+  due: readonly T[],
+  webhooks: number,
+  spentSubrequests: number,
+  minute: number,
+): T[] {
+  let left = checkRoom(webhooks) - spentSubrequests;
+  const checks: T[] = [];
+  for (let i = 0; i < due.length; i++) {
+    const monitor = due[(minute + i) % due.length]!;
+    const cost = primaryCost(monitor);
+    if (cost > left) continue;
+    left -= cost;
+    checks.push(monitor);
+  }
+  return checks;
+}
+
+export function capacityIssue(monitors: readonly Monitor[], webhooks: number): string | undefined {
+  const cost = monitors
+    .filter((monitor) => monitor.method !== 'HEARTBEAT' && checkInterval(monitor) === 1)
+    .reduce((sum, monitor) => sum + primaryCost(monitor), 0);
+  const room = checkRoom(webhooks);
+  return cost > room
+    ? `the checks due every minute need ${cost} subrequests, but a run has ${room} for checks`
+    : undefined;
 }
 
 /**
@@ -155,15 +221,10 @@ export function runBudget(
   webhooks: number,
   now = Date.now(),
 ): RunBudget {
-  let primaries = 0;
-  for (const monitor of monitors) {
-    if (monitor.method !== 'HEARTBEAT') {
-      primaries += CAPABILITIES[plan(monitor)[0].adapter].subrequests;
-    }
-  }
+  const primaries = monitors.reduce((sum, monitor) => sum + primaryCost(monitor), 0);
   return {
     deadline: now + CHECK_WINDOW_MS,
-    subrequests: Math.max(0, SUBREQUEST_LIMIT - RESERVED_SUBREQUESTS - webhooks - primaries),
+    subrequests: Math.max(0, checkRoom(webhooks) - primaries),
   };
 }
 
@@ -186,9 +247,15 @@ async function run(
   if (attempt.adapter === 'proxy') {
     return checkExternalProxy(target, attempt.url, ctx.env, deps.fetcher);
   }
+  if (attempt.adapter === 'vpc') {
+    return checkVpc(target, ctx.env.VPC, deps.getEdgeLocation, ctx.budget);
+  }
   const location = await deps.getEdgeLocation();
-  const checker = target.method === 'TCP_PING' ? deps.tcp : deps.http;
-  return { location, result: await checker.check(target) };
+  if (target.method === 'DNS') return { location, result: await checkDns(target, deps.fetcher) };
+  if (target.method === 'DOMAIN')
+    return { location, result: await checkDomain(target, ctx.budget, deps.fetcher) };
+  if (target.method === 'TCP_PING') return { location, result: await deps.tcp.check(target) };
+  return { location, result: await deps.http.check(target, ctx.budget) };
 }
 
 /** One attempt, its timeout cut to what is left of the run, and stopped at the deadline. */

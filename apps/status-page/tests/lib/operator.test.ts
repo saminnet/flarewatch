@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import type { AccessConfig } from '@flarewatch/shared';
 import type { Identity } from '@/lib/auth/access';
 import {
@@ -6,15 +6,11 @@ import {
   passwordIdentity,
   resolvePrincipal,
   resolveViewer,
-  sessionName,
+  signedInAs,
   startSession,
 } from '@/lib/operator.server';
 import { isSessionExpiredError, SessionExpiredError } from '@/lib/query/auth.mutations';
 import { memoryKv } from '../helpers/kv';
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
 
 function envWith(kv: KVNamespace): Cloudflare.Env {
   return { FLAREWATCH_ADMIN_BASIC_AUTH: 'configured', FLAREWATCH_STATE: kv };
@@ -182,7 +178,22 @@ describe('provider sessions', () => {
     await expect(
       resolvePrincipal(providerEnv(kv), requestWithCookie(cookie), { ...access, members: [] }),
     ).resolves.toBeNull();
-    await expect(sessionName(providerEnv(kv), requestWithCookie(cookie))).resolves.toBe('Kim');
+    await expect(signedInAs(providerEnv(kv), requestWithCookie(cookie))).resolves.toMatchObject({
+      name: 'Kim',
+    });
+  });
+
+  it('tells two sign-ins with the same name apart', async () => {
+    const kv = memoryKv();
+    const first = `flarewatch_admin_session=${await startSession(kv, null, kim)}`;
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    const second = `flarewatch_admin_session=${await startSession(kv, null, kim)}`;
+
+    const [a, b] = await Promise.all(
+      [first, second].map((cookie) => signedInAs(providerEnv(kv), requestWithCookie(cookie))),
+    );
+    expect(a?.name).toBe(b?.name);
+    expect(a?.since).not.toBe(b?.since);
   });
 
   it('treats a session whose identity is malformed as a visitor', async () => {

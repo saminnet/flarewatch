@@ -1,7 +1,7 @@
 import { isNonEmptyString } from '@flarewatch/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { HistoryPage } from '@/components/routes/history-page';
-import { snapshotQuery } from '@/lib/query/monitors.queries';
+import { snapshotQuery, loadQuery } from '@/lib/query/monitors.queries';
 import { audienceOf } from '@/lib/session';
 import { isValidYearMonth } from '@/lib/date';
 
@@ -25,9 +25,7 @@ export const Route = createFileRoute('/history')({
   },
   loaderDeps: ({ search }) => ({ view: search.view }),
   loader: async ({ context, deps }) => {
-    await context.queryClient.ensureQueryData(
-      snapshotQuery(audienceOf(context.session, deps.view)),
-    );
+    await loadQuery(context.queryClient, snapshotQuery(audienceOf(context.session, deps.view)));
     return { loaderNowMs: Date.now() };
   },
   component: HistoryPage,

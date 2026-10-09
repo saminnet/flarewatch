@@ -38,14 +38,190 @@ function createConfigWithMonitor(monitor: MonitorOverrides) {
 const isValid = (value: unknown) => configIssues(value).length === 0;
 
 describe('config validation', () => {
-  it('accepts a direct runtime config', () => {
-    const config = createRuntimeConfig({
-      statusPage: {
-        title: 'Status',
-      },
-    });
+  it.each([[], [''], [1], '192.0.2.1', [null]].map((dnsExpected) => ({ dnsExpected })))(
+    'rejects DNS expected values %j',
+    ({ dnsExpected }) => {
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method: 'DNS', target: 'example.com', dnsExpected }),
+        ),
+      ).not.toEqual([]);
+    },
+  );
 
-    expect(isValid(config)).toBe(true);
+  it.each(['DNS', 'DOMAIN'])('rejects the remaining forbidden fields on %s', (method) => {
+    const fields = {
+      checkProxyFallback: false,
+      headers: { Accept: 'text/plain' },
+      body: '',
+      sslCheckDaysBeforeExpiry: 0,
+      sslIgnoreSelfSigned: false,
+      pingProtocol: 'tcp',
+      ...(method === 'DOMAIN' && {
+        checkProxy: 'https://proxy.example',
+        confirmVia: 'https://confirm.example',
+        expectedCodes: [200],
+        responseKeyword: 'ok',
+        responseForbiddenKeyword: 'bad',
+        responseHeaderEquals: { Server: 'x' },
+        sslCheckEnabled: true,
+      }),
+    };
+    for (const [field, value] of Object.entries(fields)) {
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method, target: 'example.com', [field]: value }),
+        ).join(),
+      ).toContain(`${field} is not supported by ${method}`);
+    }
+    if (method === 'DOMAIN') {
+      expect(
+        configIssues(
+          createConfigWithMonitor({
+            method,
+            target: 'example.com',
+            responseJsonPath: '$.ok',
+            responseJsonValue: true,
+          }),
+        ).join(),
+      ).toContain('responseJsonPath is not supported by DOMAIN');
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method, target: 'example.com', responseJsonValue: true }),
+        ).join(),
+      ).toContain('responseJsonValue is not supported by DOMAIN');
+    }
+  });
+  it('accepts only domain expiry integers from 1 to 365', () => {
+    const config = (domainExpiryDays: number) =>
+      createConfigWithMonitor({ method: 'DOMAIN', target: 'example.com', domainExpiryDays });
+    for (const days of [1, 30, 365]) expect(configIssues(config(days))).toEqual([]);
+    for (const days of [-1, 0, 1.5, 366, Infinity, NaN])
+      expect(configIssues(config(days)).join()).toContain(
+        'domainExpiryDays must be an integer from 1 to 365',
+      );
+  });
+  it('accepts summaryAfter from two to fifty and leaves it off when absent', () => {
+    for (const summaryAfter of [2, 50])
+      expect(configIssues({ monitors: [], notification: { summaryAfter } })).toEqual([]);
+    for (const summaryAfter of [1, 51, 2.5])
+      expect(configIssues({ monitors: [], notification: { summaryAfter } }).join()).toContain(
+        'summaryAfter',
+      );
+  });
+  it('accepts domain expiry settings and rejects invalid domain targets or windows', () => {
+    expect(
+      configIssues(
+        createConfigWithMonitor({
+          method: 'DOMAIN',
+          target: 'example.co.uk',
+          domainExpiryDays: 30,
+        }),
+      ),
+    ).toEqual([]);
+    for (const target of ['https://example.com', 'localhost', '-bad.com', 'example.com/path'])
+      expect(configIssues(createConfigWithMonitor({ method: 'DOMAIN', target })).join()).toContain(
+        'target',
+      );
+    expect(
+      configIssues(
+        createConfigWithMonitor({ method: 'DOMAIN', target: 'example.com', domainExpiryDays: -1 }),
+      ).join(),
+    ).toContain('domainExpiryDays');
+  });
+  it('validates DNS targets, record types, resolver URLs and HTTP field refusals', () => {
+    for (const dnsRecordType of ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'CAA'])
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method: 'DNS', target: 'example.com', dnsRecordType }),
+        ),
+      ).toEqual([]);
+    for (const field of [
+      'checkProxy',
+      'confirmVia',
+      'expectedCodes',
+      'responseKeyword',
+      'responseForbiddenKeyword',
+      'responseJsonPath',
+      'responseJsonValue',
+      'responseHeaderEquals',
+      'sslCheckEnabled',
+    ]) {
+      expect(
+        configIssues(
+          createConfigWithMonitor({
+            method: 'DNS',
+            target: 'example.com',
+            [field]:
+              field === 'expectedCodes'
+                ? [200]
+                : field === 'responseHeaderEquals'
+                  ? { Server: 'x' }
+                  : field === 'sslCheckEnabled'
+                    ? true
+                    : field === 'responseJsonPath'
+                      ? '$.ok'
+                      : 'https://example.com',
+          }),
+        ).join(),
+      ).toContain(field);
+    }
+    for (const overrides of [
+      { target: 'https://example.com' },
+      { dnsResolver: 'http://resolver.example/dns' },
+      { dnsRecordType: 'PTR' },
+    ])
+      expect(
+        configIssues(
+          createConfigWithMonitor({ method: 'DNS', target: 'example.com', ...overrides }),
+        ).length,
+      ).toBeGreaterThan(0);
+  });
+  it('bounds downAfterChecks and refuses it on heartbeats', () => {
+    for (const downAfterChecks of [1, 10])
+      expect(configIssues(createConfigWithMonitor({ downAfterChecks }))).toEqual([]);
+    for (const downAfterChecks of [0, 11, 1.5])
+      expect(configIssues(createConfigWithMonitor({ downAfterChecks })).join()).toContain(
+        'downAfterChecks',
+      );
+    expect(
+      configIssues({
+        monitors: [
+          {
+            id: 'job',
+            name: 'Job',
+            method: 'HEARTBEAT',
+            periodSeconds: 60,
+            graceSeconds: 0,
+            downAfterChecks: 2,
+          },
+        ],
+      }).join(),
+    ).toContain('downAfterChecks');
+  });
+  it('bounds checkEveryMinutes and refuses it on heartbeats', () => {
+    for (const checkEveryMinutes of [1, 1440]) {
+      expect(configIssues(createConfigWithMonitor({ checkEveryMinutes }))).toEqual([]);
+    }
+    for (const checkEveryMinutes of [0, 1441, 1.5]) {
+      expect(configIssues(createConfigWithMonitor({ checkEveryMinutes })).join()).toContain(
+        'checkEveryMinutes',
+      );
+    }
+    expect(
+      configIssues({
+        monitors: [
+          {
+            id: 'job',
+            name: 'Job',
+            method: 'HEARTBEAT',
+            periodSeconds: 60,
+            graceSeconds: 0,
+            checkEveryMinutes: 1,
+          },
+        ],
+      }).join(),
+    ).toContain('checkEveryMinutes');
   });
 
   it('accepts every status page field', () => {
@@ -162,6 +338,7 @@ describe('config validation', () => {
 
   it.each([
     [{ id: '' }, 'id must be a non-empty string'],
+    [{ id: '__proto__' }, 'id cannot be __proto__'],
     [{ name: '' }, 'name must be a non-empty string'],
     [{ method: 42 }, 'method must be a string'],
     [{ target: undefined }, 'target must be a string'],
@@ -197,12 +374,6 @@ describe('config validation', () => {
     expect(configIssues(config)).toEqual([
       'monitor "api": headers must map names to strings or numbers',
     ]);
-  });
-
-  it('accepts TCP_PING with a host:port target', () => {
-    const config = createConfigWithMonitor({ method: 'TCP_PING', target: 'example.com:443' });
-
-    expect(isValid(config)).toBe(true);
   });
 
   it('rejects TCP_PING without a port', () => {
@@ -259,6 +430,7 @@ describe('config validation', () => {
     [{ graceSeconds: 0.5 }, 'graceSeconds'],
     [{ id: 'backup/01' }, 'HEARTBEAT id'],
     [{ id: 'a'.repeat(65) }, 'HEARTBEAT id'],
+    [{ id: '__proto__' }, 'id cannot be __proto__'],
     [{ target: 'https://example.com' }, 'must not define target'],
     [{ checkProxy: 'https://proxy.example.com' }, 'must not define checkProxy'],
     [{ maxLatencyMs: 500 }, 'must not define maxLatencyMs'],
@@ -370,14 +542,25 @@ describe('config validation', () => {
     ],
     [{ responseHeaderEquals: { 'Bad Name': 'x' } }, 'responseHeaderEquals: bad header name'],
     [{ responseHeaderEquals: { 'X-A': 1 } }, 'responseHeaderEquals values must be strings'],
-    [{ checkProxy: 'worker://local' }, 'checkProxy must be an http(s) URL or globalping://<token>'],
-    [{ checkProxy: 'globalping://' }, 'checkProxy must be an http(s) URL or globalping://<token>'],
+    [
+      { checkProxy: 'worker://local' },
+      "checkProxy must be an http(s) URL, globalping://<token> or 'vpc'",
+    ],
+    [
+      { checkProxy: 'globalping://' },
+      "checkProxy must be an http(s) URL, globalping://<token> or 'vpc'",
+    ],
+    [{ checkProxy: 'vpc ' }, "checkProxy must be an http(s) URL, globalping://<token> or 'vpc'"],
     [{ pingProtocol: 'udp' }, "pingProtocol must be 'tcp' or 'icmp'"],
-    [{ confirmVia: 'worker://local' }, 'confirmVia must be an http(s) URL or globalping://<token>'],
+    [
+      { confirmVia: 'worker://local' },
+      "confirmVia must be an http(s) URL, globalping://<token> or 'vpc'",
+    ],
     [
       { checkProxy: 'globalping://T?magic=fra', confirmVia: 'globalping://T?magic=fra' },
       'confirmVia must be another place than checkProxy',
     ],
+    [{ checkProxy: 'vpc', confirmVia: 'vpc' }, 'confirmVia must be another place than checkProxy'],
   ])('rejects the monitor field %j and names the rule', (overrides, rule) => {
     expect(configIssues(createConfigWithMonitor(overrides)).join('\n')).toContain(rule);
   });
@@ -387,6 +570,8 @@ describe('config validation', () => {
     { responseKeyword: 'x' },
     { responseForbiddenKeyword: 'x' },
     { responseHeaderEquals: { 'X-A': '' } },
+    { checkProxy: 'vpc' },
+    { confirmVia: 'vpc' },
   ])('accepts the shortest useful value %j', (overrides) => {
     expect(configIssues(createConfigWithMonitor(overrides))).toEqual([]);
   });

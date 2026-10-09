@@ -31,7 +31,6 @@ const IMPORT_PAGE = 100;
 
 export interface IncidentUpdate {
   monitorId: string;
-  statusChanged: boolean;
   changeType: 'none' | 'up' | 'down' | 'error';
   isUp: boolean;
   incidentStartTime: number;
@@ -117,20 +116,24 @@ export class Incidents {
     result: CheckResult,
     open: OpenIncident | undefined,
     now: number,
+    firstFailure = now,
   ): IncidentUpdate {
     const incidentStartTime = open?.incident.start[0] ?? now;
 
     if (result.ok) {
-      const up = (statusChanged: boolean): IncidentUpdate => ({
+      const up = (changed: boolean): IncidentUpdate => ({
         monitorId,
-        statusChanged,
-        changeType: statusChanged ? 'up' : 'none',
+        changeType: changed ? 'up' : 'none',
         isUp: true,
         incidentStartTime,
         error: '',
       });
       if (!open) return up(false);
-      if (open.reopenedAt === null) {
+      const legacyCertificate =
+        /^(?:SSL certificate|Certificate) expires in \d+ days \(threshold: \d+\)$/.test(
+          open.incident.error[open.incident.error.length - 1] ?? '',
+        );
+      if (open.reopenedAt === null || legacyCertificate) {
         this.close(open, now);
         return up(true);
       }
@@ -158,16 +161,15 @@ export class Incidents {
       this.sql.exec(
         'INSERT INTO incidents (monitor_id, starts, errors) VALUES (?, ?, ?)',
         monitorId,
-        JSON.stringify([now]),
+        JSON.stringify([firstFailure]),
         JSON.stringify([error]),
       );
-      this.setNewest(monitorId, { start: [now], error: [error] }, false);
+      this.setNewest(monitorId, { start: [firstFailure], error: [error] }, false);
       return {
         monitorId,
-        statusChanged: true,
         changeType: 'down',
         isUp: false,
-        incidentStartTime: now,
+        incidentStartTime: firstFailure,
         error,
       };
     }
@@ -195,7 +197,6 @@ export class Incidents {
     }
     return {
       monitorId,
-      statusChanged: segments !== null,
       changeType: segments ? 'error' : 'none',
       isUp: false,
       incidentStartTime,
@@ -306,7 +307,6 @@ export class Incidents {
     this.setNewest(monitorId, reopened, true);
     return {
       monitorId,
-      statusChanged: true,
       changeType: 'down',
       isUp: false,
       incidentStartTime: incident.start[0] ?? now,

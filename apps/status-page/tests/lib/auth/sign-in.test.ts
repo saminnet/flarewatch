@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { AccessConfig, JsonObject } from '@flarewatch/shared';
 import { finishSignIn, startSignIn } from '@/lib/auth/sign-in.server';
@@ -18,7 +19,9 @@ function idToken(claims: JsonObject): string {
 /** A provider that signs in `email` and echoes the nonce it was given at authorize time. */
 function fakeProvider(email: string) {
   let nonce = '';
-  const fetchFn = vi.fn<Fetch>(async (url) => {
+  let challenge = '';
+  let method = '';
+  const fetchFn = vi.fn<Fetch>(async (url, init) => {
     if (url === `${ISSUER}/.well-known/openid-configuration`) {
       return Response.json({
         issuer: ISSUER,
@@ -27,6 +30,15 @@ function fakeProvider(email: string) {
       });
     }
     if (url === `${ISSUER}/token`) {
+      const verifier =
+        new URLSearchParams(typeof init?.body === 'string' ? init.body : '').get('code_verifier') ??
+        '';
+      if (
+        !verifier ||
+        method !== 'S256' ||
+        createHash('sha256').update(verifier).digest('base64url') !== challenge
+      )
+        return Response.json({ error: 'invalid_grant' }, { status: 400 });
       return Response.json({
         id_token: idToken({
           iss: ISSUER,
@@ -42,7 +54,12 @@ function fakeProvider(email: string) {
   });
   return {
     fetchFn,
-    remember: (location: string) => (nonce = new URL(location).searchParams.get('nonce') ?? ''),
+    remember(location: string) {
+      const params = new URL(location).searchParams;
+      nonce = params.get('nonce') ?? '';
+      challenge = params.get('code_challenge') ?? '';
+      method = params.get('code_challenge_method') ?? '';
+    },
   };
 }
 

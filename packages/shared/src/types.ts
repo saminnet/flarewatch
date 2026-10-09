@@ -79,6 +79,21 @@ export type Maintenance = MaintenanceConfig & {
   updatedAt: number;
 };
 
+export type AnnouncementConfig = {
+  title: string;
+  body: string;
+  /** Unix timestamp (ms) or a date/time string. */
+  end?: number | string;
+};
+
+export type Announcement = AnnouncementConfig & {
+  id: string;
+  /** Unix timestamp (ms) */
+  createdAt: number;
+  /** Unix timestamp (ms) */
+  updatedAt: number;
+};
+
 export type PullMethod =
   | 'GET'
   | 'POST'
@@ -87,13 +102,21 @@ export type PullMethod =
   | 'DELETE'
   | 'HEAD'
   | 'OPTIONS'
-  | 'TCP_PING';
+  | 'TCP_PING'
+  | 'DNS'
+  | 'DOMAIN';
 
 export type PullMonitor = {
   id: string;
   name: string;
   method: PullMethod;
   target: string;
+  checkEveryMinutes?: number;
+  downAfterChecks?: number;
+  dnsRecordType?: 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT' | 'NS' | 'CAA';
+  dnsExpected?: string[];
+  dnsResolver?: string;
+  domainExpiryDays?: number;
   tooltip?: string;
   /**
    * Clickable link on the monitor name: auto-links to `target` if HTTP/HTTPS
@@ -181,6 +204,7 @@ export type WorkerConfig = {
 };
 
 export type NotificationConfig = {
+  summaryAfter?: number;
   webhook?: WebhookConfig;
   timeZone?: string;
   gracePeriod?: number;
@@ -288,7 +312,8 @@ export type LatencySample = {
 
 /** One monitor as the hub knows it. Down means an open incident. */
 export type MonitorView = {
-  status: HeartbeatStatus;
+  status: HeartbeatStatus | 'degraded';
+  warning?: string;
   /** Unix timestamp (seconds) of the first check result. */
   startedAt?: number;
   /** Oldest first, kept 90 days after they end. */
@@ -304,7 +329,7 @@ export type StatusView = {
 };
 
 /** What the status page reads from the hub in one call. */
-export type HubView = StatusView & { maintenances: Maintenance[] };
+export type HubView = StatusView & { maintenances: Maintenance[]; announcements: Announcement[] };
 
 export interface SSLCertificateInfo {
   /** Unix timestamp (seconds) */
@@ -318,6 +343,7 @@ export interface CheckSuccess {
   ok: true;
   latency: number;
   ssl?: SSLCertificateInfo;
+  warning?: { text: string; expiryDate: number };
 }
 
 export interface CheckFailure {
@@ -341,12 +367,20 @@ export interface RunBudget {
   subrequests: number;
 }
 
+export interface VpcBinding {
+  fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>;
+  connect(address: string | { hostname: string; port: number }): Promise<{
+    opened: Promise<unknown>;
+    close(): Promise<void>;
+  }>;
+}
+
 export interface CheckContext {
   /**
    * Worker bindings a checker may need. Kept structural and narrow so shared
    * does not depend on the worker's Env type.
    */
-  env: { FLAREWATCH_PROXY_TOKEN?: string };
+  env: { FLAREWATCH_PROXY_TOKEN?: string; VPC?: VpcBinding };
   budget: RunBudget;
 }
 

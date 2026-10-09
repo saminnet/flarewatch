@@ -19,7 +19,8 @@ export function zulipTemplate(ctx: TemplateContext): TemplateOutput {
   const alsoDown = alsoDownList(ctx, inlineCode);
   if (alsoDown) lines.push(`- Also down: ${alsoDown}`);
 
-  lines.push(`- Target: ${stripControlChars(ctx.targetUrl)}`, `- Time: ${ctx.timestamp}`);
+  if (ctx.targetUrl) lines.push(`- Target: ${stripControlChars(ctx.targetUrl)}`);
+  lines.push(`- Time: ${ctx.timestamp}`);
 
   const form = new URLSearchParams({
     type: 'stream',

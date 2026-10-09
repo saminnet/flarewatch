@@ -3,6 +3,7 @@ import { IconLock } from '@tabler/icons-react';
 import { SignInForm } from '@/components/sign-in-form';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
+import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 
 export const Route = createFileRoute('/login')({
   validateSearch: (search): { error?: string } =>
@@ -14,7 +15,9 @@ export const Route = createFileRoute('/login')({
 });
 
 function LoginPage() {
+  usePageHydrated();
   const { session } = Route.useRouteContext();
+  const { error } = Route.useSearch();
 
   if (!session.canSignIn) {
     return (
@@ -33,7 +36,7 @@ function LoginPage() {
       privateOnly={session.privateOnly}
       passwordSignIn={session.passwordSignIn}
       providers={session.providers}
-      error={Route.useSearch().error}
+      error={error}
     />
   );
 }

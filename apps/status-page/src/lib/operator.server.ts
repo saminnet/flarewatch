@@ -13,7 +13,7 @@ type SessionData = {
   identity: Identity;
 };
 
-const identities = new WeakMap<Request, Promise<Identity | null>>();
+const sessions = new WeakMap<Request, Promise<SessionData | null>>();
 
 export function isSignInConfigured(
   env: Cloudflare.Env,
@@ -76,7 +76,7 @@ function isSessionData(value: unknown): value is SessionData {
   );
 }
 
-async function readIdentity(env: Cloudflare.Env, request: Request): Promise<Identity | null> {
+async function readSession(env: Cloudflare.Env, request: Request): Promise<SessionData | null> {
   const kv = env.FLAREWATCH_STATE;
   const sessionId = sessionIdFrom(request);
   if (!kv || !sessionId) return null;
@@ -85,23 +85,27 @@ async function readIdentity(env: Cloudflare.Env, request: Request): Promise<Iden
     const session: unknown = raw ? JSON.parse(raw) : null;
     if (!isSessionData(session)) return null;
     const { identity } = session;
-    if (identity.kind !== 'password') return identity;
+    if (identity.kind !== 'password') return session;
     const adminSecret = env.FLAREWATCH_ADMIN_BASIC_AUTH;
     const current = adminSecret ? await passwordIdentity(adminSecret) : null;
-    return current?.secret === identity.secret ? identity : null;
+    return current?.secret === identity.secret ? session : null;
   } catch {
     return null;
   }
 }
 
 /** Memoized per request, so the middleware and every server fn in one SSR pass share one KV read. */
-function resolveIdentity(env: Cloudflare.Env, request: Request): Promise<Identity | null> {
-  let identity = identities.get(request);
-  if (!identity) {
-    identity = readIdentity(env, request);
-    identities.set(request, identity);
+function resolveSession(env: Cloudflare.Env, request: Request): Promise<SessionData | null> {
+  let session = sessions.get(request);
+  if (!session) {
+    session = readSession(env, request);
+    sessions.set(request, session);
   }
-  return identity;
+  return session;
+}
+
+async function resolveIdentity(env: Cloudflare.Env, request: Request): Promise<Identity | null> {
+  return (await resolveSession(env, request))?.identity ?? null;
 }
 
 /**
@@ -142,9 +146,14 @@ export async function requireMember(): Promise<Extract<Principal, { role: 'membe
   return principal;
 }
 
-export async function sessionName(env: Cloudflare.Env, request: Request): Promise<string | null> {
-  const identity = await resolveIdentity(env, request);
-  return identity?.kind === 'provider' ? identity.name : null;
+export async function signedInAs(
+  env: Cloudflare.Env,
+  request: Request,
+): Promise<{ name: string | null; since: number } | null> {
+  const session = await resolveSession(env, request);
+  if (!session) return null;
+  const { identity, createdAt } = session;
+  return { name: identity.kind === 'provider' ? identity.name : null, since: createdAt };
 }
 
 export function clearedSessionCookie(request: Request): string {

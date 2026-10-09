@@ -29,7 +29,18 @@ function isCheckResult(value: unknown): value is CheckResult {
   if (!isJsonObject(value)) return false;
 
   if (value.ok === true) {
-    return isLatency(value.latency);
+    const ssl = value.ssl;
+    return (
+      value.warning === undefined &&
+      isLatency(value.latency) &&
+      (ssl === undefined ||
+        (isJsonObject(ssl) &&
+          typeof ssl.expiryDate === 'number' &&
+          Number.isFinite(ssl.expiryDate) &&
+          Math.abs(ssl.expiryDate) <= 8.64e12 &&
+          typeof ssl.daysUntilExpiry === 'number' &&
+          Number.isFinite(ssl.daysUntilExpiry)))
+    );
   }
 
   if (value.ok === false) {
@@ -62,29 +73,30 @@ export async function checkExternalProxy(
 ): Promise<CheckResultWithLocation> {
   // The other place may be Globalping, and its URL holds a token the proxy has no use for.
   const { checkProxy: _checkProxy, confirmVia: _confirmVia, ...monitor } = target;
+  // A proxy can echo the token it was sent, and its location and errors are public.
+  const token = env?.FLAREWATCH_PROXY_TOKEN;
+  const redact = (text: string) => (token ? text.replaceAll(token, '<proxy token>') : text);
   try {
     const timeout = target.timeout ?? DEFAULT_HTTP_TIMEOUT;
     const response = await fetcher(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(env?.FLAREWATCH_PROXY_TOKEN
-          ? { Authorization: `Bearer ${env.FLAREWATCH_PROXY_TOKEN}` }
-          : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(monitor),
+      body: JSON.stringify({
+        ...monitor,
+        ...(monitor.sslCheckEnabled && { sslCheckDaysBeforeExpiry: 0 }),
+      }),
       timeout,
+      redirect: 'error',
     });
 
     if (!response.ok) {
       // The body goes to the owner's logs only: the error is public, and a proxy
       // can echo the token or the monitor config it was sent.
       const body = await readTextUpTo(response, 4096);
-      const token = env?.FLAREWATCH_PROXY_TOKEN;
-      log.warn('Proxy failed', {
-        status: response.status,
-        body: (token ? body.replaceAll(token, '<proxy token>') : body).slice(0, 200),
-      });
+      log.warn('Proxy failed', { status: response.status, body: redact(body).slice(0, 200) });
       return { location: 'ERROR', result: failure(`Proxy HTTP ${response.status}`) };
     }
 
@@ -107,16 +119,12 @@ export async function checkExternalProxy(
       };
     }
 
-    // A proxy can echo the token it was sent, and a failed result's text is public.
-    const token = env?.FLAREWATCH_PROXY_TOKEN;
-    if (!data.result.ok && token) {
-      data.result.error = data.result.error.replaceAll(token, '<proxy token>');
-    }
-    return { location: data.location, result: data.result };
+    if (!data.result.ok) data.result.error = redact(data.result.error);
+    return { location: redact(data.location), result: data.result };
   } catch (error) {
     return {
       location: 'ERROR',
-      result: failure(`Proxy error: ${getErrorMessage(error)}`),
+      result: failure(`Proxy error: ${redact(getErrorMessage(error))}`),
     };
   }
 }

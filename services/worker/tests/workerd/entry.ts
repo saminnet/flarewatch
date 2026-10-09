@@ -21,7 +21,7 @@ export class MonitorHub extends Hub {
     Object.defineProperty(ctx.storage, 'sql', {
       value: {
         exec: (query: string, ...bindings: unknown[]) => {
-          if (migrated) {
+          if (migrated && query.includes('incidents')) {
             const plan = sql.exec(`EXPLAIN QUERY PLAN ${query}`, ...bindings).toArray();
             if (
               plan.some(
@@ -104,9 +104,9 @@ async function alert(hub: Stub, runs: Run[]) {
   const results = [];
   for (const { now, records, policy } of runs) {
     const { alerts } = await hub.record(now, records, policy);
-    for (let batch = alerts; batch.length > 0;) {
-      batch = await hub.confirmAlerts(
-        batch.map(({ incident, kind, reopenedAt, run }) => ({
+    if (alerts.length > 0) {
+      await hub.confirmAlerts(
+        alerts.map(({ incident, kind, reopenedAt, run }) => ({
           incident,
           kind,
           reopenedAt,

@@ -2,6 +2,7 @@ import * as z from 'zod/mini';
 import {
   NOTIFICATION_TEMPLATES,
   type AccessConfig,
+  type Announcement,
   type CheckResultWithLocation,
   type HeartbeatSignal,
   type HeartbeatState,
@@ -15,6 +16,7 @@ import {
   type Webhook,
 } from './types';
 import { isNormalizedMaintenance, knownZone, normalizeMaintenance } from './maintenance';
+import { isValidAnnouncement } from './announcement';
 import { isJsonObject, isNonEmptyString, isSecureUrl, jsonPathKeys } from './utils';
 
 const PULL_METHODS = [
@@ -26,6 +28,8 @@ const PULL_METHODS = [
   'HEAD',
   'OPTIONS',
   'TCP_PING',
+  'DNS',
+  'DOMAIN',
 ] as const;
 const MONITOR_METHODS = new Set<string>([...PULL_METHODS, 'HEARTBEAT']);
 const HEARTBEAT_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -88,6 +92,17 @@ function isValidHostPort(value: string): boolean {
 }
 
 function targetIssue(method: string, target: string): string | null {
+  if (method === 'DNS' || method === 'DOMAIN') {
+    const host =
+      /^(?=.{1,253}\.?$)[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?(?:\.[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?)*\.?$/i.test(
+        target,
+      );
+    if (method === 'DOMAIN')
+      return host && target.includes('.') && !target.endsWith('.') && !target.includes('_')
+        ? null
+        : 'DOMAIN target must be a registrable domain, such as example.com';
+    return host ? null : 'DNS target must be a host name';
+  }
   if (method === 'TCP_PING') {
     return isValidHostPort(target)
       ? null
@@ -161,8 +176,13 @@ function intInRange(field: string, min: number, max: number) {
 
 const reminderError = `reminderEveryChecks must be an integer of at least ${MIN_REMINDER_CHECKS}`;
 
+// Views map monitor ids to objects, and `__proto__` is not an ordinary key there.
+const notProto = z.refine<string>((value) => value !== '__proto__', {
+  error: 'id cannot be __proto__',
+});
+
 const monitorCommon = {
-  id: nonEmptyString('id'),
+  id: nonEmptyString('id').check(notProto),
   name: nonEmptyString('name'),
   private: z.optional(z.boolean({ error: 'private must be a boolean' })),
   dependsOn: z.optional(z.array(z.string(), { error: 'dependsOn must be a list of monitor ids' })),
@@ -191,15 +211,16 @@ function optionalBoolean(field: string) {
 
 /** Where a check runs. The message never quotes the value: a Globalping URL holds a token. */
 function checkLocation(field: string) {
-  const error = `${field} must be an http(s) URL or globalping://<token>`;
+  const error = `${field} must be an http(s) URL, globalping://<token> or 'vpc'`;
   return z
     .string({ error })
     .check(
       z.refine(
         (value) =>
-          value.startsWith('globalping://')
+          value === 'vpc' ||
+          (value.startsWith('globalping://')
             ? Boolean(URL.parse(value)?.hostname)
-            : isValidHttpUrl(value),
+            : isValidHttpUrl(value)),
         { error },
       ),
     );
@@ -213,6 +234,22 @@ const pullMonitorShape = {
   ...monitorCommon,
   method: z.enum(PULL_METHODS),
   target: z.string({ error: 'target must be a string' }),
+  checkEveryMinutes: z.optional(intInRange('checkEveryMinutes', 1, 1440)),
+  downAfterChecks: z.optional(intInRange('downAfterChecks', 1, 10)),
+  dnsRecordType: z.optional(z.enum(['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'CAA'])),
+  dnsExpected: z.optional(
+    z
+      .array(nonEmptyString('dnsExpected'))
+      .check(z.minLength(1, { error: 'dnsExpected must list at least one value' })),
+  ),
+  dnsResolver: z.optional(
+    z.string().check(
+      z.refine((value) => URL.parse(value)?.protocol === 'https:', {
+        error: 'dnsResolver must be an https URL',
+      }),
+    ),
+  ),
+  domainExpiryDays: z.optional(intInRange('domainExpiryDays', 1, 365)),
   tooltip: optionalString('tooltip'),
   hideLatencyChart: optionalBoolean('hideLatencyChart'),
   expectedCodes: z.optional(
@@ -285,6 +322,7 @@ const pullMonitorSchema = z.strictObject(pullMonitorShape, unknownFieldError).ch
   const { method, target, responseJsonPath, responseJsonValue, checkProxy, confirmVia } = ctx.value;
   const issues = [
     targetIssue(method, target),
+    networkMonitorIssue(ctx.value),
     (responseJsonPath === undefined) !== (responseJsonValue === undefined)
       ? 'responseJsonPath and responseJsonValue go together'
       : null,
@@ -297,12 +335,38 @@ const pullMonitorSchema = z.strictObject(pullMonitorShape, unknownFieldError).ch
   }
 });
 
+export function networkMonitorIssue(target: SchemaOutput<PullMonitor>): string | null {
+  if (target.method !== 'DNS' && target.method !== 'DOMAIN') return null;
+  const fields = [
+    'checkProxy',
+    'checkProxyFallback',
+    'confirmVia',
+    'expectedCodes',
+    'headers',
+    'body',
+    'responseKeyword',
+    'responseForbiddenKeyword',
+    'responseJsonPath',
+    'responseJsonValue',
+    'responseHeaderEquals',
+    'sslCheckEnabled',
+    'sslCheckDaysBeforeExpiry',
+    'sslIgnoreSelfSigned',
+    'pingProtocol',
+  ] as const;
+  const field = fields.find((name) => target[name] !== undefined);
+  return field ? `${field} is not supported by ${target.method}` : null;
+}
+
 const heartbeatMonitorSchema = z.strictObject(
   {
     ...monitorCommon,
     id: z
       .string()
-      .check(z.regex(HEARTBEAT_ID, { error: 'HEARTBEAT id must match ^[A-Za-z0-9_-]{1,64}$' })),
+      .check(
+        z.regex(HEARTBEAT_ID, { error: 'HEARTBEAT id must match ^[A-Za-z0-9_-]{1,64}$' }),
+        notProto,
+      ),
     method: z.literal('HEARTBEAT'),
     periodSeconds: intInRange('periodSeconds', 60, MAX_HEARTBEAT_PERIOD_SECONDS),
     graceSeconds: intInRange('graceSeconds', 0, MAX_HEARTBEAT_GRACE_SECONDS),
@@ -435,6 +499,7 @@ const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
   .check(z.refine((webhook) => isAllowedPayload(webhook.payloadType, webhook.payload)));
 
 const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.object({
+  summaryAfter: z.optional(intInRange('summaryAfter', 2, 50)),
   webhook: z.optional(z.union([webhookSchema, z.array(webhookSchema)])),
   timeZone: z.optional(timeZone('timeZone')),
   gracePeriod: z.optional(z.number()),
@@ -555,10 +620,12 @@ const latencySampleSchema = z.object({ loc: z.string(), ping: z.number(), time: 
 const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
   lastUpdate: z.number(),
   maintenances: z.array(z.custom<Maintenance>(isValidMaintenance)),
+  announcements: z.array(z.custom<Announcement>(isValidAnnouncement)),
   monitors: z.record(
     z.string(),
     z.object({
-      status: z.enum(['up', 'late', 'pending', 'running', 'down']),
+      status: z.enum(['up', 'late', 'pending', 'running', 'down', 'degraded']),
+      warning: z.exactOptional(z.string()),
       startedAt: z.exactOptional(z.number()),
       incidents: z.array(incidentSchema),
       latest: z.exactOptional(latencySampleSchema),
@@ -684,6 +751,7 @@ const checkResultWithLocationSchema: z.ZodMiniType<SchemaOutput<CheckResultWithL
       z.object({
         ok: z.literal(true),
         latency: z.number(),
+        warning: z.exactOptional(z.object({ text: z.string(), expiryDate: z.number() })),
         ssl: z.exactOptional(
           z.object({
             expiryDate: z.number(),

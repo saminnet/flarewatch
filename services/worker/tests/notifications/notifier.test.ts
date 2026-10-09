@@ -35,13 +35,12 @@ describe('WebhookNotifier', () => {
     const url = 'https://api.telegram.org/bot123:SECRET/sendMessage';
     fetchMock.mockRejectedValue(new TypeError(`fetch failed for ${url}`));
     const logged: unknown[] = [];
-    const spies = (['info', 'warn', 'error'] as const).map((level) =>
-      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line)),
-    );
+    for (const level of ['info', 'warn', 'error'] as const) {
+      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line));
+    }
 
     const notifier = new WebhookNotifier({ url, payloadType: 'json', payload: {} }, fetchMock);
     const results = await notifier.send(createNotificationContext(), 'hello');
-    for (const spy of spies) spy.mockRestore();
 
     expect(JSON.stringify([logged, results])).not.toContain('SECRET');
     expect(results).toEqual([{ success: false, error: 'fetch failed for <webhook URL>' }]);
@@ -201,9 +200,9 @@ describe('WebhookNotifier', () => {
       new Response(`bad request to ${url} with Bearer header-secret-token`, { status: 400 }),
     );
     const logged: unknown[] = [];
-    const spies = (['info', 'warn', 'error'] as const).map((level) =>
-      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line)),
-    );
+    for (const level of ['info', 'warn', 'error'] as const) {
+      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line));
+    }
 
     const notifier = new WebhookNotifier(
       {
@@ -215,7 +214,6 @@ describe('WebhookNotifier', () => {
       fetchMock,
     );
     await notifier.send(createNotificationContext(), 'hello');
-    for (const spy of spies) spy.mockRestore();
 
     expect(JSON.stringify(logged)).toContain('bad request to');
     expect(JSON.stringify(logged)).not.toContain('SECRET-PATH');

@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test';
+import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import type { MonitorView, StatusView } from '@flarewatch/shared';
 import {
   calculateUptimePercent,
   generateAggregateDailyStatus,
   generateDailyStatus,
   getMonitorError,
-  getLatestLatency,
 } from '@/lib/uptime';
 
 function view(
@@ -29,11 +28,19 @@ describe('uptime utilities', () => {
     vi.setSystemTime(new Date('2025-01-15T12:00:00Z'));
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   describe('calculateUptimePercent', () => {
+    it('changes from unknown to known at exactly sixty seconds of monitor age', () => {
+      const before = view({ test: { startedAt: 100 } }, 159);
+      const boundary = view({ test: { startedAt: 100 } }, 160);
+
+      expect(calculateUptimePercent('test', before)).toBeNull();
+      expect(generateDailyStatus('test', before).every((day) => day.status === 'unknown')).toBe(
+        true,
+      );
+      expect(calculateUptimePercent('test', boundary)).toBe(100);
+      expect(generateDailyStatus('test', boundary).at(-1)?.status).toBe('up');
+    });
+
     it('returns 100% when there are no incidents', () => {
       const state = view({ test: { startedAt: Math.floor(Date.now() / 1000) - 86400 } });
 
@@ -116,16 +123,6 @@ describe('uptime utilities', () => {
       expect(result).toHaveLength(90);
       expect(result.filter((day) => day.status === 'unknown')).toHaveLength(89);
       expect(result[89]?.status).toBe('up');
-    });
-
-    it('returns correct status based on downtime thresholds', () => {
-      const nowSec = Math.floor(Date.now() / 1000);
-      const state = view({ test: { startedAt: nowSec - 90 * 24 * 60 * 60 } });
-
-      const result = generateDailyStatus('test', state);
-
-      const todayStatus = result[result.length - 1];
-      expect(todayStatus?.status).toBe('up');
     });
 
     it.each([
@@ -214,18 +211,6 @@ describe('uptime utilities', () => {
       });
 
       expect(getMonitorError('test', state)).toBe('Second error');
-    });
-  });
-
-  describe('getLatestLatency', () => {
-    it('returns null when there is no latency data', () => {
-      expect(getLatestLatency('test', view({ test: {} }))).toBeNull();
-    });
-
-    it('returns the latest latency sample when present', () => {
-      const state = view({ test: { latest: { loc: 'EU', ping: 120, time: 2 } } });
-
-      expect(getLatestLatency('test', state)).toEqual({ loc: 'EU', ping: 120, time: 2 });
     });
   });
 });

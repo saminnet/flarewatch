@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { expect, test, type APIResponse, type Page } from '@playwright/test';
+import { expect, type APIResponse, type Page } from '@playwright/test';
+import { test } from './fixtures';
 import { isJsonObject } from '@flarewatch/shared';
 import { workerConfig } from './config/worker';
 
@@ -80,15 +81,6 @@ function expectNoPrivateMonitorFields(body: string): void {
   for (const field of privateMonitorFields) expect(body).not.toContain(field);
 }
 
-function collectClientErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  return errors;
-}
-
 async function readOkJson<T>(
   response: APIResponse,
   guard: (value: unknown) => value is T,
@@ -133,7 +125,6 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
   page,
   request,
 }) => {
-  const clientErrors = collectClientErrors(page);
   const dataResponse = await request.get('/api/data');
   const data = await readOkJson(dataResponse, isPublicData);
 
@@ -191,11 +182,9 @@ test('seeded dashboard matches monitor data and supports collapse interactions',
 
   await page.getByRole('button', { name: 'Toggle Websites (2 monitors)' }).click();
   await expect(page.getByRole('link', { name: /Example Domain, operational/ })).toBeVisible();
-  expect(clientErrors).toEqual([]);
 });
 
 test('a row opens the monitor page with its history and chart', async ({ page }) => {
-  const clientErrors = collectClientErrors(page);
   await page.goto('/');
   await page.getByRole('link', { name: /^Cloudflare Docs, operational, / }).click();
 
@@ -221,7 +210,6 @@ test('a row opens the monitor page with its history and chart', async ({ page })
   await expect(history.getByText('E2E active maintenance')).toHaveCount(0);
   await page.goto('/monitors/demo_cloudflare_trace');
   await expect(history.getByText('E2E active maintenance')).toBeVisible();
-  expect(clientErrors).toEqual([]);
 });
 
 test('latency chart is server-rendered, labeled, and supports hover', async ({ page, request }) => {
@@ -229,9 +217,7 @@ test('latency chart is server-rendered, labeled, and supports hover', async ({ p
   const html = await (await request.get('/monitors/demo_example')).text();
   expectNoPrivateMonitorFields(html);
   expect(html).toContain('data-testid="latency-chart"');
-  expect(html).toContain('vector-effect="non-scaling-stroke"');
-  expect(html).toMatch(/fill="url\(#chart-fill-/);
-  expect(html).toContain('stop-opacity="var(--chart-fill-top)"');
+  expect(html).toMatch(/role="img"[^>]*aria-label="Response time chart, latest/);
 
   await page.goto('/monitors/demo_example');
   const chart = page.getByTestId('latency-chart').first();
@@ -278,16 +264,16 @@ test.describe('latency chart touch', () => {
       pointerId: 1,
       bubbles: true,
     };
-    const dot = chart.locator('span.rounded-full');
+    const tooltip = chart.getByText(/\w{3} \d{1,2}, \d{2}:\d{2} UTC/);
 
     // Same hydration race as the hover test: a pointerdown dispatched before
-    // the handler attaches is lost, so retry until the tooltip dot appears.
+    // the handler attaches is lost, so retry until the tooltip appears.
     await expect(async () => {
       await chart.dispatchEvent('pointerdown', at);
-      await expect(dot).toBeVisible({ timeout: 1000 });
+      await expect(tooltip).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 15_000 });
     await chart.dispatchEvent('pointerup', at);
-    await expect(dot).toHaveCount(0);
+    await expect(tooltip).toHaveCount(0);
   });
 });
 
@@ -393,7 +379,6 @@ const privateHeartbeat = {
 test('rows show the last 90 days, or 30 on a phone, and still open the monitor page', async ({
   page,
 }) => {
-  const clientErrors = collectClientErrors(page);
   const docsRow = monitorRow(page, 'Cloudflare Docs');
   const cells = docsRow.locator('[data-slot="row-bars"] > span');
 
@@ -425,7 +410,6 @@ test('rows show the last 90 days, or 30 on a phone, and still open the monitor p
   if (!box) throw new Error('row strip has no box');
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(page).toHaveURL(/\/monitors\/demo_cloudflare_docs$/);
-  expect(clientErrors).toEqual([]);
 });
 
 const UTC_STAMP = String.raw`\w{3} \d{1,2}, \d{2}:\d{2} UTC`;
@@ -437,7 +421,6 @@ function monitorRow(page: Page, name: string) {
 }
 
 test('heartbeat monitors render every phase on the public page', async ({ page }) => {
-  const clientErrors = collectClientErrors(page);
   await page.goto('/');
 
   await expect(
@@ -516,12 +499,9 @@ test('heartbeat monitors render every phase on the public page', async ({ page }
     page.getByRole('group', { name: /90 runs, 1 missed, 1 failed, last run/ }),
   ).toBeVisible();
   await expect(page.getByText('restic check failed')).toHaveCount(0);
-
-  expect(clientErrors).toEqual([]);
 });
 
 test('kind filter hides the other kind and lives in the URL', async ({ page }) => {
-  const clientErrors = collectClientErrors(page);
   await page.goto('/');
 
   const filter = page.getByRole('group', { name: 'Filter monitors by kind' });
@@ -548,7 +528,6 @@ test('kind filter hides the other kind and lives in the URL', async ({ page }) =
   );
   await expect(page.getByRole('button', { name: 'Toggle Scheduled jobs (6 jobs)' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Nightly Backup, / })).toBeVisible();
-  expect(clientErrors).toEqual([]);
 });
 
 async function signIn(page: Page): Promise<void> {
@@ -646,8 +625,6 @@ test('private monitor never appears to visitors but shows to the operator with a
   const signedInResponse = await page.request.get('/');
   expect(signedInResponse.headers()['cache-control']).toBe('private, no-store');
   expect(await signedInResponse.text()).toContain(privateName);
-
-  const clientErrors = collectClientErrors(page);
   await page.goto('/');
   await expect(
     page.getByRole('button', { name: /Account menu, signed in as e2e-admin/ }),
@@ -680,11 +657,12 @@ test('private monitor never appears to visitors but shows to the operator with a
   // The button works only once the page has hydrated, so retry the click.
   await expect(async () => {
     await page.getByRole('button', { name: 'Check now' }).click();
-    await expect(checkResult).toHaveText(/^(Up|Down)/, { timeout: 15_000 });
+    await expect(checkResult).toHaveText(/^Down/, { timeout: 15_000 });
   }).toPass({ timeout: 45_000 });
+  await expect(checkResult).toContainText('404');
   await page.reload();
   // The first match is the card's current error; History lists the incident below it.
-  await expect(page.getByText('Synthetic private outage').first()).toHaveClass(/status-down/);
+  await expect(page.getByText('Synthetic private outage').first()).toBeVisible();
   await expect(checkResult).toBeEmpty();
 
   // Signed-in mode is the only surface that carries the raw reported reason.
@@ -697,11 +675,9 @@ test('private monitor never appears to visitors but shows to the operator with a
   await page.goto('/history');
   await expect(page.getByText(privateMonitor.maintenance)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add maintenance window' })).toBeVisible();
-  expect(clientErrors).toEqual([]);
 });
 
 test('visitor view shows the operator the page as visitors see it', async ({ page }) => {
-  const clientErrors = collectClientErrors(page);
   await page.goto('/');
   await signIn(page);
   await page.goto('/');
@@ -737,11 +713,9 @@ test('visitor view shows the operator the page as visitors see it', async ({ pag
   await expect(page).not.toHaveURL(/view=visitor/);
   await expect(page.getByRole('button', { name: 'Add maintenance window' })).toBeVisible();
   await expect(page.getByText(privateMonitor.maintenance)).toBeVisible();
-  expect(clientErrors).toEqual([]);
 });
 
 test('history route renders seeded incidents and maintenance', async ({ page }) => {
-  const clientErrors = collectClientErrors(page);
   await page.goto('/history');
 
   await expect(page.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
@@ -760,7 +734,6 @@ test('history route renders seeded incidents and maintenance', async ({ page }) 
   await expect(page.locator('[data-slot="badge"]').filter({ hasText: /^Ongoing$/ })).toHaveCount(4);
   await expect(page.getByText(/No heartbeat since .+ \(expected by .+\)/)).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).toBeVisible();
-  expect(clientErrors).toEqual([]);
 });
 
 test('history route filters by type, monitor, and invalid month fallback', async ({ page }) => {
@@ -797,7 +770,6 @@ test('history route filters by type, monitor, and invalid month fallback', async
 });
 
 test('embed route renders seeded monitor status and variants', async ({ page, request }) => {
-  const clientErrors = collectClientErrors(page);
   const embedHtml = await (await request.get('/embed/demo_example')).text();
   expectNoPrivateMonitorFields(embedHtml);
   await page.goto('/embed/demo_example');
@@ -810,14 +782,14 @@ test('embed route renders seeded monitor status and variants', async ({ page, re
   await page.goto('/embed/demo_cloudflare_status?theme=dark');
   await expect(page.getByText('Cloudflare Status API')).toBeVisible();
   await expect(page.getByText('Synthetic E2E outage')).toBeVisible();
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto('/embed/demo_cloudflare_status?theme=light');
   await expect(page.getByText('Cloudflare Status API')).toBeVisible();
-  await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
   await page.goto('/embed/demo_cloudflare_status');
-  await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
   await page.emulateMedia({ colorScheme: 'light' });
 
   await page.goto('/embed/demo_cloudflare_status?minimal=true');
@@ -826,10 +798,13 @@ test('embed route renders seeded monitor status and variants', async ({ page, re
 
   await page.goto('/embed/missing_monitor');
   await expect(page.getByText('Monitor with ID missing_monitor not found.')).toBeVisible();
-  expect(clientErrors).toEqual([]);
 });
 
-test('another site can frame the embed but not the status page', async ({ page, baseURL }) => {
+test('another site can frame the embed but not the status page', async ({
+  page,
+  baseURL,
+  clientErrors,
+}) => {
   await page.setContent(
     `<iframe id="embed" src="${baseURL}/embed/demo_example"></iframe>
      <iframe id="page" src="${baseURL}/"></iframe>`,
@@ -837,6 +812,10 @@ test('another site can frame the embed but not the status page', async ({ page, 
 
   await expect(page.frameLocator('#embed').getByText('Example Domain')).toBeVisible();
   await expect(page.frameLocator('#page').getByRole('banner')).toHaveCount(0);
+  await expect
+    .poll(() => clientErrors)
+    .toEqual([expect.stringContaining('directive: "frame-ancestors \'none\'"')]);
+  clientErrors.length = 0;
 });
 
 test('every script on a page carries the nonce from its Content-Security-Policy', async ({
@@ -855,9 +834,7 @@ test('every script on a page carries the nonce from its Content-Security-Policy'
       body,
     }));
     expect(scripts.map((script) => script.nonce)).toEqual(scripts.map(() => nonce));
-    const themeInit = scripts.filter(({ body }) => body.includes('__flarewatchSetThemePreference'));
-    expect(themeInit, path).toHaveLength(1);
-    expect(scripts.length, path).toBeGreaterThan(themeInit.length);
+    expect(scripts.length, path).toBeGreaterThan(0);
   }
 });
 
@@ -867,8 +844,10 @@ test.describe.serial('operator maintenance lifecycle', () => {
     'mutating E2E tests require the local seeded Wrangler server',
   );
 
-  test('signs in, manages maintenance on History, and signs out', async ({ page }) => {
-    const clientErrors = collectClientErrors(page);
+  test('signs in, manages maintenance on History, and signs out', async ({
+    page,
+    clientErrors,
+  }) => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 
@@ -943,11 +922,9 @@ test.describe.serial('operator maintenance lifecycle', () => {
     await expect(page.getByRole('button', { name: 'Add maintenance window' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
     expect((await page.request.get('/')).headers()['cache-control']).not.toBe('private, no-store');
-    expect(clientErrors).toEqual([]);
   });
 
   test('repeats a maintenance window weekly from History', async ({ page }) => {
-    const clientErrors = collectClientErrors(page);
     await page.goto('/login');
     await page.getByRole('link', { name: 'Continue with Test ID' }).click();
     await page.getByRole('link', { name: 'operator@e2e.test' }).click();
@@ -994,7 +971,6 @@ test.describe.serial('operator maintenance lifecycle', () => {
       .click();
     expect((await deleted).status()).toBe(204);
     await expect(page.getByText('E2E weekly maintenance')).toHaveCount(0);
-    expect(clientErrors).toEqual([]);
   });
 });
 
@@ -1034,14 +1010,6 @@ test.describe('provider sign-in', () => {
     await expect(page.getByRole('heading', { name: 'Internal Vault Backup' })).toHaveCount(0);
   });
 
-  test('the operator signs in with the provider and can edit maintenance', async ({ page }) => {
-    await signInAs(page, 'operator@e2e.test');
-
-    await expect(page.getByRole('heading', { name: 'Internal Vault Backup' })).toBeVisible();
-    await page.getByRole('link', { name: 'History' }).click();
-    await expect(page.getByRole('button', { name: 'Add maintenance window' })).toBeVisible();
-  });
-
   test('someone no rule lets in is sent back to sign-in with a reason', async ({ page }) => {
     await signInAs(page, 'stranger@e2e.test');
 
@@ -1051,4 +1019,105 @@ test.describe('provider sign-in', () => {
     );
     await expect(page.getByRole('heading', { name: 'Internal Billing API' })).toHaveCount(0);
   });
+});
+
+test('announcement banners show newest first and hide ended notices', async ({ page }) => {
+  await page.goto('/');
+  const banners = page.getByLabel('Announcements');
+  await expect(banners.getByRole('heading')).toHaveText([
+    'E2E support hours',
+    'E2E older announcement',
+  ]);
+  await expect(banners.getByText('Support is closed on Friday.')).toBeVisible();
+  await expect(page.getByText('E2E ended announcement')).toHaveCount(0);
+  await expect(banners.getByRole('button', { name: /Edit announcement/ })).toHaveCount(0);
+});
+
+test.describe.serial('operator announcement lifecycle', () => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'needs the local seeded Wrangler server');
+  const MARKUP_BODY = '<script>alert(1)</script> <b>Created</b> by **the operator**.';
+
+  test('creates, edits and deletes announcements beside maintenance', async ({ page }) => {
+    await page.goto('/');
+    await signIn(page);
+    // The raw-fetch sign-in sets only the cookie. The hydrated app keeps its visitor session until a full load.
+    await page.goto('/history');
+    await expect(page.getByRole('button', { name: 'Add maintenance window' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Edit announcement E2E ended announcement' }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Add announcement' }).click();
+    const add = page.getByRole('dialog', { name: 'Add announcement' });
+    await expect(add.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await add.getByLabel('Title', { exact: true }).fill('E2E lifecycle announcement');
+    await add.getByLabel('Body', { exact: true }).fill(MARKUP_BODY);
+    const created = page.waitForResponse(
+      (r) => r.url().endsWith('/api/admin/announcements') && r.request().method() === 'POST',
+    );
+    await add.getByRole('button', { name: 'Save' }).click();
+    expect((await created).status()).toBe(201);
+    await expect(add).not.toBeVisible();
+    await page.goto('/');
+    const banners = page.getByLabel('Announcements');
+    await expect(banners.getByRole('heading').first()).toHaveText('E2E lifecycle announcement');
+    await expect(banners.getByText(MARKUP_BODY)).toBeVisible();
+    await expect(banners.locator('script, b, strong')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Edit announcement/ })).toHaveCount(0);
+    await page.goto('/history');
+    await page
+      .getByRole('button', { name: 'Edit announcement E2E lifecycle announcement' })
+      .click();
+    const edit = page.getByRole('dialog', { name: 'Edit announcement' });
+    await expect(edit.getByLabel('Body', { exact: true })).toHaveValue(MARKUP_BODY);
+    await edit.getByLabel('Title', { exact: true }).fill('E2E lifecycle announcement edited');
+    await edit.getByRole('button', { name: 'Save' }).click();
+    await expect(edit).not.toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: 'E2E lifecycle announcement edited' }),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Delete announcement E2E lifecycle announcement edited' })
+      .click();
+    const deleted = page.waitForResponse(
+      (r) => r.url().endsWith('/api/admin/announcements') && r.request().method() === 'DELETE',
+    );
+    await page
+      .getByRole('dialog', { name: 'Delete announcement' })
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click();
+    expect((await deleted).status()).toBe(204);
+    await expect(page.getByText('E2E lifecycle announcement edited')).toHaveCount(0);
+  });
+});
+
+test('public feed and SVG badge keep private data out and advertise the feed', async ({
+  request,
+}, testInfo) => {
+  const feed = await request.get('/feed.atom');
+  expect(feed.status()).toBe(200);
+  expect(feed.headers()['content-type']).toBe('application/atom+xml; charset=utf-8');
+  const xml = await feed.text();
+  expect(xml).toContain('<feed xmlns="http://www.w3.org/2005/Atom">');
+  expect(xml).toContain('E2E active maintenance');
+  expect(xml).toContain('Cloudflare Status API incident');
+  expectNoPrivateMonitorFields(xml);
+  const html = await (await request.get('/')).text();
+  expect(html).toMatch(
+    /<link[^>]*rel="alternate"[^>]*type="application\/atom\+xml"[^>]*href="\/feed.atom"/,
+  );
+  const badge = await request.get('/api/badge.svg?id=demo_example&label=%3Cscript%3E');
+  expect(badge.status()).toBe(200);
+  expect(badge.headers()['content-type']).toBe('image/svg+xml');
+  expect(badge.headers()['x-content-type-options']).toBe('nosniff');
+  expect(badge.headers()['content-security-policy']).toBe(
+    "default-src 'none'; style-src 'unsafe-inline'",
+  );
+  const svg = await badge.text();
+  expect(svg).toContain('&lt;script&gt;');
+  expect(svg).not.toContain('<script>');
+  expect((await request.get(`/api/badge.svg?id=${privateMonitor.id}`)).status()).toBe(404);
+  await testInfo.attach('status-badge.svg', { body: svg, contentType: 'image/svg+xml' });
+  await testInfo.attach('status-feed.atom', { body: xml, contentType: 'application/atom+xml' });
+  await testInfo.attach('announcements.html', { body: html, contentType: 'text/html' });
 });

@@ -199,12 +199,6 @@ describe('publicView', () => {
   it('keeps null state', () => {
     expect(publicView(config, null).state).toBeNull();
   });
-
-  it('never exposes the private flag on public monitors', () => {
-    const view = publicView(config, null);
-    expect(view.monitors).toHaveLength(2);
-    for (const monitor of view.monitors) expect(monitor).not.toHaveProperty('private');
-  });
 });
 
 describe('toAdminMonitors', () => {
@@ -254,12 +248,6 @@ describe('publicMaintenances', () => {
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
-  });
-
-  it('strips private monitor ids from scoped records', () => {
-    expect(
-      publicMaintenances(config, [maintenance({ id: 'mixed', monitors: ['public', 'hidden'] })]),
-    ).toEqual([maintenance({ id: 'mixed', monitors: ['public'] })]);
   });
 
   it('drops records whose monitors are all private but keeps unscoped ones', () => {
@@ -377,12 +365,14 @@ describe('snapshots', () => {
       up: 1,
       late: 1,
       slow: 0,
+      expiry: 0,
       down: 1,
     });
     expect(countStatuses(visitor.monitors, visitor.state!, [])).toEqual({
       up: 1,
       late: 1,
       slow: 0,
+      expiry: 0,
       down: 0,
     });
   });

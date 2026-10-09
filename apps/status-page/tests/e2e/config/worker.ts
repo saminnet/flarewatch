@@ -9,7 +9,8 @@ export const privateMonitor: MonitorTarget = {
   id: 'demo_private_internal',
   name: 'Internal Billing API',
   method: 'GET',
-  target: 'https://internal.example.com/health',
+  // The fake OIDC server answers 404.
+  target: 'http://127.0.0.1:3102/health',
   link: false,
   private: true,
 };

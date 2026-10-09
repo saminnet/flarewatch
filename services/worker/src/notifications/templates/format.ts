@@ -15,17 +15,22 @@ export function reminderNote(ctx: TemplateContext): string {
 
 /** What the alert says of the monitor, after its name. */
 export function stateText(ctx: TemplateContext): string {
+  if (ctx.kind === 'summary') return 'summary';
   if (ctx.kind === 'recovered') return 'is up!';
+  if (ctx.kind === 'expiry') return 'has an expiry warning';
   return ctx.isInitialOutage ? 'is down' : `is still down${reminderNote(ctx)}`;
 }
 
 /** The value of a Status field. */
 export function statusText(ctx: TemplateContext): string {
+  if (ctx.kind === 'summary') return 'Summary';
   if (ctx.kind === 'recovered') return 'Operational';
+  if (ctx.kind === 'expiry') return 'Degraded';
   return ctx.kind === 'reminder' ? 'Still down' : 'Down';
 }
 
 export function notificationBody(ctx: TemplateContext): string {
+  if (ctx.kind === 'summary' || ctx.kind === 'expiry') return ctx.reason;
   if (ctx.kind === 'recovered') {
     return `Recovered after ${ctx.downtimeMinutes} minutes of downtime.`;
   }

@@ -17,6 +17,32 @@ function createTarget(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
 }
 
 describe('checkExternalProxy', () => {
+  it.each([
+    { ssl: { expiryDate: 9e12, daysUntilExpiry: 4 } },
+    { warning: { text: {}, expiryDate: 123 } },
+  ])('rejects expiry metadata that cannot safely reach the hub: %j', async (metadata) => {
+    fetchMock.mockResolvedValue(
+      Response.json({ location: 'FRA', result: { ok: true, latency: 1, ...metadata } }),
+    );
+    const { result } = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
+    expect(result).toMatchObject({ ok: false, error: 'Proxy returned invalid response' });
+  });
+  it('asks the proxy to fail expired certificates only and rejects malformed SSL metadata', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        location: 'FRA',
+        result: { ok: true, latency: 1, ssl: { expiryDate: 'bad', daysUntilExpiry: 4 } },
+      }),
+    );
+    const result = await checkExternalProxy(
+      createTarget({ sslCheckEnabled: true, sslCheckDaysBeforeExpiry: 14 }),
+      PROXY_URL,
+      undefined,
+      fetchMock,
+    );
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toContain('"sslCheckDaysBeforeExpiry":0');
+    expect(result.result).toMatchObject({ ok: false, error: 'Proxy returned invalid response' });
+  });
   beforeEach(() => {
     fetchMock.mockReset();
   });
@@ -54,6 +80,7 @@ describe('checkExternalProxy', () => {
         timeout: 1234,
       }),
       timeout: 1234,
+      redirect: 'error',
     });
   });
 
@@ -136,9 +163,9 @@ describe('checkExternalProxy', () => {
       new Response('Authorization: Bearer proxy-secret', { status: 503 }),
     );
     const logged: unknown[] = [];
-    const spies = (['info', 'warn', 'error'] as const).map((level) =>
-      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line)),
-    );
+    for (const level of ['info', 'warn', 'error'] as const) {
+      vi.spyOn(console, level).mockImplementation((line: unknown) => logged.push(line));
+    }
 
     await checkExternalProxy(
       createTarget(),
@@ -146,7 +173,6 @@ describe('checkExternalProxy', () => {
       { FLAREWATCH_PROXY_TOKEN: 'proxy-secret' },
       fetchMock,
     );
-    for (const spy of spies) spy.mockRestore();
 
     expect(JSON.stringify(logged)).toContain('Bearer <proxy token>');
     expect(JSON.stringify(logged)).not.toContain('proxy-secret');
@@ -220,6 +246,20 @@ describe('checkExternalProxy', () => {
     });
   });
 
+  it('keeps the proxy token out of the error when the proxy answers with no JSON', async () => {
+    fetchMock.mockResolvedValue(new Response('Bearer proxy-secret', { status: 200 }));
+
+    const { result } = await checkExternalProxy(
+      createTarget(),
+      PROXY_URL,
+      { FLAREWATCH_PROXY_TOKEN: 'proxy-secret' },
+      fetchMock,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain('proxy-secret');
+  });
+
   describe('header and JSON checks', () => {
     const TOO_OLD = {
       location: 'ERROR',
@@ -228,20 +268,16 @@ describe('checkExternalProxy', () => {
         error: 'Proxy is too old for header and JSON checks: update to flarewatch-proxy 2.0.0',
       },
     };
-    const assertions: [string, Partial<MonitorTarget>][] = [
-      ['a header check', { responseHeaderEquals: { 'X-A': '1' } }],
-      ['a JSON check', { responseJsonPath: '$.status', responseJsonValue: 'ok' }],
-    ];
     const answer = (fields: { contract?: unknown }) =>
       new Response(
         JSON.stringify({ location: 'FRA', result: { ok: true, latency: 5 }, ...fields }),
       );
 
-    it.each(assertions)('fails %s on a proxy that sends no contract', async (_case, overrides) => {
+    it('fails a header check on a proxy that sends no contract', async () => {
       fetchMock.mockResolvedValue(answer({}));
 
       const result = await checkExternalProxy(
-        createTarget(overrides),
+        createTarget({ responseHeaderEquals: { 'X-A': '1' } }),
         PROXY_URL,
         undefined,
         fetchMock,

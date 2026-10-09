@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
-  isJsonObject,
   isValidMaintenance,
   type Maintenance,
   type MaintenanceConfig,
@@ -9,7 +8,7 @@ import {
 import { compareByStart } from '../maintenance';
 import type { Snapshot } from '../public-view';
 import { qk } from './keys';
-import { SessionExpiredError } from './auth.mutations';
+import { requestOk, reportError, type MutationCallbacks } from './request';
 
 const API_PATH = '/api/admin/maintenances';
 
@@ -29,16 +28,6 @@ function setMaintenances(
   void queryClient.invalidateQueries({ queryKey: qk.snapshot });
 }
 
-function reportError(
-  queryClient: QueryClient,
-  error: unknown,
-  onError?: (error: Error) => void,
-): void {
-  // Otherwise the cached session still says operator and /login sends the user back.
-  if (error instanceof SessionExpiredError) queryClient.removeQueries({ queryKey: qk.session });
-  onError?.(error instanceof Error ? error : new Error('Something went wrong'));
-}
-
 export type MaintenanceUpdatePatch = {
   title: string | null;
   body: string;
@@ -49,26 +38,6 @@ export type MaintenanceUpdatePatch = {
   repeat?: MaintenanceRepeat | null;
 };
 
-async function requestOk(path: string, init: RequestInit): Promise<Response> {
-  const res = await fetch(path, init);
-  if (!res.ok) {
-    if (res.status === 401) {
-      throw new SessionExpiredError();
-    }
-    const body: unknown = await res
-      .clone()
-      .json()
-      .catch(() => null);
-    const text = await res.text().catch(() => '');
-    throw new Error(
-      isJsonObject(body) && typeof body.error === 'string'
-        ? body.error
-        : text || `Request failed (${res.status})`,
-    );
-  }
-  return res;
-}
-
 async function requestMaintenance(path: string, init: RequestInit): Promise<Maintenance> {
   const res = await requestOk(path, init);
   const data: unknown = await res.json();
@@ -76,12 +45,7 @@ async function requestMaintenance(path: string, init: RequestInit): Promise<Main
   return data;
 }
 
-interface MutationCallbacks<T = Maintenance> {
-  onSuccess?: (result: T) => void;
-  onError?: (error: Error) => void;
-}
-
-export function useCreateMaintenance(callbacks?: MutationCallbacks) {
+export function useCreateMaintenance(callbacks?: MutationCallbacks<Maintenance>) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -100,7 +64,7 @@ export function useCreateMaintenance(callbacks?: MutationCallbacks) {
   });
 }
 
-export function useUpdateMaintenance(callbacks?: MutationCallbacks) {
+export function useUpdateMaintenance(callbacks?: MutationCallbacks<Maintenance>) {
   const queryClient = useQueryClient();
 
   return useMutation({

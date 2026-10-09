@@ -11,11 +11,12 @@ export async function requestCheckNow(id: string): Promise<CheckResultWithLocati
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id }),
   });
-  const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
     const reason = isJsonObject(body) && typeof body.error === 'string' ? body.error : null;
     throw new Error(reason ?? `Check failed (${response.status})`);
   }
+  const body: unknown = await response.json().catch(() => null);
   if (!isCheckResultWithLocation(body)) throw new Error('Unexpected response shape');
   return body;
 }

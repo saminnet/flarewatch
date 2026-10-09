@@ -4,6 +4,7 @@ import {
   type MonitorChecker,
   type FetchOptions,
   type Fetcher,
+  type RunBudget,
   success,
   failure,
   fetchWithTimeout,
@@ -34,7 +35,7 @@ const CREDENTIAL_HEADERS = ['authorization', 'cookie', 'proxy-authorization'];
 export class HttpChecker implements MonitorChecker {
   constructor(private readonly fetcher: Fetcher = fetchWithTimeout) {}
 
-  async check(target: MonitorTarget): Promise<CheckResult> {
+  async check(target: MonitorTarget, budget?: RunBudget): Promise<CheckResult> {
     const startTime = performance.now();
 
     try {
@@ -43,7 +44,7 @@ export class HttpChecker implements MonitorChecker {
         headers.set('user-agent', USER_AGENT);
       }
 
-      const response = await this.follow(target, headers, startTime);
+      const response = await this.follow(target, headers, startTime, budget);
       if (typeof response === 'string') return failure(response, elapsed(startTime));
 
       const latency = elapsed(startTime);
@@ -86,17 +87,27 @@ export class HttpChecker implements MonitorChecker {
     target: MonitorTarget,
     headers: Headers,
     startTime: number,
+    budget: RunBudget | undefined,
   ): Promise<Response | string> {
     const timeout = target.timeout || DEFAULT_HTTP_TIMEOUT;
     let url = target.target;
     let method = target.method || 'GET';
     let body = target.body;
     for (let hops = 0; ; hops++) {
+      const remaining = budget ? budget.deadline - Date.now() : Infinity;
+      if (remaining <= 0) return 'The check run ended';
+      if (budget && hops > 0) {
+        if (budget.subrequests < 1) return 'No subrequests left in this check run';
+        budget.subrequests--;
+      }
       const response = await this.fetcher(url, {
         method,
         headers,
         body,
-        timeout: Math.max(1, Math.round(timeout - (performance.now() - startTime))),
+        timeout: Math.max(
+          1,
+          Math.min(Math.round(timeout - (performance.now() - startTime)), remaining),
+        ),
         redirect: 'manual',
         cf: {
           cacheTtlByStatus: { '100-599': -1 }, // Never cache

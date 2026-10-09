@@ -1,25 +1,13 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { useState } from 'react';
 import type { StatusView } from '@flarewatch/shared';
 import type { AdminMonitor } from '@/lib/public-view';
 import { renderWithProviders } from '../helpers/render';
 
-// jsdom has no ResizeObserver; the card body only measures its container width.
-vi.stubGlobal(
-  'ResizeObserver',
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  },
-);
-
-const { MonitorDetail } = await import('@/components/monitor-card');
-
-afterEach(cleanup);
+import { MonitorDetail } from '@/components/monitor-card';
 
 const api: AdminMonitor = { id: 'api', name: 'API', method: 'GET' };
 const backup: AdminMonitor = {

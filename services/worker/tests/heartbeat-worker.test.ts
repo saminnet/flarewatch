@@ -1,20 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   HEARTBEAT_RUN_HISTORY,
   formatUtcShort,
   type HeartbeatMonitor,
-  type Fetcher,
   type MonitorView,
   type WorkerConfig,
 } from '@flarewatch/shared';
 import type { Env } from '../src/env';
 import { runChecks } from '../src/index';
-import { WebhookNotifier } from '../src/notifications/webhook';
+import { createNotifier } from '../src/notifications/webhook';
 import type { PingKind } from '../src/hub/heartbeat';
 import { createHub, hubNamespace } from './helpers/hub';
 import { createWorkerDeps } from './helpers/worker-deps';
+import { webhookCapture, type Delivered } from './helpers/webhook-delivery';
 
-const notifierSendMock = vi.fn<WebhookNotifier['send']>();
 const workerConfigMock: WorkerConfig = { monitors: [] };
 
 const NOW = Date.parse('2025-01-15T12:00:00Z') / 1000;
@@ -39,93 +38,85 @@ function createHeartbeatJob() {
   };
 }
 
-function scheduledRun(env: Env): Promise<void> {
-  const notifier = new WebhookNotifier({ url: 'https://hooks.example.com' }, vi.fn<Fetcher>());
-  vi.spyOn(notifier, 'send').mockImplementation(notifierSendMock);
-  return runChecks(env, {
+async function scheduledRun(env: Env): Promise<Delivered[]> {
+  const { delivered, fetchMock } = webhookCapture('hooks.example.com');
+  vi.stubGlobal('fetch', fetchMock);
+  await runChecks(env, {
     ...createWorkerDeps(workerConfigMock),
-    createNotifier: (config) => (config ? notifier : null),
+    createNotifier,
   });
-}
-
-function runScheduled(job: ReturnType<typeof createHeartbeatJob>): Promise<void> {
-  return scheduledRun({ MONITOR_HUB: hubNamespace(job.hub) });
+  vi.unstubAllGlobals();
+  return delivered;
 }
 
 function setNow(timestamp: number): void {
   vi.setSystemTime(new Date(timestamp * 1000));
 }
 
+async function runScheduled(job: ReturnType<typeof createHeartbeatJob>): Promise<string[]> {
+  const delivered = await scheduledRun({ MONITOR_HUB: hubNamespace(job.hub) });
+  return delivered.map(({ id, label }) => `${id} ${label}`);
+}
+
 describe('heartbeat scheduled checks', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     setNow(NOW);
-    vi.clearAllMocks();
-    notifierSendMock.mockResolvedValue([{ success: true }]);
     workerConfigMock.monitors = [heartbeat];
     workerConfigMock.notification = {
-      webhook: { url: 'https://hooks.example.com' },
+      webhook: { url: 'https://hooks.example.com', template: 'matrix' },
       gracePeriod: 60,
     };
     delete workerConfigMock.callbacks;
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it('opens once after the deadline and closes once after recovery', async () => {
     const job = createHeartbeatJob();
     job.ping('success', NOW);
 
-    await runScheduled(job);
+    expect(await runScheduled(job)).toEqual([]);
     expect(job.monitor()?.heartbeat?.status).toBe('up');
-    expect(notifierSendMock).not.toHaveBeenCalled();
 
     setNow(NOW + 71);
-    await runScheduled(job);
+    const sent = [await runScheduled(job)];
     const downState = job.monitor();
     expect(downState?.heartbeat?.status).toBe('down');
     expect(downState?.incidents).toHaveLength(1);
     expect(downState?.incidents?.[0]?.error).toEqual([
       `No heartbeat since ${formatUtcShort(NOW)} (expected by ${formatUtcShort(NOW + 70)})`,
     ]);
-    expect(notifierSendMock).toHaveBeenCalledTimes(1);
 
     job.ping('success', NOW + 71);
-    await runScheduled(job);
+    sent.push(await runScheduled(job));
     const recoveredState = job.monitor();
     expect(recoveredState?.heartbeat?.status).toBe('up');
     expect(recoveredState?.incidents?.[0]?.end).toBe(NOW + 71);
-    expect(notifierSendMock).toHaveBeenCalledTimes(2);
-    expect(notifierSendMock.mock.calls.map(([ctx]) => ctx.kind)).toEqual(['down', 'recovered']);
+    expect(sent).toEqual([['backup down'], ['backup up']]);
   });
 
   it('opens from a fail signal with its message and closes after success', async () => {
     const job = createHeartbeatJob();
     job.ping('fail', NOW, 'restic check failed');
 
-    await runScheduled(job);
+    expect(await runScheduled(job)).toEqual(['backup down']);
     expect(job.monitor()?.incidents?.[0]?.error).toEqual(['Job reported failure']);
-    expect(notifierSendMock).toHaveBeenCalledTimes(1);
 
     setNow(NOW + 1);
     job.ping('success', NOW + 1);
-    await runScheduled(job);
+    expect(await runScheduled(job)).toEqual(['backup up']);
 
     expect(job.monitor()?.incidents?.[0]?.end).toBe(NOW + 1);
-    expect(notifierSendMock).toHaveBeenCalledTimes(2);
   });
 
   it('stores pending without an incident, a start time or latency', async () => {
     const job = createHeartbeatJob();
 
-    await runScheduled(job);
+    const delivered = await runScheduled(job);
 
     const state = job.monitor();
     expect(state?.heartbeat?.status).toBe('pending');
     expect(state).toEqual({ status: 'pending', incidents: [], heartbeat: { status: 'pending' } });
-    expect(notifierSendMock).not.toHaveBeenCalled();
+    expect(delivered).toEqual([]);
   });
 
   it('takes its status from each heartbeat phase', async () => {
@@ -168,13 +159,13 @@ describe('heartbeat scheduled checks', () => {
     const job = createHeartbeatJob();
     job.ping('success', NOW - 65);
 
-    await runScheduled(job);
+    const delivered = await runScheduled(job);
 
     const state = job.monitor();
     expect(state?.heartbeat?.status).toBe('late');
     expect(state?.status).toBe('late');
     expect(state?.incidents).toEqual([]);
-    expect(notifierSendMock).not.toHaveBeenCalled();
+    expect(delivered).toEqual([]);
   });
 
   it('lets a start extend the deadline without producing success', async () => {
@@ -276,11 +267,11 @@ describe('heartbeat scheduled checks', () => {
     job.ping('success', NOW);
 
     setNow(NOW + 70);
-    await runScheduled(job);
+    const delivered = await runScheduled(job);
 
     const state = job.monitor();
     expect(state?.heartbeat).toMatchObject({ status: 'late', deadline: NOW + 70 });
     expect(state?.incidents).toEqual([]);
-    expect(notifierSendMock).not.toHaveBeenCalled();
+    expect(delivered).toEqual([]);
   });
 });

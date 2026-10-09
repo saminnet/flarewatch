@@ -7,7 +7,7 @@ import {
   type MonitorTarget,
 } from '@flarewatch/shared';
 import { getEdgeLocation } from '../utils/location';
-import { httpChecker } from './http';
+import { type HttpChecker, httpChecker } from './http';
 import { tcpChecker } from './tcp';
 import { globalPingChecker } from './globalping';
 
@@ -21,7 +21,7 @@ interface LocatedChecker {
  * substitute a checker or a fixed edge location without reaching for module mocking.
  */
 export interface CheckDeps {
-  readonly http: MonitorChecker;
+  readonly http: Pick<HttpChecker, 'check'>;
   readonly tcp: MonitorChecker;
   readonly globalPing: LocatedChecker;
   readonly getEdgeLocation: () => Promise<string>;

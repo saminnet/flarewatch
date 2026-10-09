@@ -1,7 +1,10 @@
+import type { VpcBinding } from '@flarewatch/shared';
 import type { MonitorHub } from './hub/monitor-hub';
 
 export interface Env {
   MONITOR_HUB?: DurableObjectNamespace<MonitorHub>;
+  /** Optional so forks without a VPC tunnel deploy with the committed wrangler.toml. */
+  VPC?: VpcBinding;
   /** Sent as `Authorization: Bearer <token>` on every external proxy check. */
   FLAREWATCH_PROXY_TOKEN?: string;
   /** Webhooks as JSON, one or a list, that get alerts alongside `notification.webhook`. */

@@ -12,7 +12,7 @@ export function pushoverTemplate(ctx: TemplateContext): TemplateOutput {
     title,
     message: `${stripControlChars(notificationBody(ctx))}\n${stripControlChars(ctx.targetUrl)}`,
     priority: up ? '0' : '1',
-    url: stripControlChars(ctx.targetUrl),
+    ...(ctx.targetUrl && { url: stripControlChars(ctx.targetUrl) }),
   });
 
   return {

@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vite-plus/test';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vite-plus/test';
 
 import { Field, FieldError } from '@/components/ui/field';
-
-afterEach(cleanup);
 
 describe('Field', () => {
   it('renders as a plain layout container', () => {

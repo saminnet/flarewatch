@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { Fetcher, JsonValue, MonitorTarget } from '@flarewatch/shared';
 import { GlobalPingChecker } from '../../src/checkers/globalping';
 
@@ -56,10 +56,6 @@ describe('GlobalPingChecker', () => {
     fetchMock.mockReset();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('parses proxy settings and builds an HTTP measurement request', async () => {
     mockCompletedMeasurement(finishedHttpMeasurement());
 
@@ -85,6 +81,7 @@ describe('GlobalPingChecker', () => {
         Authorization: 'Bearer CaseSensitiveToken',
       },
       timeout: 5000,
+      redirect: 'error',
     });
     expect(typeof body).toBe('string');
     expect(JSON.parse(body as string)).toEqual({
@@ -233,7 +230,7 @@ describe('GlobalPingChecker', () => {
     });
   });
 
-  it('fails when certificate expiry reaches the configured threshold', async () => {
+  it('passes when certificate expiry reaches the configured warning threshold', async () => {
     mockCompletedMeasurement(
       finishedHttpMeasurement({
         tls: {
@@ -250,10 +247,47 @@ describe('GlobalPingChecker', () => {
     expect(result).toEqual({
       location: 'FI/Helsinki',
       result: {
-        ok: false,
-        error: 'Certificate expires in 14 days (threshold: 14)',
+        ok: true,
+        ssl: { expiryDate: 1738152000, daysUntilExpiry: 14 },
         latency: 13,
       },
+    });
+  });
+
+  it.each(['2025-01-15T12:00:00Z', '2025-01-14T12:00:00Z'])(
+    'fails an expired certificate at %s',
+    async (expiresAt) => {
+      mockCompletedMeasurement(
+        finishedHttpMeasurement({ tls: { authorized: true, certificate: { expiresAt } } }),
+      );
+      expect((await check(createMonitor({ sslCheckEnabled: true }))).result).toMatchObject({
+        ok: false,
+        error: 'Certificate has expired',
+      });
+    },
+  );
+
+  it('fails a certificate check whose expiry date does not parse, without NaN metadata', async () => {
+    mockCompletedMeasurement(
+      finishedHttpMeasurement({
+        tls: { authorized: true, certificate: { expiresAt: 'not-a-date' } },
+      }),
+    );
+
+    const result = await check(createMonitor({ sslCheckEnabled: true }));
+
+    expect(result.result).toMatchObject({ ok: false, error: 'Invalid certificate expiry date' });
+    expect(JSON.stringify(result)).not.toContain('NaN');
+  });
+
+  it('fails a measurement that finishes without a probe result', async () => {
+    mockCompletedMeasurement({ status: 'finished', results: [] });
+
+    const result = await check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'ERROR',
+      result: { ok: false, error: 'GlobalPing: No probe result returned' },
     });
   });
 
@@ -328,16 +362,6 @@ describe('GlobalPingChecker', () => {
       location: 'ERROR',
       result: { ok: false, error: 'GlobalPing: response is over 1048576 bytes' },
     });
-  });
-
-  it('fails a measurement poll whose JSON is over 1 MiB', async () => {
-    mockCompletedMeasurement(finishedHttpMeasurement({ rawBody: 'x'.repeat(1024 * 1024) }));
-
-    const result = await check(createMonitor());
-
-    expect(result.location).toBe('ERROR');
-    expect(result.result.ok).toBe(false);
-    expect(result.result.ok ? '' : result.result.error).toContain('over 1048576 bytes');
   });
 
   it('fails the check when measurement creation returns no id', async () => {

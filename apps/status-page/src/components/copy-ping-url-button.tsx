@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import { IconCheck, IconCopy } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,28 +34,38 @@ export function CopyPingUrlButton({ monitorId, monitorName, loadPingUrl }: CopyP
     };
   }, []);
 
-  const copyMutation = useMutation({
-    mutationFn: () => loadPingUrl(monitorId),
-    onSuccess: async (url) => {
-      if (!url) return;
-      try {
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
-      } catch {
-        setManualUrl(url);
+  const [isPending, setIsPending] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+
+  async function copy() {
+    setIsPending(true);
+    setUnavailable(false);
+    try {
+      const url = await loadPingUrl(monitorId);
+      if (!url) {
+        setUnavailable(true);
+      } else {
+        try {
+          await navigator.clipboard.writeText(url);
+          setCopied(true);
+          copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
+        } catch {
+          setManualUrl(url);
+        }
       }
-    },
-  });
-  const unavailable = copyMutation.isError || copyMutation.data === null;
+    } catch {
+      setUnavailable(true);
+    }
+    setIsPending(false);
+  }
 
   const button = (
     <Button
       variant="ghost"
       size="icon-sm"
-      disabled={copyMutation.isPending}
+      disabled={isPending}
       aria-label={`Copy ping URL for ${monitorName}`}
-      onClick={() => copyMutation.mutate()}
+      onClick={() => void copy()}
     >
       <span className="relative inline-flex">
         <IconCheck

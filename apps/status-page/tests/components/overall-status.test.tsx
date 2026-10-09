@@ -1,16 +1,14 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vite-plus/test';
+import { screen } from '@testing-library/react';
+import { describe, expect, it } from 'vite-plus/test';
 import type { HeartbeatStatus, StatusView } from '@flarewatch/shared';
 import { OverallStatus } from '@/components/overall-status';
 import type { PublicMonitor } from '@/lib/public-view';
 import { renderWithProviders } from '../helpers/render';
 
-afterEach(cleanup);
-
 /** A page whose last `jobs` monitors are heartbeats. */
-function page(statuses: Array<HeartbeatStatus | 'slow'>, jobs: number) {
+function page(statuses: Array<HeartbeatStatus | 'slow' | 'expiry'>, jobs: number) {
   const isJob = (i: number) => i >= statuses.length - jobs;
   const monitors: PublicMonitor[] = statuses.map((_, i) => ({
     id: `m${i}`,
@@ -25,11 +23,13 @@ function page(statuses: Array<HeartbeatStatus | 'slow'>, jobs: number) {
         `m${i}`,
         status === 'slow'
           ? { status: 'up', incidents: [], latest: { loc: 'FRA', ping: 900, time: 1000 } }
-          : {
-              status,
-              incidents: status === 'down' ? [{ start: [1000], error: ['Error'] }] : [],
-              ...(isJob(i) && { heartbeat: { status } }),
-            },
+          : status === 'expiry'
+            ? { status: 'degraded', incidents: [], warning: 'Certificate expires soon' }
+            : {
+                status,
+                incidents: status === 'down' ? [{ start: [1000], error: ['Error'] }] : [],
+                ...(isJob(i) && { heartbeat: { status } }),
+              },
       ]),
     ),
   };
@@ -37,6 +37,51 @@ function page(statuses: Array<HeartbeatStatus | 'slow'>, jobs: number) {
 }
 
 describe('OverallStatus', () => {
+  it.each([
+    [
+      ['expiry', 'up', 'up'],
+      'Some systems have expiry warnings (1 out of 3)',
+      '2 up / 1 expiry warning / 0 down',
+    ],
+    [
+      ['expiry', 'slow', 'up'],
+      'Some systems are degraded (2 out of 3)',
+      '1 up / 1 slow / 1 expiry warning / 0 down',
+    ],
+    [
+      ['expiry', 'up', 'late'],
+      'Some systems are degraded (2 out of 3)',
+      '1 up / 1 late / 1 expiry warning / 0 down',
+    ],
+    [
+      ['expiry', 'down', 'up'],
+      'Some systems are down (1 out of 3)',
+      '1 up / 1 expiry warning / 1 down',
+    ],
+    [
+      ['expiry', 'expiry', 'up'],
+      'Some systems have expiry warnings (2 out of 3)',
+      '1 up / 2 expiry warnings / 0 down',
+    ],
+  ] as const)('counts expiry warnings apart in %s', (statuses, title, badge) => {
+    renderWithProviders(
+      <OverallStatus
+        {...page([...statuses], statuses.some((status) => status === 'late') ? 1 : 0)}
+      />,
+    );
+    expect(screen.getByRole('heading').textContent).toBe(title);
+    expect(screen.getByText(badge)).toBeTruthy();
+  });
+
+  it('counts a monitor with both expiry and latency degradation once', () => {
+    const props = page(['expiry', 'up'], 0);
+    props.state.monitors.m0!.latest = { loc: 'HEL', ping: 900, time: 1000 };
+    renderWithProviders(<OverallStatus {...props} />);
+    expect(screen.getByRole('heading').textContent).toBe(
+      'Some systems have expiry warnings (1 out of 2)',
+    );
+    expect(screen.getByText('1 up / 1 expiry warning / 0 down')).toBeTruthy();
+  });
   it('reports all operational when nothing is down or late', () => {
     renderWithProviders(<OverallStatus {...page(['up', 'up', 'up'], 3)} />);
 
@@ -45,12 +90,9 @@ describe('OverallStatus', () => {
   });
 
   it('raises the degraded banner for a late heartbeat with nothing down', () => {
-    const { container } = renderWithProviders(
-      <OverallStatus {...page(['up', 'up', 'up', 'up', 'late'], 2)} />,
-    );
+    renderWithProviders(<OverallStatus {...page(['up', 'up', 'up', 'up', 'late'], 2)} />);
 
     expect(screen.getByRole('heading').textContent).toBe('Some jobs are running late (1 out of 2)');
-    expect(container.querySelector('.bg-status-degraded-bg')).not.toBeNull();
   });
 
   it('splits late out of the up count and counts every visible monitor', () => {
@@ -63,13 +105,10 @@ describe('OverallStatus', () => {
   });
 
   it('raises the degraded banner for a slow check with nothing down', () => {
-    const { container } = renderWithProviders(
-      <OverallStatus {...page(['up', 'slow', 'up', 'up', 'up'], 2)} />,
-    );
+    renderWithProviders(<OverallStatus {...page(['up', 'slow', 'up', 'up', 'up'], 2)} />);
 
     expect(screen.getByRole('heading').textContent).toBe('Some systems are slow (1 out of 3)');
     expect(screen.getByText('4 up / 1 slow / 0 down')).toBeTruthy();
-    expect(container.querySelector('.bg-status-degraded-bg')).not.toBeNull();
   });
 
   it('names both kinds when a check is slow and a job is late', () => {

@@ -40,6 +40,62 @@ interface MonitorListProps {
   onKindChange?: (kind: MonitorKindFilter | undefined) => void;
 }
 
+function isHeartbeat(monitor: AdminMonitor) {
+  return monitor.method === 'HEARTBEAT';
+}
+
+function groupMonitors(
+  monitors: AdminMonitor[],
+  groups: PageConfigGroup | undefined,
+  kind: MonitorKindFilter | undefined,
+  filterActive: boolean,
+  hasBothKinds: boolean,
+) {
+  const matchesKind = (monitor: AdminMonitor) =>
+    !filterActive || !kind || (kind === 'jobs') === isHeartbeat(monitor);
+
+  const activeGroups: MonitorGroup[] = [];
+  const monitorById = new Map(monitors.map((monitor) => [monitor.id, monitor]));
+  const groupedMonitorIds = new Set<string>();
+
+  if (groups) {
+    for (const [name, ids] of Object.entries(groups)) {
+      const groupMonitors = ids
+        .map((id) => monitorById.get(id))
+        .filter(
+          (monitor): monitor is AdminMonitor => monitor !== undefined && matchesKind(monitor),
+        );
+
+      for (const id of ids) groupedMonitorIds.add(id);
+
+      if (groupMonitors.length > 0) {
+        activeGroups.push({ key: name, name, monitors: groupMonitors });
+      }
+    }
+  }
+
+  const ungroupedMonitors = monitors.filter(
+    (monitor) => !groupedMonitorIds.has(monitor.id) && matchesKind(monitor),
+  );
+
+  if (hasBothKinds) {
+    const scheduledJobs = ungroupedMonitors.filter(isHeartbeat);
+    if (scheduledJobs.length > 0) {
+      activeGroups.push({
+        key: SCHEDULED_JOBS_GROUP_KEY,
+        name: 'Scheduled jobs',
+        monitors: scheduledJobs,
+      });
+    }
+  }
+
+  const flatMonitors = hasBothKinds
+    ? ungroupedMonitors.filter((monitor) => !isHeartbeat(monitor))
+    : ungroupedMonitors;
+
+  return { activeGroups, flatMonitors };
+}
+
 export function MonitorList({
   monitors,
   state,
@@ -88,48 +144,13 @@ export function MonitorList({
   const hasBothKinds = hasHeartbeats && hasPulls;
   const filterActive = Boolean(onKindChange && hasBothKinds);
 
-  const isHeartbeat = (monitor: AdminMonitor) => monitor.method === 'HEARTBEAT';
-  const matchesKind = (monitor: AdminMonitor) =>
-    !filterActive || !kind || (kind === 'jobs') === isHeartbeat(monitor);
-
-  const activeGroups: MonitorGroup[] = [];
-  const monitorById = new Map(monitors.map((monitor) => [monitor.id, monitor]));
-  const groupedMonitorIds = new Set<string>();
-
-  if (groups) {
-    for (const [name, ids] of Object.entries(groups)) {
-      const groupMonitors = ids
-        .map((id) => monitorById.get(id))
-        .filter(
-          (monitor): monitor is AdminMonitor => monitor !== undefined && matchesKind(monitor),
-        );
-
-      for (const id of ids) groupedMonitorIds.add(id);
-
-      if (groupMonitors.length > 0) {
-        activeGroups.push({ key: name, name, monitors: groupMonitors });
-      }
-    }
-  }
-
-  const ungroupedMonitors = monitors.filter(
-    (monitor) => !groupedMonitorIds.has(monitor.id) && matchesKind(monitor),
+  const { activeGroups, flatMonitors } = groupMonitors(
+    monitors,
+    groups,
+    kind,
+    filterActive,
+    hasBothKinds,
   );
-
-  if (hasBothKinds) {
-    const scheduledJobs = ungroupedMonitors.filter(isHeartbeat);
-    if (scheduledJobs.length > 0) {
-      activeGroups.push({
-        key: SCHEDULED_JOBS_GROUP_KEY,
-        name: 'Scheduled jobs',
-        monitors: scheduledJobs,
-      });
-    }
-  }
-
-  const flatMonitors = hasBothKinds
-    ? ungroupedMonitors.filter((monitor) => !isHeartbeat(monitor))
-    : ungroupedMonitors;
 
   const activeGroupKeys = activeGroups.map((group) => group.key);
   const collapsedGroupKeys = new Set(collapsedGroups);

@@ -14,6 +14,7 @@ import {
 import type { AlertKind } from '../hub/alerts';
 import { getTemplate } from './templates';
 import type { TemplateContext } from './templates/types';
+import { singleLine } from './templates/format';
 
 const log = createLogger('Webhook');
 
@@ -30,7 +31,7 @@ function createDateFormatter(timeZone: string) {
 
 export interface NotificationContext {
   monitor: Monitor;
-  kind: AlertKind;
+  kind: AlertKind | 'summary';
   incidentStartTime: number;
   /** When it happened: the run's time, or when a held recovery came back up. */
   currentTime: number;
@@ -56,6 +57,7 @@ interface WebhookResult {
 }
 
 export function formatNotificationMessage(ctx: NotificationContext): string {
+  if (ctx.kind === 'summary') return ctx.reason;
   const { monitor, incidentStartTime, currentTime, reason, timeZone } = ctx;
   const formatter = createDateFormatter(timeZone);
   const downtimeMinutes = Math.round(ctx.downtimeSeconds / 60);
@@ -66,6 +68,8 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
       `The service recovered after ${downtimeMinutes} minutes of downtime.`,
     ].join('\n');
   }
+
+  if (ctx.kind === 'expiry') return `⚠️ ${monitor.name}: ${reason}`;
 
   const alsoDown = ctx.alsoDown.length > 0 ? [`Also down: ${ctx.alsoDown.join(', ')}`] : [];
   if (isInitialOutage(ctx)) {
@@ -84,6 +88,65 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
     `Reason: ${reason || 'Unknown'}`,
     ...alsoDown,
   ].join('\n');
+}
+
+function summaryContext(contexts: NotificationContext[]): NotificationContext {
+  const currentTime = Math.max(...contexts.map((ctx) => ctx.currentTime));
+  const groups = new Map<string, string[]>([
+    ['Down', []],
+    ['Recovered', []],
+    ['Still down', []],
+    ['Reminders', []],
+    ['Expiry warnings', []],
+  ]);
+  for (const ctx of contexts) {
+    const group =
+      ctx.kind === 'recovered'
+        ? 'Recovered'
+        : ctx.kind === 'expiry'
+          ? 'Expiry warnings'
+          : ctx.kind === 'reminder'
+            ? 'Reminders'
+            : isInitialOutage(ctx)
+              ? 'Down'
+              : 'Still down';
+    const detail =
+      ctx.kind === 'expiry'
+        ? `: ${singleLine(ctx.reason)}`
+        : ctx.kind === 'reminder'
+          ? ` (reminder ${String(ctx.reminder)})`
+          : '';
+    groups.get(group)!.push(`- ${singleLine(ctx.monitor.name)}${detail}`);
+  }
+  let reason = '';
+  let included = 0;
+  groups: for (const [name, lines] of groups) {
+    for (const [index, line] of lines.entries()) {
+      const next = `${reason}${index === 0 ? `${reason ? '\n\n' : ''}${name}\n` : '\n'}${line}`;
+      const remaining = contexts.length - included - 1;
+      const tail = remaining > 0 ? `\nand ${remaining} more` : '';
+      if (next.length + tail.length > 1900) break groups;
+      reason = next;
+      included++;
+    }
+  }
+  if (included < contexts.length)
+    reason += `${reason ? '\n' : ''}and ${contexts.length - included} more`;
+  return {
+    monitor: {
+      id: 'summary',
+      name: `FlareWatch (${contexts.length} alerts)`,
+      method: 'GET',
+      target: '',
+    },
+    kind: 'summary',
+    incidentStartTime: currentTime,
+    currentTime,
+    downtimeSeconds: 0,
+    reason,
+    timeZone: contexts[0]?.timeZone ?? 'UTC',
+    alsoDown: [],
+  };
 }
 
 function applyTemplate(payload: JsonValue, message: string): JsonValue {
@@ -171,7 +234,8 @@ export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook)
     ...(ctx.reminder !== undefined && { reminder: ctx.reminder }),
     timestamp: formatter.format(new Date(currentTime * 1000)),
     timestampIso: new Date(currentTime * 1000).toISOString(),
-    incidentKey: `${monitor.id}:${incidentStartTime}`,
+    incidentKey:
+      ctx.kind === 'summary' ? crypto.randomUUID() : `${monitor.id}:${incidentStartTime}`,
     webhookUrl: webhook.url,
     options: webhook.options ?? {},
   };
@@ -188,13 +252,18 @@ export class WebhookNotifier {
     private readonly fetcher: Fetcher = fetchWithTimeout,
   ) {}
 
-  async send(ctx: NotificationContext, message: string): Promise<WebhookResult[]> {
-    const configs = Array.isArray(this.config) ? this.config : [this.config];
+  async send(ctx: NotificationContext, message: string, only?: Webhook): Promise<WebhookResult[]> {
+    const configs = only ? [only] : Array.isArray(this.config) ? this.config : [this.config];
     return Promise.all(
       configs
         .filter((webhook) => routes(webhook, ctx.monitor.id))
         .map((webhook) => this.sendSingle(webhook, ctx, message)),
     );
+  }
+
+  async sendSummary(webhook: Webhook, contexts: NotificationContext[]): Promise<WebhookResult> {
+    const ctx = summaryContext(contexts);
+    return this.sendSingle(webhook, ctx, formatNotificationMessage(ctx));
   }
 
   private async sendSingle(
@@ -250,6 +319,7 @@ export class WebhookNotifier {
       const response = await this.fetcher(finalUrl, {
         ...requestInit,
         timeout,
+        redirect: 'error',
       });
 
       if (!response.ok) {

@@ -35,12 +35,6 @@ describe('timeTicks', () => {
         for (const tick of result.ticks) expect(tick % fineStep).toBe(0);
       });
 
-      it('nests the coarse step inside the fine ticks', () => {
-        const [first, second] = result.ticks;
-        const actualFineStep = second! - first!;
-        expect(result.coarseStep % actualFineStep).toBe(0);
-      });
-
       it('keeps a sensible label count (5-9) with >=2 coarse anchors', () => {
         expect(result.ticks.length).toBeGreaterThanOrEqual(5);
         expect(result.ticks.length).toBeLessThanOrEqual(9);

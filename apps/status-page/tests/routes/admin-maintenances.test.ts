@@ -5,7 +5,6 @@ import { normalizeMaintenanceUpdates, Route } from '@/routes/api/admin/maintenan
 const originalEnv = globalThis.__env__;
 
 afterEach(() => {
-  vi.unstubAllGlobals();
   globalThis.__env__ = originalEnv;
 });
 
@@ -212,6 +211,70 @@ describe('POST /api/admin/maintenances', () => {
 
     expect(response.status).toBe(400);
     expect(put).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/admin/maintenances', () => {
+  function stubHubWithCurrent() {
+    const saved: unknown[] = [];
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        saved.push(typeof init.body === 'string' ? JSON.parse(init.body) : init?.body);
+        return new Response(null, { status: 204 });
+      }
+      return Response.json([current]);
+    });
+    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+    return saved;
+  }
+
+  const putRequest = (body: unknown) =>
+    new Request('https://flarewatch.test/api/admin/maintenances', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('persists cleared, kept and changed fields and ignores forged identity fields', async () => {
+    const saved = stubHubWithCurrent();
+    const now = Date.parse('2026-06-10T12:00:00Z');
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+
+    const response = await getHandler('PUT')({
+      request: putRequest({
+        id: 'maint_1',
+        updates: {
+          title: 'Rescheduled upgrade',
+          end: null,
+          monitors: null,
+          id: 'maint_evil',
+          createdAt: 123,
+          updatedAt: 123,
+          note: 'forged',
+        },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body: unknown = await response.json();
+    expect(saved).toStrictEqual([body]);
+    expect(body).toEqual(
+      expect.objectContaining({
+        id: 'maint_1',
+        title: 'Rescheduled upgrade',
+        body: 'Database upgrade',
+        start: '2026-01-01T00:00:00.000Z',
+        color: 'amber',
+        createdAt: 0,
+        updatedAt: now,
+      }),
+    );
+    expect(body).not.toHaveProperty('end');
+    expect(body).not.toHaveProperty('monitors');
+    expect(body).not.toHaveProperty('note');
+    expect(Object.keys(body as object).sort()).toEqual(
+      ['body', 'color', 'createdAt', 'id', 'start', 'title', 'updatedAt'].sort(),
+    );
   });
 });
 

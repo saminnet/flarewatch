@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
 import { IconCircleCheck, IconCircleX, IconRefresh } from '@tabler/icons-react';
 import type { CheckResultWithLocation } from '@flarewatch/shared';
 import { Button } from '@/components/ui/button';
@@ -12,31 +12,43 @@ interface CheckNowProps {
 
 /** Operator only. The result stays in this component: the hub records nothing for it. */
 export function CheckNow({ monitorId }: CheckNowProps) {
-  const check = useMutation({ mutationFn: () => requestCheckNow(monitorId) });
+  const [isPending, setIsPending] = useState(false);
+  const [result, setResult] = useState<CheckResultWithLocation | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function check() {
+    setIsPending(true);
+    setResult(null);
+    setError(null);
+    try {
+      setResult(await requestCheckNow(monitorId));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    }
+    setIsPending(false);
+  }
 
   return (
     <div className="mt-3 text-sm">
       <Button
         variant="outline"
         size="sm"
-        disabled={check.isPending}
-        aria-busy={check.isPending}
-        onClick={() => check.mutate()}
+        disabled={isPending}
+        aria-busy={isPending}
+        onClick={() => void check()}
       >
         <IconRefresh
           data-icon="inline-start"
           aria-hidden="true"
-          className={cn('size-4', check.isPending && 'animate-spin')}
+          className={cn('size-4', isPending && 'animate-spin')}
         />
         Check now
       </Button>
       <div role="status" aria-label="Check now result">
-        {check.isPending && <p className="mt-2 text-xs text-muted-foreground">Checking...</p>}
-        {check.isSuccess && <CheckNowResult check={check.data} />}
-        {check.isError && (
-          <p className="mt-2 text-xs text-status-down-text wrap-break-word">
-            {check.error.message}
-          </p>
+        {isPending && <p className="mt-2 text-xs text-muted-foreground">Checking...</p>}
+        {result && <CheckNowResult check={result} />}
+        {error !== null && (
+          <p className="mt-2 text-xs text-status-down-text wrap-break-word">{error}</p>
         )}
       </div>
     </div>

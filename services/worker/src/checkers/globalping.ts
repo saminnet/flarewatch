@@ -10,7 +10,6 @@ import {
   validateHttpResponse,
   parseTcpTarget,
   DEFAULT_HTTP_TIMEOUT,
-  DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   createLogger,
   getErrorMessage,
   readJsonUpTo,
@@ -150,18 +149,21 @@ async function validateHttpResult(
 
     if (tls.certificate?.expiresAt) {
       const { expiryDate, daysUntilExpiry } = calculateCertExpiry(tls.certificate.expiresAt);
-      ssl = { expiryDate, daysUntilExpiry };
-      if (tls.certificate.issuer?.commonName) {
-        ssl.issuer = tls.certificate.issuer.commonName;
-      }
-      if (tls.certificate.subject?.commonName) {
-        ssl.subject = tls.certificate.subject.commonName;
-      }
+      if (!Number.isFinite(expiryDate)) {
+        if (!error && target.sslCheckEnabled) error = 'Invalid certificate expiry date';
+      } else {
+        ssl = { expiryDate, daysUntilExpiry };
+        if (tls.certificate.issuer?.commonName) {
+          ssl.issuer = tls.certificate.issuer.commonName;
+        }
+        if (tls.certificate.subject?.commonName) {
+          ssl.subject = tls.certificate.subject.commonName;
+        }
 
-      if (!error && target.sslCheckEnabled) {
-        const threshold = target.sslCheckDaysBeforeExpiry ?? DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS;
-        if (daysUntilExpiry <= threshold) {
-          error = `Certificate expires in ${daysUntilExpiry} days (threshold: ${threshold})`;
+        if (!error && target.sslCheckEnabled) {
+          if (expiryDate <= Math.floor(Date.now() / 1000)) {
+            error = 'Certificate has expired';
+          }
         }
       }
     }
@@ -294,7 +296,7 @@ export class GlobalPingChecker {
         budget.subrequests -= 1;
       }
       const timeout = Math.min(options.timeout ?? API_TIMEOUT, remaining);
-      return this.fetcher(input, { ...options, timeout });
+      return this.fetcher(input, { ...options, timeout, redirect: 'error' });
     };
     try {
       const config = parseProxyUrl(url);

@@ -1,5 +1,22 @@
 import { Incidents } from './incidents';
 import type { Sql } from './sql';
+import { parseJson } from './sql';
+import * as z from 'zod/mini';
+import type { LatencySample } from '@flarewatch/shared';
+
+const hourSchema = z.record(z.string(), z.record(z.string(), z.tuple([z.number(), z.string()])));
+const latestSchema = z.record(
+  z.string(),
+  z.object({ ping: z.number(), loc: z.string(), time: z.number() }),
+);
+
+export function parseHour(data: string | null) {
+  return hourSchema.safeParse(parseJson(data)).data ?? {};
+}
+
+export function parseLatest(data: string | null) {
+  return latestSchema.safeParse(parseJson(data)).data ?? {};
+}
 
 // Durable Object SQLite has no PRAGMA user_version, so applied steps are rows
 // in _migrations. Append new steps; never edit a shipped one.
@@ -79,6 +96,63 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
     `ALTER TABLE meta ADD COLUMN runs INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE incidents ADD COLUMN alert_run INTEGER`,
     `ALTER TABLE incidents ADD COLUMN reminders INTEGER NOT NULL DEFAULT 0`,
+  ],
+  [
+    `ALTER TABLE monitors ADD COLUMN failure_count INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE monitors ADD COLUMN first_failure_at INTEGER`,
+  ],
+  [
+    `ALTER TABLE monitors ADD COLUMN warning TEXT`,
+    `CREATE TABLE expiry_alerts (
+      monitor_id TEXT NOT NULL,
+      expiry_date INTEGER NOT NULL,
+      run INTEGER NOT NULL,
+      PRIMARY KEY (monitor_id, expiry_date)
+    ) WITHOUT ROWID`,
+  ],
+  [`CREATE TABLE announcements (id TEXT PRIMARY KEY, data TEXT NOT NULL) WITHOUT ROWID`],
+  [
+    `ALTER TABLE meta ADD COLUMN latest TEXT NOT NULL DEFAULT '{}'`,
+    (sql) => {
+      const ids = new Set(sql.exec<{ id: string }>('SELECT id FROM monitors').map(({ id }) => id));
+      const latest = new Map<string, LatencySample>();
+      const [newest] = sql.exec<{ hour: number }>(
+        'SELECT hour FROM latency ORDER BY hour DESC LIMIT 1',
+      );
+      if (!newest) return;
+      let before = newest.hour + 1;
+      for (;;) {
+        const [hour] = sql.exec<{ hour: number; data: string }>(
+          'SELECT hour, data FROM latency WHERE hour < ? AND hour >= ? ORDER BY hour DESC LIMIT 1',
+          before,
+          newest.hour - 12,
+        );
+        if (!hour) break;
+        for (const [at, samples] of Object.entries(parseHour(hour.data)).sort(
+          ([a], [b]) => Number(b) - Number(a),
+        )) {
+          for (const [id, [ping, loc]] of Object.entries(samples)) {
+            if (ids.has(id) && !latest.has(id)) latest.set(id, { ping, loc, time: Number(at) });
+          }
+        }
+        before = hour.hour;
+      }
+      sql.exec(
+        "UPDATE meta SET latest = ? WHERE key = 'last_update'",
+        JSON.stringify(Object.fromEntries(latest)),
+      );
+    },
+  ],
+  [
+    `CREATE TABLE pending_recoveries (
+      monitor_id TEXT PRIMARY KEY,
+      incident INTEGER NOT NULL,
+      reopened_at INTEGER,
+      start INTEGER NOT NULL,
+      at INTEGER NOT NULL,
+      claimed_run INTEGER,
+      claimed_at INTEGER
+    ) WITHOUT ROWID`,
   ],
 ];
 

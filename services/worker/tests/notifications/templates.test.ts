@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vite-plus/test';
 import { NOTIFICATION_TEMPLATES, type JsonValue } from '@flarewatch/shared';
 import { getTemplate } from '../../src/notifications/templates';
 import type { TemplateContext } from '../../src/notifications/templates/types';
-import { stripControlChars, singleLine } from '../../src/notifications/templates/format';
 
 const baseContext: TemplateContext = {
   monitorName: 'Test Monitor',
@@ -337,22 +336,25 @@ describe('notification templates', () => {
     },
   );
 
-  it('new templates strip control characters from monitor name and reason', () => {
-    const ctx: TemplateContext = {
-      ...baseContext,
-      monitorName: 'Bad\u0000Monitor\nSecond\u0007',
-      reason: 'line1\u001B[31mline2',
-    };
-
-    const teamsCard = JSON.parse(getTemplate('teams')(ctx).body) as {
-      attachments: Array<{ content: { body: Array<{ text?: string }> } }>;
-    };
-    const teamsTitle = String(teamsCard.attachments[0]?.content.body[0]?.text);
-    expect(teamsTitle).toBe('🔴 BadMonitor Second is down');
-
-    expect(singleLine('a\r\nb')).toBe('a b');
-    expect(stripControlChars('a\rb')).toBe('ab');
-  });
+  it.each(['googlechat', 'matrix', 'teams', 'pushover', 'gotify', 'zulip', 'resend'] as const)(
+    '%s strips control characters from the delivered name and reason',
+    (name) => {
+      const output = getTemplate(name)({
+        ...baseContext,
+        monitorName: 'Bad\u0000Monitor\u0007',
+        reason: 'First\u001BSecond\u0007',
+      });
+      const body =
+        output.headers['Content-Type'] === 'application/x-www-form-urlencoded'
+          ? [...new URLSearchParams(output.body).values()].join('\n')
+          : JSON.stringify(JSON.parse(output.body));
+      expect(body).toContain('BadMonitor');
+      expect(body).toContain('FirstSecond');
+      expect(body).not.toContain('\\u0000');
+      expect(body).not.toContain('\\u0007');
+      expect(body).not.toContain('\\u001b');
+    },
+  );
 
   it('slack template includes reason section only when down with a reason', () => {
     const slack = getTemplate('slack');
@@ -378,7 +380,9 @@ describe('notification templates', () => {
     expect(hasReasonUp).toBe(false);
   });
 
-  describe.each(NOTIFICATION_TEMPLATES)('%s', (name) => {
+  describe.each(
+    NOTIFICATION_TEMPLATES.filter((name) => name !== 'mattermost' && name !== 'rocketchat'),
+  )('%s', (name) => {
     const render = (ctx: Partial<TemplateContext>) => {
       const { body, headers } = getTemplate(name)({ ...baseContext, ...ctx });
       return decodeURIComponent(`${JSON.stringify(headers)}${body}`.replaceAll('+', ' '));

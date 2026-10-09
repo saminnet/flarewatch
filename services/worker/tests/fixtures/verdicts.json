@@ -86,8 +86,8 @@
   {
     "name": "json value: a string with a line separator prints it as is",
     "replies": [{"body": "{\"v\":\"x\"}"}],
-    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": "ab"},
-    "result": {"ok": false, "error": "JSON value at $.v is not \"ab\""}
+    "monitor": {"responseJsonPath": "$.v", "responseJsonValue": "a\u2028b"},
+    "result": {"ok": false, "error": "JSON value at $.v is not \"a\u2028b\""}
   },
   {
     "name": "json value: a string with control characters escapes them",

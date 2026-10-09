@@ -2,9 +2,13 @@ import { DurableObject } from 'cloudflare:workers';
 import * as z from 'zod/mini';
 import {
   isMaintenanceActive,
+  coversMonitor,
+  DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   maintenanceExpiresAt,
+  parseAnnouncements,
   parseHeartbeatSignal,
   parseMaintenances,
+  type Announcement,
   type Maintenance,
   parseHeartbeatState,
   type CheckResult,
@@ -20,7 +24,7 @@ import type { Env } from '../env';
 import { Alerts, type Alert, type AlertOutcome, type AlertPolicy } from './alerts';
 import { applyPing, evaluateHeartbeat, withMisses, type PingKind } from './heartbeat';
 import { Incidents, type IncidentUpdate } from './incidents';
-import { migrate } from './schema';
+import { migrate, parseHour, parseLatest } from './schema';
 import { durableObjectSql, parseJson, type Sql } from './sql';
 
 /** How long History keeps closed incidents and ended maintenance windows. */
@@ -28,13 +32,22 @@ const HISTORY_RETENTION_SECONDS = 90 * 24 * 60 * 60;
 const LATENCY_RETENTION_SECONDS = 12 * 60 * 60;
 const HOUR = 60 * 60;
 const MAX_MAINTENANCES = 100;
+const MAX_ANNOUNCEMENTS = 50;
+const MAX_EXPIRY_CLAIMS = 32;
 
 /** A check monitor's result, or a heartbeat monitor, which the hub evaluates from its pings. */
 export type CheckRecord =
-  | { monitor: MonitorTarget; check: CheckResultWithLocation }
+  | { monitor: MonitorTarget; check?: CheckResultWithLocation }
   | { monitor: HeartbeatMonitor };
 
-type MonitorRow = { id: string; started_at: number | null; heartbeat: string | null };
+type MonitorRow = {
+  id: string;
+  started_at: number | null;
+  heartbeat: string | null;
+  failure_count: number;
+  first_failure_at: number | null;
+  warning: string | null;
+};
 
 /** One check run's samples: monitor id to [latency, location]. */
 type Samples = Record<string, [number, string]>;
@@ -60,6 +73,26 @@ export class MonitorHub extends DurableObject<Env> {
     this.alerts = new Alerts(this.sql);
   }
 
+  claimInitialCheck(nowMs: number): boolean {
+    return this.sql.transaction(() => {
+      const rows = this.sql.exec<{ key: string; value: string }>(
+        "SELECT key, value FROM meta WHERE key IN ('last_update', 'initial_trigger')",
+      );
+      if (
+        rows.some(({ key, value }) =>
+          key === 'last_update' ? Number(value) > 0 : nowMs - Number(value) < 60_000,
+        )
+      )
+        return false;
+      this.sql.exec(
+        `INSERT INTO meta (key, value) VALUES ('initial_trigger', ?)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+        String(nowMs),
+      );
+      return true;
+    });
+  }
+
   /**
    * Stores one check run. With a policy (a webhook is configured) it also
    * decides the run's alerts; confirmAlerts records how each one's delivery went.
@@ -70,20 +103,25 @@ export class MonitorHub extends DurableObject<Env> {
     policy?: AlertPolicy,
   ): { updates: IncidentUpdate[]; alerts: Alert[] } {
     return this.sql.transaction(() => {
-      const [last] = this.sql.exec<{ value: string; runs: number }>(
-        "SELECT value, runs FROM meta WHERE key = 'last_update'",
+      const [last] = this.sql.exec<{ value: string; runs: number; latest: string }>(
+        "SELECT value, runs, latest FROM meta WHERE key = 'last_update'",
       );
       // A run that outlasted a later one would put older results over newer ones.
       if (last && now < Number(last.value)) return { updates: [], alerts: [] };
       const run = (last?.runs ?? 0) + 1;
       const rows = new Map(
         this.sql
-          .exec<MonitorRow>('SELECT id, started_at, heartbeat FROM monitors')
+          .exec<MonitorRow>(
+            'SELECT id, started_at, heartbeat, failure_count, first_failure_at, warning FROM monitors',
+          )
           .map((row) => [row.id, row]),
       );
       const open = this.incidents.open();
       const updates: IncidentUpdate[] = [];
       const samples: Samples = {};
+      const latest = new Map(Object.entries(parseLatest(last?.latest ?? null)));
+      const warningAlerts: Alert[] = [];
+      const warnings = new Map([...rows].map(([id, row]) => [id, parseWarning(row.warning)]));
       const maintenances = this.maintenances();
       const activeMaintenances = maintenances.filter((maintenance) =>
         isMaintenanceActive(maintenance, now * 1000),
@@ -94,10 +132,17 @@ export class MonitorHub extends DurableObject<Env> {
         const row = rows.get(monitor.id);
         let result: CheckResult | undefined;
 
-        if ('check' in record) {
-          result = record.check.result;
+        if (record.monitor.method !== 'HEARTBEAT') {
+          const check = 'check' in record ? record.check : undefined;
+          if (!check) continue;
+          result = check.result;
           // A proxy names its own location; a long one would bloat the hour's row.
-          samples[monitor.id] = [result.latency ?? 0, record.check.location.slice(0, 64)];
+          samples[monitor.id] = [result.latency ?? 0, check.location.slice(0, 64)];
+          latest.set(monitor.id, {
+            ping: result.latency ?? 0,
+            loc: check.location.slice(0, 64),
+            time: now,
+          });
           // Left from when this id was a heartbeat monitor; the view would show the job's status.
           if (row?.heartbeat) {
             this.sql.exec('UPDATE monitors SET heartbeat = NULL WHERE id = ?', monitor.id);
@@ -125,7 +170,47 @@ export class MonitorHub extends DurableObject<Env> {
             now,
           );
         }
-        updates.push(this.incidents.apply(monitor.id, result, open.get(monitor.id), now));
+        let warning = result.ok ? result.warning : undefined;
+        if (result.ok && monitor.method !== 'HEARTBEAT' && monitor.sslCheckEnabled && result.ssl) {
+          const ssl = result.ssl;
+          if (ssl.expiryDate <= now)
+            result = { ok: false, error: 'Certificate has expired', latency: result.latency };
+          else if (
+            ssl.daysUntilExpiry <=
+            (monitor.sslCheckDaysBeforeExpiry ?? DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS)
+          ) {
+            warning = {
+              text: `Certificate expires on ${new Date(ssl.expiryDate * 1000).toISOString().slice(0, 10)} (${ssl.daysUntilExpiry} days remaining)`,
+              expiryDate: ssl.expiryDate,
+            };
+          }
+        }
+        const warningJson = warning ? JSON.stringify(warning) : null;
+        if (warningJson !== (row?.warning ?? null))
+          this.sql.exec('UPDATE monitors SET warning = ? WHERE id = ?', warningJson, monitor.id);
+        warnings.set(monitor.id, warning);
+        let firstFailure = now;
+        if (monitor.method !== 'HEARTBEAT') {
+          const count = row?.failure_count ?? 0;
+          if (result.ok && count > 0) {
+            this.sql.exec(
+              'UPDATE monitors SET failure_count = 0, first_failure_at = NULL WHERE id = ?',
+              monitor.id,
+            );
+          } else if (!result.ok && !open.has(monitor.id) && (monitor.downAfterChecks ?? 1) > 1) {
+            firstFailure = row?.first_failure_at ?? now;
+            this.sql.exec(
+              'UPDATE monitors SET failure_count = ?, first_failure_at = ? WHERE id = ?',
+              count + 1,
+              firstFailure,
+              monitor.id,
+            );
+            if (count + 1 < monitor.downAfterChecks!) continue;
+          }
+        }
+        updates.push(
+          this.incidents.apply(monitor.id, result, open.get(monitor.id), now, firstFailure),
+        );
       }
 
       if (Object.keys(samples).length > 0) {
@@ -139,6 +224,51 @@ export class MonitorHub extends DurableObject<Env> {
           `$."${now}"`,
           json,
         );
+      }
+      if (policy) {
+        for (const { monitor } of records) {
+          const warning = warnings.get(monitor.id);
+          if (
+            !warning ||
+            policy.skipIds.includes(monitor.id) ||
+            activeMaintenances.some((maintenance) => coversMonitor(maintenance, monitor.id))
+          )
+            continue;
+          this.sql.exec(
+            'DELETE FROM expiry_alerts WHERE monitor_id = ? AND expiry_date < ?',
+            monitor.id,
+            now - HISTORY_RETENTION_SECONDS,
+          );
+          const claimed = this.sql.exec(
+            `INSERT INTO expiry_alerts (monitor_id, expiry_date, run) VALUES (?, ?, ?)
+               ON CONFLICT DO NOTHING RETURNING monitor_id`,
+            monitor.id,
+            warning.expiryDate,
+            run,
+          );
+          if (claimed.length > 0) {
+            this.sql.exec(
+              `DELETE FROM expiry_alerts WHERE monitor_id = ? AND expiry_date IN (
+                 SELECT expiry_date FROM expiry_alerts WHERE monitor_id = ?
+                 ORDER BY run DESC, expiry_date DESC LIMIT -1 OFFSET ?
+               )`,
+              monitor.id,
+              monitor.id,
+              MAX_EXPIRY_CLAIMS,
+            );
+            warningAlerts.push({
+              monitorId: monitor.id,
+              incident: 0,
+              kind: 'expiry',
+              incidentStartTime: now,
+              error: warning.text,
+              alsoDown: [],
+              reopenedAt: null,
+              run,
+              expiryDate: warning.expiryDate,
+            });
+          }
+        }
       }
       this.sql.exec(
         'DELETE FROM latency WHERE hour < ?',
@@ -164,10 +294,18 @@ export class MonitorHub extends DurableObject<Env> {
         }
       }
       this.sql.exec(
-        `INSERT INTO meta (key, value, runs) VALUES ('last_update', ?, ?)
-         ON CONFLICT (key) DO UPDATE SET value = excluded.value, runs = excluded.runs`,
+        `INSERT INTO meta (key, value, runs, latest) VALUES ('last_update', ?, ?, ?)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, runs = excluded.runs, latest = excluded.latest`,
         String(now),
         run,
+        JSON.stringify(
+          Object.fromEntries(
+            records.flatMap(({ monitor }) => {
+              const sample = latest.get(monitor.id);
+              return monitor.method !== 'HEARTBEAT' && sample ? [[monitor.id, sample]] : [];
+            }),
+          ),
+        ),
       );
       const alerts = policy
         ? this.alerts.decide(
@@ -183,16 +321,13 @@ export class MonitorHub extends DurableObject<Env> {
             policy,
           )
         : [];
-      return { updates, alerts };
+      if (!policy) this.sql.exec('DELETE FROM pending_recoveries');
+      return { updates, alerts: [...alerts, ...warningAlerts] };
     });
   }
 
-  /**
-   * Records how each alert's delivery went. Returns the recovery alerts of
-   * delivered outages that ended while they were being sent.
-   */
-  confirmAlerts(outcomes: AlertOutcome[]): Alert[] {
-    return this.sql.transaction(() => this.alerts.record(outcomes));
+  confirmAlerts(outcomes: AlertOutcome[]): void {
+    this.sql.transaction(() => this.alerts.record(outcomes));
   }
 
   /** Records a job's ping. Its status changes at the next check run. */
@@ -230,30 +365,29 @@ export class MonitorHub extends DurableObject<Env> {
   }
 
   view(): HubView {
-    const [meta] = this.sql.exec<{ value: string }>(
-      "SELECT value FROM meta WHERE key = 'last_update'",
+    const [meta] = this.sql.exec<{ value: string; latest: string }>(
+      "SELECT value, latest FROM meta WHERE key = 'last_update'",
     );
     const incidents = this.incidents.byMonitor();
-    const [hour] = this.sql.exec<{ data: string }>(
-      'SELECT data FROM latency ORDER BY hour DESC LIMIT 1',
-    );
-    const runs = parseHour(hour?.data ?? null);
-    const latestAt = Math.max(...Object.keys(runs).map(Number));
-    const latest = runs[latestAt] ?? {};
+    const latest = parseLatest(meta?.latest ?? null);
 
     const monitors: Record<string, MonitorView> = {};
-    for (const row of this.sql.exec<MonitorRow>('SELECT id, started_at, heartbeat FROM monitors')) {
+    for (const row of this.sql.exec<MonitorRow>(
+      'SELECT id, started_at, heartbeat, warning FROM monitors',
+    )) {
       const list = incidents.get(row.id) ?? [];
       const heartbeat = readHeartbeat(row);
       const sample = Object.prototype.hasOwnProperty.call(latest, row.id)
         ? latest[row.id]
         : undefined;
       const down = list[list.length - 1]?.end === undefined && list.length > 0;
+      const warning = parseWarning(row.warning);
       monitors[row.id] = {
-        status: down ? 'down' : (heartbeat?.status ?? 'up'),
+        status: down ? 'down' : (heartbeat?.status ?? (warning ? 'degraded' : 'up')),
+        ...(warning && { warning: warning.text }),
         incidents: list,
         ...(row.started_at !== null && { startedAt: row.started_at }),
-        ...(sample && { latest: { ping: sample[0], loc: sample[1], time: latestAt } }),
+        ...(sample && { latest: sample }),
         ...(heartbeat && { heartbeat }),
       };
     }
@@ -262,6 +396,7 @@ export class MonitorHub extends DurableObject<Env> {
       lastUpdate: meta ? Number(meta.value) : 0,
       monitors,
       maintenances: this.maintenances(),
+      announcements: this.announcements(),
     };
   }
 
@@ -298,6 +433,37 @@ export class MonitorHub extends DurableObject<Env> {
     return row !== undefined;
   }
 
+  announcements(): Announcement[] {
+    return parseAnnouncements(
+      this.sql
+        .exec<{ data: string }>('SELECT data FROM announcements')
+        .map(({ data }) => parseJson(data)),
+    ).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  putAnnouncement(announcement: Announcement): boolean {
+    const [existing] = this.sql.exec('SELECT 1 FROM announcements WHERE id = ?', announcement.id);
+    if (!existing) {
+      const [row] = this.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM announcements');
+      if ((row?.count ?? 0) >= MAX_ANNOUNCEMENTS) return false;
+    }
+    this.sql.exec(
+      `INSERT INTO announcements (id, data) VALUES (?, ?)
+       ON CONFLICT (id) DO UPDATE SET data = excluded.data`,
+      announcement.id,
+      JSON.stringify(announcement),
+    );
+    return true;
+  }
+
+  deleteAnnouncement(id: string): boolean {
+    const [row] = this.sql.exec<{ id: string }>(
+      'DELETE FROM announcements WHERE id = ? RETURNING id',
+      id,
+    );
+    return row !== undefined;
+  }
+
   /** The last 12 hours before `now`, oldest first. */
   latency(monitorId: string, now: number): LatencySample[] {
     const cutoff = now - LATENCY_RETENTION_SECONDS;
@@ -318,9 +484,8 @@ export class MonitorHub extends DurableObject<Env> {
   }
 }
 
-/** An hour's check runs: run time to that run's samples. */
-const hourSchema = z.record(z.string(), z.record(z.string(), z.tuple([z.number(), z.string()])));
+const warningSchema = z.object({ text: z.string(), expiryDate: z.number() });
 
-function parseHour(data: string | null): Record<string, Samples> {
-  return hourSchema.safeParse(parseJson(data)).data ?? {};
+function parseWarning(data: string | null) {
+  return warningSchema.safeParse(parseJson(data)).data;
 }

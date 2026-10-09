@@ -15,6 +15,7 @@ As the operator, the same pages show you everything:
 - the ping URL of each heartbeat
 - a **Check now** button on each check monitor's page
 - buttons to add, edit and delete maintenance windows on History
+- an announcement form on History, and controls to edit or delete announcements
 
 **Check now** runs that monitor's check once and shows the result under the button: up or down, the response time, where it ran from, and the error if it failed. It saves nothing. The page, History and alerts still show the last scheduled check run until the next one. Each press counts against the sign-in limit of 5 per minute per IP, because each one sends a real request to the target, directly or through Globalping or a proxy.
 
@@ -112,9 +113,34 @@ Months with fewer than 31 days get no run, so this one skips November and runs a
 - The dashboard shows the current or next run. History lists each run in its month. Covered monitors send no down alerts during a run.
 - History keeps a repeating window for 90 days after `until` plus the length of one run. One without `until` stays until you delete it.
 
+## Announcements
+
+Sign in and open History, then choose **Add announcement** beside **Add maintenance window**. Give it a title and body, and optionally an end time in UTC. Active announcements appear on the dashboard under the status banner, newest first. You edit and delete them on History, as you do maintenance windows. Titles and bodies show exactly as typed. HTML tags and Markdown appear as text, so `<b>` shows as `<b>` and doesn't make text bold.
+
+The hub keeps at most 50 announcements. A title needs text and can be at most 200 characters. A body needs text and can be at most 2000 characters. Ended announcements remain in the hub and feed until you delete them. History lists them for the operator, so you can edit or delete an ended announcement too.
+
+Scripts use `/api/admin/announcements` with the [same authentication as maintenance](#admin-endpoints):
+
+| Method   | Body                                                                        | Result                                                                                               |
+| -------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GET`    | None                                                                        | All announcements, newest first.                                                                     |
+| `POST`   | `{"title":"Update","body":"Work is complete","end":"2026-12-01T12:00:00Z"}` | The saved announcement, with its `id` and timestamps, and status 201. Omit `end` to keep showing it. |
+| `PUT`    | `{"id":"ann_...","updates":{"body":"New details","end":null}}`              | The saved announcement. Omitted fields stay unchanged. `end: null` clears the end time.              |
+| `DELETE` | `{"id":"ann_..."}`                                                          | Status 204, or 404 for an unknown id.                                                                |
+
+A wrong field type or a limit violation gets 400 with an error that names the field. At 50 announcements, you can still edit or delete existing records.
+
+## Atom feed
+
+Subscribe to `/feed.atom` in an Atom reader. The page head also advertises the feed for readers that discover subscriptions from a page URL.
+
+The feed lists the newest 50 public incidents, maintenance windows and announcements, ordered by incident start, maintenance start or announcement creation time. Entries keep their IDs when you edit an announcement, reschedule maintenance or an incident recovers. Repeating maintenance has one entry per stored window. Ended announcements stay in the feed until deleted.
+
+The feed uses the visitor snapshot, including the same 20-second hub cache as the page. Its `updated` value comes from the last check run, so an operator edit updates an entry before the feed timestamp advances. Private monitors and maintenance windows that cover only private monitors never appear. Text remains plain text. If the hub cannot answer, the feed has no entries and uses the Unix epoch as its update time.
+
 ## Private page
 
-To keep the whole page to yourself, set `visibility: 'private'` in `packages/config/src/public.ts`. Visitors then get only the sign-in page. The dashboard, History, monitor pages, embeds, badges and the JSON API are closed to them. Heartbeat pings keep working.
+To keep the whole page to yourself, set `visibility: 'private'` in `packages/config/src/public.ts`. Visitors then get only the sign-in page. The dashboard, History, monitor pages, embeds, badges, Atom feed and the JSON API are closed to them. Heartbeat pings keep working.
 
 ## Page settings
 
@@ -130,6 +156,10 @@ To keep the whole page to yourself, set `visibility: 'private'` in `packages/con
 | `apiCorsOrigins`  | Origins allowed to call the JSON API. Defaults to any.                                                    |
 
 Colours and the corner radius are CSS variables at the top of [`apps/status-page/src/styles.css`](../apps/status-page/src/styles.css), in a `:root` block for light mode and a `.dark` block for dark mode. Edit them there.
+
+### Upstream demo
+
+The upstream deployment uses `packages/config/src/demo/worker.ts` and `demo/public.ts`. It keeps the six original monitor IDs for their stored history, shows **FlareWatch demo**, and links to **Deploy your own**. The deploy workflow copies those files over the starter files only in `saminnet/flarewatch`. Forks continue to edit `packages/config/src/worker.ts` and `public.ts`.
 
 ## Statuses
 
@@ -147,12 +177,14 @@ Only down counts against uptime.
 
 ## API, badges and embeds
 
-| URL                       | Returns                                                                                                                                              |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/data`               | Current status of every public monitor, as JSON. Each has a `status` from [above](#statuses), and `up`, which is false only when `status` is `down`. |
-| `/api/maintenances`       | Maintenance windows, as JSON.                                                                                                                        |
-| `/api/badge?id=<monitor>` | Badge data for shields.io: up, degraded or down. `label`, `up`, `degraded`, `down`, `colorUp`, `colorDegraded` and `colorDown` change it.            |
-| `/embed/<monitor>`        | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`.                                                                   |
+| URL                           | Returns                                                                                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/data`                   | Current status of every public monitor, as JSON. Each has a `status` from [above](#statuses), and `up`, which is false only when `status` is `down`. |
+| `/api/maintenances`           | Maintenance windows, as JSON.                                                                                                                        |
+| `/api/badge?id=<monitor>`     | Badge data for shields.io: up, degraded or down. `label`, `up`, `degraded`, `down`, `colorUp`, `colorDegraded` and `colorDown` change it.            |
+| `/api/badge.svg?id=<monitor>` | A flat SVG badge with the same parameters as the JSON badge.                                                                                         |
+| `/feed.atom`                  | An Atom 1.0 feed of public incidents, maintenance windows and announcements.                                                                         |
+| `/embed/<monitor>`            | A small status card for an iframe. Add `theme=light` or `dark`, or `minimal=true`.                                                                   |
 
 Other sites can show `/embed` in a frame. All other pages refuse to load in a frame. This stops other sites from framing your sign-in page.
 
@@ -162,10 +194,11 @@ Every page sends a Content-Security-Policy header. It lets a page run scripts on
 
 These need the operator's sign-in: the session cookie, or the password sign-in's username and password in a Basic `Authorization` header. Each Basic call counts against the sign-in limit of 5 per minute per IP, and so does every check-now call, signed in or not. Answers are never cached. A call without the operator's sign-in gets 401. A call gets 403 when no sign-in is set up, or when a write comes from another origin. A call over the sign-in limit gets 429 with `Too many attempts`.
 
-| URL                       | Does                                                                                               |
-| ------------------------- | -------------------------------------------------------------------------------------------------- |
-| `/api/admin/maintenances` | Lists, adds, edits and deletes [maintenance windows](#maintenance).                                |
-| `/api/admin/check`        | `POST {"id": "<monitor>"}` runs that check monitor once and returns the result, without saving it. |
+| URL                        | Does                                                                                               |
+| -------------------------- | -------------------------------------------------------------------------------------------------- |
+| `/api/admin/maintenances`  | Lists, adds, edits and deletes [maintenance windows](#maintenance).                                |
+| `/api/admin/announcements` | Lists, adds, edits and deletes [announcements](#announcements).                                    |
+| `/api/admin/check`         | `POST {"id": "<monitor>"}` runs that check monitor once and returns the result, without saving it. |
 
 ```bash
 curl -fsS -u 'admin:your-password' -H 'Content-Type: application/json' \
@@ -178,8 +211,16 @@ curl -fsS -u 'admin:your-password' -H 'Content-Type: application/json' \
 
 A failed check has `"ok": false` and an `error`. An unknown id gets a 404. A heartbeat id gets a 400, because a heartbeat has no check to run.
 
-The badge route returns JSON for [shields.io's endpoint badge](https://shields.io/badges/endpoint-badge), not an image. Pass it to shields.io, URL-encoded:
+The JSON badge route works with [shields.io's endpoint badge](https://shields.io/badges/endpoint-badge). Pass it to shields.io, URL-encoded:
 
 ```md
 ![API status](https://img.shields.io/endpoint?url=https%3A%2F%2Fstatus.example.com%2Fapi%2Fbadge%3Fid%3Dapi)
 ```
+
+For an image served by your own status page, use the SVG route:
+
+```md
+![API status](https://status.example.com/api/badge.svg?id=api&label=API)
+```
+
+The SVG badge caps the label and each message at 64 characters. It accepts shields.io named colors or three- and six-digit hex colors, with or without `#`. Other colors use the status default. Query text renders as text, including `<script>`. SVG responses use the JSON badge's cache headers, `nosniff`, and `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`.

@@ -1,4 +1,10 @@
-import type { HeartbeatState, Incident, LatencySample, Maintenance } from '@flarewatch/shared';
+import type {
+  Announcement,
+  HeartbeatState,
+  Incident,
+  LatencySample,
+  Maintenance,
+} from '@flarewatch/shared';
 
 /** What the browser tests start the hub with, keyed by monitor id. */
 export type HubFixture = {
@@ -8,4 +14,5 @@ export type HubFixture = {
   latency: Record<string, LatencySample[]>;
   heartbeats: Record<string, HeartbeatState>;
   maintenances: Maintenance[];
+  announcements: Announcement[];
 };

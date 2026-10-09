@@ -20,7 +20,7 @@ export function discordTemplate(ctx: TemplateContext): TemplateOutput {
   const alsoDown = alsoDownList(ctx, inlineCode);
   if (alsoDown) fields.push({ name: 'Also down', value: alsoDown, inline: false });
 
-  fields.push({ name: 'Target', value: ctx.targetUrl, inline: false });
+  if (ctx.targetUrl) fields.push({ name: 'Target', value: ctx.targetUrl, inline: false });
 
   const payload = {
     embeds: [

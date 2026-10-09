@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { isJsonObject } from '@flarewatch/shared';
+import type { Session } from '@/lib/session';
 import { qk } from './keys';
 
 type LoginCredentials = {
@@ -67,6 +69,20 @@ export function useSignOut() {
       queryClient.removeQueries({ queryKey: qk.allLatency });
     },
   });
+}
+
+/** Tabs share one cookie. A tab that hears another account reloads, because its cache still holds the old one. */
+export function useAccountSync(session: Session): void {
+  const account = JSON.stringify([session.viewer, session.name, session.signedInAt]);
+
+  useEffect(() => {
+    const channel = new BroadcastChannel('flarewatch-account');
+    channel.onmessage = ({ data }) => {
+      if (data !== account) window.location.reload();
+    };
+    channel.postMessage(account);
+    return () => channel.close();
+  }, [account]);
 }
 
 export function isSessionExpiredError(error: unknown): boolean {

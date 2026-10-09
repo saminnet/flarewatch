@@ -8,6 +8,7 @@ vp config          # once, for the pre-commit hook
 
 vp check           # format, lint and types
 vp run test        # unit tests
+vp run --filter status-page doctor  # React Doctor: fails on any finding
 vp run build       # both Workers
 ```
 

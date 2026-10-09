@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSuspenseQuery } from '@tanstack/react-query';
+import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 import { getRouteApi } from '@tanstack/react-router';
 import { IconChevronLeft, IconChevronRight, IconCalendar, IconPlus } from '@tabler/icons-react';
 import type { Maintenance } from '@flarewatch/shared';
@@ -18,6 +19,10 @@ import { IncidentCard } from '@/components/history/incident-card';
 import { MaintenanceEventCard } from '@/components/history/maintenance-event-card';
 import { MaintenanceFormDialog } from '@/components/maintenance/maintenance-form-dialog';
 import { DeleteMaintenanceDialog } from '@/components/maintenance/delete-maintenance-dialog';
+import {
+  AddAnnouncementButton,
+  ManageAnnouncements,
+} from '@/components/announcements/announcement-controls';
 import { snapshotQuery } from '@/lib/query/monitors.queries';
 import { useAudience } from '@/lib/hooks/use-audience';
 import { useNow } from '@/lib/hooks/use-now';
@@ -37,10 +42,11 @@ type DialogTarget = { open: boolean; maintenance?: Maintenance; key: number };
 const CLOSED: DialogTarget = { open: false, key: 0 };
 
 export function HistoryPage() {
+  usePageHydrated();
   const audience = useAudience();
   const operator = audience === 'operator';
   const {
-    data: { monitors, state, maintenances },
+    data: { monitors, state, maintenances, announcements },
   } = useSuspenseQuery(snapshotQuery(audience));
   const [editing, setEditing] = useState(CLOSED);
   const [deleting, setDeleting] = useState(CLOSED);
@@ -103,14 +109,19 @@ export function HistoryPage() {
           <p className="mt-1 text-sm text-muted-foreground">Incidents and scheduled maintenance</p>
         </div>
         {operator && (
-          <Button onClick={() => setEditing(openFor())}>
-            <IconPlus className="size-4" />
-            Add maintenance window
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <AddAnnouncementButton />
+            <Button onClick={() => setEditing(openFor())}>
+              <IconPlus className="size-4" />
+              Add maintenance window
+            </Button>
+          </div>
         )}
       </div>
 
       {state && <UptimeCalendar monitors={monitors} state={state} selectedMonth={resolvedMonth} />}
+
+      <ManageAnnouncements announcements={announcements} nowMs={nowMs} operator={operator} />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">

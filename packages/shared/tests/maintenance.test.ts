@@ -131,6 +131,26 @@ function runs(window: Parameters<typeof maintenanceOccurrences>[0], from: string
 }
 
 describe('a repeating window', () => {
+  it('stops at the date-range guards', () => {
+    const day = 86_400_000;
+    const edge = 8.64e15 - 2 * day;
+    const window = { start: edge + day, end: edge + day + 1000, repeat: { every: 'day' as const } };
+    expect(nextMaintenanceOccurrence(window, edge)).toBeUndefined();
+    const ordinary = { start: 0, end: 1000, repeat: { every: 'day' as const } };
+    expect(nextMaintenanceOccurrence(ordinary, edge + day + 1000)).toBeUndefined();
+    expect(
+      nextMaintenanceOccurrence({ ...ordinary, repeat: { every: 'week', weekdays: [0] } }, edge),
+    ).toBeUndefined();
+  });
+
+  it.each([
+    { every: 'week' as const, weekdays: [] },
+    { every: 'month' as const, dayOfMonth: 32 },
+  ])('terminates when a stored repeat matches no day %j', (repeat) => {
+    const window = { start: 0, end: 1000, repeat };
+    expect(nextMaintenanceOccurrence(window, 0)).toBeUndefined();
+    expect(maintenanceOccurrences(window, 0, 86_400_000)).toEqual([]);
+  });
   it('keeps 09:00 Berlin time across the spring-forward change', () => {
     const window = {
       start: '2026-03-27T08:00:00Z',
