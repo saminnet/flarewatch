@@ -209,6 +209,115 @@ describe('subrequests per check run', () => {
     for (const monitor of monitors) expect(sent).toMatch(new RegExp(`${monitor.name}\\b`));
   });
 
+  const urlOf = (input: RequestInfo | URL) =>
+    input instanceof Request ? input.url : input.toString();
+
+  async function countRun(
+    monitors: MonitorTarget[],
+    fetchMock: ReturnType<typeof vi.fn<typeof fetch>>,
+    notification?: NotificationConfig,
+    scheduledAt?: number,
+  ) {
+    vi.stubGlobal('fetch', fetchMock);
+    const { hub, env } = createEnv();
+    const record = vi.spyOn(hub, 'record');
+    const confirmAlerts = vi.spyOn(hub, 'confirmAlerts');
+    await runChecks(
+      env,
+      createWorkerDeps({ monitors, ...(notification && { notification }) }),
+      scheduledAt,
+    );
+    return {
+      hub,
+      // The edge-location lookup adds one on a cold isolate; the test deps answer it without a fetch.
+      total:
+        fetchMock.mock.calls.length +
+        record.mock.calls.length +
+        confirmAlerts.mock.calls.length +
+        1,
+    };
+  }
+
+  it('skips the due checks a run cannot afford instead of going past 50', async () => {
+    const monitors = Array.from({ length: 48 }, (_, i) => createMonitor(`m${i}`));
+    const fetchMock = vi.fn<typeof fetch>(async (input) =>
+      urlOf(input) === HOOK ? new Response('ok') : new Response('down', { status: 503 }),
+    );
+
+    const { total, hub } = await countRun(monitors, fetchMock, { webhook: { url: HOOK } });
+
+    expect(total).toBeLessThanOrEqual(50);
+    const checked = Object.values(hub.view().monitors).filter(({ status }) => status === 'down');
+    expect(checked).toHaveLength(46);
+  });
+
+  it('counts a DOMAIN check as two requests when it decides what a run can afford', async () => {
+    const monitors: MonitorTarget[] = Array.from({ length: 25 }, (_, i) => ({
+      id: `d${i}`,
+      name: `Domain ${i}`,
+      method: 'DOMAIN',
+      target: `d${i}.com`,
+      checkEveryMinutes: 1,
+    }));
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(urlOf(input));
+      if (url.hostname === 'data.iana.org')
+        return Response.json({ services: [[['com'], ['https://rdap.example/']]] });
+      return Response.json({
+        objectClassName: 'domain',
+        ldhName: decodeURIComponent(url.pathname.split('/').pop()!),
+        events: [{ eventAction: 'expiration', eventDate: '2030-01-01T00:00:00Z' }],
+      });
+    });
+
+    const { total, hub } = await countRun(monitors, fetchMock);
+
+    expect(total).toBeLessThanOrEqual(50);
+    expect(Object.values(hub.view().monitors).filter(({ status }) => status === 'up').length).toBe(
+      23,
+    );
+  });
+
+  it('still runs the cheaper checks that fit after one that does not', async () => {
+    const gets = Array.from({ length: 47 }, (_, i) => createMonitor(`m${i}`));
+    const domain: MonitorTarget = {
+      id: 'domain',
+      name: 'Domain',
+      method: 'DOMAIN',
+      target: 'example.com',
+      checkEveryMinutes: 1,
+    };
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response('ok'));
+
+    // At this minute the list starts at its first entry, so the DOMAIN check comes up with one request left.
+    const { hub } = await countRun(
+      [...gets.slice(0, 46), domain, gets[46]!],
+      fetchMock,
+      undefined,
+      48 * 600_000 * 60_000,
+    );
+
+    const up = Object.entries(hub.view().monitors).filter(([, { status }]) => status === 'up');
+    expect(up).toHaveLength(47);
+    expect(up.map(([id]) => id)).not.toContain('domain');
+  });
+
+  it('skips a different check each minute when a run is one request short', async () => {
+    const monitors = Array.from({ length: 48 }, (_, i) => createMonitor(`m${i}`));
+    const checkedAt = async (minute: number) => {
+      const fetchMock = vi.fn<typeof fetch>(async () => new Response('ok'));
+      await countRun(monitors, fetchMock, undefined, minute * 60_000);
+      return new Set(fetchMock.mock.calls.map(([input]) => urlOf(input)));
+    };
+
+    const first = await checkedAt(29_000_000);
+    const second = await checkedAt(29_000_001);
+
+    expect(first.size).toBe(47);
+    expect(second.size).toBe(47);
+    expect(first).not.toEqual(second);
+  });
+
   /** Fetches and hub calls in one run of 45 monitors that confirm through a proxy. */
   async function countSubrequests(failing: number, notification?: NotificationConfig) {
     const monitors = Array.from({ length: 45 }, (_, i) => ({

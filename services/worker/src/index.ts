@@ -14,7 +14,7 @@ import { getHub, type Env } from './env';
 import { handleHubRequest } from './hub/routes';
 import { handlePing, handlePingUrl } from './ping';
 import { getEdgeLocation } from './utils/location';
-import { checkMonitor, runBudget } from './checkers';
+import { affordableChecks, checkInterval, checkMonitor, runBudget } from './checkers';
 import {
   createNotifier,
   formatNotificationMessage,
@@ -27,7 +27,7 @@ import type { CheckRecord } from './hub/monitor-hub';
 function checkDue(monitor: MonitorTarget, minute: number): boolean {
   let hash = 0;
   for (const char of monitor.id) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
-  const interval = monitor.checkEveryMinutes ?? (monitor.method === 'DOMAIN' ? 1440 : 1);
+  const interval = checkInterval(monitor);
   return minute % interval === hash % interval;
 }
 
@@ -94,13 +94,18 @@ export async function runChecks(
   const currentTime = Math.floor(startedAt / 1000);
   const webhooks = alertWebhooks(config, env.FLAREWATCH_WEBHOOKS);
   const notifier = deps.createNotifier(webhooks);
+  const minute = Math.floor((scheduledAt ?? startedAt) / 60000);
   const due = config.monitors.filter(
-    (monitor) =>
-      monitor.method !== 'HEARTBEAT' &&
-      checkDue(monitor, Math.floor((scheduledAt ?? startedAt) / 60000)),
+    (monitor) => monitor.method !== 'HEARTBEAT' && checkDue(monitor, minute),
   );
-  const dueIds = new Set(due.map((monitor) => monitor.id));
-  const budget = runBudget(due, webhooks.length, startedAt);
+  const checks = affordableChecks(due, webhooks.length, spentSubrequests, minute);
+  const dueIds = new Set(checks.map((monitor) => monitor.id));
+  if (checks.length < due.length) {
+    log.warn('Skipping checks the run has no subrequests for', {
+      monitors: due.filter(({ id }) => !dueIds.has(id)).map(({ id }) => id),
+    });
+  }
+  const budget = runBudget(checks, webhooks.length, startedAt);
   budget.subrequests = Math.max(0, budget.subrequests - spentSubrequests);
 
   const ctx: CheckContext = { env, budget };

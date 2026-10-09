@@ -166,6 +166,52 @@ export function planIssues(target: MonitorTarget): string[] {
   ].filter((issue) => issue !== undefined);
 }
 
+export function checkInterval(monitor: MonitorTarget): number {
+  return monitor.checkEveryMinutes ?? (monitor.method === 'DOMAIN' ? 1440 : 1);
+}
+
+function primaryCost(monitor: Monitor): number {
+  if (monitor.method === 'HEARTBEAT') return 0;
+  return monitor.method === 'DOMAIN' ? 2 : CAPABILITIES[plan(monitor)[0].adapter].subrequests;
+}
+
+/** Subrequests a run has for its checks once the hub and each webhook have theirs. */
+function checkRoom(webhooks: number): number {
+  return SUBREQUEST_LIMIT - RESERVED_SUBREQUESTS - webhooks;
+}
+
+/**
+ * The due checks a run can afford. The list starts at a point that moves each minute,
+ * so a run that is short of requests skips different checks each time.
+ */
+export function affordableChecks<T extends Monitor>(
+  due: readonly T[],
+  webhooks: number,
+  spentSubrequests: number,
+  minute: number,
+): T[] {
+  let left = checkRoom(webhooks) - spentSubrequests;
+  const checks: T[] = [];
+  for (let i = 0; i < due.length; i++) {
+    const monitor = due[(minute + i) % due.length]!;
+    const cost = primaryCost(monitor);
+    if (cost > left) continue;
+    left -= cost;
+    checks.push(monitor);
+  }
+  return checks;
+}
+
+export function capacityIssue(monitors: readonly Monitor[], webhooks: number): string | undefined {
+  const cost = monitors
+    .filter((monitor) => monitor.method !== 'HEARTBEAT' && checkInterval(monitor) === 1)
+    .reduce((sum, monitor) => sum + primaryCost(monitor), 0);
+  const room = checkRoom(webhooks);
+  return cost > room
+    ? `the checks due every minute need ${cost} subrequests, but a run has ${room} for checks`
+    : undefined;
+}
+
 /**
  * The budget for one check run starting now: its deadline and the subrequests left for extras.
  * Each webhook is held one request first, so the first alert of the run always goes out.
@@ -175,16 +221,10 @@ export function runBudget(
   webhooks: number,
   now = Date.now(),
 ): RunBudget {
-  let primaries = 0;
-  for (const monitor of monitors) {
-    if (monitor.method !== 'HEARTBEAT') {
-      primaries +=
-        monitor.method === 'DOMAIN' ? 2 : CAPABILITIES[plan(monitor)[0].adapter].subrequests;
-    }
-  }
+  const primaries = monitors.reduce((sum, monitor) => sum + primaryCost(monitor), 0);
   return {
     deadline: now + CHECK_WINDOW_MS,
-    subrequests: Math.max(0, SUBREQUEST_LIMIT - RESERVED_SUBREQUESTS - webhooks - primaries),
+    subrequests: Math.max(0, checkRoom(webhooks) - primaries),
   };
 }
 
