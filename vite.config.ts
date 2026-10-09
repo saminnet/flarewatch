@@ -1,5 +1,8 @@
 import { defineConfig } from 'vite-plus';
 
+// pnpm rewrites this file on every install.
+const ignorePnpmState = '!node_modules/.modules.yaml';
+
 export default defineConfig({
   lint: {
     ignorePatterns: [
@@ -141,21 +144,18 @@ export default defineConfig({
         cache: {
           input: [
             { auto: true },
+            ignorePnpmState,
             '!apps/status-page/node_modules/.vite/**',
             '!apps/status-page/node_modules/.vite-temp/**',
           ],
         },
       },
       'worker-test': {
-        command: 'vp test run',
+        // The fingerprint holds the listing of the worker's node_modules, so Vite's cache and config bundle stay out of it.
+        command: 'vp test run --configLoader runner',
         cwd: 'services/worker',
         cache: {
-          input: [
-            { auto: true },
-            '!services/worker/node_modules/.vite/**',
-            '!services/worker/node_modules/.vite-temp/**',
-            '!services/worker/tests/workerd/.wrangler/**',
-          ],
+          input: [{ auto: true }, ignorePnpmState, '!node_modules/.vite/**'],
         },
       },
       'shared-test': {
@@ -164,6 +164,7 @@ export default defineConfig({
         cache: {
           input: [
             { auto: true },
+            ignorePnpmState,
             '!packages/shared/node_modules/.vite/**',
             '!packages/shared/node_modules/.vite-temp/**',
           ],

@@ -30,13 +30,15 @@ jobs:
           cache: true
           run-install: true
 
+      # A key per run, because GitHub never overwrites a saved key. Vite+ fingerprints the inputs.
       - name: Restore task cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: task-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/.vite/task-cache
-          key: ${{ runner.os }}-vite-task-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'vite.config.ts', 'apps/status-page/vite.config.ts', 'apps/status-page/vitest.config.ts', 'services/worker/vitest.config.ts', 'packages/shared/vitest.config.ts') }}
+          key: vite-task-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ${{ runner.os }}-vite-task-
+            vite-task-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Check formatting, types, and lint
         timeout-minutes: 5
@@ -45,6 +47,12 @@ jobs:
       - name: Run unit tests
         timeout-minutes: 5
         run: vp run test
+
+      - name: Save task cache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.task-cache.outputs.cache-primary-key }}
 
       - name: Check React code
         timeout-minutes: 5
@@ -87,7 +95,6 @@ jobs:
 
   build-and-deploy:
     name: Deploy to Cloudflare
-    # A manual run on another branch would otherwise deploy that branch.
     if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     concurrency:
       group: deploy-${{ github.repository }}-${{ github.ref }}
