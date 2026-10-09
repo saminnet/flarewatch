@@ -1,5 +1,5 @@
 import { getDateKey, type CalendarMonthGrid } from '@/lib/date';
-import type { AggregatedDayData } from '@/lib/uptime';
+import { formatPercent, type AggregatedDayData } from '@/lib/uptime';
 import { cn } from '@/lib/utils';
 import { CalendarDayCell } from './calendar-day-cell';
 
@@ -29,7 +29,7 @@ export function CalendarMonth({
         <div className="text-xs font-semibold tracking-tight text-foreground">{grid.label}</div>
         {monthUptime != null && (
           <div className="text-xs font-medium text-muted-foreground tabular-nums">
-            {monthUptime.toFixed(2)}%
+            {formatPercent(monthUptime, 2)}
           </div>
         )}
       </div>
@@ -37,7 +37,7 @@ export function CalendarMonth({
         {WEEKDAYS.map((day, i) => (
           <div
             key={WEEKDAY_KEYS[i]}
-            className="h-4 flex items-center justify-center text-[9px] font-medium text-muted-foreground/50 select-none"
+            className="h-4 flex items-center justify-center text-2xs font-medium text-muted-foreground/50 select-none"
           >
             {day}
           </div>

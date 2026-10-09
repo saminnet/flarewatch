@@ -1,16 +1,8 @@
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent } from '@/components/ui/tooltip';
+import { DayCell } from '@/components/ui/status-cell';
 import { cn } from '@/lib/utils';
 import { formatUtc, type CalendarDay } from '@/lib/date';
-import type { AggregatedDayData, DayStatus } from '@/lib/uptime';
-import { STATUS_COLORS } from '@/lib/constants';
-
-// Overlays are tuned for contrast on the solid status fills.
-const DAY_TEXT_COLORS = {
-  up: 'text-background/70',
-  down: 'text-background/80',
-  partial: 'text-status-degraded-text/50 dark:text-foreground/70',
-  unknown: 'text-muted-foreground',
-} satisfies Record<DayStatus, string>;
+import { formatPercent, type AggregatedDayData } from '@/lib/uptime';
 
 interface CalendarDayCellProps {
   day: CalendarDay | null;
@@ -29,7 +21,7 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
   if (day.isFuture) {
     return (
       <div
-        className="h-6 rounded flex items-center justify-center bg-muted/40 text-[10px] leading-none tabular-nums text-muted-foreground/40 select-none"
+        className="h-6 rounded flex items-center justify-center bg-muted/40 text-2xs leading-none tabular-nums text-muted-foreground/40 select-none"
         aria-hidden
       >
         {dayNum}
@@ -44,24 +36,18 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
 
   const label =
     data?.uptime != null
-      ? `${data.uptime.toFixed(2)}% uptime on ${dateStr}`
+      ? `${formatPercent(data.uptime, 2)} uptime on ${dateStr}`
       : `No data for ${dateStr}`;
-
-  const cellClasses = cn(
-    'relative h-6 rounded flex items-center justify-center',
-    'text-[10px] leading-none tabular-nums font-medium select-none',
-    'animate-calendar-cell transition-all duration-150',
-    'hover:brightness-110',
-    STATUS_COLORS[status],
-    DAY_TEXT_COLORS[status],
-    hasIncidents ? 'cursor-pointer hover:z-10' : 'cursor-default',
-    day.isToday && 'ring-2 ring-foreground/40 ring-offset-1 ring-offset-background',
-  );
 
   const sharedProps = {
     'aria-label': label,
-    className: cellClasses,
-    style: { animationDelay: `${animationDelay}ms` },
+    status,
+    today: day.isToday,
+    className: cn(
+      'relative h-6 flex items-center justify-center select-none',
+      hasIncidents ? 'cursor-pointer hover:z-10' : 'cursor-default',
+    ),
+    style: { '--cell-delay': `${animationDelay}ms` },
   } as const;
 
   const contents = (
@@ -78,19 +64,19 @@ export function CalendarDayCell({ day, data, animationDelay, onClick }: Calendar
 
   const cell =
     data && hasIncidents ? (
-      <TooltipTrigger {...sharedProps} onClick={() => onClick(data)}>
+      <DayCell {...sharedProps} onClick={() => onClick(data)}>
         {contents}
-      </TooltipTrigger>
+      </DayCell>
     ) : (
-      <TooltipTrigger {...sharedProps} render={<span />}>
+      <DayCell {...sharedProps} render={<span />}>
         {contents}
-      </TooltipTrigger>
+      </DayCell>
     );
 
   return (
     <Tooltip>
       {cell}
-      <TooltipContent side="top" className="text-xs">
+      <TooltipContent side="top">
         <div className="font-medium">{label}</div>
         {hasIncidents && (
           <div className="text-muted-foreground">

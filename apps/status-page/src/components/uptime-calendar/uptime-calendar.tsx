@@ -72,7 +72,7 @@ export function UptimeCalendar({ monitors, state, selectedMonth }: UptimeCalenda
 
   return (
     <>
-      <Card className="py-0 gap-0 mb-6">
+      <Card size="flush" className="mb-6">
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between mb-4">
             <div className="text-sm font-semibold text-foreground">Uptime History</div>

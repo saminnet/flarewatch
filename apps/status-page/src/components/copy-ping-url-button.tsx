@@ -13,9 +13,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 
 const COPIED_MS = 2000;
-const ICON_FADE = 'transition-[opacity,filter,scale] duration-300 ease-[cubic-bezier(0.2,0,0,1)]';
-const ICON_SHOWN = 'scale-100 opacity-100 blur-0';
-const ICON_HIDDEN = 'scale-[0.25] opacity-0 blur-[4px]';
+const ICON_FADE = 'transition-reveal duration-300 ease-standard';
+const ICON_SHOWN = 'scale-100 opacity-100 blur-none';
+const ICON_HIDDEN = 'scale-[0.25] opacity-0 blur-xs';
 
 interface CopyPingUrlButtonProps {
   monitorId: string;
@@ -105,7 +105,7 @@ export function CopyPingUrlButton({ monitorId, monitorName, loadPingUrl }: CopyP
           <Input
             readOnly
             value={manualUrl ?? ''}
-            className="font-mono text-xs"
+            variant="mono"
             onFocus={(e) => e.currentTarget.select()}
           />
           <div className="flex justify-end">

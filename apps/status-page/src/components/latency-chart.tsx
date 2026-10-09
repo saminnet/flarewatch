@@ -1,12 +1,12 @@
 import { useId, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { area, line, curveMonotoneX } from 'd3-shape';
 import { formatUtcShort, type LatencySample } from '@flarewatch/shared';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { linearScale, niceLinearTicks } from '@/lib/chart-scale';
 import { timeTicks } from '@/lib/chart-ticks';
 import { formatUtc } from '@/lib/date';
-import { CHART_HEIGHT_PX } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 
 type ChartPoint = {
   timeMs: number;
@@ -23,16 +23,14 @@ type ChartPoint = {
  * via container queries (styles.css).
  */
 const VB = 100;
-const PADDING_TOP_PX = 5;
-const X_AXIS_HEIGHT_PX = 20;
 
 const pct = (frac: number) => `${frac * 100}%`;
 
 // Anchor labels near the edges inward so they don't overflow the plot box.
-function xLabelTransform(frac: number): string {
-  if (frac < 0.08) return 'translateX(0)';
-  if (frac > 0.92) return 'translateX(-100%)';
-  return 'translateX(-50%)';
+function xLabelTranslate(frac: number): string {
+  if (frac < 0.08) return 'translate-x-0';
+  if (frac > 0.92) return '-translate-x-full';
+  return '-translate-x-1/2';
 }
 
 // Assumes data is sorted by timeMs (binary search).
@@ -53,15 +51,15 @@ function nearestIndex(data: ChartPoint[], t: number): number {
 
 function ChartTooltip({ point, xFrac }: { point: ChartPoint; xFrac: number }) {
   const coloLabel = formatColoLabel(point.loc);
-  const style: CSSProperties =
-    xFrac > 0.5
-      ? { right: `${(1 - xFrac) * 100}%`, marginRight: 8, top: 4 }
-      : { left: `${xFrac * 100}%`, marginLeft: 8, top: 4 };
+  const right = xFrac > 0.5;
 
   return (
     <div
-      className="pointer-events-none absolute z-10 rounded border border-border bg-popover px-2 py-1.5 text-xs shadow-sm"
-      style={style}
+      className={cn(
+        'pointer-events-none absolute top-1 z-10 rounded border border-border bg-popover px-2 py-1.5 text-xs shadow-sm',
+        right ? 'right-(--x) mr-2' : 'left-(--x) ml-2',
+      )}
+      style={{ '--x': pct(right ? 1 - xFrac : xFrac) }}
     >
       <div className="font-medium text-popover-foreground">{point.ping}ms</div>
       <div className="text-muted-foreground">{coloLabel || point.loc}</div>
@@ -79,7 +77,7 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
   const times = chartData.map((d) => d.timeMs);
   const xDomain: [number, number] = [Math.min(...times), Math.max(...times)];
   const maxPing = Math.max(...chartData.map((d) => d.ping), 0);
-  const yAxisWidth = maxPing >= 10000 ? 60 : maxPing >= 1000 ? 50 : 40;
+  const plotLeft = maxPing >= 10000 ? 'left-15' : maxPing >= 1000 ? 'left-12.5' : 'left-10';
   const { ticks: xTicks, coarseStep } = timeTicks(xDomain[0], xDomain[1]);
 
   const last = chartData[chartData.length - 1];
@@ -123,8 +121,7 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
 
   return (
     <div
-      className="relative touch-pan-y"
-      style={{ height: CHART_HEIGHT_PX }}
+      className="relative h-37.5 touch-pan-y"
       data-testid="latency-chart"
       role="img"
       aria-label={ariaLabel}
@@ -134,17 +131,7 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
       onPointerLeave={() => setActiveIndex(null)}
       onPointerCancel={() => setActiveIndex(null)}
     >
-      <div
-        ref={plotRef}
-        className="absolute"
-        style={{
-          left: yAxisWidth,
-          right: 0,
-          top: PADDING_TOP_PX,
-          bottom: X_AXIS_HEIGHT_PX,
-          containerType: 'inline-size',
-        }}
-      >
+      <div ref={plotRef} className={cn('absolute @container top-1.25 right-0 bottom-5', plotLeft)}>
         <svg
           viewBox={`0 0 ${VB} ${VB}`}
           preserveAspectRatio="none"
@@ -223,25 +210,16 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
 
         {activePoint && (
           <span
-            className="pointer-events-none absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{
-              left: pct(activeXFrac),
-              top: pct(fracY(activePoint.ping)),
-              background: 'var(--muted-foreground)',
-            }}
+            className="pointer-events-none absolute top-(--y) left-(--x) h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground"
+            style={{ '--x': pct(activeXFrac), '--y': pct(fracY(activePoint.ping)) }}
           />
         )}
 
         {yTicks.map((tick) => (
           <span
             key={`yl-${tick}`}
-            className="pointer-events-none absolute -translate-y-1/2 text-[10px] leading-none whitespace-nowrap"
-            style={{
-              top: pct(fracY(tick)),
-              right: '100%',
-              marginRight: 4,
-              color: 'var(--muted-foreground)',
-            }}
+            className="pointer-events-none absolute top-(--y) right-full mr-1 -translate-y-1/2 text-2xs leading-none whitespace-nowrap text-muted-foreground"
+            style={{ '--y': pct(fracY(tick)) }}
           >
             {`${tick}ms`}
           </span>
@@ -250,12 +228,11 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
           <span
             key={`xl-${tick}`}
             data-chart-tier={xTier(tick)}
-            className="pointer-events-none absolute top-full mt-1 text-[10px] leading-none whitespace-nowrap"
-            style={{
-              left: pct(fracX(tick)),
-              transform: xLabelTransform(fracX(tick)),
-              color: 'var(--muted-foreground)',
-            }}
+            className={cn(
+              'pointer-events-none absolute top-full left-(--x) mt-1 text-2xs leading-none whitespace-nowrap text-muted-foreground',
+              xLabelTranslate(fracX(tick)),
+            )}
+            style={{ '--x': pct(fracX(tick)) }}
           >
             {formatUtc(new Date(tick), 'HH:mm')}
           </span>
@@ -276,10 +253,7 @@ export function LatencyChart({ samples }: { samples: LatencySample[] }) {
 
   if (chartData.length === 0) {
     return (
-      <div
-        className="flex w-full items-center justify-center rounded-md border border-dashed border-border"
-        style={{ height: CHART_HEIGHT_PX }}
-      >
+      <div className="flex h-37.5 w-full items-center justify-center rounded-md border border-dashed border-border">
         <span className="text-xs text-muted-foreground">No response data yet</span>
       </div>
     );

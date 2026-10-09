@@ -7,8 +7,8 @@ export function PageSkeleton() {
       <div className="animate-pulse space-y-3">
         <div className="h-7 w-56 rounded bg-muted" />
 
-        <Card className="p-6">
-          <div className="space-y-3">
+        <Card size="flush">
+          <div className="space-y-3 p-6">
             <div className="h-4 w-40 rounded bg-muted" />
             <div className="h-9 w-full rounded bg-muted" />
           </div>
@@ -16,8 +16,8 @@ export function PageSkeleton() {
 
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="p-4">
-              <div className="flex items-center justify-between gap-4">
+            <Card key={i} size="flush">
+              <div className="flex items-center justify-between gap-4 p-4">
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="h-4 w-52 rounded bg-muted" />
                   <div className="h-3 w-72 max-w-full rounded bg-muted" />

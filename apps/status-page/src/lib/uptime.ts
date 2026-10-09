@@ -62,13 +62,22 @@ export function getLatestLatency(monitorId: string, state: StatusView): LatencyS
   return state.monitors[monitorId]?.latest ?? null;
 }
 
+/** Rounds like `toFixed`, but uptime below 100 never shows as 100%. */
+export function formatPercent(percent: number, decimals: number): string {
+  const rounded = percent.toFixed(decimals);
+  if (percent < 100 && Number(rounded) >= 100) {
+    return `${(100 - 10 ** -decimals).toFixed(decimals)}%`;
+  }
+  return `${rounded}%`;
+}
+
 export function formatUptimeDisplay(
   uptimePercent: number | null,
   hasStarted: boolean,
   decimals: number,
 ): string {
   if (uptimePercent !== null) {
-    return `${uptimePercent.toFixed(decimals)}%`;
+    return formatPercent(uptimePercent, decimals);
   }
   return hasStarted ? 'Starting...' : 'Pending';
 }

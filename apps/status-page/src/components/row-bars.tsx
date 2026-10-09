@@ -1,6 +1,6 @@
 import type { HeartbeatRun } from '@flarewatch/shared';
 import { HEARTBEAT_RUN_HISTORY } from '@flarewatch/shared';
-import { RUN_CELL_CLASSES, RUNNING_CELL_CLASSES } from '@/components/run-strip';
+import { RUN_CELL_CLASSES, RUNNING_CELL_CLASSES } from '@/components/ui/status-cell';
 import type { HeartbeatView } from '@/lib/heartbeat';
 import { STATUS_DOT_COLORS } from '@/lib/constants';
 import type { DailyStatusData } from '@/lib/uptime';
@@ -28,7 +28,7 @@ function Cells({ cells }: { cells: Cell[] }) {
         <span
           key={cell.key}
           className={cn(
-            'min-w-0 flex-1 rounded-[2px]',
+            'min-w-0 flex-1 rounded-xs',
             index < hideFrom && '@max-[641px]:hidden',
             cell.className,
           )}

@@ -200,8 +200,7 @@ export function HistoryPage() {
       {pinned.length === 0 && timeline.length === 0 ? (
         <EmptyState
           icon={IconCalendar}
-          iconClassName="text-status-operational"
-          iconContainerClassName="bg-status-operational-bg"
+          tone="operational"
           title="Nothing this month"
           description="No incidents or maintenance scheduled for this period."
         />

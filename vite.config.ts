@@ -22,6 +22,7 @@ export default defineConfig({
         name: 'anti-slop',
         specifier: './tools/oxlint/anti-slop/index.ts',
       },
+      { name: 'shadcn', specifier: '@shadcn/lint' },
     ],
     rules: {
       'react-hooks-js/set-state-in-render': 'error',
@@ -47,8 +48,42 @@ export default defineConfig({
       'typescript/no-unsafe-call': 'error',
       'typescript/no-unsafe-member-access': 'error',
       'typescript/no-unsafe-return': 'error',
+      'shadcn/no-restyle': [
+        'error',
+        {
+          allow: ['layout'],
+          contracts: [
+            {
+              pattern: '^(TooltipTrigger|DropdownMenuTrigger)$',
+              allow: [
+                'layout',
+                'color',
+                'typography',
+                'spacing',
+                'shape',
+                'effects',
+                'motion',
+                'animate-calendar-cell',
+              ],
+            },
+          ],
+        },
+      ],
+      'shadcn/no-raw-colors': 'error',
+      'shadcn/no-arbitrary-values': ['error', { allow: ['layout', 'focus-visible:ring-[3px]'] }],
+      'shadcn/no-inline-styles': 'error',
+      'shadcn/no-unknown-classes': 'error',
+      'shadcn/require-static-classes': 'error',
     },
     overrides: [
+      {
+        files: ['apps/status-page/src/components/ui/**'],
+        rules: {
+          'shadcn/no-restyle': 'off',
+          'shadcn/no-arbitrary-values': 'off',
+          'shadcn/require-static-classes': 'off',
+        },
+      },
       {
         files: ['apps/status-page/src/**'],
         rules: {

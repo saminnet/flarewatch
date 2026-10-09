@@ -12,6 +12,7 @@
     "lint": "vp lint"
   },
   "devDependencies": {
+    "@shadcn/lint": "0.2.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "vite": "catalog:",
     "vite-plus": "catalog:"

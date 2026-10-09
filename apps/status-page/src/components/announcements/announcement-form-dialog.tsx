@@ -118,7 +118,7 @@ export function AnnouncementFormDialog({
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground">Shows until</Label>
+            <Label variant="muted">Shows until</Label>
             <div className="mt-1.5">
               <DateTimePicker
                 value={end}

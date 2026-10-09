@@ -6,6 +6,7 @@ import { snapshotQuery } from '@/lib/query/monitors.queries';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
 import { monitorState, type MonitorState } from '@/lib/monitor-state';
 import { formatUptimeDisplay } from '@/lib/uptime';
+import { UPTIME_TEXT, uptimeTone } from '@/lib/color';
 import { cn } from '@/lib/utils';
 import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 
@@ -31,10 +32,7 @@ export function EmbedPage() {
 
   const monitor = monitors.find((m) => m.id === monitorId);
 
-  const { uptimePercent, error, latency, statusColor } = useMonitorStatus(
-    monitorId,
-    state ?? EMPTY_STATE,
-  );
+  const { uptimePercent, error, latency } = useMonitorStatus(monitorId, state ?? EMPTY_STATE);
   const hasStarted = state?.monitors[monitorId]?.startedAt !== undefined;
 
   if (!monitor) {
@@ -56,12 +54,13 @@ export function EmbedPage() {
   }
 
   const shown = monitorState(monitor, state, maintenances);
+  const uptimeText = UPTIME_TEXT[uptimeTone(monitor.method === 'HEARTBEAT', shown, uptimePercent)];
 
   if (minimal) {
     return (
       <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium">
         <span className={cn('w-2 h-2 rounded-full', STATE_CLASSES[shown].dot)} />
-        <span className={cn('font-mono', statusColor.text)}>
+        <span className={cn('font-mono', uptimeText)}>
           {formatUptimeDisplay(uptimePercent, hasStarted, 1)}
         </span>
       </div>
@@ -100,7 +99,7 @@ export function EmbedPage() {
           className={cn(
             'px-2 py-1 rounded text-xs font-mono font-medium',
             STATE_CLASSES[shown].chip,
-            statusColor.text,
+            uptimeText,
           )}
         >
           {formatUptimeDisplay(uptimePercent, hasStarted, 2)}

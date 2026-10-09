@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent } from '@/components/ui/tooltip';
+import { BarCell } from '@/components/ui/status-cell';
 import {
   Dialog,
   DialogContent,
@@ -10,18 +11,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { IconX } from '@tabler/icons-react';
 import type { StatusView } from '@flarewatch/shared';
-import { generateDailyStatus, type DailyStatusData } from '@/lib/uptime';
+import { formatPercent, generateDailyStatus, type DailyStatusData } from '@/lib/uptime';
 import { formatUtc, formatDuration } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { useContainerWidth } from '@/lib/hooks/use-container-width';
-import { STATUS_BAR, STATUS_DOT_COLORS } from '@/lib/constants';
-
-const hoverColors = {
-  up: 'hover:bg-status-operational',
-  down: 'hover:bg-status-down',
-  partial: 'hover:bg-status-degraded',
-  unknown: 'hover:bg-status-unknown-bg',
-};
+import { STATUS_BAR } from '@/lib/constants';
 
 interface StatusBarSegmentProps {
   day: DailyStatusData;
@@ -32,27 +26,22 @@ interface StatusBarSegmentProps {
 function StatusBarSegment({ day, isMobile, onClick }: StatusBarSegmentProps) {
   return (
     <Tooltip>
-      <TooltipTrigger
+      <BarCell
         aria-label={
           day.status === 'unknown'
             ? `No data for ${formatUtc(day.date, 'MMM d, yyyy')}`
-            : `${day.uptime.toFixed(2)}% uptime on ${formatUtc(day.date, 'MMM d, yyyy')}`
+            : `${formatPercent(day.uptime, 2)} uptime on ${formatUtc(day.date, 'MMM d, yyyy')}`
         }
-        className={cn(
-          'h-6 rounded-sm transition-[scale,filter,background-color,box-shadow] duration-150 ease-out',
-          isMobile ? 'w-2.5 shrink-0' : 'min-w-0 flex-1',
-          STATUS_DOT_COLORS[day.status],
-          day.downtime > 0
-            ? `cursor-pointer hover:scale-y-110 hover:brightness-110 ${hoverColors[day.status]}`
-            : 'cursor-default',
-        )}
+        status={day.status}
+        interactive={day.downtime > 0}
+        className={cn('h-6', isMobile ? 'w-2.5 shrink-0' : 'min-w-0 flex-1')}
         onClick={() => onClick(day)}
       />
-      <TooltipContent side="top" className="text-xs">
+      <TooltipContent side="top">
         <div className="font-medium">
           {day.status === 'unknown'
             ? 'No data'
-            : `${day.uptime.toFixed(2)}% at ${formatUtc(day.date, 'MMM d, yyyy')}`}
+            : `${formatPercent(day.uptime, 2)} at ${formatUtc(day.date, 'MMM d, yyyy')}`}
         </div>
         {day.downtime > 0 && (
           <div className="text-muted-foreground">
@@ -122,7 +111,7 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
               </DialogTitle>
               <DialogClose
                 render={
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Close">
+                  <Button variant="ghost" size="icon-sm" aria-label="Close">
                     <IconX className="h-4 w-4" />
                   </Button>
                 }

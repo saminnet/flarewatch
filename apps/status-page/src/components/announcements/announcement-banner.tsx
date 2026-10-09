@@ -78,11 +78,10 @@ export function AnnouncementBanner({
                   <IconPencil className="size-4" />
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="ghost-destructive"
                   size="icon-sm"
                   aria-label={`Delete announcement ${announcement.title}`}
                   onClick={() => openDelete(announcement)}
-                  className="hover:text-destructive"
                 >
                   <IconTrash className="size-4" />
                 </Button>

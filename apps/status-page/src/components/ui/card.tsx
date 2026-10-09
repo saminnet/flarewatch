@@ -1,20 +1,39 @@
 import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils';
+
+const cardVariants = cva(
+  'ring-foreground/10 bg-card text-card-foreground gap-6 overflow-hidden rounded-lg py-6 text-sm shadow-xs ring-1 has-[>img:first-child]:pt-0 data-[size=sm]:gap-4 data-[size=sm]:py-4 data-[size=flush]:p-0 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg group/card flex flex-col',
+  {
+    variants: {
+      variant: {
+        default: '',
+        operational:
+          'bg-status-operational-bg border border-status-operational-border shadow-none ring-0',
+        degraded: 'bg-status-degraded-bg border border-status-degraded-border shadow-none ring-0',
+        down: 'bg-status-down-bg border border-status-down-border shadow-none ring-0',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  },
+);
 
 function Card({
   className,
   size = 'default',
+  variant,
   ...props
-}: React.ComponentProps<'div'> & { size?: 'default' | 'sm' }) {
+}: React.ComponentProps<'div'> & {
+  size?: 'default' | 'sm' | 'flush';
+} & VariantProps<typeof cardVariants>) {
   return (
     <div
       data-slot="card"
       data-size={size}
-      className={cn(
-        'ring-foreground/10 bg-card text-card-foreground gap-6 overflow-hidden rounded-lg py-6 text-sm shadow-xs ring-1 has-[>img:first-child]:pt-0 data-[size=sm]:gap-4 data-[size=sm]:py-4 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg group/card flex flex-col',
-        className,
-      )}
+      className={cn(cardVariants({ variant }), className)}
       {...props}
     />
   );

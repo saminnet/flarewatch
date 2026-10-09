@@ -12,16 +12,16 @@ export function CalendarLegend() {
       {legendItems.map((item) => (
         <li key={item.label} className="flex items-center gap-1 whitespace-nowrap">
           <div className={`size-2 rounded-sm ${item.color}`} />
-          <span className="text-[10px] text-muted-foreground">{item.label}</span>
+          <span className="text-2xs text-muted-foreground">{item.label}</span>
         </li>
       ))}
       <li className="flex items-center gap-1 whitespace-nowrap">
         <div className="size-2 rounded-full bg-muted-foreground ring-1 ring-background/90" />
-        <span className="text-[10px] text-muted-foreground">Incident</span>
+        <span className="text-2xs text-muted-foreground">Incident</span>
       </li>
       <li className="flex items-center gap-1 whitespace-nowrap">
         <div className={`size-2 rounded-sm ${STATUS_COLORS.unknown}`} />
-        <span className="text-[10px] text-muted-foreground">No data</span>
+        <span className="text-2xs text-muted-foreground">No data</span>
       </li>
     </ul>
   );

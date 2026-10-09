@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import type { MonitorView, StatusView } from '@flarewatch/shared';
 import {
   calculateUptimePercent,
+  formatUptimeDisplay,
   generateAggregateDailyStatus,
   generateDailyStatus,
   getMonitorError,
@@ -211,6 +212,26 @@ describe('uptime utilities', () => {
       });
 
       expect(getMonitorError('test', state)).toBe('Second error');
+    });
+  });
+
+  describe('formatUptimeDisplay', () => {
+    it('never rounds uptime below 100 up to 100%', () => {
+      expect(formatUptimeDisplay(99.96, true, 1)).toBe('99.9%');
+      expect(formatUptimeDisplay(99.996, true, 2)).toBe('99.99%');
+      expect(formatUptimeDisplay(99.9999, true, 0)).toBe('99%');
+    });
+
+    it('rounds other values to the given decimals', () => {
+      expect(formatUptimeDisplay(100, true, 2)).toBe('100.00%');
+      expect(formatUptimeDisplay(98.76, true, 1)).toBe('98.8%');
+      expect(formatUptimeDisplay(99.954, true, 2)).toBe('99.95%');
+      expect(formatUptimeDisplay(0, true, 2)).toBe('0.00%');
+    });
+
+    it('names a monitor without uptime by whether it has started', () => {
+      expect(formatUptimeDisplay(null, true, 2)).toBe('Starting...');
+      expect(formatUptimeDisplay(null, false, 2)).toBe('Pending');
     });
   });
 });

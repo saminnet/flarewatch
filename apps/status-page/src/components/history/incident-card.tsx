@@ -15,18 +15,12 @@ export function IncidentCard({ event }: IncidentCardProps) {
   const latestError = event.errors.at(-1) ?? 'Unknown error';
 
   return (
-    <Alert className="bg-status-down-bg">
-      <AlertTitle className="flex flex-wrap items-center gap-2">
+    <Alert variant="down">
+      <AlertTitle>
         <IconAlertTriangle className="h-4 w-4 text-status-down" />
         {event.monitorName}
-        <Badge variant="outline" className="text-xs">
-          Incident
-        </Badge>
-        {isOngoing && (
-          <Badge variant="destructive" className="text-xs">
-            Ongoing
-          </Badge>
-        )}
+        <Badge variant="outline">Incident</Badge>
+        {isOngoing && <Badge variant="destructive">Ongoing</Badge>}
       </AlertTitle>
 
       <AlertDescription className="mt-1.5">

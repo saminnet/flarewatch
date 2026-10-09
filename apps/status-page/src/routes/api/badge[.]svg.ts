@@ -141,7 +141,7 @@ export const Route = createFileRoute('/api/badge.svg')({
 
           const projected = projectBadgeStatus(monitor, state, maintenances);
           if (projected.status === 'unknown') {
-            return svgResponse(badgeSvg(label, 'unknown', GREY), 404);
+            return svgResponse(badgeSvg(label, 'unknown', GREY));
           }
 
           const looks: Record<typeof projected.status, [text: string, color: string]> = {

@@ -69,7 +69,6 @@ export const Route = createFileRoute('/api/badge')({
           const projected = projectBadgeStatus(monitor, state, maintenances);
           if (projected.status === 'unknown') {
             return new Response(JSON.stringify(errorBadge(label, 'unknown')), {
-              status: 404,
               headers: jsonHeaders,
             });
           }
