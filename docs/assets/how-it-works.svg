@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
   <title id="title">How FlareWatch works</title>
-  <desc id="desc">Everything runs in your Cloudflare account. The monitor Worker runs every minute. It checks your sites and APIs, saves the results in a Durable Object, and sends alerts when something goes down or comes back up. Scheduled jobs such as backups ping the status page Worker when they finish. The status page Worker reads the Durable Object through the monitor Worker and serves the status page. Visitors see what you publish; you sign in to see everything. Optionally, checks can run from other regions or private networks through Globalping or your own proxy.</desc>
+  <desc id="desc">Everything runs in your Cloudflare account. The monitor Worker runs every minute. It checks your sites, APIs and domains, saves the results in a Durable Object, and sends alerts when something goes down or comes back up. Scheduled jobs such as backups ping the status page Worker when they finish. The status page Worker reads the Durable Object through the monitor Worker and serves the status page. Visitors see what you publish, and you sign in to see everything. Optionally, checks can run from other regions or private networks through Globalping, your own proxy or Workers VPC.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path class="arrow-head" d="M1 1.5 L8.5 5 L1 8.5"/>
@@ -65,14 +65,14 @@
   <!-- Status page Worker -->
   <rect class="panel" x="400" y="474" width="400" height="118" rx="10"/>
   <text class="h" x="424" y="512">Status page Worker</text>
-  <text class="body" x="424" y="540">Page, JSON API, badges</text>
+  <text class="body" x="424" y="540">Page, API, badges, Atom feed</text>
   <text class="small" x="424" y="568">Takes pings from your jobs</text>
 
   <!-- Your sites and APIs -->
   <rect class="panel" x="40" y="140" width="260" height="130" rx="10"/>
   <text class="h" x="62" y="178">Your sites and APIs</text>
   <text class="body" x="62" y="206">Websites, APIs, servers</text>
-  <text class="small" x="62" y="240">HTTP · TCP</text>
+  <text class="small" x="62" y="240">HTTP · TCP · DNS · domain expiry</text>
   <path class="flow" d="M400 205 H304"/>
   <text class="label" x="352" y="195" text-anchor="middle">checks</text>
 
@@ -82,7 +82,7 @@
   <text class="eyebrow" x="62" y="346">OPTIONAL</text>
   <text class="body" x="62" y="374">Check or confirm from other regions</text>
   <text class="body" x="62" y="396">or private networks, and SSL expiry</text>
-  <text class="small" x="62" y="418">Globalping or your own proxy</text>
+  <text class="small" x="62" y="418">Globalping, a proxy or Workers VPC</text>
 
   <!-- Your scheduled jobs -->
   <rect class="panel" x="40" y="468" width="260" height="130" rx="10"/>
