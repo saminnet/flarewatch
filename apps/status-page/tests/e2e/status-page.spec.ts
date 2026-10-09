@@ -657,8 +657,9 @@ test('private monitor never appears to visitors but shows to the operator with a
   // The button works only once the page has hydrated, so retry the click.
   await expect(async () => {
     await page.getByRole('button', { name: 'Check now' }).click();
-    await expect(checkResult).toHaveText(/^(Up|Down)/, { timeout: 15_000 });
+    await expect(checkResult).toHaveText(/^Down/, { timeout: 15_000 });
   }).toPass({ timeout: 45_000 });
+  await expect(checkResult).toContainText('404');
   await page.reload();
   // The first match is the card's current error; History lists the incident below it.
   await expect(page.getByText('Synthetic private outage').first()).toBeVisible();
@@ -811,7 +812,6 @@ test('another site can frame the embed but not the status page', async ({
 
   await expect(page.frameLocator('#embed').getByText('Example Domain')).toBeVisible();
   await expect(page.frameLocator('#page').getByRole('banner')).toHaveCount(0);
-  // Chrome logs the blocked frame as a console error.
   await expect
     .poll(() => clientErrors)
     .toEqual([expect.stringContaining('directive: "frame-ancestors \'none\'"')]);
@@ -1040,9 +1040,7 @@ test.describe.serial('operator announcement lifecycle', () => {
   test('creates, edits and deletes announcements beside maintenance', async ({ page }) => {
     await page.goto('/');
     await signIn(page);
-    // The raw-fetch sign-in sets only the cookie; the operator view needs a full
-    // load, because the hydrated app keeps its visitor session until the sign-in
-    // mutation or a page load resets it.
+    // The raw-fetch sign-in sets only the cookie. The hydrated app keeps its visitor session until a full load.
     await page.goto('/history');
     await expect(page.getByRole('button', { name: 'Add maintenance window' })).toBeVisible();
     await expect(
