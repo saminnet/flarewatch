@@ -55,7 +55,7 @@ Read the entries marked **Needs attention** before you upgrade. Each one changes
 - A latency chart with a single sample draws it in the middle instead of at the left edge. ([f986eea](https://github.com/saminnet/flarewatch/pull/95/commits/f986eea5c1ff188ddff37ae857d07d0d7efa59a9))
 - `/api/badge` and `/api/badge.svg` answer 200 with an `unknown` badge for a monitor that has no result yet. Before, they answered 404, and some browsers then showed a broken image. A missing or private monitor still gets 404. ([#96](https://github.com/saminnet/flarewatch/pull/96))
 - An uptime below 100% never shows as 100%. Before, an embed showed 99.96% as 100.0%. Embeds also color a heartbeat monitor's uptime by its state, as the dashboard does, so a down heartbeat no longer shows green. ([#96](https://github.com/saminnet/flarewatch/pull/96))
-- Deleting a repeating maintenance window now says that every occurrence goes with it, and shows how it repeats. History lists each occurrence of the window, and the delete button on any of them removes the whole series.
+- Deleting a repeating maintenance window now says that every occurrence goes with it, and shows how it repeats. History lists each occurrence of the window, and the delete button on any of them removes the whole series. ([#98](https://github.com/saminnet/flarewatch/pull/98))
 
 ## 3.3.0 - 2026-10-03
 
