@@ -43,7 +43,7 @@ export function MaintenanceAlerts({ maintenances, monitors, nowMs }: Maintenance
       {upcomingMaintenances.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-            <IconCalendar className="size-4 text-status-maintenance" />
+            <IconCalendar className="size-4 text-status-maintenance-text" />
             Upcoming maintenance windows
           </h3>
           {upcomingMaintenances.map((m) => (

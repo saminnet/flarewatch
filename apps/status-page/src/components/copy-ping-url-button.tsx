@@ -71,7 +71,7 @@ export function CopyPingUrlButton({ monitorId, monitorName, loadPingUrl }: CopyP
         <IconCheck
           aria-hidden="true"
           className={cn(
-            'absolute inset-0 size-4 text-status-operational',
+            'absolute inset-0 size-4 text-status-operational-text',
             ICON_FADE,
             copied ? ICON_SHOWN : ICON_HIDDEN,
           )}

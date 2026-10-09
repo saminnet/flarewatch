@@ -96,7 +96,7 @@ describe('maintenance helpers', () => {
       expect(colors).toEqual({
         bg: 'bg-status-maintenance-bg',
         border: 'border-status-maintenance-border',
-        icon: 'text-status-maintenance',
+        icon: 'text-status-maintenance-text',
         dot: 'bg-status-maintenance',
       });
     }

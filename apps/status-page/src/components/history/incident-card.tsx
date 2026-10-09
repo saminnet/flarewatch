@@ -17,7 +17,7 @@ export function IncidentCard({ event }: IncidentCardProps) {
   return (
     <Alert variant="down">
       <AlertTitle>
-        <IconAlertTriangle className="h-4 w-4 text-status-down" />
+        <IconAlertTriangle className="h-4 w-4 text-status-down-text" />
         {event.monitorName}
         <Badge variant="outline">Incident</Badge>
         {isOngoing && <Badge variant="destructive">Ongoing</Badge>}
@@ -29,7 +29,7 @@ export function IncidentCard({ event }: IncidentCardProps) {
           start={startDate}
           end={endDate}
           noEndLabel="Ongoing"
-          noEndClassName="text-status-down"
+          noEndClassName="text-status-down-text"
         />
       </AlertDescription>
     </Alert>

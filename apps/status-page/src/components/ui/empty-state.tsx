@@ -3,7 +3,7 @@ import { Card } from './card';
 
 const TONES = {
   default: { icon: 'text-muted-foreground', container: 'bg-muted' },
-  operational: { icon: 'text-status-operational', container: 'bg-status-operational-bg' },
+  operational: { icon: 'text-status-operational-text', container: 'bg-status-operational-bg' },
 };
 
 interface EmptyStateProps {

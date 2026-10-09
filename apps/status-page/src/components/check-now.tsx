@@ -65,7 +65,7 @@ function CheckNowResult({ check: { location, result } }: { check: CheckResultWit
           aria-hidden="true"
           className={cn(
             'size-4 shrink-0',
-            result.ok ? 'text-status-operational' : 'text-status-down',
+            result.ok ? 'text-status-operational-text' : 'text-status-down-text',
           )}
         />
         <span className="font-medium text-foreground">{result.ok ? 'Up' : 'Down'}</span>

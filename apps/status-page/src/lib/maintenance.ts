@@ -130,7 +130,7 @@ const MAINTENANCE_COLOR_MAP = {
   blue: {
     bg: 'bg-status-maintenance-bg',
     border: 'border-status-maintenance-border',
-    icon: 'text-status-maintenance',
+    icon: 'text-status-maintenance-text',
     dot: 'bg-status-maintenance',
   },
   yellow: {
@@ -161,7 +161,7 @@ function isMaintenanceColorName(value: string): value is MaintenanceColorName {
 const DEFAULT_MAINTENANCE_COLORS: MaintenanceColors = {
   bg: 'bg-status-maintenance-bg',
   border: 'border-status-maintenance-border',
-  icon: 'text-status-maintenance',
+  icon: 'text-status-maintenance-text',
   dot: 'bg-status-maintenance',
 };
 
@@ -184,7 +184,7 @@ export const SEVERITY_OPTIONS = [
   {
     value: 'blue',
     label: 'Info',
-    badge: 'bg-status-maintenance-bg text-status-maintenance',
+    badge: 'bg-status-maintenance-bg text-status-maintenance-text',
   },
   {
     value: 'red',

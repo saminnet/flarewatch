@@ -75,7 +75,6 @@ code {
   --chart-fill-top: 0.18;
   --chart-fill-bottom: 0.02;
 
-  /* Status tokens, supported for themeVars (see packages/shared/src/theme.ts). */
   --status-operational: oklch(0.696 0.17 162.48);
   --status-operational-text: oklch(0.52 0.12 162.48);
   --status-operational-bg: oklch(0.979 0.021 166.113);
@@ -89,6 +88,7 @@ code {
   --status-down-border: oklch(0.885 0.062 18.334);
   --status-down-text: oklch(0.55 0.22 27);
   --status-maintenance: oklch(0.623 0.214 259.815);
+  --status-maintenance-text: oklch(0.52 0.2 259.815);
   --status-maintenance-bg: oklch(0.97 0.014 254.604);
   --status-maintenance-border: oklch(0.882 0.059 254.128);
   --status-unknown: oklch(0.708 0 0);
@@ -129,7 +129,6 @@ code {
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* Status tokens, supported for themeVars (see packages/shared/src/theme.ts). */
   --status-operational: oklch(0.696 0.17 162.48);
   --status-operational-text: var(--status-operational);
   --status-operational-bg: oklch(0.262 0.051 172.552 / 30%);
@@ -143,6 +142,7 @@ code {
   --status-down-border: oklch(0.396 0.141 25.723);
   --status-down-text: var(--status-down);
   --status-maintenance: oklch(0.623 0.214 259.815);
+  --status-maintenance-text: var(--status-maintenance);
   --status-maintenance-bg: oklch(0.282 0.091 267.935 / 30%);
   --status-maintenance-border: oklch(0.379 0.146 265.522);
   --status-unknown: oklch(0.708 0 0);
@@ -201,6 +201,7 @@ code {
   --color-status-down-border: var(--status-down-border);
   --color-status-down-text: var(--status-down-text);
   --color-status-maintenance: var(--status-maintenance);
+  --color-status-maintenance-text: var(--status-maintenance-text);
   --color-status-maintenance-bg: var(--status-maintenance-bg);
   --color-status-maintenance-border: var(--status-maintenance-border);
   --color-status-unknown: var(--status-unknown);
