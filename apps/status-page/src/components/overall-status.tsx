@@ -19,24 +19,21 @@ const statusConfig = {
     icon: IconCircleCheck,
     title: 'All systems operational',
     bgClass: 'bg-status-operational-bg',
-    borderClass: 'border border-status-operational-border',
-    iconClass: 'text-status-operational',
+    iconClass: 'text-status-operational-text',
     badgeVariant: 'default' as const,
   },
   degraded: {
     icon: IconAlertTriangle,
     title: 'Some systems are down',
     bgClass: 'bg-status-degraded-bg',
-    borderClass: 'border border-status-degraded-border',
-    iconClass: 'text-status-degraded',
+    iconClass: 'text-status-degraded-text',
     badgeVariant: 'secondary' as const,
   },
   down: {
     icon: IconCircleX,
     title: 'All systems down',
     bgClass: 'bg-status-down-bg',
-    borderClass: 'border border-status-down-border',
-    iconClass: 'text-status-down',
+    iconClass: 'text-status-down-text',
     badgeVariant: 'destructive' as const,
   },
 };
@@ -90,7 +87,7 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
   }
 
   return (
-    <Card className={cn('p-0 shadow-none ring-0', config.bgClass, config.borderClass)}>
+    <Card size="flush" variant={status}>
       <div className="flex items-center gap-2 px-3 py-2.5">
         <div className={cn('rounded-full p-1.5', config.bgClass)}>
           <StatusIcon className={cn('h-6 w-6', config.iconClass)} />

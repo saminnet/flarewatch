@@ -46,13 +46,9 @@ export function MaintenanceCard({
             {maintenance.title ?? 'Scheduled Maintenance'}
           </h4>
           {isActive ? (
-            <Badge variant="secondary" className="text-xs">
-              Ongoing
-            </Badge>
+            <Badge variant="secondary">Ongoing</Badge>
           ) : (
-            <Badge variant="outline" className="text-xs">
-              {`Starts in ${formatTimeUntil(start, now)}`}
-            </Badge>
+            <Badge variant="outline">{`Starts in ${formatTimeUntil(start, now)}`}</Badge>
           )}
         </div>
         {maintenance.body && (
@@ -78,7 +74,7 @@ export function MaintenanceCard({
         {maintenance.monitors && maintenance.monitors.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {maintenance.monitors.map((id) => (
-              <Badge key={id} variant="outline" className="text-xs">
+              <Badge key={id} variant="outline">
                 {monitorNames.get(id) ?? id}
               </Badge>
             ))}

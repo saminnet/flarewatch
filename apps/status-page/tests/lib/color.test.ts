@@ -1,48 +1,23 @@
 import { describe, it, expect } from 'vite-plus/test';
-import { getStatusColor } from '@/lib/color';
+import { getStatusTone, uptimeTone } from '@/lib/color';
 
 describe('color utilities', () => {
-  it('maps uptime thresholds to status token classes', () => {
-    expect(getStatusColor(99.9)).toEqual({
-      bg: 'bg-status-operational',
-      text: 'text-status-operational',
-      border: 'border-status-operational',
-    });
+  it('maps uptime thresholds to a status tone', () => {
+    expect(getStatusTone(99.9)).toBe('operational');
+    expect(getStatusTone(99.19)).toBe('degraded');
+    expect(getStatusTone(99)).toBe('degraded');
+    expect(getStatusTone(98.9)).toBe('down');
+    expect(getStatusTone(0)).toBe('down');
+    expect(getStatusTone('not-a-number')).toBe('unknown');
+    expect(getStatusTone(null)).toBe('unknown');
+  });
 
-    expect(getStatusColor(99.19)).toEqual({
-      bg: 'bg-status-degraded',
-      text: 'text-status-degraded',
-      border: 'border-status-degraded',
-    });
-
-    expect(getStatusColor(99)).toEqual({
-      bg: 'bg-status-degraded',
-      text: 'text-status-degraded',
-      border: 'border-status-degraded',
-    });
-
-    expect(getStatusColor(98.9)).toEqual({
-      bg: 'bg-status-down',
-      text: 'text-status-down',
-      border: 'border-status-down',
-    });
-
-    expect(getStatusColor('not-a-number')).toEqual({
-      bg: 'bg-status-unknown',
-      text: 'text-status-unknown',
-      border: 'border-status-unknown',
-    });
-
-    expect(getStatusColor(null)).toEqual({
-      bg: 'bg-status-unknown',
-      text: 'text-status-unknown',
-      border: 'border-status-unknown',
-    });
-
-    expect(getStatusColor(0)).toEqual({
-      bg: 'bg-status-down',
-      text: 'text-status-down',
-      border: 'border-status-down',
-    });
+  it('colors a heartbeat monitor by its state and any other monitor by its uptime', () => {
+    expect(uptimeTone(true, 'down', 99.96)).toBe('down');
+    expect(uptimeTone(true, 'degraded', 100)).toBe('degraded');
+    expect(uptimeTone(true, 'running', 99.96)).toBe('operational');
+    expect(uptimeTone(true, 'pending', null)).toBe('pending');
+    expect(uptimeTone(false, 'down', 99.96)).toBe('operational');
+    expect(uptimeTone(false, 'up', 98)).toBe('down');
   });
 });

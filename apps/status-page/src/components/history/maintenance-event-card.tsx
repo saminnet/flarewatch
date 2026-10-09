@@ -15,6 +15,13 @@ import {
 import { DateRange } from './date-range';
 import type { MaintenanceEvent } from './types';
 
+const ALERT_VARIANT = new Map<string, 'maintenance' | 'degraded' | 'down' | 'unknown'>([
+  ['blue', 'maintenance'],
+  ['yellow', 'degraded'],
+  ['red', 'down'],
+  ['green', 'unknown'],
+]);
+
 interface MaintenanceEventCardProps {
   event: MaintenanceEvent;
   monitors: PublicMonitor[];
@@ -40,13 +47,11 @@ export function MaintenanceEventCard({
   const title = maintenance.title ?? 'Scheduled Maintenance';
 
   return (
-    <Alert className={colors.bg}>
-      <AlertTitle className="flex flex-wrap items-center gap-2">
+    <Alert variant={ALERT_VARIANT.get(maintenance.color ?? '') ?? 'maintenance'}>
+      <AlertTitle>
         <IconTool className={cn('h-4 w-4', colors.icon)} />
         {title}
-        <Badge variant="outline" className="text-xs">
-          Maintenance
-        </Badge>
+        <Badge variant="outline">Maintenance</Badge>
         <MaintenanceStatusBadge status={status} />
       </AlertTitle>
 
@@ -68,7 +73,7 @@ export function MaintenanceEventCard({
             </span>
             <div className="mt-1 flex flex-wrap gap-1">
               {affectedMonitors.map((monitor) => (
-                <Badge key={monitor.id} variant="outline" className="text-xs">
+                <Badge key={monitor.id} variant="outline">
                   {monitor.name}
                 </Badge>
               ))}
@@ -78,16 +83,15 @@ export function MaintenanceEventCard({
       </AlertDescription>
 
       {onEdit && onDelete && (
-        <AlertAction className="flex gap-1">
+        <AlertAction>
           <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label={`Edit ${title}`}>
             <IconPencil className="size-4" />
           </Button>
           <Button
-            variant="ghost"
+            variant="ghost-destructive"
             size="icon-sm"
             onClick={onDelete}
             aria-label={`Delete ${title}`}
-            className="hover:text-destructive"
           >
             <IconTrash className="size-4" />
           </Button>

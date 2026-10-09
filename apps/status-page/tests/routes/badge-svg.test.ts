@@ -136,7 +136,7 @@ describe('GET /api/badge.svg', () => {
     }
   });
 
-  it('keeps private and missing monitors out and preserves failure statuses', async () => {
+  it('keeps private and missing monitors out, serves unknown before a first result, and preserves failure statuses', async () => {
     stubView();
     workerConfig.monitors = originalMonitors.map((m) => ({ ...m, private: true }));
     expect((await get()).status).toBe(404);
@@ -144,7 +144,9 @@ describe('GET /api/badge.svg', () => {
     workerConfig.monitors = originalMonitors;
     forgetCachedView();
     stubView('up', { startedAt: undefined });
-    expect((await get()).status).toBe(404);
+    const firstResultPending = await get();
+    expect(firstResultPending.status).toBe(200);
+    expect(await firstResultPending.text()).toContain('>unknown</text>');
     forgetCachedView();
     vi.stubGlobal('__env__', {});
     const unavailable = await get();

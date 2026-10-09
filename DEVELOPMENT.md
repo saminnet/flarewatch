@@ -56,6 +56,8 @@ Open <http://localhost:3000>. The first page load starts a check run, and data s
 
 Linting includes the anti-slop rules in `tools/oxlint/anti-slop/`, from [dmmulroy/anti-slop](https://github.com/dmmulroy/anti-slop) plus a few local ones. They live with their tests in another repository, so don't edit the copy here. If a rule misfires, open an issue. `vite.config.ts` lists the rules that run.
 
+`@shadcn/lint` checks how pages use the components in `apps/status-page/src/components/ui`. Each of its rules is an error. When a page needs a style a component doesn't offer, add a variant to the component instead of passing the class through `className`. Every rule also runs inside `components/ui`, with two exceptions that `vite.config.ts` lists by file name. A few composites, such as the calendar, skip `no-restyle` because they build on other primitives. Three files skip `require-static-classes` because they pass on their own `cva()` output, which the rule can't read. A new file gets every rule, so an odd value goes into `styles.css` as a theme token.
+
 Oxlint's type-aware `no-unsafe-*`, `no-floating-promises` and `no-misused-promises` checks run as errors, tests included. Fix findings by restructuring first. A type assertion that survives review needs a `SAFETY:` comment stating the checked invariant.
 
 ## SSR and hydration safety

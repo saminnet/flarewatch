@@ -75,8 +75,8 @@ code {
   --chart-fill-top: 0.18;
   --chart-fill-bottom: 0.02;
 
-  /* Status tokens, supported for themeVars (see packages/shared/src/theme.ts). */
   --status-operational: oklch(0.696 0.17 162.48);
+  --status-operational-text: oklch(0.52 0.12 162.48);
   --status-operational-bg: oklch(0.979 0.021 166.113);
   --status-operational-border: oklch(0.905 0.093 164.15);
   --status-degraded: oklch(0.769 0.188 70.08);
@@ -88,6 +88,7 @@ code {
   --status-down-border: oklch(0.885 0.062 18.334);
   --status-down-text: oklch(0.55 0.22 27);
   --status-maintenance: oklch(0.623 0.214 259.815);
+  --status-maintenance-text: oklch(0.52 0.2 259.815);
   --status-maintenance-bg: oklch(0.97 0.014 254.604);
   --status-maintenance-border: oklch(0.882 0.059 254.128);
   --status-unknown: oklch(0.708 0 0);
@@ -128,8 +129,8 @@ code {
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* Status tokens, supported for themeVars (see packages/shared/src/theme.ts). */
   --status-operational: oklch(0.696 0.17 162.48);
+  --status-operational-text: var(--status-operational);
   --status-operational-bg: oklch(0.262 0.051 172.552 / 30%);
   --status-operational-border: oklch(0.378 0.077 168.94);
   --status-degraded: oklch(0.769 0.188 70.08);
@@ -141,6 +142,7 @@ code {
   --status-down-border: oklch(0.396 0.141 25.723);
   --status-down-text: var(--status-down);
   --status-maintenance: oklch(0.623 0.214 259.815);
+  --status-maintenance-text: var(--status-maintenance);
   --status-maintenance-bg: oklch(0.282 0.091 267.935 / 30%);
   --status-maintenance-border: oklch(0.379 0.146 265.522);
   --status-unknown: oklch(0.708 0 0);
@@ -153,6 +155,18 @@ code {
 
 @theme inline {
   --font-sans: 'Inter Variable', 'Inter Fallback', sans-serif;
+  --text-2xs: 0.625rem;
+  --text-caption: 0.8rem;
+  --radius-control-xs: min(var(--radius-md), 8px);
+  --radius-control-sm: min(var(--radius-md), 10px);
+  /* Concentric with the rounded-lg cards inside, which sit px-3 from the group edge. */
+  --radius-card-group: calc(var(--radius-lg) + var(--spacing) * 3);
+  --transition-props-control: color, box-shadow;
+  --transition-props-toggle: color, background-color, box-shadow;
+  --transition-props-cell: scale, filter, box-shadow;
+  --transition-props-bar: scale, filter, background-color, box-shadow;
+  --transition-props-reveal: opacity, filter, scale;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -185,6 +199,7 @@ code {
   --color-foreground: var(--foreground);
   --color-background: var(--background);
   --color-status-operational: var(--status-operational);
+  --color-status-operational-text: var(--status-operational-text);
   --color-status-operational-bg: var(--status-operational-bg);
   --color-status-operational-border: var(--status-operational-border);
   --color-status-degraded: var(--status-degraded);
@@ -196,6 +211,7 @@ code {
   --color-status-down-border: var(--status-down-border);
   --color-status-down-text: var(--status-down-text);
   --color-status-maintenance: var(--status-maintenance);
+  --color-status-maintenance-text: var(--status-maintenance-text);
   --color-status-maintenance-bg: var(--status-maintenance-bg);
   --color-status-maintenance-border: var(--status-maintenance-border);
   --color-status-unknown: var(--status-unknown);
@@ -256,7 +272,21 @@ code {
 }
 
 .animate-calendar-cell {
-  animation: calendar-cell-in 0.3s ease-out both;
+  animation: calendar-cell-in 0.3s ease-out var(--cell-delay, 0ms) both;
+}
+
+@utility transition-props-* {
+  transition-property: --value(--transition-props-*);
+  transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+  transition-duration: var(--tw-duration, var(--default-transition-duration));
+}
+
+@utility bg-running-cell {
+  background-image: linear-gradient(
+    to top,
+    var(--status-maintenance) 45%,
+    var(--status-maintenance-bg) 45%
+  );
 }
 
 ::view-transition-group(*) {

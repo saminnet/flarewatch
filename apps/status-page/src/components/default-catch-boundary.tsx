@@ -2,7 +2,7 @@ import type { ErrorComponentProps } from '@tanstack/react-router';
 import { ErrorComponent, Link, rootRouteId, useMatch, useRouter } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 
@@ -18,12 +18,10 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
     <div className="container mx-auto flex min-h-[60vh] max-w-5xl items-center justify-center px-4 py-8">
       <Card className="w-full max-w-3xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-semibold text-destructive">
-            Something went wrong
-          </CardTitle>
+          <div className="text-2xl font-semibold text-destructive">Something went wrong</div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="rounded-lg bg-muted p-4 text-sm text-foreground">
+        <CardContent>
+          <div className="mb-6 rounded-lg bg-muted p-4 text-sm text-foreground">
             <ErrorComponent error={error} />
           </div>
 

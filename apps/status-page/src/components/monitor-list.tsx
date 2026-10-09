@@ -13,15 +13,11 @@ import type { Maintenance, StatusView, PageConfigGroup } from '@flarewatch/share
 import type { AdminMonitor } from '@/lib/public-view';
 import { setUiPrefsServerFn, type UiPrefs } from '@/lib/ui-prefs-server';
 import { qk } from '@/lib/query/keys';
-import { cn } from '@/lib/utils';
 
 export type MonitorKindFilter = 'web' | 'jobs';
 
 /** Key the default heartbeat group uses in collapsedGroups; never a config group name. */
 const SCHEDULED_JOBS_GROUP_KEY = '__scheduled_jobs__';
-
-/** Concentric with the rounded-lg cards inside, which sit px-3 from the group edge. */
-const GROUP_RADIUS = 'rounded-[calc(var(--radius-lg)+--spacing(3))]';
 
 interface MonitorGroup {
   key: string;
@@ -195,7 +191,7 @@ export function MonitorList({
               const nextCollapsed = activeGroupKeys.filter((key) => !open.has(key));
               setCollapsedGroups(nextCollapsed);
             }}
-            className="space-y-2"
+            variant="card"
           >
             {activeGroups.map(({ key, name, monitors: groupMonitors }) => {
               const count = groupMonitors.length;
@@ -203,19 +199,14 @@ export function MonitorList({
                 ? `${count} ${count === 1 ? 'job' : 'jobs'}`
                 : `${count} ${count === 1 ? 'monitor' : 'monitors'}`;
               return (
-                <AccordionItem key={key} value={key} className={cn('border', GROUP_RADIUS)}>
-                  <AccordionTrigger
-                    className={cn('px-3 py-2.5 hover:no-underline hover:bg-muted/50', GROUP_RADIUS)}
-                    aria-label={`Toggle ${name} (${countLabel})`}
-                  >
+                <AccordionItem key={key} value={key}>
+                  <AccordionTrigger aria-label={`Toggle ${name} (${countLabel})`}>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{name}</span>
                       <span className="text-sm text-muted-foreground">({countLabel})</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-3 pb-3 pt-1.5">
-                    {renderRows(groupMonitors)}
-                  </AccordionContent>
+                  <AccordionContent>{renderRows(groupMonitors)}</AccordionContent>
                 </AccordionItem>
               );
             })}

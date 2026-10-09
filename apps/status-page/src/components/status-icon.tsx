@@ -14,11 +14,11 @@ interface StatusIconProps {
 }
 
 const STATE_ICONS = {
-  up: [IconCircleCheck, 'text-status-operational'],
+  up: [IconCircleCheck, 'text-status-operational-text'],
   degraded: [IconClockExclamation, 'text-status-degraded-text'],
   pending: [IconCircleDashed, 'text-muted-foreground'],
-  running: [IconProgress, 'text-status-maintenance'],
-  down: [IconCircleX, 'text-status-down'],
+  running: [IconProgress, 'text-status-maintenance-text'],
+  down: [IconCircleX, 'text-status-down-text'],
 } as const;
 
 export function StatusIcon({ state, className }: StatusIconProps) {

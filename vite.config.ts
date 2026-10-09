@@ -22,6 +22,7 @@ export default defineConfig({
         name: 'anti-slop',
         specifier: './tools/oxlint/anti-slop/index.ts',
       },
+      { name: 'shadcn', specifier: '@shadcn/lint' },
     ],
     rules: {
       'react-hooks-js/set-state-in-render': 'error',
@@ -47,8 +48,59 @@ export default defineConfig({
       'typescript/no-unsafe-call': 'error',
       'typescript/no-unsafe-member-access': 'error',
       'typescript/no-unsafe-return': 'error',
+      'shadcn/no-restyle': [
+        'error',
+        {
+          allow: ['layout'],
+          contracts: [
+            {
+              pattern: '^(TooltipTrigger|DropdownMenuTrigger)$',
+              allow: [
+                'layout',
+                'color',
+                'typography',
+                'spacing',
+                'shape',
+                'effects',
+                'motion',
+                'animate-calendar-cell',
+              ],
+            },
+          ],
+        },
+      ],
+      'shadcn/no-raw-colors': 'error',
+      'shadcn/no-arbitrary-values': ['error', { allow: ['layout'] }],
+      'shadcn/no-inline-styles': 'error',
+      'shadcn/no-unknown-classes': 'error',
+      'shadcn/require-static-classes': 'error',
     },
     overrides: [
+      {
+        // Composites that build on other primitives.
+        files: [
+          'apps/status-page/src/components/ui/calendar.tsx',
+          'apps/status-page/src/components/ui/datetime-picker.tsx',
+          'apps/status-page/src/components/ui/dropdown-menu.tsx',
+          'apps/status-page/src/components/ui/empty-state.tsx',
+          'apps/status-page/src/components/ui/field.tsx',
+          'apps/status-page/src/components/ui/month-picker.tsx',
+        ],
+        rules: {
+          'shadcn/no-restyle': 'off',
+        },
+      },
+      {
+        // These pass their own cva() output on, which the rule cannot read.
+        files: [
+          'apps/status-page/src/components/ui/calendar.tsx',
+          'apps/status-page/src/components/ui/status-cell.tsx',
+          'apps/status-page/src/components/ui/uptime-badge.tsx',
+        ],
+        rules: {
+          'shadcn/require-static-classes': 'off',
+        },
+      },
       {
         files: ['apps/status-page/src/**'],
         rules: {

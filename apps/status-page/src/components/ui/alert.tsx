@@ -11,6 +11,10 @@ const alertVariants = cva(
         default: 'bg-card text-card-foreground',
         destructive:
           'text-destructive bg-card *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current',
+        maintenance: 'bg-status-maintenance-bg text-card-foreground',
+        degraded: 'bg-status-degraded-bg text-card-foreground',
+        down: 'bg-status-down-bg text-card-foreground',
+        unknown: 'bg-status-unknown-bg text-card-foreground',
       },
     },
     defaultVariants: {
@@ -39,7 +43,7 @@ function AlertTitle({ className, ...props }: React.ComponentProps<'div'>) {
     <div
       data-slot="alert-title"
       className={cn(
-        'font-medium group-has-[>svg]/alert:col-start-2 [&_a]:hover:text-foreground [&_a]:underline [&_a]:underline-offset-3',
+        'flex flex-wrap items-center gap-2 font-medium group-has-[>svg]/alert:col-start-2 [&_a]:hover:text-foreground [&_a]:underline [&_a]:underline-offset-3',
         className,
       )}
       {...props}
@@ -64,7 +68,7 @@ function AlertAction({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="alert-action"
-      className={cn('absolute top-2.5 right-3', className)}
+      className={cn('absolute top-2.5 right-3 flex gap-1', className)}
       {...props}
     />
   );

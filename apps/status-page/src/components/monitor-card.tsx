@@ -6,6 +6,7 @@ import { formatUtcShort } from '@flarewatch/shared';
 import { UPTIME_DAYS } from '@/lib/constants';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { UptimeBadge } from '@/components/ui/uptime-badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusBar } from '@/components/status-bar';
 import { RowBars, barsSummary } from '@/components/row-bars';
@@ -16,6 +17,7 @@ import { CopyPingUrlButton } from '@/components/copy-ping-url-button';
 import { getHeartbeatPingUrl } from '@/lib/heartbeat-ping-url';
 import type { LatencySample, Maintenance, StatusView } from '@flarewatch/shared';
 import { useMonitorStatus } from '@/lib/hooks/use-monitor-status';
+import { uptimeTone } from '@/lib/color';
 import type { AdminMonitor } from '@/lib/public-view';
 import { deriveHeartbeat, type HeartbeatView } from '@/lib/heartbeat';
 import { monitorState, type MonitorState } from '@/lib/monitor-state';
@@ -36,14 +38,6 @@ const PHASE_STATUS_LABELS: Record<HeartbeatStatus, string> = {
 const CHECK_STATUS_LABELS: Partial<Record<MonitorState, string>> = {
   down: 'not operational',
   degraded: 'responding slowly',
-};
-
-const STATE_BADGE_CLASS: Record<MonitorState, string> = {
-  up: 'text-status-operational border-status-operational',
-  running: 'text-status-operational border-status-operational',
-  degraded: 'text-status-degraded-text border-status-degraded',
-  down: 'text-status-down-text border-status-down',
-  pending: 'text-muted-foreground border-border',
 };
 
 function UtcTime({ sec, className }: { sec: number; className?: string }) {
@@ -450,7 +444,7 @@ function MonitorSummary({
   detail,
   history,
 }: MonitorViewProps & { detail: boolean; history?: string }) {
-  const { uptimePercent, error, latency, statusColor } = useMonitorStatus(monitor.id, state);
+  const { uptimePercent, error, latency } = useMonitorStatus(monitor.id, state);
   const shown = monitorState(monitor, state, maintenances);
   const heartbeat = deriveHeartbeat(monitor, state);
   const warning = shown === 'degraded' ? state.monitors[monitor.id]?.warning : undefined;
@@ -460,27 +454,21 @@ function MonitorSummary({
   const uptimeDisplay = formatUptimeDisplay(uptimePercent, hasStarted, 2);
 
   const uptimeBadge = (
-    <Badge
-      variant="outline"
-      className={cn(
-        'font-mono',
-        heartbeat ? STATE_BADGE_CLASS[shown] : cn(statusColor.text, statusColor.border),
-      )}
-    >
+    <UptimeBadge tone={uptimeTone(heartbeat !== null, shown, uptimePercent)}>
       {uptimeDisplay}
-    </Badge>
+    </UptimeBadge>
   );
 
   return (
     <div
-      className="flex items-start gap-2.5"
-      style={{ viewTransitionName: `monitor-${monitor.id.replace(/[^\w-]/g, '_')}` }}
+      className="flex items-start gap-2.5 [view-transition-name:var(--vt)]"
+      style={{ '--vt': `monitor-${monitor.id.replace(/[^\w-]/g, '_')}` }}
     >
       {!detail && (
         <Link
           to="/monitors/$monitorId"
           params={{ monitorId: monitor.id }}
-          className="absolute inset-0 z-10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+          className="absolute inset-0 z-10 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
           aria-label={`${rowLabel({ name: monitor.name, heartbeat, shown, uptime: uptimeDisplay, warning })}, ${history}`}
         />
       )}
@@ -563,7 +551,7 @@ export function MonitorDetail({
   const heartbeat = deriveHeartbeat(monitor, state);
 
   return (
-    <Card className="@container p-0">
+    <Card size="flush" className="@container">
       <div className="px-4 pt-4">
         <MonitorSummary
           monitor={monitor}

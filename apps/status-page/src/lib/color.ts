@@ -1,37 +1,42 @@
 import { UPTIME_THRESHOLDS } from './constants';
+import type { MonitorState } from './monitor-state';
 
-type StatusColor = {
-  bg: string;
-  text: string;
-  border: string;
+export type StatusTone = 'operational' | 'degraded' | 'down' | 'unknown';
+export type UptimeTone = StatusTone | 'pending';
+
+/** Text tokens that keep AA contrast on the card background. */
+export const UPTIME_TEXT: Record<UptimeTone, string> = {
+  operational: 'text-status-operational-text',
+  degraded: 'text-status-degraded-text',
+  down: 'text-status-down-text',
+  unknown: 'text-muted-foreground',
+  pending: 'text-muted-foreground',
 };
 
-const UNKNOWN: StatusColor = {
-  bg: 'bg-status-unknown',
-  text: 'text-status-unknown',
-  border: 'border-status-unknown',
+const STATE_TONE: Record<MonitorState, UptimeTone> = {
+  up: 'operational',
+  running: 'operational',
+  degraded: 'degraded',
+  down: 'down',
+  pending: 'pending',
 };
 
-/** Status classes resolve from the `--status-*` theme tokens. */
-export function getStatusColor(percent: number | string | null): StatusColor {
-  if (percent === null) return UNKNOWN;
+export function getStatusTone(percent: number | string | null): StatusTone {
+  if (percent === null) return 'unknown';
 
   const p = Number(percent);
-  if (Number.isNaN(p)) return UNKNOWN;
+  if (Number.isNaN(p)) return 'unknown';
 
-  if (p >= UPTIME_THRESHOLDS.EXCELLENT) {
-    return {
-      bg: 'bg-status-operational',
-      text: 'text-status-operational',
-      border: 'border-status-operational',
-    };
-  }
-  if (p >= UPTIME_THRESHOLDS.GOOD) {
-    return {
-      bg: 'bg-status-degraded',
-      text: 'text-status-degraded',
-      border: 'border-status-degraded',
-    };
-  }
-  return { bg: 'bg-status-down', text: 'text-status-down', border: 'border-status-down' };
+  if (p >= UPTIME_THRESHOLDS.EXCELLENT) return 'operational';
+  if (p >= UPTIME_THRESHOLDS.GOOD) return 'degraded';
+  return 'down';
+}
+
+/** A heartbeat's uptime counts runs, so its state says more than its percentage. */
+export function uptimeTone(
+  isHeartbeat: boolean,
+  state: MonitorState,
+  uptimePercent: number | null,
+): UptimeTone {
+  return isHeartbeat ? STATE_TONE[state] : getStatusTone(uptimePercent);
 }
