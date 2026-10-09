@@ -183,12 +183,30 @@ describe('subrequests per check run', () => {
     const record = vi.spyOn(hub, 'record');
     const confirmAlerts = vi.spyOn(hub, 'confirmAlerts');
 
-    await runChecks(env, createWorkerDeps({ monitors, notification: { webhook: { url: HOOK } } }));
-
-    expect(overlapped).toBe(true);
-    const total =
+    const deps = createWorkerDeps({
+      monitors,
+      notification: { webhook: { url: HOOK, payload: '$MSG' } },
+    });
+    const requests = () =>
       fetchMock.mock.calls.length + record.mock.calls.length + confirmAlerts.mock.calls.length + 1;
-    expect(total).toBeLessThanOrEqual(50);
+
+    await runChecks(env, deps);
+    expect(overlapped).toBe(true);
+    expect(requests()).toBeLessThanOrEqual(50);
+
+    fetchMock.mockClear();
+    record.mockClear();
+    confirmAlerts.mockClear();
+    fetchMock.mockImplementation(async () => new Response('ok'));
+    vi.setSystemTime(Date.now() + 120_000);
+    await runChecks(env, deps);
+
+    expect(requests()).toBeLessThanOrEqual(50);
+    const sent = fetchMock.mock.calls
+      .filter(([input]) => input === HOOK)
+      .map(([, init]) => (typeof init?.body === 'string' ? init.body : ''))
+      .join('\n');
+    for (const monitor of monitors) expect(sent).toMatch(new RegExp(`${monitor.name}\\b`));
   });
 
   /** Fetches and hub calls in one run of 45 monitors that confirm through a proxy. */

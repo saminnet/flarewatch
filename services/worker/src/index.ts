@@ -206,12 +206,7 @@ export async function runChecks(
       ...(!attempted && { deferred: true }),
     }));
   };
-  if (alerts.length > 0) {
-    // Reporting a down alert's outcome can turn up the recovery of an outage that ended meanwhile.
-    // The hub keeps nothing about a recovery, so its outcome is not reported.
-    const recoveries = await hub.confirmAlerts(await deliver(alerts));
-    if (recoveries.length > 0) await deliver(recoveries);
-  }
+  if (alerts.length > 0) await hub.confirmAlerts(await deliver(alerts));
 
   for (const update of updates) {
     const monitor = monitors.get(update.monitorId);

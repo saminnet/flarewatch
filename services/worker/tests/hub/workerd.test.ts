@@ -98,6 +98,7 @@ it('backfills each monitor’s latest sample on upgrade before any new check', a
   ]);
   const sql = await storage(hub);
   await sql.exec('DELETE FROM _migrations WHERE id >= 12');
+  await sql.exec('DROP TABLE pending_recoveries');
   const columns = await sql.exec('PRAGMA table_info(meta)');
   if (columns.some(({ name }) => name === 'latest'))
     await sql.exec('ALTER TABLE meta DROP COLUMN latest');
@@ -160,6 +161,7 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
     await sql.exec('ALTER TABLE monitors DROP COLUMN warning');
     await sql.exec('DROP TABLE expiry_alerts');
     await sql.exec('DROP TABLE announcements');
+    await sql.exec('DROP TABLE pending_recoveries');
     await sql.exec('ALTER TABLE meta DROP COLUMN runs');
     await sql.exec('ALTER TABLE meta DROP COLUMN latest');
     await sql.exec('ALTER TABLE incidents DROP COLUMN alert_run');
@@ -302,7 +304,7 @@ describe('MonitorHub in workerd row budgets', () => {
     expect(steady.rows.written).toBe(2);
     expect(clear.rows.written).toBe(3);
     expect(after.rows.written).toBe(2);
-    expect(steady.rows.read).toBeLessThanOrEqual(10);
+    expect(steady.rows.read).toBeLessThanOrEqual(11);
   }, 60_000);
   it('writes the failure counter only as it grows and once on reset', async () => {
     const hub = 'threshold-budget';
@@ -599,11 +601,11 @@ describe('MonitorHub in workerd row budgets', () => {
   });
 
   it.each([
-    // Measured on workerd 1.20260930 before alerts.ts took over the alert columns.
-    ['alertOpening', { read: 25, written: 8 }],
-    ['alertSteady', { read: 20, written: 2 }],
-    ['alertErrorChange', { read: 23, written: 5 }],
-    ['alertRecovery', { read: 23, written: 6 }],
+    // Measured on workerd 1.20260930 with the recovery queue, which every alerting run reads.
+    ['alertOpening', { read: 27, written: 8 }],
+    ['alertSteady', { read: 22, written: 2 }],
+    ['alertErrorChange', { read: 25, written: 5 }],
+    ['alertRecovery', { read: 27, written: 9 }],
   ] as const)('reads and writes no more rows than before for %s', (name, before) => {
     expect(large[name], report()).toEqual(small[name]);
     expect(small[name].read, report()).toBeLessThanOrEqual(before.read);

@@ -35,6 +35,7 @@ Read the entries marked **Needs attention** before you upgrade. Each one changes
 ### Fixed
 
 - When a check run can't afford one request per alert, each webhook now gets the alerts that don't fit as one summary in the same run. Before, recovery alerts past the run's 50 requests were never sent, and down alerts waited for later runs. ([44511ad](https://github.com/saminnet/flarewatch/pull/95/commits/44511adea39d9917de5a23d75590ccad8c5306f7))
+- A recovery that a check run has no requests left for now waits for a later run. So does the recovery of an outage that ends while its down alert is still going out, which used to go out in the same run. Before, both could be lost. A waiting recovery is dropped if its monitor goes down again first.
 - Returning to the dashboard from a monitor page or History no longer makes an extra server call to load collapsed groups. ([28eef7a](https://github.com/saminnet/flarewatch/pull/95/commits/28eef7a89ceacfa00ecc05336ba4ef26ba0ef15c))
 - Hovering a monitor on the dashboard no longer loads its latency. The monitor page loads it once you open it. ([6750af6](https://github.com/saminnet/flarewatch/pull/95/commits/6750af6c129792cd295a497984943864ff8cbd0f))
 - A Globalping check with `sslCheckEnabled` now fails with `Invalid certificate expiry date` when Globalping reports an expiry that isn't a date. Before, the check passed and stored the broken date. ([8f7e464](https://github.com/saminnet/flarewatch/pull/95/commits/8f7e464841e112c7ee198fc55928ebab39ec590b))

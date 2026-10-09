@@ -78,7 +78,7 @@ export interface Alert {
   error: string;
   /** Down alerts only: names of the monitors behind this one that are down too. */
   alsoDown: string[];
-  /** A recovery found only once its down alert was delivered: when it happened. */
+  /** Recoveries only: when the outage ended. */
   at?: number;
   /** Reminders only: this one's number, counted from 1. */
   reminder?: number;
@@ -149,16 +149,12 @@ export class Alerts {
         const closed = openBefore.get(monitor.id);
         if (closed?.alert.state === 'sent') {
           // A held recovery ended when the monitor came back up, not now.
-          const end = closed.upSince ?? undefined;
-          alerts.push(
-            recoveryAlert(
-              monitor.id,
-              closed.id,
-              closed.reopenedAt,
-              runNumber,
-              change.incidentStartTime,
-              end,
-            ),
+          this.queueRecovery(
+            monitor.id,
+            closed.id,
+            closed.reopenedAt,
+            change.incidentStartTime,
+            closed.upSince ?? now,
           );
         }
         continue;
@@ -245,17 +241,69 @@ export class Alerts {
         });
       }
     }
-    return alerts;
+    const order = new Map(monitors.map(({ id }, index) => [id, index]));
+    return [...alerts, ...this.claimRecoveries(run, policy)].sort(
+      (a, b) => order.get(a.monitorId)! - order.get(b.monitorId)!,
+    );
+  }
+
+  /** One per monitor: a newer recovery replaces an older one that never went out. */
+  private queueRecovery(
+    monitorId: string,
+    incident: number,
+    reopenedAt: number | null,
+    start: number,
+    at: number,
+  ): void {
+    this.sql.exec(
+      `INSERT OR REPLACE INTO pending_recoveries (monitor_id, incident, reopened_at, start, at)
+       VALUES (?, ?, ?, ?, ?)`,
+      monitorId,
+      incident,
+      reopenedAt,
+      start,
+      at,
+    );
+  }
+
+  /**
+   * Claims the queued recoveries no live run holds. A recovery is dropped once
+   * its monitor is down again, leaves the config or stops alerting.
+   */
+  private claimRecoveries({ now, runNumber, monitors, openNow }: AlertRun, policy: AlertPolicy) {
+    const alerting = new Set(
+      monitors.filter(({ id }) => !policy.skipIds.includes(id)).map(({ id }) => id),
+    );
+    const claimed: Alert[] = [];
+    for (const row of this.sql.exec<PendingRecoveryRow>(
+      'SELECT * FROM pending_recoveries ORDER BY at',
+    )) {
+      if (!alerting.has(row.monitor_id) || openNow.has(row.monitor_id)) {
+        this.sql.exec('DELETE FROM pending_recoveries WHERE monitor_id = ?', row.monitor_id);
+        continue;
+      }
+      if (row.claimed_at !== null && now - row.claimed_at < ALERT_CLAIM_SECONDS) continue;
+      this.sql.exec(
+        'UPDATE pending_recoveries SET claimed_run = ?, claimed_at = ? WHERE monitor_id = ?',
+        runNumber,
+        now,
+        row.monitor_id,
+      );
+      claimed.push(
+        recoveryAlert(row.monitor_id, row.incident, row.reopened_at, runNumber, row.start, row.at),
+      );
+    }
+    return claimed;
   }
 
   /**
    * Records how each alert's delivery went. A down alert no webhook accepted is
    * due again next run, until MAX_ALERT_ATTEMPTS failures; a deferred one is due
-   * again with no failure counted. Returns the recovery
-   * alerts of delivered outages that ended while they were being sent.
+   * again with no failure counted. A recovery goes once tried and waits for a
+   * later run when deferred. A delivered outage that ended while its alert was
+   * being sent queues its recovery for the next run.
    */
-  record(outcomes: AlertOutcome[]): Alert[] {
-    const recoveries: Alert[] = [];
+  record(outcomes: AlertOutcome[]): void {
     for (const {
       incident,
       kind,
@@ -280,6 +328,15 @@ export class Alerts {
            WHERE id = ? AND error_alerts > 0 AND reopened_at IS ?`,
           incident,
           reopenedAt,
+        );
+      }
+      if (kind === 'recovered') {
+        this.sql.exec(
+          deferred
+            ? 'UPDATE pending_recoveries SET claimed_run = NULL, claimed_at = NULL WHERE incident = ? AND claimed_run = ?'
+            : 'DELETE FROM pending_recoveries WHERE incident = ? AND claimed_run = ?',
+          incident,
+          run,
         );
       }
       // A refused reminder keeps its number for the next one.
@@ -323,21 +380,26 @@ export class Alerts {
         run,
       );
       if (row?.end_at != null) {
-        recoveries.push(
-          recoveryAlert(
-            row.monitor_id,
-            incident,
-            row.reopened_at,
-            run,
-            row.start ?? row.end_at,
-            row.end_at,
-          ),
+        this.queueRecovery(
+          row.monitor_id,
+          incident,
+          row.reopened_at,
+          row.start ?? row.end_at,
+          row.end_at,
         );
       }
     }
-    return recoveries;
   }
 }
+
+type PendingRecoveryRow = {
+  monitor_id: string;
+  incident: number;
+  reopened_at: number | null;
+  start: number;
+  at: number;
+  claimed_at: number | null;
+};
 
 function recoveryAlert(
   monitorId: string,
@@ -345,7 +407,7 @@ function recoveryAlert(
   reopenedAt: number | null,
   run: number,
   start: number,
-  at?: number,
+  at: number,
 ): Alert {
   return {
     monitorId,
@@ -356,7 +418,7 @@ function recoveryAlert(
     incidentStartTime: start,
     error: '',
     alsoDown: [],
-    ...(at !== undefined && { at }),
+    at,
   };
 }
 

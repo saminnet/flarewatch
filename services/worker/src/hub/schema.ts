@@ -143,6 +143,17 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
       );
     },
   ],
+  [
+    `CREATE TABLE pending_recoveries (
+      monitor_id TEXT PRIMARY KEY,
+      incident INTEGER NOT NULL,
+      reopened_at INTEGER,
+      start INTEGER NOT NULL,
+      at INTEGER NOT NULL,
+      claimed_run INTEGER,
+      claimed_at INTEGER
+    ) WITHOUT ROWID`,
+  ],
 ];
 
 export function migrate(sql: Sql): void {

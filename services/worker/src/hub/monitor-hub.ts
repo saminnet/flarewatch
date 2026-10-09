@@ -321,16 +321,13 @@ export class MonitorHub extends DurableObject<Env> {
             policy,
           )
         : [];
+      if (!policy) this.sql.exec('DELETE FROM pending_recoveries');
       return { updates, alerts: [...alerts, ...warningAlerts] };
     });
   }
 
-  /**
-   * Records how each alert's delivery went. Returns the recovery alerts of
-   * delivered outages that ended while they were being sent.
-   */
-  confirmAlerts(outcomes: AlertOutcome[]): Alert[] {
-    return this.sql.transaction(() => this.alerts.record(outcomes));
+  confirmAlerts(outcomes: AlertOutcome[]): void {
+    this.sql.transaction(() => this.alerts.record(outcomes));
   }
 
   /** Records a job's ping. Its status changes at the next check run. */

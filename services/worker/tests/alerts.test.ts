@@ -1108,7 +1108,7 @@ describe('alert delivery', () => {
     expect(d.alerts()).toEqual(['web still down', 'api still down']);
   });
 
-  it('sends the recovery when the outage ends while its down alert is being delivered', async () => {
+  it('sends the recovery next run when the outage ends while its down alert is being delivered', async () => {
     const d = deployment([pull('api')]);
     d.down('api');
     d.whileDelivering(async () => {
@@ -1117,9 +1117,119 @@ describe('alert delivery', () => {
     });
 
     await d.run(T);
+    expect(d.alerts()).toEqual(['api down']);
+    await d.run(T + 120);
 
     expect(d.lastAlert()).toMatchObject({ label: 'up', at: T + 60, downtimeSeconds: 60 });
-    expect(d.alerts()).toEqual(['api down', 'api up']);
+    expect(d.alerts()).toEqual(['api up']);
+  });
+
+  it('sends a refused recovery only once', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    d.refuse();
+    await d.run(T + 60);
+    const attempts = d.deliveryAttempts();
+
+    d.accept();
+    await d.run(T + 120);
+
+    expect(d.alerts()).toEqual(['api down']);
+    expect(d.deliveryAttempts()).toBe(attempts);
+  });
+
+  it('drops a late recovery when the monitor is down again before it goes out', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    d.whileDelivering(async () => {
+      d.up('api');
+      await d.run(T + 60);
+    });
+    await d.run(T);
+
+    d.down('api');
+    await d.run(T + 120);
+    d.up('api');
+
+    expect(d.alerts()).not.toContain('api up');
+  });
+
+  it('drops a late recovery when its monitor stops alerting', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    d.whileDelivering(async () => {
+      d.up('api');
+      await d.run(T + 60);
+    });
+    await d.run(T);
+
+    d.config.notification = { ...d.config.notification, skipNotificationIds: ['api'] };
+    await d.run(T + 120);
+
+    expect(d.alerts()).toEqual(['api down']);
+  });
+
+  it('drops a late recovery when alerts are turned off', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api');
+    d.whileDelivering(async () => {
+      d.up('api');
+      await d.run(T + 60);
+    });
+    await d.run(T);
+    const notification = { ...d.config.notification };
+
+    d.config.notification = { ...notification, webhook: [] };
+    await d.run(T + 120);
+    d.config.notification = notification;
+    await d.run(T + 180);
+
+    expect(d.alerts()).toEqual(['api down']);
+  });
+
+  describe('a recovery the run cannot send', () => {
+    const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+    const failing = { ok: false as const, error: 'Unavailable' };
+    const working = { ok: true as const, latency: 10 };
+    function hub() {
+      const d = deployment([pull('api')]);
+      const record = (at: number, result: typeof failing | typeof working) =>
+        d.hub.record(
+          at,
+          [{ monitor: pull('api') as MonitorTarget, check: { location: 'SFO', result } }],
+          policy,
+        ).alerts;
+      const report = (alerts: Alert[], outcome: { delivered: boolean; deferred?: boolean }) =>
+        d.hub.confirmAlerts(alerts.map((alert) => ({ ...alert, ...outcome })));
+      report(record(T, failing), { delivered: true });
+      return { record, report, working };
+    }
+
+    it('waits for a later run, as often as it is deferred', () => {
+      const { record, report } = hub();
+      const first = record(T + 60, working);
+      expect(first).toMatchObject([{ kind: 'recovered', at: T + 60 }]);
+      report(first, { delivered: false, deferred: true });
+      const second = record(T + 120, working);
+      expect(second).toMatchObject([{ kind: 'recovered', at: T + 60 }]);
+      report(second, { delivered: false, deferred: true });
+      const third = record(T + 180, working);
+      expect(third).toMatchObject([{ kind: 'recovered', at: T + 60 }]);
+      report(third, { delivered: true });
+
+      expect(record(T + 240, working)).toEqual([]);
+    });
+
+    it('goes to one run at a time until that run is gone for 20 minutes', () => {
+      const { record } = hub();
+      expect(record(T + 60, working)).toMatchObject([{ kind: 'recovered' }]);
+
+      expect(record(T + 120, working)).toEqual([]);
+      expect(record(T + 60 + 19 * 60, working)).toEqual([]);
+      expect(record(T + 60 + 20 * 60, working)).toMatchObject([{ kind: 'recovered', at: T + 60 }]);
+    });
   });
 
   it('does not send a down alert twice when a second run overlaps its delivery', async () => {

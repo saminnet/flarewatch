@@ -623,6 +623,7 @@ describe('MonitorHub after an upgrade from 3.2', () => {
       ALTER TABLE monitors DROP COLUMN warning;
       DROP TABLE expiry_alerts;
       DROP TABLE announcements;
+      DROP TABLE pending_recoveries;
       ALTER TABLE meta DROP COLUMN runs;
       ALTER TABLE meta DROP COLUMN latest;
       ALTER TABLE incidents DROP COLUMN alert_run;
@@ -652,6 +653,7 @@ function rewindTo31(db: DatabaseSync): void {
     ALTER TABLE monitors DROP COLUMN warning;
     DROP TABLE expiry_alerts;
     DROP TABLE announcements;
+    DROP TABLE pending_recoveries;
     ALTER TABLE meta DROP COLUMN runs;
       ALTER TABLE meta DROP COLUMN latest;
     ALTER TABLE incidents DROP COLUMN alert_run;
