@@ -156,6 +156,16 @@ code {
 @theme inline {
   --font-sans: 'Inter Variable', 'Inter Fallback', sans-serif;
   --text-2xs: 0.625rem;
+  --text-caption: 0.8rem;
+  --radius-control-xs: min(var(--radius-md), 8px);
+  --radius-control-sm: min(var(--radius-md), 10px);
+  /* Concentric with the rounded-lg cards inside, which sit px-3 from the group edge. */
+  --radius-card-group: calc(var(--radius-lg) + var(--spacing) * 3);
+  --transition-props-control: color, box-shadow;
+  --transition-props-toggle: color, background-color, box-shadow;
+  --transition-props-cell: scale, filter, box-shadow;
+  --transition-props-bar: scale, filter, background-color, box-shadow;
+  --transition-props-reveal: opacity, filter, scale;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -265,10 +275,18 @@ code {
   animation: calendar-cell-in 0.3s ease-out var(--cell-delay, 0ms) both;
 }
 
-@utility transition-reveal {
-  transition-property: opacity, filter, scale;
+@utility transition-props-* {
+  transition-property: --value(--transition-props-*);
   transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
   transition-duration: var(--tw-duration, var(--default-transition-duration));
+}
+
+@utility bg-running-cell {
+  background-image: linear-gradient(
+    to top,
+    var(--status-maintenance) 45%,
+    var(--status-maintenance-bg) 45%
+  );
 }
 
 ::view-transition-group(*) {

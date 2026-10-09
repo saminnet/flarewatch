@@ -26,7 +26,7 @@ function AccordionItem({ className, ...props }: AccordionPrimitive.Item.Props) {
     <AccordionPrimitive.Item
       data-slot="accordion-item"
       className={cn(
-        'not-last:border-b group-data-[variant=card]/accordion:rounded-[calc(var(--radius-lg)+(--spacing(3)))] group-data-[variant=card]/accordion:border',
+        'not-last:border-b group-data-[variant=card]/accordion:rounded-card-group group-data-[variant=card]/accordion:border',
         className,
       )}
       {...props}
@@ -40,7 +40,7 @@ function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
         className={cn(
-          'focus-visible:ring-ring/50 focus-visible:border-ring focus-visible:after:border-ring **:data-[slot=accordion-trigger-icon]:text-muted-foreground rounded-md py-4 text-left text-sm font-medium hover:underline focus-visible:ring-[3px] **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-start justify-between border border-transparent transition-all outline-none disabled:pointer-events-none disabled:opacity-50 group-data-[variant=card]/accordion:rounded-[calc(var(--radius-lg)+(--spacing(3)))] group-data-[variant=card]/accordion:px-3 group-data-[variant=card]/accordion:py-2.5 group-data-[variant=card]/accordion:hover:no-underline group-data-[variant=card]/accordion:hover:bg-muted/50',
+          'focus-visible:ring-ring/50 focus-visible:border-ring focus-visible:after:border-ring **:data-[slot=accordion-trigger-icon]:text-muted-foreground rounded-md py-4 text-left text-sm font-medium hover:underline focus-visible:ring-3 **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-start justify-between border border-transparent transition-all outline-none disabled:pointer-events-none disabled:opacity-50 group-data-[variant=card]/accordion:rounded-card-group group-data-[variant=card]/accordion:px-3 group-data-[variant=card]/accordion:py-2.5 group-data-[variant=card]/accordion:hover:no-underline group-data-[variant=card]/accordion:hover:bg-muted/50',
           className,
         )}
         {...props}

@@ -17,7 +17,7 @@ import { STATUS_BAR } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 const GROUP_FOCUS =
-  'outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
+  'outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3';
 
 type NextCellKind = 'next' | 'late' | 'missed' | 'first' | 'running';
 

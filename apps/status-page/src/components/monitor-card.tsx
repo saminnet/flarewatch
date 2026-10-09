@@ -468,7 +468,7 @@ function MonitorSummary({
         <Link
           to="/monitors/$monitorId"
           params={{ monitorId: monitor.id }}
-          className="absolute inset-0 z-10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+          className="absolute inset-0 z-10 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
           aria-label={`${rowLabel({ name: monitor.name, heartbeat, shown, uptime: uptimeDisplay, warning })}, ${history}`}
         />
       )}

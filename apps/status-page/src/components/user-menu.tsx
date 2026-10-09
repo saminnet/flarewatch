@@ -37,7 +37,7 @@ export function UserMenu({ session, visitorView }: UserMenuProps) {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Account menu, signed in as ${name}`}
-        className="ml-1 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground outline-none transition-opacity hover:opacity-80 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="ml-1 inline-flex size-8 cursor-pointer items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground outline-none transition-opacity hover:opacity-80 focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         {initialsOf(name)}
       </DropdownMenuTrigger>

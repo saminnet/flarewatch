@@ -70,17 +70,34 @@ export default defineConfig({
         },
       ],
       'shadcn/no-raw-colors': 'error',
-      'shadcn/no-arbitrary-values': ['error', { allow: ['layout', 'focus-visible:ring-[3px]'] }],
+      'shadcn/no-arbitrary-values': ['error', { allow: ['layout'] }],
       'shadcn/no-inline-styles': 'error',
       'shadcn/no-unknown-classes': 'error',
       'shadcn/require-static-classes': 'error',
     },
     overrides: [
       {
-        files: ['apps/status-page/src/components/ui/**'],
+        // Composites that build on other primitives.
+        files: [
+          'apps/status-page/src/components/ui/calendar.tsx',
+          'apps/status-page/src/components/ui/datetime-picker.tsx',
+          'apps/status-page/src/components/ui/dropdown-menu.tsx',
+          'apps/status-page/src/components/ui/empty-state.tsx',
+          'apps/status-page/src/components/ui/field.tsx',
+          'apps/status-page/src/components/ui/month-picker.tsx',
+        ],
         rules: {
           'shadcn/no-restyle': 'off',
-          'shadcn/no-arbitrary-values': 'off',
+        },
+      },
+      {
+        // These pass their own cva() output on, which the rule cannot read.
+        files: [
+          'apps/status-page/src/components/ui/calendar.tsx',
+          'apps/status-page/src/components/ui/status-cell.tsx',
+          'apps/status-page/src/components/ui/uptime-badge.tsx',
+        ],
+        rules: {
           'shadcn/require-static-classes': 'off',
         },
       },

@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 
 const COPIED_MS = 2000;
-const ICON_FADE = 'transition-reveal duration-300 ease-standard';
+const ICON_FADE = 'transition-props-reveal duration-300 ease-standard';
 const ICON_SHOWN = 'scale-100 opacity-100 blur-none';
 const ICON_HIDDEN = 'scale-[0.25] opacity-0 blur-xs';
 

@@ -17,18 +17,15 @@ export const RUNNING_CELL_CLASSES = 'border border-status-maintenance';
 
 const NEXT_CELL = 'border border-dashed';
 
-const barCellVariants = cva(
-  'rounded-sm transition-[scale,filter,background-color,box-shadow] duration-150 ease-out',
-  {
-    variants: {
-      status: STATUS_DOT_COLORS,
-      interactive: {
-        true: 'cursor-pointer hover:scale-y-110 hover:brightness-110',
-        false: 'cursor-default',
-      },
+const barCellVariants = cva('rounded-sm transition-props-bar duration-150 ease-out', {
+  variants: {
+    status: STATUS_DOT_COLORS,
+    interactive: {
+      true: 'cursor-pointer hover:scale-y-110 hover:brightness-110',
+      false: 'cursor-default',
     },
   },
-);
+});
 
 function BarCell({
   className,
@@ -45,12 +42,12 @@ function BarCell({
 }
 
 const runCellVariants = cva(
-  'rounded-sm transition-[scale,filter,box-shadow] duration-150 ease-out hover:scale-y-110 hover:brightness-110 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+  'rounded-sm transition-props-cell duration-150 ease-out hover:scale-y-110 hover:brightness-110 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3',
   {
     variants: {
       run: {
         ...RUN_CELL_CLASSES,
-        running: `${RUNNING_CELL_CLASSES} bg-[linear-gradient(to_top,var(--status-maintenance)_45%,var(--status-maintenance-bg)_45%)]`,
+        running: `${RUNNING_CELL_CLASSES} bg-running-cell`,
       },
       next: {
         next: `${NEXT_CELL} bg-status-unknown-bg border-muted-foreground`,
