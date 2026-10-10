@@ -4,7 +4,6 @@ FlareWatch uses Vite+ (`vp`) for installs, checks, tests and builds.
 
 ```bash
 vp install
-vp config          # once, for the pre-commit hook
 
 vp check           # format, lint and types
 vp run test        # unit tests
