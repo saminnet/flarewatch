@@ -14,6 +14,8 @@ const authMiddleware = createMiddleware({ type: 'request' }).server(async (opts)
   return authMiddlewareServer(opts);
 });
 
+const DEFAULT_TITLE = 'FlareWatch';
+
 interface RootSearch {
   view?: 'visitor';
 }
@@ -42,17 +44,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       loadQuery(context.queryClient, configQuery()),
       loadQuery(context.queryClient, uiPrefsQuery()),
     ]);
-    return { theme, statusPage: config.statusPage };
+    return {
+      theme,
+      statusPage: config.statusPage,
+      title: config.statusPage?.title || DEFAULT_TITLE,
+    };
   },
-  head: () => {
+  head: ({ loaderData }) => {
+    const title = loaderData?.title ?? DEFAULT_TITLE;
+    const description = `Live status, uptime and incident history for ${title}.`;
     return {
       meta: [
         { charSet: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        {
-          name: 'description',
-          content: 'Open-source uptime monitoring for Cloudflare',
-        },
+        { name: 'description', content: description },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:site_name', content: title },
+        { property: 'og:title', content: title },
+        { property: 'og:description', content: description },
+        { name: 'twitter:card', content: 'summary' },
       ],
       links: [
         { rel: 'stylesheet', href: appCss },
