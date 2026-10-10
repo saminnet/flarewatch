@@ -6,7 +6,7 @@ All notable changes to FlareWatch will be documented in this file.
 
 ### Added
 
-- The status page sends link-preview tags (Open Graph and a Twitter card) on every page. A shared link now shows the page title and a short description instead of a bare URL.
+- The status page sends link-preview tags (Open Graph and a Twitter card) on every page. A shared link now shows the page title and a short description instead of a bare URL. ([#99](https://github.com/saminnet/flarewatch/pull/99))
 
 ## 3.4.0 - 2026-10-09
 
