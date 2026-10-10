@@ -543,6 +543,25 @@ async function signIn(page: Page): Promise<void> {
   }, adminCredentials);
 }
 
+test('the server sends link-preview tags on every page', async ({ request }) => {
+  const tagIn = (html: string, attribute: string, value: string) =>
+    new RegExp(`<meta[^>]*${attribute}="${value}"[^>]*content="([^"]*)"`).exec(html)?.[1];
+  for (const path of ['/', '/monitors/demo_example', '/history']) {
+    const html = await (await request.get(path)).text();
+    const tag = (attribute: string, value: string) => tagIn(html, attribute, value);
+    expect(tag('property', 'og:title'), path).toBe('FlareWatch');
+    expect(tag('property', 'og:site_name'), path).toBe('FlareWatch');
+    expect(tag('property', 'og:type'), path).toBe('website');
+    expect(tag('property', 'og:description'), path).toBe(
+      'Live status, uptime and incident history for FlareWatch.',
+    );
+    expect(tag('name', 'description'), path).toBe(
+      'Live status, uptime and incident history for FlareWatch.',
+    );
+    expect(tag('name', 'twitter:card'), path).toBe('summary');
+  }
+});
+
 test('the browser bundle carries no monitor or access config', () => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'reads the local e2e build');
   const assets = path.join(process.cwd(), '.wrangler/e2e/public/build/client/assets');

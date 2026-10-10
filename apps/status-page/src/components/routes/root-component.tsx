@@ -15,7 +15,7 @@ import { useAccountSync } from '@/lib/query/auth.mutations';
 const rootRoute = getRouteApi('__root__');
 
 export function RootComponent() {
-  const { theme: themePreference, statusPage } = rootRoute.useLoaderData();
+  const { theme: themePreference, statusPage, title } = rootRoute.useLoaderData();
   const { session } = rootRoute.useRouteContext();
   useAccountSync(session);
   // An embed sits in someone else's page: no site chrome, and its theme comes from the URL.
@@ -27,7 +27,6 @@ export function RootComponent() {
   const themeInitScript = getThemeInitScript(theme);
   const nonce = useRouter().options.ssr?.nonce;
   const isDark = theme === 'dark';
-  const title = statusPage?.title || 'FlareWatch';
   const favicon = statusPage?.favicon;
 
   return (

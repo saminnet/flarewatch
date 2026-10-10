@@ -2,6 +2,12 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- The status page sends link-preview tags (Open Graph and a Twitter card) on every page. A shared link now shows the page title and a short description instead of a bare URL.
+
 ## 3.4.0 - 2026-10-09
 
 A certificate close to expiry now shows its monitor as degraded and sends one warning, instead of taking it down. If a monitor is down today only because of its certificate, its next check closes that outage, and the outage stays in History.
