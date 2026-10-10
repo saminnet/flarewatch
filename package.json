@@ -4,6 +4,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "prepare": "vp config --no-agent",
     "compile": "vp check --no-fmt --no-lint",
     "check": "vp check",
     "auth:secret": "node --experimental-strip-types scripts/generate-auth-secret.ts",
