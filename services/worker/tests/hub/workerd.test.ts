@@ -99,6 +99,7 @@ it('backfills each monitor’s latest sample on upgrade before any new check', a
   const sql = await storage(hub);
   await sql.exec('DELETE FROM _migrations WHERE id >= 12');
   await sql.exec('DROP TABLE pending_recoveries');
+  await sql.exec('ALTER TABLE incidents DROP COLUMN error_due');
   const columns = await sql.exec('PRAGMA table_info(meta)');
   if (columns.some(({ name }) => name === 'latest'))
     await sql.exec('ALTER TABLE meta DROP COLUMN latest');
@@ -114,6 +115,12 @@ it('backfills each monitor’s latest sample on upgrade before any new check', a
   await evict(hub);
   expect((await view(hub)).body).toEqual(upgraded.body);
 }, 60_000);
+
+/** Undoes the two steps 3.4.1 adds, so the next start runs them as on the upgrade from 3.4.0. */
+async function rewindTo340(sql: Awaited<ReturnType<typeof storage>>) {
+  await sql.exec('DELETE FROM _migrations WHERE id >= (SELECT MAX(id) - 1 FROM _migrations)');
+  await sql.exec('ALTER TABLE incidents DROP COLUMN error_due');
+}
 
 async function insertHistory(
   sql: Awaited<ReturnType<typeof storage>>,
@@ -156,6 +163,7 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
     const sql = await storage(hub);
     // The schema 3.1.0 left behind.
     await sql.exec('DELETE FROM _migrations WHERE id >= 7');
+    await sql.exec('ALTER TABLE incidents DROP COLUMN error_due');
     await sql.exec('ALTER TABLE monitors DROP COLUMN failure_count');
     await sql.exec('ALTER TABLE monitors DROP COLUMN first_failure_at');
     await sql.exec('ALTER TABLE monitors DROP COLUMN warning');
@@ -679,11 +687,10 @@ describe('MonitorHub in workerd storage sizes', () => {
     }
     expect(JSON.stringify(stored).length).toBeLessThan(1_000_000);
     await view(hub);
-    // As 3.4.0 stored it, in parts of up to 2,000,000 characters. Undoing the last
-    // step makes the next start run it again, as on the upgrade to 3.4.1.
+    // As 3.4.0 stored it, in parts of up to 2,000,000 characters.
     const sql = await storage(hub);
     await insertHistory(sql, 'api', T0, stored, 2_000_000);
-    await sql.exec('DELETE FROM _migrations WHERE id = (SELECT MAX(id) FROM _migrations)');
+    await rewindTo340(sql);
     await evict(hub);
     expect((await view(hub)).body.monitors.api?.incidents).toEqual(stored);
 
@@ -729,7 +736,7 @@ describe('MonitorHub in workerd storage sizes', () => {
     await view(hub);
     const sql = await storage(hub);
     await insertHistory(sql, 'api', T0, [legacy], 6_000_000);
-    await sql.exec('DELETE FROM _migrations WHERE id = (SELECT MAX(id) FROM _migrations)');
+    await rewindTo340(sql);
     await evict(hub);
 
     const kept = [0, ...Array.from({ length: 99 }, (_, i) => 1301 + i)];

@@ -628,6 +628,7 @@ describe('MonitorHub after an upgrade from 3.2', () => {
       ALTER TABLE meta DROP COLUMN latest;
       ALTER TABLE incidents DROP COLUMN alert_run;
       ALTER TABLE incidents DROP COLUMN reminders;
+      ALTER TABLE incidents DROP COLUMN error_due;
     `);
     const { hub } = createHub({}, db);
     const api: CheckRecord = {
@@ -661,6 +662,7 @@ function rewindTo31(db: DatabaseSync): void {
     DROP TABLE incident_lists;
     DROP TABLE latency;
     ALTER TABLE incidents DROP COLUMN up_since;
+    ALTER TABLE incidents DROP COLUMN error_due;
   `);
 }
 
@@ -742,4 +744,28 @@ describe('MonitorHub after an upgrade from 3.1', () => {
     expect(incidents.length).toBeGreaterThan(10);
     expect(incidents[incidents.length - 1]?.end).toBe(T0 + 24 * 7200 + 6000);
   });
+});
+
+it('sends a deferred error change on a later run, even when the error stays the same', () => {
+  const { hub } = createHub();
+  const run = (now: number, error: string) =>
+    hub.record(
+      now,
+      [{ monitor: monitor('api'), check: { location: 'HEL', result: { ok: false, error } } }],
+      POLICY,
+    ).alerts;
+  const confirm = (alerts: ReturnType<typeof run>, outcome: { deferred?: boolean }) =>
+    hub.confirmAlerts(
+      alerts.map((alert) => ({ ...alert, delivered: !outcome.deferred, ...outcome })),
+    );
+
+  confirm(run(1000, 'Timeout'), {});
+  const changed = run(1060, 'HTTP 500');
+  expect(changed.map(({ kind, error }) => [kind, error])).toEqual([['error', 'HTTP 500']]);
+  confirm(changed, { deferred: true });
+
+  const retried = run(1120, 'HTTP 500');
+  expect(retried.map(({ kind, error }) => [kind, error])).toEqual([['error', 'HTTP 500']]);
+  confirm(retried, {});
+  expect(run(1180, 'HTTP 500')).toEqual([]);
 });

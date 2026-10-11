@@ -162,6 +162,8 @@ it('initialization admission leaves room for hub recording and an alert', async 
 });
 
 it('ends the checks of a triggered run within 20 seconds', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(1_800_000_000_000);
   const { hub } = createHub();
   const env = { MONITOR_HUB: hubNamespace(hub) };
   const deadlines: number[] = [];

@@ -26,6 +26,8 @@ export interface IncidentAlert {
   claimedAt: number | null;
   /** Error-change alerts claimed and not refused since the incident last opened. */
   errorAlerts: number;
+  /** An error change a run deferred, owed to the next run that can send it. */
+  errorDue: boolean;
   /** The check run that claimed the last down alert or reminder; null before reminders existed. */
   run: number | null;
   /** Reminders a webhook accepted since the incident last opened. */
@@ -33,12 +35,14 @@ export interface IncidentAlert {
 }
 
 /** The alert columns, for the query that loads the open incidents. */
-export const ALERT_COLUMNS = 'alert, alert_claimed_at, error_alerts, alert_run, reminders';
+export const ALERT_COLUMNS =
+  'alert, alert_claimed_at, error_alerts, error_due, alert_run, reminders';
 
 export type AlertRow = {
   alert: AlertState;
   alert_claimed_at: number | null;
   error_alerts: number;
+  error_due: number;
   alert_run: number | null;
   reminders: number;
 };
@@ -48,6 +52,7 @@ export function readAlert(row: AlertRow): IncidentAlert {
     state: row.alert,
     claimedAt: row.alert_claimed_at,
     errorAlerts: row.error_alerts,
+    errorDue: row.error_due === 1,
     run: row.alert_run,
     reminders: row.reminders,
   };
@@ -57,7 +62,7 @@ export function readAlert(row: AlertRow): IncidentAlert {
  * The alert columns a reopen sets, in the reopen's own UPDATE. The down alert
  * is due again unless it is still waiting to go out: the outage it covered ended.
  */
-export const REOPEN_ALERT_RESET = `error_alerts = 0, reminders = 0,
+export const REOPEN_ALERT_RESET = `error_alerts = 0, error_due = 0, reminders = 0,
   alert_attempts = CASE WHEN alert IN ('pending', 'sending') THEN alert_attempts ELSE 0 END,
   alert = CASE WHEN alert IN ('pending', 'sending') THEN alert ELSE 'pending' END`;
 
@@ -202,13 +207,16 @@ export class Alerts {
         });
       } else if (
         state === 'sent' &&
-        change?.changeType === 'error' &&
+        (change?.changeType === 'error' || open.alert.errorDue) &&
         !quiet &&
         !policy.skipErrorChanges &&
         errorAlerts < MAX_ERROR_ALERTS
       ) {
         // Counted now, so an overlapping run cannot pass the cap; a refused one is given back.
-        this.sql.exec('UPDATE incidents SET error_alerts = error_alerts + 1 WHERE id = ?', open.id);
+        this.sql.exec(
+          'UPDATE incidents SET error_alerts = error_alerts + 1, error_due = 0 WHERE id = ?',
+          open.id,
+        );
         alerts.push({
           monitorId: monitor.id,
           incident: open.id,
@@ -324,8 +332,10 @@ export class Alerts {
       }
       if (kind === 'error' && !delivered) {
         this.sql.exec(
-          `UPDATE incidents SET error_alerts = error_alerts - 1
+          `UPDATE incidents SET error_alerts = error_alerts - 1,
+             error_due = CASE WHEN ? THEN 1 ELSE error_due END
            WHERE id = ? AND error_alerts > 0 AND reopened_at IS ?`,
+          deferred ? 1 : 0,
           incident,
           reopenedAt,
         );
