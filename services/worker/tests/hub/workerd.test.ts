@@ -1,13 +1,9 @@
 import { createTestHarness } from 'wrangler';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vite-plus/test';
-import type {
-  CheckResult,
-  HubView,
-  Incident,
-  LatencySample,
-  MonitorTarget,
-} from '@flarewatch/shared';
+import type { CheckResult, HubView, Incident, LatencySample } from '@flarewatch/shared';
 import type { CheckRecord } from '../../src/hub/monitor-hub';
+import { check, down, up } from '../helpers/check-records';
+import { RELEASE_STEP, rewindStatements } from '../helpers/schema-rewind';
 import type { Rows, Run } from '../workerd/entry';
 
 // The hub in the workerd that wrangler deploys with. Storage is recreated after
@@ -25,16 +21,6 @@ const T0 = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const HOUR = 60 * 60;
 const DAY = 24 * HOUR;
 const FLAP_SECONDS = 15 * 60;
-
-const up = (latency = 10): CheckResult => ({ ok: true, latency });
-const down = (error = 'Unavailable'): CheckResult => ({ ok: false, error });
-
-function check(id: string, result: CheckResult): CheckRecord & { monitor: MonitorTarget } {
-  return {
-    monitor: { id, name: id, method: 'GET', target: `https://${id}.example.com` },
-    check: { location: 'HEL', result },
-  };
-}
 
 async function call<T>(hub: string, path: string, query = '', runs?: Run[]) {
   const response = await server.fetch(
@@ -97,12 +83,8 @@ it('backfills each monitor’s latest sample on upgrade before any new check', a
     { now: T0 + HOUR, records: [{ monitor: check('api', up()).monitor }, check('db', up(20))] },
   ]);
   const sql = await storage(hub);
-  await sql.exec('DELETE FROM _migrations WHERE id >= 12');
-  await sql.exec('DROP TABLE pending_recoveries');
-  await sql.exec('ALTER TABLE incidents DROP COLUMN error_due');
-  const columns = await sql.exec('PRAGMA table_info(meta)');
-  if (columns.some(({ name }) => name === 'latest'))
-    await sql.exec('ALTER TABLE meta DROP COLUMN latest');
+  // Before step 12, which backfills each monitor's latest sample.
+  await rewindTo(sql, 11);
   await sql.exec(
     'INSERT INTO latency (hour, data) VALUES (?, ?)',
     Math.floor(T0 / HOUR) - 1,
@@ -116,10 +98,10 @@ it('backfills each monitor’s latest sample on upgrade before any new check', a
   expect((await view(hub)).body).toEqual(upgraded.body);
 }, 60_000);
 
-/** Undoes the two steps 3.4.1 adds, so the next start runs them as on the upgrade from 3.4.0. */
-async function rewindTo340(sql: Awaited<ReturnType<typeof storage>>) {
-  await sql.exec('DELETE FROM _migrations WHERE id >= (SELECT MAX(id) - 1 FROM _migrations)');
-  await sql.exec('ALTER TABLE incidents DROP COLUMN error_due');
+/** Takes a hub back to the schema after migration step `target`; its next start runs the rest. */
+async function rewindTo(sql: Awaited<ReturnType<typeof storage>>, target: number) {
+  const [row] = await sql.exec('SELECT MAX(id) AS applied FROM _migrations');
+  for (const statement of rewindStatements(Number(row?.applied), target)) await sql.exec(statement);
 }
 
 async function insertHistory(
@@ -161,22 +143,7 @@ describe('MonitorHub in workerd after an upgrade from 3.1', () => {
       { now: T0, records: [check('api', up()), check('db', up()), check('web', up())] },
     ]);
     const sql = await storage(hub);
-    // The schema 3.1.0 left behind.
-    await sql.exec('DELETE FROM _migrations WHERE id >= 7');
-    await sql.exec('ALTER TABLE incidents DROP COLUMN error_due');
-    await sql.exec('ALTER TABLE monitors DROP COLUMN failure_count');
-    await sql.exec('ALTER TABLE monitors DROP COLUMN first_failure_at');
-    await sql.exec('ALTER TABLE monitors DROP COLUMN warning');
-    await sql.exec('DROP TABLE expiry_alerts');
-    await sql.exec('DROP TABLE announcements');
-    await sql.exec('DROP TABLE pending_recoveries');
-    await sql.exec('ALTER TABLE meta DROP COLUMN runs');
-    await sql.exec('ALTER TABLE meta DROP COLUMN latest');
-    await sql.exec('ALTER TABLE incidents DROP COLUMN alert_run');
-    await sql.exec('ALTER TABLE incidents DROP COLUMN reminders');
-    await sql.exec('DROP TABLE incident_lists');
-    await sql.exec('DROP TABLE latency');
-    await sql.exec('ALTER TABLE incidents DROP COLUMN up_since');
+    await rewindTo(sql, RELEASE_STEP['3.1.0']);
     const addIncident = (monitorId: string, starts: number[], errors: string[], end?: number) =>
       sql.exec(
         'INSERT INTO incidents (monitor_id, starts, errors, end_at) VALUES (?, ?, ?, ?)',
@@ -690,7 +657,7 @@ describe('MonitorHub in workerd storage sizes', () => {
     // As 3.4.0 stored it, in parts of up to 2,000,000 characters.
     const sql = await storage(hub);
     await insertHistory(sql, 'api', T0, stored, 2_000_000);
-    await rewindTo340(sql);
+    await rewindTo(sql, RELEASE_STEP['3.4.0']);
     await evict(hub);
     expect((await view(hub)).body.monitors.api?.incidents).toEqual(stored);
 
@@ -736,7 +703,7 @@ describe('MonitorHub in workerd storage sizes', () => {
     await view(hub);
     const sql = await storage(hub);
     await insertHistory(sql, 'api', T0, [legacy], 6_000_000);
-    await rewindTo340(sql);
+    await rewindTo(sql, RELEASE_STEP['3.4.0']);
     await evict(hub);
 
     const kept = [0, ...Array.from({ length: 99 }, (_, i) => 1301 + i)];

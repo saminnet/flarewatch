@@ -1,20 +1,15 @@
-import { getEdgeLocation as locateEdge } from '../src/utils/location';
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   isCheckResultWithLocation,
   type Fetcher,
-  type HeartbeatMonitor,
   type MonitorTarget,
   type WorkerConfig,
 } from '@flarewatch/shared';
-import { checkMonitor } from '../src/checkers';
-import { createNotifier } from '../src/notifications/webhook';
-import { HttpChecker } from '../src/checkers/http';
-import { TcpChecker } from '../src/checkers/tcp';
-import { GlobalPingChecker } from '../src/checkers/globalping';
 import type { Env } from '../src/env';
-import Worker, { type WorkerDeps } from '../src/index';
+import Worker from '../src/index';
 import { createHub, hubNamespace } from './helpers/hub';
+import { createWorkerDeps } from './helpers/worker-deps';
+import { createHeartbeat } from '../../../packages/shared/tests/helpers/monitors';
 
 const NOW = Date.parse('2025-01-15T12:00:00Z') / 1000;
 
@@ -25,33 +20,11 @@ const api: MonitorTarget = {
   target: 'https://api.example.com/health',
   checkProxy: 'https://proxy.example.com/check',
 };
-const backup: HeartbeatMonitor = {
-  id: 'backup',
-  name: 'Backup',
-  method: 'HEARTBEAT',
-  periodSeconds: 3600,
-  graceSeconds: 60,
-};
+const backup = createHeartbeat({ name: 'Backup' });
 const config: WorkerConfig = { monitors: [api, backup] };
 
 const fetchMock = vi.fn<Fetcher>();
-const edge = () => locateEdge(async () => new Response('colo=HEL\n'));
-
-const deps: WorkerDeps = {
-  checkMonitor: (target, ctx) =>
-    checkMonitor(target, ctx, {
-      http: new HttpChecker(fetchMock),
-      tcp: new TcpChecker(async () => {
-        throw new Error('no socket in this test');
-      }),
-      globalPing: new GlobalPingChecker(fetchMock),
-      getEdgeLocation: edge,
-      fetcher: fetchMock,
-    }),
-  createNotifier,
-  getEdgeLocation: edge,
-  staticConfig: config,
-};
+const deps = createWorkerDeps(config, { fetcher: fetchMock });
 
 /** A hub that already holds one recorded run, behind a binding that counts every use. */
 function createEnv() {

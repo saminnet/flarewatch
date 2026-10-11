@@ -1,11 +1,11 @@
-import { once } from 'node:events';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import net from 'node:net';
 import { text } from 'node:stream/consumers';
-import { unstable_startWorker } from 'wrangler';
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test';
 import type { JsonObject } from '@flarewatch/shared';
 import fixture from '../fixtures/verdicts.json';
+import { useDirectWorker } from '../helpers/direct-worker';
+import { close, listen } from '../helpers/local-server';
 
 /** flarewatch-proxy runs the same file, so this shape is a contract between the repos. */
 interface Reply {
@@ -62,45 +62,34 @@ const DISAGREES = new Map<string, Disagreement>([
   ],
 ]);
 
-let worker: Awaited<ReturnType<typeof unstable_startWorker>>;
+const worker = useDirectWorker();
 
 const HOST = '127.0.0.1';
 let tcp = 0;
-let closed = 0;
-
-async function listen(listener: net.Server): Promise<number> {
-  listener.listen(0, HOST);
-  await once(listener, 'listening');
-  const address = listener.address();
-  if (address === null || typeof address === 'string') throw new Error('listener has no port');
-  return address.port;
-}
 
 const tcpListener = net.createServer((socket) => socket.destroy());
 
 beforeAll(async () => {
-  worker = await unstable_startWorker({
-    config: `${import.meta.dirname}/../workerd/direct/wrangler.toml`,
-    dev: { server: { port: 0 }, inspector: false },
-  });
   tcp = await listen(tcpListener);
-  const unused = net.createServer();
-  closed = await listen(unused);
-  unused.close();
-  await once(unused, 'close');
-}, 60_000);
-
-afterAll(async () => {
-  tcpListener.close();
-  await worker.dispose();
 });
+
+afterAll(() => close(tcpListener));
+
+/** A port nothing listens on, taken just before its case so another listener is unlikely to hold it. */
+async function closedPort(): Promise<number> {
+  const unused = net.createServer();
+  const port = await listen(unused);
+  await close(unused);
+  return port;
+}
 
 interface Target {
   origin: string;
   other: string;
+  closed: number;
 }
 
-function expand(value: string, { origin, other }: Target): string {
+function expand(value: string, { origin, other, closed }: Target): string {
   const placeholders = {
     '{ORIGIN}': origin.replace('http://', 'HTTP://'),
     '{originhost}': origin.replace('http://', ''),
@@ -164,15 +153,21 @@ describe('verdicts.json through the direct check on workerd', () => {
           { body: 'end' },
         ]
       : (replies ?? []);
-    const target: Target = { origin: '', other: '' };
+    const target: Target = { origin: '', other: '', closed: 0 };
     const servers = [0, 1].map(() =>
       createServer((request, response) => void answer(list, target, request, response)),
     );
-    const [originPort, otherPort] = await Promise.all(servers.map(listen));
-    target.origin = `http://${HOST}:${originPort}`;
-    target.other = `http://${HOST}:${otherPort}`;
 
     try {
+      // Settled first, so the finally closes a server that started when the other failed.
+      const started = await Promise.allSettled(servers.map(listen));
+      const [originPort, otherPort] = started.map((port) => {
+        if (port.status === 'rejected') throw port.reason;
+        return port.value;
+      });
+      target.origin = `http://${HOST}:${originPort}`;
+      target.other = `http://${HOST}:${otherPort}`;
+      if (JSON.stringify(monitor).includes('{closed}')) target.closed = await closedPort();
       const body = JSON.stringify({
         id: 'test',
         name: 'Test',
@@ -180,20 +175,13 @@ describe('verdicts.json through the direct check on workerd', () => {
         target: '{origin}/0',
         ...monitor,
       });
-      const response = await worker.fetch('http://worker/', {
-        method: 'POST',
-        body: expand(body, target),
-      });
-      const got: unknown = await response.json();
+      const got = await worker.post('/', expand(body, target));
       const want = DISAGREES.get(name)?.result ?? result;
 
       expect(got).toMatchObject(want);
       if (!want.ok) expect(got).toHaveProperty('error', expect.stringMatching(/./));
     } finally {
-      for (const each of servers) {
-        each.close();
-        each.closeAllConnections();
-      }
+      await Promise.all(servers.map(close));
     }
   });
 });

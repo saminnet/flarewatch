@@ -1,10 +1,20 @@
-import { expect, it, vi } from 'vite-plus/test';
+import { expect, it, onTestFinished, vi } from 'vite-plus/test';
 import Worker, { runChecks } from '../src/index';
 import type { CheckContext, MonitorTarget } from '@flarewatch/shared';
 import { checkMonitor } from '../src/checkers';
 import { createNotifier } from '../src/notifications/webhook';
 import { getEdgeLocation } from '../src/utils/location';
+import type { env as workersEnv } from './helpers/cloudflare-workers';
 import { createHub, hubNamespace } from './helpers/hub';
+import { freezeClock } from '../../../packages/shared/tests/helpers/clock';
+
+/** The status page's snapshot module in a fresh isolate, its MONITOR_WORKER binding set to `binding`. */
+async function pageIsolate(binding: NonNullable<typeof workersEnv.MONITOR_WORKER>) {
+  vi.resetModules();
+  onTestFinished(() => void vi.resetModules());
+  (await import('./helpers/cloudflare-workers')).env.MONITOR_WORKER = binding;
+  return import('../../../apps/status-page/src/lib/snapshots');
+}
 
 it.each([0, 60_001])(
   'two page isolates share initialization admission; retry after %i ms',
@@ -40,12 +50,8 @@ it.each([0, 60_001])(
       fetch: (input: Request | string, init?: RequestInit) =>
         Worker.fetch(new Request(input, init), env, ctx as typeof ctx & ExecutionContext, deps),
     };
-    vi.resetModules();
-    (await import('./helpers/cloudflare-workers')).env.MONITOR_WORKER = binding;
-    const first = await import('../../../apps/status-page/src/lib/snapshots');
-    vi.resetModules();
-    (await import('./helpers/cloudflare-workers')).env.MONITOR_WORKER = binding;
-    const second = await import('../../../apps/status-page/src/lib/snapshots');
+    const first = await pageIsolate(binding);
+    const second = await pageIsolate(binding);
     await Promise.all([first.readVisitorSnapshot(), second.readVisitorSnapshot()]);
     await vi.waitFor(() => expect(completions).toHaveLength(1));
     expect(pending).toHaveLength(1);
@@ -162,8 +168,7 @@ it('initialization admission leaves room for hub recording and an alert', async 
 });
 
 it('ends the checks of a triggered run within 20 seconds', async () => {
-  vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(1_800_000_000_000);
+  freezeClock(1_800_000_000_000, { dateOnly: true });
   const { hub } = createHub();
   const env = { MONITOR_HUB: hubNamespace(hub) };
   const deadlines: number[] = [];

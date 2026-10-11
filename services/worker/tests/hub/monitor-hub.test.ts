@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vite-plus/test';
 import type { CheckResult, HeartbeatMonitor, MonitorTarget } from '@flarewatch/shared';
 import type { AlertPolicy } from '../../src/hub/alerts';
 import type { CheckRecord } from '../../src/hub/monitor-hub';
+import { check, down, up } from '../helpers/check-records';
 import { createHub } from '../helpers/hub';
+import { RELEASE_STEP, rewindStatements } from '../helpers/schema-rewind';
 
 const T0 = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const DAY = 24 * 60 * 60;
@@ -12,13 +14,6 @@ const POLICY: AlertPolicy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChang
 function monitor(id: string): MonitorTarget {
   return { id, name: id, method: 'GET', target: `https://${id}.example.com` };
 }
-
-function check(id: string, result: CheckResult, location = 'HEL'): CheckRecord {
-  return { monitor: monitor(id), check: { location, result } };
-}
-
-const up = (latency = 10): CheckResult => ({ ok: true, latency });
-const down = (error = 'Unavailable'): CheckResult => ({ ok: false, error });
 
 describe('MonitorHub incidents', () => {
   it('opens an incident on the first failure and reports it as a down change', () => {
@@ -615,21 +610,7 @@ describe('MonitorHub after an upgrade from 3.2', () => {
         delivered: true,
       })),
     );
-    // The schema 3.2.0 left behind.
-    db.exec(`
-      DELETE FROM _migrations WHERE id >= 8;
-      ALTER TABLE monitors DROP COLUMN failure_count;
-      ALTER TABLE monitors DROP COLUMN first_failure_at;
-      ALTER TABLE monitors DROP COLUMN warning;
-      DROP TABLE expiry_alerts;
-      DROP TABLE announcements;
-      DROP TABLE pending_recoveries;
-      ALTER TABLE meta DROP COLUMN runs;
-      ALTER TABLE meta DROP COLUMN latest;
-      ALTER TABLE incidents DROP COLUMN alert_run;
-      ALTER TABLE incidents DROP COLUMN reminders;
-      ALTER TABLE incidents DROP COLUMN error_due;
-    `);
+    rewindTo(db, RELEASE_STEP['3.2.0']);
     const { hub } = createHub({}, db);
     const api: CheckRecord = {
       monitor: { ...monitor('api'), reminderEveryChecks: 30 },
@@ -645,25 +626,10 @@ describe('MonitorHub after an upgrade from 3.2', () => {
   });
 });
 
-/** Rewinds a new hub's storage to the schema 3.1.0 left behind. */
-function rewindTo31(db: DatabaseSync): void {
-  db.exec(`
-    DELETE FROM _migrations WHERE id >= 7;
-    ALTER TABLE monitors DROP COLUMN failure_count;
-    ALTER TABLE monitors DROP COLUMN first_failure_at;
-    ALTER TABLE monitors DROP COLUMN warning;
-    DROP TABLE expiry_alerts;
-    DROP TABLE announcements;
-    DROP TABLE pending_recoveries;
-    ALTER TABLE meta DROP COLUMN runs;
-      ALTER TABLE meta DROP COLUMN latest;
-    ALTER TABLE incidents DROP COLUMN alert_run;
-    ALTER TABLE incidents DROP COLUMN reminders;
-    DROP TABLE incident_lists;
-    DROP TABLE latency;
-    ALTER TABLE incidents DROP COLUMN up_since;
-    ALTER TABLE incidents DROP COLUMN error_due;
-  `);
+/** Rewinds a new hub's storage to the schema after migration step `target`. */
+function rewindTo(db: DatabaseSync, target: number): void {
+  const [row] = db.prepare('SELECT MAX(id) AS applied FROM _migrations').all();
+  for (const statement of rewindStatements(Number(row?.applied), target)) db.exec(statement);
 }
 
 function addIncident(
@@ -687,7 +653,7 @@ describe('MonitorHub after an upgrade from 2.x', () => {
     const { hub } = createHub({}, db);
     hub.record(T0, [check('api', up())]);
     // Rewind to the schema 2.x left behind, with its import rows.
-    rewindTo31(db);
+    rewindTo(db, RELEASE_STEP['3.1.0']);
     db.exec(`
       DELETE FROM _migrations WHERE id >= 4;
       DROP INDEX incidents_end_at;
@@ -714,7 +680,7 @@ describe('MonitorHub after an upgrade from 3.1', () => {
   it('keeps a monitor’s newest 1,000 closed incidents and cuts long errors', () => {
     const db = new DatabaseSync(':memory:');
     createHub({}, db).hub.record(T0, [check('api', up())]);
-    rewindTo31(db);
+    rewindTo(db, RELEASE_STEP['3.1.0']);
     for (let i = 1; i <= 1005; i++)
       addIncident(db, 'api', [T0 + i * 100], ['Timeout'], T0 + i * 100 + 50);
     addIncident(db, 'api', [T0 + 200_000], ['x'.repeat(600)]);
@@ -730,7 +696,7 @@ describe('MonitorHub after an upgrade from 3.1', () => {
   it('keeps about a megabyte of a monitor’s history, dropping the oldest', () => {
     const db = new DatabaseSync(':memory:');
     createHub({}, db).hub.record(T0, [check('api', up())]);
-    rewindTo31(db);
+    rewindTo(db, RELEASE_STEP['3.1.0']);
     // 25 outages whose 500-character error changed 100 times each.
     for (let i = 0; i < 25; i++) {
       const starts = Array.from({ length: 100 }, (_, j) => T0 + i * 7200 + j * 60);

@@ -3,6 +3,7 @@ import { text } from 'node:stream/consumers';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vite-plus/test';
 import { isJsonObject, type JsonObject, type JsonValue } from '@flarewatch/shared';
 import { useDirectWorker } from './helpers/direct-worker';
+import { finishedMeasurement } from './helpers/globalping';
 import { close, listen } from './helpers/local-server';
 
 interface Received {
@@ -20,15 +21,7 @@ function json(response: ServerResponse, body: unknown, status = 200): void {
   response.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
 }
 
-const finished = {
-  status: 'finished',
-  results: [
-    {
-      probe: { country: 'FI', city: 'Helsinki' },
-      result: { status: 'finished', statusCode: 200, rawBody: 'ok', timings: { total: 12 } },
-    },
-  ],
-};
+const finished = finishedMeasurement({ timings: { total: 12 } });
 
 async function answer(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const path = request.url ?? '';

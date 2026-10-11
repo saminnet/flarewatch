@@ -1,35 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
-import type { Fetcher, MonitorTarget, Webhook } from '@flarewatch/shared';
+import type { Fetcher, Webhook } from '@flarewatch/shared';
 import {
   buildTemplateContext,
   formatNotificationMessage,
   WebhookNotifier,
   type NotificationContext,
 } from '../../src/notifications/webhook';
+import { createMonitor } from '../../../../packages/shared/tests/helpers/monitors';
+import { freezeClock } from '../../../../packages/shared/tests/helpers/clock';
+import { notificationContext } from '../helpers/notification-context';
 
-const createMonitor = (name = 'Test Monitor'): MonitorTarget => ({
-  id: 'test-monitor',
-  name,
-  method: 'GET',
-  target: 'https://example.com',
-});
-
-const createContext = (overrides: Partial<NotificationContext> = {}): NotificationContext => ({
-  monitor: createMonitor(),
-  kind: 'down',
-  incidentStartTime: 1000,
-  currentTime: 2000,
-  downtimeSeconds: 1000,
-  reason: 'Connection refused',
-  timeZone: 'UTC',
-  alsoDown: [],
-  ...overrides,
-});
+const createContext = (overrides: Partial<NotificationContext> = {}): NotificationContext =>
+  notificationContext({ currentTime: 2000, downtimeSeconds: 1000, ...overrides });
 
 describe('webhook notifications', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-01-15T12:00:00Z'));
+    freezeClock(new Date('2025-01-15T12:00:00Z'));
   });
 
   describe('formatNotificationMessage', () => {

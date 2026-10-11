@@ -1,4 +1,5 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { afterAll, expect, onTestFinished } from 'vite-plus/test';
 import type { Env } from '../../src/env';
 import { MonitorHub } from '../../src/hub/monitor-hub';
 
@@ -36,11 +37,26 @@ function createStorage(db: DatabaseSync, onQuery: (query: string) => void) {
   };
 }
 
+const owned = new WeakSet<DatabaseSync>();
+
+/** Closes `db` when the test that opened it ends, or after the file when no test is running. */
+function own(db: DatabaseSync): void {
+  if (owned.has(db)) return;
+  owned.add(db);
+  const close = () => {
+    if (db.isOpen) db.close();
+  };
+  if (expect.getState().currentTestName === undefined) afterAll(close);
+  else onTestFinished(close);
+}
+
 /**
  * Past migrations, a query that would scan every incident fails the test, as
  * when it loses its index. The workerd tests measure the rows Durable Objects bill.
+ * A hub reopened over the same `db` shares its owner.
  */
 export function createHub(env: Env = {}, db = new DatabaseSync(':memory:')) {
+  own(db);
   let migrated = false;
   const ctx = {
     storage: createStorage(db, (query) => {

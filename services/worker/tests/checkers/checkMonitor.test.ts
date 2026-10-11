@@ -1,26 +1,18 @@
-import { getEdgeLocation as locateEdge } from '../../src/utils/location';
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import type { CheckContext, Fetcher, MonitorTarget, VpcBinding } from '@flarewatch/shared';
 import { checkMonitor, planIssues, runBudget } from '../../src/checkers';
 import type { CheckDeps } from '../../src/checkers/deps';
 import { HttpChecker } from '../../src/checkers/http';
-import { TcpChecker } from '../../src/checkers/tcp';
-import { GlobalPingChecker } from '../../src/checkers/globalping';
+import { createCheckDeps } from '../helpers/worker-deps';
+import { finishedMeasurement } from '../helpers/globalping';
 
 const GLOBALPING_API = 'https://api.globalping.io/v1/measurements';
 
 type Socket = { opened: Promise<unknown>; close: () => Promise<void> };
-const getEdgeLocation = () => locateEdge(async () => new Response('colo=SFO\n'));
 const fetchMock = vi.fn<Fetcher>();
 const connectMock = vi.fn<(address: { hostname: string; port: number }) => Promise<Socket>>();
 
-const deps: CheckDeps = {
-  http: new HttpChecker(fetchMock),
-  tcp: new TcpChecker(connectMock),
-  globalPing: new GlobalPingChecker(fetchMock),
-  getEdgeLocation,
-  fetcher: fetchMock,
-};
+const deps = createCheckDeps(fetchMock, connectMock, 'SFO');
 
 const urls = () => fetchMock.mock.calls.map(([url]) => String(url));
 
@@ -38,18 +30,10 @@ function createTarget(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   };
 }
 
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+const json = (body: unknown, status = 200) => Response.json(body, { status });
 const inProgress = () => json({ status: 'in-progress', results: [] });
 const finishedAt = (country: string, city: string, total: number) =>
-  json({
-    status: 'finished',
-    results: [
-      {
-        probe: { country, city },
-        result: { status: 'finished', statusCode: 200, rawBody: 'ok', timings: { total } },
-      },
-    ],
-  });
+  json(finishedMeasurement({ timings: { total } }, { country, city }));
 const failedMeasurement = (output: string) =>
   json({
     status: 'finished',

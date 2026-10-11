@@ -1,22 +1,23 @@
 import { expect, it } from 'vite-plus/test';
 import { NOTIFICATION_TEMPLATES } from '@flarewatch/shared';
 import { WebhookNotifier, type NotificationContext } from '../../src/notifications/webhook';
+import { createMonitor } from '../../../../packages/shared/tests/helpers/monitors';
+import { notificationContext } from '../helpers/notification-context';
 
 const context = (
   kind: NotificationContext['kind'],
   name: string,
   downtimeSeconds = 0,
-): NotificationContext => ({
-  monitor: { id: name, name, method: 'GET', target: 'https://example.com' },
-  kind,
-  currentTime: 1800000000,
-  incidentStartTime: 1800000000 - downtimeSeconds,
-  downtimeSeconds,
-  timeZone: 'UTC',
-  reason: 'Expires tomorrow',
-  alsoDown: [],
-  ...(kind === 'reminder' && { reminder: 2 }),
-});
+): NotificationContext =>
+  notificationContext({
+    monitor: createMonitor({ id: name, name }),
+    kind,
+    currentTime: 1800000000,
+    incidentStartTime: 1800000000 - downtimeSeconds,
+    downtimeSeconds,
+    reason: 'Expires tomorrow',
+    ...(kind === 'reminder' && { reminder: 2 }),
+  });
 
 it.each([100, 2000])(
   'bounds summaries with %i-character names and counts omitted alerts',

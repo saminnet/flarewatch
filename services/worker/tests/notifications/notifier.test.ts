@@ -1,30 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
-import type { Fetcher, MonitorTarget } from '@flarewatch/shared';
-import { WebhookNotifier, type NotificationContext } from '../../src/notifications/webhook';
+import type { Fetcher } from '@flarewatch/shared';
+import { WebhookNotifier } from '../../src/notifications/webhook';
+import { notificationContext } from '../helpers/notification-context';
 
 const fetchMock = vi.fn<Fetcher>();
-
-function createMonitor(): MonitorTarget {
-  return {
-    id: 'test-monitor',
-    name: 'Test Monitor',
-    method: 'GET',
-    target: 'https://example.com',
-  };
-}
-
-function createNotificationContext(): NotificationContext {
-  return {
-    monitor: createMonitor(),
-    kind: 'down',
-    incidentStartTime: 1000,
-    currentTime: 1000,
-    downtimeSeconds: 0,
-    reason: 'Connection refused',
-    timeZone: 'UTC',
-    alsoDown: [],
-  };
-}
 
 describe('WebhookNotifier', () => {
   beforeEach(() => {
@@ -40,7 +19,7 @@ describe('WebhookNotifier', () => {
     }
 
     const notifier = new WebhookNotifier({ url, payloadType: 'json', payload: {} }, fetchMock);
-    const results = await notifier.send(createNotificationContext(), 'hello');
+    const results = await notifier.send(notificationContext(), 'hello');
 
     expect(JSON.stringify([logged, results])).not.toContain('SECRET');
     expect(results).toEqual([{ success: false, error: 'fetch failed for <webhook URL>' }]);
@@ -58,7 +37,7 @@ describe('WebhookNotifier', () => {
       fetchMock,
     );
 
-    const results = await notifier.send(createNotificationContext(), 'hello');
+    const results = await notifier.send(notificationContext(), 'hello');
 
     expect(results).toEqual([{ success: true, statusCode: 200 }]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -89,7 +68,7 @@ describe('WebhookNotifier', () => {
       fetchMock,
     );
 
-    await notifier.send(createNotificationContext(), 'hello');
+    await notifier.send(notificationContext(), 'hello');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [calledUrl, options] = fetchMock.mock.calls[0] ?? [];
@@ -115,7 +94,7 @@ describe('WebhookNotifier', () => {
         fetchMock,
       );
 
-      const result = await notifier.send(createNotificationContext(), 'hello');
+      const result = await notifier.send(notificationContext(), 'hello');
 
       expect(fetchMock).not.toHaveBeenCalled();
       expect(result).toEqual([
@@ -136,7 +115,7 @@ describe('WebhookNotifier', () => {
       fetchMock,
     );
 
-    await notifier.send(createNotificationContext(), 'hello');
+    await notifier.send(notificationContext(), 'hello');
 
     const [, options] = fetchMock.mock.calls[0] ?? [];
     const body = new URLSearchParams(options?.body as string);
@@ -158,7 +137,7 @@ describe('WebhookNotifier', () => {
       fetchMock,
     );
 
-    await notifier.send(createNotificationContext(), 'ignored');
+    await notifier.send(notificationContext(), 'ignored');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, options] = fetchMock.mock.calls[0] ?? [];
@@ -184,7 +163,7 @@ describe('WebhookNotifier', () => {
       fetchMock,
     );
 
-    await notifier.send(createNotificationContext(), 'ignored');
+    await notifier.send(notificationContext(), 'ignored');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0] ?? [];
@@ -213,7 +192,7 @@ describe('WebhookNotifier', () => {
       },
       fetchMock,
     );
-    await notifier.send(createNotificationContext(), 'hello');
+    await notifier.send(notificationContext(), 'hello');
 
     expect(JSON.stringify(logged)).toContain('bad request to');
     expect(JSON.stringify(logged)).not.toContain('SECRET-PATH');
@@ -233,7 +212,7 @@ describe('WebhookNotifier', () => {
       fetchMock,
     );
 
-    expect(await notifier.send(createNotificationContext(), 'hello')).toEqual([
+    expect(await notifier.send(notificationContext(), 'hello')).toEqual([
       { success: false, statusCode: 500, error: 'HTTP 500' },
     ]);
   });
@@ -250,7 +229,7 @@ describe('WebhookNotifier', () => {
       fetchMock,
     );
 
-    const results = await notifier.send(createNotificationContext(), 'hello');
+    const results = await notifier.send(notificationContext(), 'hello');
 
     expect(results).toEqual([{ success: false, statusCode: 500, error: 'HTTP 500' }]);
   });
@@ -267,7 +246,7 @@ describe('WebhookNotifier', () => {
       fetchMock,
     );
 
-    const results = await notifier.send(createNotificationContext(), 'hello');
+    const results = await notifier.send(notificationContext(), 'hello');
 
     expect(results).toEqual([
       { success: false, error: 'boom' },

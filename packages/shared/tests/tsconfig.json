@@ -1,0 +1,7 @@
+{
+  "extends": "@flarewatch/ts-config/base",
+  "include": ["**/*.ts"],
+  "compilerOptions": {
+    "types": ["node"]
+  }
+}

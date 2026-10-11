@@ -1,4 +1,3 @@
-import { getEdgeLocation as locateEdge } from '../src/utils/location';
 import { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type {
@@ -12,12 +11,9 @@ import type {
 } from '@flarewatch/shared';
 import type { Alert } from '../src/hub/alerts';
 import { runChecks } from '../src/index';
-import { checkMonitor } from '../src/checkers';
-import { HttpChecker } from '../src/checkers/http';
-import { TcpChecker } from '../src/checkers/tcp';
-import { GlobalPingChecker } from '../src/checkers/globalping';
 import { createNotifier } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
+import { createWorkerDeps } from './helpers/worker-deps';
 import { decodeAlert, type Delivered } from './helpers/webhook-delivery';
 
 const T = Date.parse('2025-01-15T12:00:00Z') / 1000;
@@ -146,19 +142,8 @@ function deployment(
           ...(secretWebhooks !== undefined && { FLAREWATCH_WEBHOOKS: secretWebhooks }),
         },
         {
-          checkMonitor: (target, ctx) =>
-            checkMonitor(target, ctx, {
-              http: new HttpChecker(fetcher),
-              tcp: new TcpChecker(async () => {
-                throw new Error('Unexpected socket');
-              }),
-              globalPing: new GlobalPingChecker(fetcher),
-              getEdgeLocation: () => locateEdge(async () => new Response('colo=SFO\n')),
-              fetcher,
-            }),
+          ...createWorkerDeps(config, { fetcher, location: 'SFO' }),
           createNotifier: (webhook) => createNotifier(webhook, fetcher),
-          getEdgeLocation: () => locateEdge(async () => new Response('colo=SFO\n')),
-          staticConfig: config,
         },
       );
     },

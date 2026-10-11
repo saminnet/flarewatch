@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   HEARTBEAT_RUN_HISTORY,
   formatUtcShort,
-  type HeartbeatMonitor,
   type MonitorView,
   type WorkerConfig,
 } from '@flarewatch/shared';
@@ -13,17 +12,12 @@ import type { PingKind } from '../src/hub/heartbeat';
 import { createHub, hubNamespace } from './helpers/hub';
 import { createWorkerDeps } from './helpers/worker-deps';
 import { webhookCapture, type Delivered } from './helpers/webhook-delivery';
+import { createHeartbeat } from '../../../packages/shared/tests/helpers/monitors';
 
 const workerConfigMock: WorkerConfig = { monitors: [] };
 
 const NOW = Date.parse('2025-01-15T12:00:00Z') / 1000;
-const heartbeat: HeartbeatMonitor = {
-  id: 'backup',
-  name: 'Nightly backup',
-  method: 'HEARTBEAT',
-  periodSeconds: 60,
-  graceSeconds: 10,
-};
+const heartbeat = createHeartbeat({ periodSeconds: 60, graceSeconds: 10 });
 
 function createHeartbeatJob() {
   const { hub } = createHub();

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   parseHeartbeatSignal,
-  type HeartbeatMonitor,
   type HeartbeatRun,
   type HeartbeatSignal,
   type Monitor,
@@ -13,19 +12,15 @@ import { deriveHeartbeatToken } from '../src/ping';
 import { createHub, hubNamespace } from './helpers/hub';
 import type { PingKind } from '../src/hub/heartbeat';
 import { createWorkerDeps } from './helpers/worker-deps';
+import { createHeartbeat } from '../../../packages/shared/tests/helpers/monitors';
+import { freezeClock } from '../../../packages/shared/tests/helpers/clock';
 
 const workerConfigMock: WorkerConfig = { monitors: [] };
 
 const NOW = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const SECRET = 'test-heartbeat-secret';
 
-const heartbeat: HeartbeatMonitor = {
-  id: 'backup',
-  name: 'Nightly backup',
-  method: 'HEARTBEAT',
-  periodSeconds: 3600,
-  graceSeconds: 60,
-};
+const heartbeat = createHeartbeat();
 const pullMonitor: Monitor = {
   id: 'api',
   name: 'API',
@@ -100,8 +95,7 @@ describe('heartbeat tokens', () => {
 
 describe('ping routes', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(NOW * 1000));
+    freezeClock(new Date(NOW * 1000));
     workerConfigMock.monitors = [heartbeat, pullMonitor];
     hub = createHub().hub;
   });
@@ -421,8 +415,7 @@ describe('ping routes', () => {
 
 describe('ping to scheduled check end to end', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(NOW * 1000));
+    freezeClock(new Date(NOW * 1000));
     workerConfigMock.monitors = [heartbeat];
     hub = createHub().hub;
   });

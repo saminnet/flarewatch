@@ -47,14 +47,17 @@ export function decodeAlert(url: string, body: unknown): Delivered | undefined {
   };
 }
 
-export function webhookCapture(host: string) {
+/** Collects the alerts sent to `host`; `otherwise` answers every other request. */
+export function webhookCapture(
+  host: string,
+  otherwise: (url: string) => Promise<Response> = async () => new Response('ok'),
+) {
   const delivered: Delivered[] = [];
   const fetchMock = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = input instanceof Request ? input.url : String(input);
-    if (new URL(url).host === host) {
-      const alert = decodeAlert(url, init?.body);
-      if (alert) delivered.push(alert);
-    }
+    if (new URL(url).host !== host) return otherwise(url);
+    const alert = decodeAlert(url, init?.body);
+    if (alert) delivered.push(alert);
     return new Response('ok');
   };
   return { delivered, fetchMock };

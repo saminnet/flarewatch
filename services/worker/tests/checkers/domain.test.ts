@@ -5,6 +5,7 @@ import { createNotifier } from '../../src/notifications/webhook';
 import { createHub, hubNamespace } from '../helpers/hub';
 import { createWorkerDeps } from '../helpers/worker-deps';
 import { getEdgeLocation } from '../../src/utils/location';
+import { freezeClock } from '../../../../packages/shared/tests/helpers/clock';
 
 const NOW = Date.parse('2025-01-15T01:37:00Z');
 const monitor: PullMonitor = { id: 'a', name: 'Domain', method: 'DOMAIN', target: 'example.com' };
@@ -18,8 +19,7 @@ const reply = (date = '2025-02-14T01:37:00Z') => ({
   ],
 });
 it.each(['server', 'redirect'])('refuses an HTTP RDAP %s without fetching it', async (cause) => {
-  vi.useFakeTimers();
-  vi.setSystemTime(NOW);
+  freezeClock(NOW);
   const fetched: string[] = [];
   vi.stubGlobal(
     'fetch',
@@ -96,8 +96,7 @@ it.each([
   [{ ...reply(), ldhName: 'other.com' }, 'registrable domain'],
   [{ broken: true }, 'Invalid RDAP response'],
 ])('fails a domain check for %j', async (body, error) => {
-  vi.useFakeTimers();
-  vi.setSystemTime(NOW);
+  freezeClock(NOW);
   vi.stubGlobal(
     'fetch',
     vi.fn<typeof fetch>(async (input) =>
@@ -116,8 +115,7 @@ it.each([
 });
 
 it('names a TLD without RDAP and stops an oversized RDAP reply', async () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(NOW);
+  freezeClock(NOW);
   let missing = true;
   vi.stubGlobal(
     'fetch',
@@ -138,8 +136,7 @@ it('names a TLD without RDAP and stops an oversized RDAP reply', async () => {
 });
 
 it('charges each RDAP redirect to the shared run budget', async () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(NOW);
+  freezeClock(NOW);
   let follow = false;
   const fetched: string[] = [];
   vi.stubGlobal(
@@ -181,8 +178,7 @@ it('charges each RDAP redirect to the shared run budget', async () => {
 });
 
 it.each([20, 21] as const)('follows at most 20 RDAP redirects (%j hops)', async (hops) => {
-  vi.useFakeTimers();
-  vi.setSystemTime(NOW);
+  freezeClock(NOW);
   const rdap: string[] = [];
   vi.stubGlobal(
     'fetch',
@@ -219,8 +215,7 @@ it.each([20, 21] as const)('follows at most 20 RDAP redirects (%j hops)', async 
 it.each(['bootstrap-http', 'bootstrap-json', 'lookup-http', 'network', 'redirect'])(
   'names an RDAP %s failure',
   async (cause) => {
-    vi.useFakeTimers();
-    vi.setSystemTime(NOW);
+    freezeClock(NOW);
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>(async (input) => {
@@ -258,8 +253,7 @@ it.each([
   [45, 'degraded'],
   [14, 'up'],
 ] as const)('applies a custom RDAP warning window of %i days', async (domainExpiryDays, status) => {
-  vi.useFakeTimers();
-  vi.setSystemTime(NOW);
+  freezeClock(NOW);
   const requests: string[] = [];
   vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
     const url = input instanceof Request ? input.url : String(input);

@@ -1,4 +1,3 @@
-import { getEdgeLocation as locateEdge } from '../src/utils/location';
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import {
   type Fetcher,
@@ -9,18 +8,14 @@ import {
   type WorkerConfig,
 } from '@flarewatch/shared';
 import type { Env } from '../src/env';
-import Worker, { runChecks, type WorkerDeps } from '../src/index';
-import { checkMonitor } from '../src/checkers';
-import { HttpChecker } from '../src/checkers/http';
-import { TcpChecker } from '../src/checkers/tcp';
-import { GlobalPingChecker } from '../src/checkers/globalping';
+import Worker, { runChecks } from '../src/index';
 import { createNotifier } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
 import { createWorkerDeps } from './helpers/worker-deps';
-import { decodeAlert, type Delivered } from './helpers/webhook-delivery';
+import { webhookCapture, type Delivered } from './helpers/webhook-delivery';
+import { freezeClock } from '../../../packages/shared/tests/helpers/clock';
 
 const network = vi.fn<Fetcher>();
-const edge = () => locateEdge(async () => new Response('colo=SFO\n'));
 const workerConfigMock: WorkerConfig = { monitors: [] };
 
 const NOW_SECONDS = Date.parse('2025-01-15T12:00:00Z') / 1000;
@@ -70,21 +65,7 @@ function mockDown(): void {
   });
 }
 
-const deps: WorkerDeps = {
-  checkMonitor: (target, ctx) =>
-    checkMonitor(target, ctx, {
-      http: new HttpChecker(network),
-      tcp: new TcpChecker(async () => {
-        throw new Error('Unexpected socket');
-      }),
-      globalPing: new GlobalPingChecker(network),
-      getEdgeLocation: edge,
-      fetcher: network,
-    }),
-  createNotifier,
-  getEdgeLocation: edge,
-  staticConfig: workerConfigMock,
-};
+const deps = createWorkerDeps(workerConfigMock, { fetcher: network, location: 'SFO' });
 
 async function runScheduled(env: Env): Promise<void> {
   await runChecks(env, deps);
@@ -417,8 +398,7 @@ describe('subrequests per check run', () => {
 
 describe('worker', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(NOW_SECONDS * 1000));
+    freezeClock(new Date(NOW_SECONDS * 1000));
     vi.clearAllMocks();
 
     workerConfigMock.monitors = [createMonitor()];
@@ -432,26 +412,12 @@ describe('worker', () => {
     let failure: 'up' | 'down' | 'refused' = 'up';
 
     async function runNotifying(env: Env): Promise<Delivered[]> {
-      const delivered: Delivered[] = [];
-      vi.stubGlobal(
-        'fetch',
-        async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-          const url = input instanceof Request ? input.url : String(input);
-          if (new URL(url).host === 'hooks.example.com') {
-            const alert = decodeAlert(url, init?.body);
-            if (alert) delivered.push(alert);
-            return new Response('ok');
-          }
-          if (failure === 'refused') throw new TypeError('fetch failed');
-          return new Response('unavailable', { status: failure === 'down' ? 503 : 200 });
-        },
-      );
-      await runChecks(env, {
-        checkMonitor,
-        createNotifier,
-        getEdgeLocation: () => locateEdge(async () => new Response('colo=SFO\n')),
-        staticConfig: workerConfigMock,
+      const { delivered, fetchMock } = webhookCapture('hooks.example.com', async () => {
+        if (failure === 'refused') throw new TypeError('fetch failed');
+        return new Response('unavailable', { status: failure === 'down' ? 503 : 200 });
       });
+      vi.stubGlobal('fetch', fetchMock);
+      await runChecks(env, createWorkerDeps(workerConfigMock, { location: 'SFO' }));
       vi.unstubAllGlobals();
       return delivered;
     }
@@ -635,8 +601,7 @@ describe('worker', () => {
 
 describe('hub routes for the status page', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(NOW_SECONDS * 1000));
+    freezeClock(new Date(NOW_SECONDS * 1000));
   });
 
   const fetchRoute = (env: Env, path: string) =>

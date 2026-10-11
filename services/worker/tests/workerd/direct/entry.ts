@@ -9,11 +9,8 @@ import { checkMonitor, runBudget } from '../../../src/checkers/index';
 import { defaultCheckDeps, type CheckDeps } from '../../../src/checkers/deps';
 import { GlobalPingChecker } from '../../../src/checkers/globalping';
 import { MonitorHub, runChecks } from '../../../src/index';
-import {
-  createNotifier,
-  formatNotificationMessage,
-  type NotificationContext,
-} from '../../../src/notifications/webhook';
+import { createNotifier, formatNotificationMessage } from '../../../src/notifications/webhook';
+import { notificationContext } from '../../helpers/notification-context';
 
 export { MonitorHub };
 
@@ -42,16 +39,12 @@ export default {
     if (pathname === '/webhook') {
       const { webhook, monitor }: { webhook: Webhook; monitor: MonitorTarget } =
         await request.json();
-      const ctx: NotificationContext = {
+      const ctx = notificationContext({
         monitor,
-        kind: 'down',
         incidentStartTime: 0,
         currentTime: 0,
-        downtimeSeconds: 0,
         reason: 'Timeout',
-        timeZone: 'UTC',
-        alsoDown: [],
-      };
+      });
       const [result] = await createNotifier(webhook)!.send(ctx, formatNotificationMessage(ctx));
       return Response.json(result);
     }
