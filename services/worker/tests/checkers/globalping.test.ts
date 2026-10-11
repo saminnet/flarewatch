@@ -30,7 +30,6 @@ function mockCompletedMeasurement(measurement: JsonValue): void {
 describe('GlobalPingChecker', () => {
   beforeEach(() => {
     freezeClock(new Date('2025-01-15T12:00:00Z'));
-    fetchMock.mockReset();
   });
 
   it('parses proxy settings and builds an HTTP measurement request', async () => {

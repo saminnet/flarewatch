@@ -43,10 +43,6 @@ const failedMeasurement = (output: string) =>
   });
 
 describe('checkMonitor', () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-  });
-
   it('delegates to GlobalPing when checkProxy is globalping://', async () => {
     fetchMock
       .mockResolvedValueOnce(json({ id: 'm1' }, 202))

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import {
   isCheckResultWithLocation,
   type Fetcher,
@@ -46,10 +46,6 @@ function checkNow(env: Env, path: string, init: RequestInit = { method: 'POST' }
     deps_,
   );
 }
-
-beforeEach(() => {
-  fetchMock.mockReset();
-});
 
 describe('check now route for the status page', () => {
   it('checks the configured monitor once and answers its result', async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
+import { describe, it, expect, vi } from 'vite-plus/test';
 import type { Fetcher, MonitorTarget } from '@flarewatch/shared';
 import { checkExternalProxy } from '../../src/checkers/proxy';
 
@@ -43,10 +43,6 @@ describe('checkExternalProxy', () => {
     expect(fetchMock.mock.calls[0]?.[1]?.body).toContain('"sslCheckDaysBeforeExpiry":0');
     expect(result.result).toMatchObject({ ok: false, error: 'Proxy returned invalid response' });
   });
-  beforeEach(() => {
-    fetchMock.mockReset();
-  });
-
   it('posts the monitor with authorization and its configured timeout', async () => {
     const proxyResult = {
       location: 'FRA',

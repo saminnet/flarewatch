@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
+import { describe, it, expect, vi } from 'vite-plus/test';
 import type { Fetcher } from '@flarewatch/shared';
 import { WebhookNotifier } from '../../src/notifications/webhook';
 import { notificationContext } from '../helpers/notification-context';
@@ -6,10 +6,6 @@ import { notificationContext } from '../helpers/notification-context';
 const fetchMock = vi.fn<Fetcher>();
 
 describe('WebhookNotifier', () => {
-  beforeEach(() => {
-    fetchMock.mockReset();
-  });
-
   it('keeps the webhook URL out of logs and results when the request throws', async () => {
     const url = 'https://api.telegram.org/bot123:SECRET/sendMessage';
     fetchMock.mockRejectedValue(new TypeError(`fetch failed for ${url}`));
