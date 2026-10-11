@@ -161,7 +161,7 @@ ExecStart=/usr/local/bin/backup.sh
 ExecStopPost=/usr/bin/curl -fsS "https://status.example.com/ping/nightly-backup/<token>/${EXIT_STATUS}"
 ```
 
-Pings are limited to 30 a minute per monitor, which stops a looping script. Jobs that run every minute are fine.
+Pings are limited to 30 a minute per monitor, which stops a looping script. Jobs that run every minute are fine. Cloudflare counts pings in each of its locations, and only roughly, so a burst can get a few more through.
 
 ## Other regions and private networks
 

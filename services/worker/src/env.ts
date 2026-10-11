@@ -11,7 +11,7 @@ export interface Env {
   FLAREWATCH_WEBHOOKS?: string;
   /** Root secret for ping tokens (base64url(HMAC-SHA256(secret, `v1:<id>`))). */
   HEARTBEAT_SECRET?: string;
-  /** Workers rate-limiting binding, 30 requests per 60s per monitor. */
+  /** Workers rate-limiting binding: about 30 requests per 60s per monitor, counted per Cloudflare location. */
   HEARTBEAT_RATE_LIMIT?: RateLimit;
   /** Public status page origin for /ping-url; falls back to the requester's origin. */
   PUBLIC_ORIGIN?: string;

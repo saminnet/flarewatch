@@ -37,7 +37,7 @@
       "service": "flarewatch-worker",
     },
   ],
-  // Five sign-in attempts per minute per IP. The binding keeps no stored count.
+  // About five sign-in attempts per minute per IP, counted per Cloudflare location.
   "ratelimits": [
     {
       "name": "LOGIN_RATE_LIMIT",

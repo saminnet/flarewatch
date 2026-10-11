@@ -17,6 +17,8 @@ As the operator, the same pages show you everything:
 - buttons to add, edit and delete maintenance windows on History
 - an announcement form on History, and controls to edit or delete announcements
 
+Password attempts, provider sign-ins, check-now presses and scripted admin calls share a limit of 5 a minute per IP. Cloudflare counts it in each of its locations, and only roughly, so it slows down guessing but is not an exact cap. A session lasts 14 days. Signing out ends it at once where you are, but Cloudflare can take a minute or more to pass that on to its other locations.
+
 **Check now** runs that monitor's check once and shows the result under the button: up or down, the response time, where it ran from, and the error if it failed. It saves nothing. The page, History and alerts still show the last scheduled check run until the next one. Each press counts against the sign-in limit of 5 per minute per IP, because each one sends a real request to the target, directly or through Globalping or a proxy.
 
 The account menu has a **Visitor view** switch that shows the page the way visitors see it.
