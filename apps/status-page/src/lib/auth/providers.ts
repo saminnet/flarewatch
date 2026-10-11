@@ -123,6 +123,7 @@ type CallbackInput = {
 function tokenRequest(provider: AuthProvider, input: CallbackInput): RequestInit {
   return {
     method: 'POST',
+    redirect: 'manual',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -211,10 +212,16 @@ async function identifyGithub(
     Authorization: `Bearer ${tokens.access_token}`,
     'User-Agent': 'FlareWatch',
   };
-  const user = await readJson(await fetchFn(`${GITHUB_API}/user`, { headers }), 'GitHub');
+  const user = await readJson(
+    await fetchFn(`${GITHUB_API}/user`, { headers, redirect: 'manual' }),
+    'GitHub',
+  );
   if (!isNonEmptyString(user.login)) throw new SignInError('GitHub sent no login');
 
-  const emailsResponse = await fetchFn(`${GITHUB_API}/user/emails`, { headers });
+  const emailsResponse = await fetchFn(`${GITHUB_API}/user/emails`, {
+    headers,
+    redirect: 'manual',
+  });
   const emails = emailsResponse.ok ? await readBody(emailsResponse) : null;
   const list: unknown[] = Array.isArray(emails) ? emails : [];
   const primary = list.find(

@@ -41,6 +41,25 @@ function fakeOidc(provider: { issuer: string }, claims: JsonObject, scopes = ['o
   return { fetchFn, tokenBodies };
 }
 
+/** Follows a 307 the way fetch does unless the request asks for 'manual', and records every URL reached. */
+function withRedirects(route: Fetch) {
+  const reached: string[] = [];
+  const fetchFn: Fetch = async (url, init) => {
+    for (let next = url; ;) {
+      reached.push(next);
+      const response = await route(next, init);
+      const location = response.headers.get('location');
+      if (response.status !== 307 || location === null || init?.redirect === 'manual') {
+        return response;
+      }
+      next = new URL(location, next).href;
+    }
+  };
+  return { fetchFn, reached };
+}
+
+const moved = (to: string) => new Response(null, { status: 307, headers: { location: to } });
+
 const input = {
   code: 'code-1',
   redirectUri: 'https://status.example/auth/callback',
@@ -112,6 +131,20 @@ describe('OpenID Connect sign-in', () => {
     const body = new URLSearchParams(tokenBodies[0]);
     expect(body.get('code_verifier')).toBe('verifier-1');
     expect(body.get('client_secret')).toBe('shh');
+  });
+
+  it('fails rather than follow a token endpoint redirect, which would carry the code and secret', async () => {
+    const provider = oidcProvider();
+    const { fetchFn: oidc } = fakeOidc(provider, good(provider.issuer));
+    const { fetchFn, reached } = withRedirects(async (url, init) =>
+      url === `${provider.issuer}/token`
+        ? moved('https://elsewhere.example/token')
+        : oidc(url, init),
+    );
+    await expect(
+      identify(provider, { ...input, clientSecret: 'shh' }, fetchFn),
+    ).rejects.toBeInstanceOf(SignInError);
+    expect(reached.filter((url) => url.startsWith('https://elsewhere.example'))).toEqual([]);
   });
 
   it('sends no client secret for a public client', async () => {
@@ -202,6 +235,17 @@ describe('GitHub sign-in', () => {
       return new Response('not found', { status: 404 });
     });
   }
+
+  it('fails rather than follow an API redirect, which would carry the access token', async () => {
+    const api = fakeGithub([]);
+    const { fetchFn, reached } = withRedirects(async (url, init) =>
+      url === 'https://api.github.com/user'
+        ? moved('https://elsewhere.example/user')
+        : api(url, init),
+    );
+    await expect(identify(github, input, fetchFn)).rejects.toBeInstanceOf(SignInError);
+    expect(reached.filter((url) => url.startsWith('https://elsewhere.example'))).toEqual([]);
+  });
 
   it('uses the login and only a primary, verified email', async () => {
     const identity = await identify(
