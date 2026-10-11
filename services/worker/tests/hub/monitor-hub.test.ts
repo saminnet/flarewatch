@@ -764,6 +764,20 @@ describe('a deferred error change', () => {
     expect(run(1240)).toEqual([]);
   });
 
+  it('goes out when its outage relapsed in the recovery hold before the deferral came back', () => {
+    const { run, confirm, kinds } = hubRuns();
+    confirm(run(1000, 'Timeout'), {});
+    confirm(run(1060), {});
+    confirm(run(1120, 'Timeout'), {});
+    const changed = run(1180, 'HTTP 500');
+    expect(kinds(changed)).toEqual([['error', 'HTTP 500']]);
+    confirm(run(1240), {});
+    expect(run(1300, 'HTTP 500')).toEqual([]);
+    confirm(changed, { deferred: true });
+
+    expect(kinds(run(1360, 'HTTP 500'))).toEqual([['error', 'HTTP 500']]);
+  });
+
   it('is not owed again when an overlapping run sent a newer one', () => {
     const { run, confirm, kinds } = hubRuns();
     confirm(run(1000, 'Timeout'), {});
