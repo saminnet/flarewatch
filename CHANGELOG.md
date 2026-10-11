@@ -14,7 +14,7 @@ All notable changes to FlareWatch will be documented in this file.
 - A Globalping check fails when a poll answers with a redirect or an error. Before, a redirect that carried a finished result could pass the check.
 - Mattermost and Rocket.Chat alerts show their content. They used Slack's block layout, which neither app reads, so an alert came through as an empty colored bar.
 - Sign-in with an OpenID Connect provider or GitHub fails when the token endpoint or GitHub's API answers with a redirect. Before, it followed the redirect and sent the client secret or the access token along.
-- The first check run after a deploy ends inside the 30 seconds that Cloudflare gives it. It sends an alert only when the alert can go out in time, and leaves the rest to the next run.
+- The first check run of a new hub ends inside the 30 seconds that Cloudflare gives it. It sends an alert only when the alert can go out in time, and leaves the rest to the next run. A webhook with a `timeout` of 27 seconds or more always waits for the next run.
 - An error-change alert that a busy check run had to put off now goes out on a later run. Before, it was lost unless the error changed again.
 - The hub keeps every row under the 2 MB that Cloudflare documents. History parts are measured in bytes, so long errors in non-Latin scripts no longer make a part too big. The upgrade splits any larger part that 3.2.0 to 3.4.0 wrote, and cuts an incident from before 3.2.0 down to its first and its latest 99 error changes. CI fails a config whose monitor ids are so long that an hour of latency samples could not fit in one row.
 
