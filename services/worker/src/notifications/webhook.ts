@@ -224,7 +224,6 @@ export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook)
 
   return {
     monitorName: monitor.name,
-    monitorId: monitor.id,
     targetUrl: withoutCredentials(
       'target' in monitor ? monitor.target : typeof monitor.link === 'string' ? monitor.link : '',
     ),

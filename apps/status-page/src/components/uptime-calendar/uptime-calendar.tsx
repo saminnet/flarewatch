@@ -13,8 +13,8 @@ const MONTHS_PER_PAGE = 3;
 interface UptimeCalendarProps {
   monitors: PublicMonitor[];
   state: StatusView;
-  /** The month to end the calendar window at (yyyy-MM). Defaults to the current month. */
-  selectedMonth?: string;
+  /** The month to end the calendar window at (yyyy-MM). */
+  selectedMonth: string;
 }
 
 function getMonthUptimes(

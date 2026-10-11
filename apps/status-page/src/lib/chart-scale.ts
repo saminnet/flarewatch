@@ -13,9 +13,7 @@ export function linearScale([d0, d1]: [number, number], [r0, r1]: [number, numbe
   const span = d1 - d0;
   const scale = (value: number) =>
     span === 0 ? (r0 + r1) / 2 : r0 + ((value - d0) / span) * (r1 - r0);
-  return Object.assign(scale, {
-    invert: (px: number) => d0 + ((px - r0) / (r1 - r0)) * span,
-  });
+  return scale;
 }
 
 const E10 = Math.sqrt(50);

@@ -237,7 +237,7 @@ export type JsonObject = { [key: string]: JsonValue };
 /** Any value representable as JSON: the contract for user-authored webhook payloads. */
 export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 
-type SingleWebhook = {
+export type Webhook = {
   url: string;
   /** Use a pre-built template (see NOTIFICATION_TEMPLATES) */
   template?: NotificationTemplate;
@@ -246,9 +246,9 @@ type SingleWebhook = {
   /** HTTP method (default: from the template, POST for custom payloads) */
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
   headers?: { [key: string]: string | number };
-  /** Payload type (required if not using template) */
+  /** Payload type without a template (default: 'json') */
   payloadType?: 'param' | 'json' | 'x-www-form-urlencoded';
-  /** Payload with $MSG placeholder (required if not using template) */
+  /** Payload with $MSG placeholder, used without a template. 'param' and 'x-www-form-urlencoded' need an object. */
   payload?: JsonValue;
   /** Request timeout in ms (default: 5000) */
   timeout?: number;
@@ -256,9 +256,7 @@ type SingleWebhook = {
   monitors?: string[];
 };
 
-export type Webhook = SingleWebhook;
-
-export type WebhookConfig = SingleWebhook | SingleWebhook[];
+export type WebhookConfig = Webhook | Webhook[];
 
 export type RuntimeConfig = {
   monitors: Monitor[];

@@ -1,6 +1,5 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterAll, expect, onTestFinished } from 'vite-plus/test';
-import type { Env } from '../../src/env';
 import { MonitorHub } from '../../src/hub/monitor-hub';
 
 /** Durable Object storage over an in-memory node:sqlite database. */
@@ -55,7 +54,7 @@ function own(db: DatabaseSync): void {
  * when it loses its index. The workerd tests measure the rows Durable Objects bill.
  * A hub reopened over the same `db` shares its owner.
  */
-export function createHub(env: Env = {}, db = new DatabaseSync(':memory:')) {
+export function createHub(db = new DatabaseSync(':memory:')) {
   own(db);
   let migrated = false;
   const ctx = {
@@ -68,7 +67,7 @@ export function createHub(env: Env = {}, db = new DatabaseSync(':memory:')) {
   };
   // SAFETY: the hub touches only ctx.storage.sql.exec and ctx.storage.transactionSync,
   // which the fake implements.
-  const hub = new MonitorHub(ctx as typeof ctx & DurableObjectState, env);
+  const hub = new MonitorHub(ctx as typeof ctx & DurableObjectState, {});
   migrated = true;
   return { hub, db };
 }

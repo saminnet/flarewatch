@@ -5,7 +5,6 @@ import type { TemplateContext } from '../../src/notifications/templates/types';
 
 const baseContext: TemplateContext = {
   monitorName: 'Test Monitor',
-  monitorId: 'test-monitor',
   targetUrl: 'https://example.com',
   kind: 'down',
   isInitialOutage: true,

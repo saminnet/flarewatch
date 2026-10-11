@@ -58,33 +58,18 @@ export interface FetchOptions extends Omit<RequestInit, 'signal' | 'body'> {
 /** The HTTP seam every checker and notifier takes, so tests substitute a real function. */
 export type Fetcher = (url: string, options?: FetchOptions) => Promise<Response>;
 
-function getTimeoutSignal(timeoutMs: number) {
-  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-    return { signal: AbortSignal.timeout(timeoutMs), cleanup: () => {} };
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  return { signal: controller.signal, cleanup: () => clearTimeout(timeoutId) };
-}
-
 /** fetch() with a timeout (default 10s); throws the runtime's abort exception when the signal fires. */
 export async function fetchWithTimeout(url: string, options: FetchOptions = {}): Promise<Response> {
   const { timeout = DEFAULT_HTTP_TIMEOUT, body, ...rest } = options;
 
-  const { signal, cleanup } = getTimeoutSignal(timeout);
-  const requestInit: RequestInit = { ...rest, signal };
+  const requestInit: RequestInit = { ...rest, signal: AbortSignal.timeout(timeout) };
 
   // Only set body if explicitly provided (undefined !== omitted in fetch API)
   if (body !== undefined) {
     requestInit.body = body;
   }
 
-  try {
-    return await fetch(url, requestInit);
-  } finally {
-    cleanup();
-  }
+  return fetch(url, requestInit);
 }
 
 export class TimeoutError extends Error {
@@ -275,7 +260,7 @@ export function failure(error: string, latency?: number): CheckFailure {
   return { ok: false, error };
 }
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = 'info' | 'warn' | 'error';
 
 export function createLogger(component: string) {
   const log = (level: LogLevel, message: string, data?: JsonObject) => {
@@ -290,9 +275,6 @@ export function createLogger(component: string) {
     const output = JSON.stringify(entry);
 
     switch (level) {
-      case 'debug':
-        console.debug(output);
-        break;
       case 'info':
         console.info(output);
         break;
@@ -306,7 +288,6 @@ export function createLogger(component: string) {
   };
 
   return {
-    debug: (message: string, data?: JsonObject) => log('debug', message, data),
     info: (message: string, data?: JsonObject) => log('info', message, data),
     warn: (message: string, data?: JsonObject) => log('warn', message, data),
     error: (message: string, data?: JsonObject) => log('error', message, data),

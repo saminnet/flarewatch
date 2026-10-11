@@ -63,7 +63,7 @@ function deployment(
   secretWebhooks?: string,
 ) {
   const db = new DatabaseSync(':memory:');
-  let { hub } = createHub({}, db);
+  let { hub } = createHub(db);
   const failing = new Map<string, string>();
   const sent: (Delivered & { host: string })[] = [];
   const config: WorkerConfig = {
@@ -132,7 +132,7 @@ function deployment(
     },
 
     restart() {
-      hub = createHub({}, db).hub;
+      hub = createHub(db).hub;
     },
     async run(at: number) {
       vi.setSystemTime(at * 1000);

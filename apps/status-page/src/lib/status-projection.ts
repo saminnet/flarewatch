@@ -40,7 +40,7 @@ type TimelineProjectionInput = {
   monthEnd: Date;
   nowMs: number;
   selectedMonitor?: string | undefined;
-  eventType?: TimelineEventType | undefined;
+  eventType: TimelineEventType;
   /** Of a window's future runs, list only the next one: for a range with no real end. */
   nextRunOnly?: boolean | undefined;
 };
@@ -195,7 +195,7 @@ export function projectTimeline(input: TimelineProjectionInput): TimelineProject
   const pinned: MaintenanceEvent[] = [];
   const timeline: TimelineEvent[] = [];
 
-  if ((input.eventType ?? 'all') === 'all') {
+  if (input.eventType === 'all') {
     for (const event of sortedEvents) {
       if (event.type === 'maintenance') {
         const { maintenance, occurrence } = event;

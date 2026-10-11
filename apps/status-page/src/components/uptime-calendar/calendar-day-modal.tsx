@@ -11,7 +11,7 @@ import { IconX } from '@tabler/icons-react';
 import { cn } from '@/lib/utils';
 import { formatUtc } from '@/lib/date';
 import { formatPercent, type AggregatedDayData, type AggregatedDayIncident } from '@/lib/uptime';
-import { STATUS_DOT_COLORS } from '@/lib/constants';
+import { STATUS_COLORS } from '@/lib/constants';
 
 function groupByMonitor(incidents: AggregatedDayIncident[]): Map<string, AggregatedDayIncident[]> {
   const grouped = new Map<string, AggregatedDayIncident[]>();
@@ -44,10 +44,7 @@ export function CalendarDayModal({ data, open, onOpenChange }: CalendarDayModalP
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center">
               <span
-                className={cn(
-                  'mr-2 w-2.5 h-2.5 rounded-full shrink-0',
-                  STATUS_DOT_COLORS[data.status],
-                )}
+                className={cn('mr-2 w-2.5 h-2.5 rounded-full shrink-0', STATUS_COLORS[data.status])}
               />
               {`Incidents on ${formatUtc(data.date, 'MMM d, yyyy')}`}
             </DialogTitle>

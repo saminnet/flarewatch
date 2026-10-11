@@ -3,7 +3,7 @@ import type { HeartbeatRun } from '@flarewatch/shared';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { TooltipTrigger } from '@/components/ui/tooltip';
-import { STATUS_COLORS, STATUS_DOT_COLORS } from '@/lib/constants';
+import { STATUS_COLORS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 export const RUN_CELL_CLASSES: Record<HeartbeatRun['outcome'], string> = {
@@ -19,7 +19,7 @@ const NEXT_CELL = 'border border-dashed';
 
 const barCellVariants = cva('rounded-sm transition-props-bar duration-150 ease-out', {
   variants: {
-    status: STATUS_DOT_COLORS,
+    status: STATUS_COLORS,
     interactive: {
       true: 'cursor-pointer hover:scale-y-110 hover:brightness-110',
       false: 'cursor-default',

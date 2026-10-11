@@ -1,5 +1,3 @@
-import { pageConfig } from '@flarewatch/config';
-
 type CorsHeaders = {
   'Access-Control-Allow-Methods': string;
   'Access-Control-Allow-Headers': string;
@@ -9,7 +7,7 @@ type CorsHeaders = {
 
 export function getCorsHeaders(
   request: Request,
-  allowedOrigins: string[] | undefined = pageConfig.apiCorsOrigins,
+  allowedOrigins: string[] | undefined,
 ): CorsHeaders {
   const origin = request.headers.get('Origin');
 

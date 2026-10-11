@@ -9,7 +9,7 @@ import type { WorkerDeps } from '../../src/index';
 
 type Connect = ConstructorParameters<typeof TcpChecker>[0];
 
-export const refuseSockets: Connect = async () => {
+const refuseSockets: Connect = async () => {
   throw new Error('Unexpected socket');
 };
 
@@ -33,14 +33,10 @@ export function createCheckDeps(
  */
 export function createWorkerDeps(
   staticConfig: WorkerConfig,
-  {
-    fetcher,
-    connect,
-    location = 'HEL',
-  }: { fetcher?: Fetcher; connect?: Connect; location?: string } = {},
+  { fetcher, location = 'HEL' }: { fetcher?: Fetcher; location?: string } = {},
 ): WorkerDeps {
   const checkDeps = fetcher
-    ? createCheckDeps(fetcher, connect, location)
+    ? createCheckDeps(fetcher, refuseSockets, location)
     : { ...defaultCheckDeps, getEdgeLocation: async () => location };
   return {
     checkMonitor: (target, ctx) => checkMonitor(target, ctx, checkDeps),

@@ -82,7 +82,7 @@ export function formatUptimeDisplay(
   return hasStarted ? 'Starting...' : 'Pending';
 }
 
-export type DayStatus = 'up' | 'down' | 'partial' | 'unknown';
+type DayStatus = 'up' | 'down' | 'partial' | 'unknown';
 
 interface DayIncidentDetail {
   startSec: number;
@@ -100,7 +100,6 @@ export interface AggregatedDayData {
   date: Date;
   status: DayStatus;
   uptime: number | null;
-  totalDowntime: number;
   incidents: AggregatedDayIncident[];
 }
 
@@ -252,7 +251,6 @@ export function generateAggregateDailyStatus(
     let allUnknown = true;
     let uptimeSum = 0;
     let uptimeCount = 0;
-    let totalDowntime = 0;
     const incidents: AggregatedDayIncident[] = [];
 
     for (let m = 0; m < monitorIds.length; m++) {
@@ -268,8 +266,6 @@ export function generateAggregateDailyStatus(
 
       if (dayData.status === 'down') hasDown = true;
       if (dayData.status === 'partial') hasPartial = true;
-
-      totalDowntime += dayData.downtime;
 
       for (const incident of dayData.incidents) {
         incidents.push({ ...incident, monitorName, monitorId });
@@ -291,7 +287,6 @@ export function generateAggregateDailyStatus(
       date,
       status,
       uptime: uptimeCount > 0 ? uptimeSum / uptimeCount : null,
-      totalDowntime,
       incidents,
     });
   }

@@ -65,7 +65,7 @@ export function alsoDownList(
 }
 
 /** A trailing "Also down" line for plain-text bodies. */
-export function alsoDownSuffix(ctx: TemplateContext): string {
+function alsoDownSuffix(ctx: TemplateContext): string {
   const list = alsoDownList(ctx);
   return list ? `\nAlso down: ${list}` : '';
 }

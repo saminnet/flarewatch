@@ -34,12 +34,11 @@ declare global {
   interface Window {
     /** Installed by {@link getThemeInitScript}; absent until that inline script has run. */
     __flarewatchSetThemePreference?: (theme: ThemePreference) => void;
-    __flarewatchGetThemePreference?: () => ThemePreference;
   }
 }
 
 export function getThemeInitScript(theme: ThemePreference): string {
   const initialTheme = JSON.stringify(theme);
 
-  return `(function(){try{var r=document.documentElement;var m=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var c=${initialTheme};function a(p){c=p;r.dataset.theme=p;if(p==='dark'){r.classList.add('dark');r.style.colorScheme='dark';return}if(p==='light'){r.classList.remove('dark');r.style.colorScheme='light';return}var d=!!(m&&m.matches);r.classList.toggle('dark',d);r.style.colorScheme=d?'dark':'light'}function h(){if(c==='system')a('system')}if(m){if(m.addEventListener)m.addEventListener('change',h);else if(m.addListener)m.addListener(h)}window.__flarewatchSetThemePreference=function(p){try{if(p==='light'||p==='dark'||p==='system')a(p)}catch(e){}};window.__flarewatchGetThemePreference=function(){return c};a(c)}catch(e){}})()`;
+  return `(function(){try{var r=document.documentElement;var m=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)');var c=${initialTheme};function a(p){c=p;r.dataset.theme=p;if(p==='dark'){r.classList.add('dark');r.style.colorScheme='dark';return}if(p==='light'){r.classList.remove('dark');r.style.colorScheme='light';return}var d=!!(m&&m.matches);r.classList.toggle('dark',d);r.style.colorScheme=d?'dark':'light'}function h(){if(c==='system')a('system')}if(m){if(m.addEventListener)m.addEventListener('change',h);else if(m.addListener)m.addListener(h)}window.__flarewatchSetThemePreference=function(p){try{if(p==='light'||p==='dark'||p==='system')a(p)}catch(e){}};a(c)}catch(e){}})()`;
 }

@@ -108,8 +108,8 @@ describe('MonitorHub incidents', () => {
     });
 
     const lastUp = T0 + 1439 * 60;
-    const held = createHub({}, db).hub.record(lastUp + 14 * 60, [check('api', up())]).updates;
-    const closed = createHub({}, db).hub.record(lastUp + 15 * 60, [check('api', up())]).updates;
+    const held = createHub(db).hub.record(lastUp + 14 * 60, [check('api', up())]).updates;
+    const closed = createHub(db).hub.record(lastUp + 15 * 60, [check('api', up())]).updates;
 
     expect(held).toMatchObject([{ changeType: 'none', isUp: true }]);
     expect(closed).toMatchObject([{ changeType: 'up', incidentStartTime: T0 }]);
@@ -192,7 +192,7 @@ describe('MonitorHub incidents', () => {
     hub.record(T0 + 1002 * gap, [check('api', down(error(1002)))]);
     hub.record(T0 + 1002 * gap + 60, [check('api', down('Timeout'))]);
 
-    const incidents = createHub({}, db).hub.view().monitors.api?.incidents ?? [];
+    const incidents = createHub(db).hub.view().monitors.api?.incidents ?? [];
     expect(incidents).toHaveLength(1001);
     expect(incidents[0]).toEqual({
       start: [T0 + 2 * gap],
@@ -426,7 +426,7 @@ describe('MonitorHub storage', () => {
     const { hub, db } = createHub();
     hub.record(T0, [check('api', down())]);
 
-    const { hub: reopened } = createHub({}, db);
+    const { hub: reopened } = createHub(db);
 
     expect(reopened.view().monitors.api?.status).toBe('down');
     expect(reopened.view().lastUpdate).toBe(T0);
@@ -436,7 +436,7 @@ describe('MonitorHub storage', () => {
     const { hub, db } = createHub();
     for (let i = 0; i <= 12 * 60; i++) hub.record(T0 + i * 60, [check('api', up(i))]);
 
-    expect(createHub({}, db).hub.latency('api', T0 + 12 * 60 * 60)).toHaveLength(12 * 60 + 1);
+    expect(createHub(db).hub.latency('api', T0 + 12 * 60 * 60)).toHaveLength(12 * 60 + 1);
   });
 
   it('reports nothing before the first check run', () => {
@@ -586,7 +586,7 @@ describe('MonitorHub after an upgrade from a release without alert tracking', ()
       INSERT INTO monitors (id, started_at) VALUES ('api', ${T0 - 3600});
       INSERT INTO incidents (monitor_id, starts, errors) VALUES ('api', '[${T0 - 600}]', '["Timeout"]');
     `);
-    const { hub } = createHub({}, db);
+    const { hub } = createHub(db);
 
     expect(hub.record(T0, [check('api', down('HTTP 502'))], POLICY).alerts).toEqual([]);
     expect(hub.record(T0 + 60, [check('api', up())], POLICY).alerts).toEqual([]);
@@ -599,7 +599,7 @@ describe('MonitorHub after an upgrade from a release without alert tracking', ()
 describe('MonitorHub after an upgrade from 3.2', () => {
   it('reminds about an outage alerted before the upgrade once 30 runs have passed since it', () => {
     const db = new DatabaseSync(':memory:');
-    const before = createHub({}, db).hub;
+    const before = createHub(db).hub;
     const { alerts } = before.record(T0, [check('api', down())], POLICY);
     before.confirmAlerts(
       alerts.map(({ incident, kind, reopenedAt, run }) => ({
@@ -611,7 +611,7 @@ describe('MonitorHub after an upgrade from 3.2', () => {
       })),
     );
     rewindTo(db, RELEASE_STEP['3.2.0']);
-    const { hub } = createHub({}, db);
+    const { hub } = createHub(db);
     const api: CheckRecord = {
       monitor: { ...monitor('api'), reminderEveryChecks: 30 },
       check: { location: 'HEL', result: down() },
@@ -649,7 +649,7 @@ function addIncident(
 describe('MonitorHub after an upgrade from 2.x', () => {
   it('drops the 1.x import bookkeeping and keeps the rest', () => {
     const db = new DatabaseSync(':memory:');
-    const { hub } = createHub({}, db);
+    const { hub } = createHub(db);
     hub.record(T0, [check('api', up())]);
     // Rewind to the schema 2.x left behind, with its import rows.
     rewindTo(db, RELEASE_STEP['3.1.0']);
@@ -662,7 +662,7 @@ describe('MonitorHub after an upgrade from 2.x', () => {
       INSERT INTO meta (key, value) VALUES ('v1_import', '1'), ('v1_import_marked', '1');
     `);
 
-    const upgraded = createHub({}, db).hub;
+    const upgraded = createHub(db).hub;
 
     expect(upgraded.view()).toMatchObject({
       lastUpdate: T0,
@@ -678,13 +678,13 @@ describe('MonitorHub after an upgrade from 2.x', () => {
 describe('MonitorHub after an upgrade from 3.1', () => {
   it('keeps a monitor’s newest 1,000 closed incidents and cuts long errors', () => {
     const db = new DatabaseSync(':memory:');
-    createHub({}, db).hub.record(T0, [check('api', up())]);
+    createHub(db).hub.record(T0, [check('api', up())]);
     rewindTo(db, RELEASE_STEP['3.1.0']);
     for (let i = 1; i <= 1005; i++)
       addIncident(db, 'api', [T0 + i * 100], ['Timeout'], T0 + i * 100 + 50);
     addIncident(db, 'api', [T0 + 200_000], ['x'.repeat(600)]);
 
-    const incidents = createHub({}, db).hub.view().monitors.api?.incidents ?? [];
+    const incidents = createHub(db).hub.view().monitors.api?.incidents ?? [];
 
     expect(incidents).toHaveLength(1001);
     expect(incidents[0]?.start).toEqual([T0 + 600]);
@@ -694,7 +694,7 @@ describe('MonitorHub after an upgrade from 3.1', () => {
 
   it('keeps about a megabyte of a monitor’s history, dropping the oldest', () => {
     const db = new DatabaseSync(':memory:');
-    createHub({}, db).hub.record(T0, [check('api', up())]);
+    createHub(db).hub.record(T0, [check('api', up())]);
     rewindTo(db, RELEASE_STEP['3.1.0']);
     // 25 outages whose 500-character error changed 100 times each.
     for (let i = 0; i < 25; i++) {
@@ -703,7 +703,7 @@ describe('MonitorHub after an upgrade from 3.1', () => {
       addIncident(db, 'api', starts, errors, T0 + i * 7200 + 6000);
     }
 
-    const incidents = createHub({}, db).hub.view().monitors.api?.incidents ?? [];
+    const incidents = createHub(db).hub.view().monitors.api?.incidents ?? [];
 
     expect(JSON.stringify(incidents).length).toBeLessThanOrEqual(1_000_000);
     expect(incidents.length).toBeGreaterThan(10);

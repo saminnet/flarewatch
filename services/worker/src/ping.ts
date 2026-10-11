@@ -83,7 +83,7 @@ export async function handlePing(
   const token = segments[1] ?? '';
   const action = segments[2] ?? '';
 
-  // Fixed work before any monitor or KV lookup: derive the expected token for
+  // Fixed work before any monitor lookup: derive the expected token for
   // the id and compare in constant time, so responses never reveal whether an
   // id or token exists.
   const secret = env.HEARTBEAT_SECRET;

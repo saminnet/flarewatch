@@ -111,7 +111,7 @@ export class Incidents {
     result: CheckResult,
     open: OpenIncident | undefined,
     now: number,
-    firstFailure = now,
+    firstFailure: number,
   ): IncidentUpdate {
     const incidentStartTime = open?.incident.start[0] ?? now;
 

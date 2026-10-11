@@ -186,7 +186,7 @@ export function coversMonitor(maintenance: Maintenance, monitorId: string): bool
 
 type Normalized = { value: MaintenanceConfig } | { error: string };
 
-function parseTime(value: unknown): number | undefined {
+export function parseTime(value: unknown): number | undefined {
   if (typeof value !== 'string' && typeof value !== 'number') return undefined;
   const ms = new Date(value).getTime();
   return Number.isFinite(ms) ? ms : undefined;

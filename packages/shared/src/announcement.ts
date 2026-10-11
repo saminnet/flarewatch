@@ -1,15 +1,10 @@
 import type { Announcement, AnnouncementConfig } from './types';
+import { parseTime } from './maintenance';
 import { isJsonObject, isNonEmptyString } from './utils';
 
 export type NormalizedAnnouncement = { title: string; body: string; end?: string };
 
 type Normalized = { value: NormalizedAnnouncement } | { error: string };
-
-function parseTime(value: unknown): number | undefined {
-  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
-  const ms = new Date(value).getTime();
-  return Number.isFinite(ms) ? ms : undefined;
-}
 
 export function isAnnouncementActive(announcement: AnnouncementConfig, now: number): boolean {
   return announcement.end === undefined || new Date(announcement.end).getTime() > now;

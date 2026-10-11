@@ -160,29 +160,6 @@ describe('fetchWithTimeout', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('bounds fetch without AbortSignal.timeout', async () => {
-    vi.stubGlobal('AbortSignal', {});
-    const pendingFetch = vi.fn<typeof globalThis.fetch>(
-      (_url, init) =>
-        new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
-        }),
-    );
-    globalThis.fetch = pendingFetch;
-
-    const pending = fetchWithTimeout('https://example.com', { timeout: 1000 });
-    const abortsAtDeadline = expect(pending).rejects.toThrow('aborted');
-    await vi.advanceTimersByTimeAsync(1000);
-    await abortsAtDeadline;
-
-    const resolvingFetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('ok'));
-    globalThis.fetch = resolvingFetch;
-    await fetchWithTimeout('https://example.com', { timeout: 5000 });
-
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(resolvingFetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
-  });
-
   it('passes body when provided', async () => {
     const mockFetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('ok'));
     globalThis.fetch = mockFetch;

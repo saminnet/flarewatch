@@ -12,7 +12,6 @@ interface UseAutoRefreshOptions {
 
 interface UseAutoRefreshReturn {
   currentTime: number;
-  dataAge: number;
   isStale: boolean;
   willRefreshSoon: boolean;
   refreshCountdown: number | null;
@@ -55,7 +54,7 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
 
       const openTime = openTimeRef.current;
 
-      // Revalidates instead of reloading; the cooldown avoids hammering KV if the worker stalls.
+      // Revalidates instead of reloading; the cooldown avoids hammering the hub if the worker stalls.
       if (
         now - lastUpdate > STALE_THRESHOLD_SECONDS &&
         now - openTime > AUTO_REFRESH_MIN_OPEN_SECONDS
@@ -73,7 +72,6 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
 
   return {
     currentTime: displayTime,
-    dataAge,
     isStale,
     willRefreshSoon,
     refreshCountdown,

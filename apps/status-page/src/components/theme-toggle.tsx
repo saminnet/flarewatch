@@ -5,8 +5,6 @@ import type { ThemePreference } from '@/lib/theme-server';
 import { setThemePreferenceServerFn } from '@/lib/theme-server';
 
 function applyTheme(theme: ThemePreference) {
-  if (typeof window === 'undefined') return;
-
   const root = document.documentElement;
 
   if (theme === 'dark') {
@@ -27,8 +25,6 @@ function applyTheme(theme: ThemePreference) {
 }
 
 function setThemePreferenceClient(theme: ThemePreference) {
-  if (typeof window === 'undefined') return;
-
   const setTheme = window.__flarewatchSetThemePreference;
 
   if (setTheme) {

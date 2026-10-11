@@ -37,7 +37,7 @@ function DashboardPage() {
   const { data: uiPrefs } = useSuspenseQuery(uiPrefsQuery());
   const nowMs = useNow({ serverTime: (state?.lastUpdate ?? 0) * 1000 });
 
-  // State can be null if KV has no data yet (worker hasn't run)
+  // State is null when the hub view cannot be fetched.
   if (!state) {
     return (
       <div className={PAGE_CONTAINER_CLASSES}>

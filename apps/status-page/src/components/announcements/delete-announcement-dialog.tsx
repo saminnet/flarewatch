@@ -41,7 +41,7 @@ export function DeleteAnnouncementDialog({
           </Alert>
         )}
         <p className="py-4 text-muted-foreground">
-          {`Delete "${announcement?.title ?? announcement?.body.slice(0, 80) ?? 'this announcement'}"? This cannot be undone.`}
+          {`Delete "${announcement?.title ?? 'this announcement'}"? This cannot be undone.`}
         </p>
         <div className="flex justify-end gap-2">
           <DialogClose render={<Button variant="outline">Cancel</Button>} />

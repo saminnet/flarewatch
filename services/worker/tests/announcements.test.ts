@@ -61,7 +61,7 @@ describe('announcement hub routes', () => {
       announcement('old'),
     ];
     expect(await (await send('/announcements'))?.json()).toEqual(expected);
-    const restarted = createHub({}, db).hub.view();
+    const restarted = createHub(db).hub.view();
     expect(restarted.announcements).toEqual(expected);
     expect(restarted.maintenances).toHaveLength(1);
     expect(restarted.monitors).toEqual(before);
@@ -124,7 +124,7 @@ describe('announcement hub routes', () => {
 
     expect(hub.view().announcements).toEqual([legacy]);
     expect(await (await send('/announcements'))?.json()).toEqual([legacy]);
-    expect(createHub({}, db).hub.view().announcements).toEqual([legacy]);
+    expect(createHub(db).hub.view().announcements).toEqual([legacy]);
     expect(
       (await send('/announcements/legacy', 'PUT', { ...legacy, body: 'y'.repeat(2001) }))?.status,
     ).toBe(400);

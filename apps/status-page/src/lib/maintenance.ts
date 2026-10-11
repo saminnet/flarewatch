@@ -174,30 +174,20 @@ export const SEVERITY_OPTIONS = [
   {
     value: 'green',
     label: 'Minor',
-    badge: 'bg-status-unknown-bg text-muted-foreground',
   },
   {
     value: 'yellow',
     label: 'Maintenance',
-    badge: 'bg-status-degraded-bg text-status-degraded-text',
   },
   {
     value: 'blue',
     label: 'Info',
-    badge: 'bg-status-maintenance-bg text-status-maintenance-text',
   },
   {
     value: 'red',
     label: 'Critical',
-    badge: 'bg-status-down-bg text-status-down-text',
   },
 ] as const;
-
-type SeverityOption = (typeof SEVERITY_OPTIONS)[number];
-
-export function getSeverityOption(color?: string): SeverityOption {
-  return SEVERITY_OPTIONS.find((s) => s.value === color) ?? SEVERITY_OPTIONS[1];
-}
 
 export function resolveAffectedMonitors<T extends { id: string }>(
   monitorIds: string[] | undefined,

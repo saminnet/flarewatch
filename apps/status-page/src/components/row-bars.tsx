@@ -2,7 +2,7 @@ import type { HeartbeatRun } from '@flarewatch/shared';
 import { HEARTBEAT_RUN_HISTORY } from '@flarewatch/shared';
 import { RUN_CELL_CLASSES, RUNNING_CELL_CLASSES } from '@/components/ui/status-cell';
 import type { HeartbeatView } from '@/lib/heartbeat';
-import { STATUS_DOT_COLORS } from '@/lib/constants';
+import { STATUS_COLORS } from '@/lib/constants';
 import type { DailyStatusData } from '@/lib/uptime';
 import { cn } from '@/lib/utils';
 
@@ -48,7 +48,7 @@ export function RowBars({
   if (!heartbeat) {
     const cells = days.map((day) => ({
       key: day.date.toISOString(),
-      className: STATUS_DOT_COLORS[day.status],
+      className: STATUS_COLORS[day.status],
     }));
     return <Cells cells={cells} />;
   }

@@ -4,11 +4,9 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.d.ts",
-    "flarewatch.config.ts",
     "playwright.config.ts",
     "vite.config.ts",
     "vitest.config.ts",
-    "functions/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx"

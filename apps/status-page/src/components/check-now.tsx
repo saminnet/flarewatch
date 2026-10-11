@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { IconCircleCheck, IconCircleX, IconRefresh } from '@tabler/icons-react';
-import type { CheckResultWithLocation } from '@flarewatch/shared';
+import { getErrorMessage, type CheckResultWithLocation } from '@flarewatch/shared';
 import { Button } from '@/components/ui/button';
 import { requestCheckNow } from '@/lib/check-now';
 import { formatColoLabel } from '@/lib/cf-colos';
@@ -23,7 +23,7 @@ export function CheckNow({ monitorId }: CheckNowProps) {
     try {
       setResult(await requestCheckNow(monitorId));
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      setError(getErrorMessage(error));
     }
     setIsPending(false);
   }

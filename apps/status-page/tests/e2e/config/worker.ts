@@ -23,7 +23,7 @@ const heartbeat = (
   options: { private?: boolean } = {},
 ): HeartbeatMonitor => ({ id, name, method: 'HEARTBEAT', periodSeconds, graceSeconds, ...options });
 
-export const heartbeatMonitors: HeartbeatMonitor[] = [
+const heartbeatMonitors: HeartbeatMonitor[] = [
   heartbeat('demo_nightly_backup', 'Nightly Backup', DAY, 30 * MINUTE),
   heartbeat('demo_hourly_report', 'Hourly Report', HOUR, 5 * MINUTE),
   heartbeat('demo_weekly_prune', 'Weekly Prune', 7 * DAY, HOUR),

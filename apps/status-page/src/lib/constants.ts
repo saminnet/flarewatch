@@ -57,8 +57,3 @@ export const STATUS_COLORS = {
   partial: 'bg-status-degraded',
   unknown: 'bg-status-unknown-bg',
 } as const;
-
-// Status-bar segments and small dots reuse the same tokens.
-export const STATUS_DOT_COLORS = {
-  ...STATUS_COLORS,
-} as const;

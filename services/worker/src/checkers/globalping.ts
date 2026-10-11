@@ -28,7 +28,7 @@ export const PREPAID_REQUESTS = 2;
 interface GlobalPingConfig {
   token: string;
   magic?: string;
-  ipVersion?: number;
+  ipVersion: number;
 }
 
 const measurementResultSchema = z.object({
