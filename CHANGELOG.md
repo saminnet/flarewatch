@@ -8,6 +8,21 @@ All notable changes to FlareWatch will be documented in this file.
 
 - The status page sends link-preview tags (Open Graph and a Twitter card) on every page. A shared link now shows the page title and a short description instead of a bare URL. ([#99](https://github.com/saminnet/flarewatch/pull/99))
 
+### Fixed
+
+- Webhook alerts work again. 3.4.0 told fetch to refuse redirects with a setting that Cloudflare Workers rejects, so every webhook alert failed. Every DNS, flarewatch-proxy and Globalping check failed for the same reason. A redirect now fails the request, as 3.4.0 meant it to, without sending your webhook token or proxy token on to another host. ([#101](https://github.com/saminnet/flarewatch/issues/101))
+- A Globalping check fails when a poll answers with a redirect or an error. Before, a redirect that carried a finished result could pass the check.
+- Mattermost and Rocket.Chat alerts show their content. They used Slack's block layout, which neither app reads, so an alert came through as an empty colored bar.
+- Sign-in with an OpenID Connect provider or GitHub fails when the token endpoint or GitHub's API answers with a redirect. Before, it followed the redirect and sent the client secret or the access token along.
+- The first check run after a deploy ends inside the 30 seconds that Cloudflare gives it. It sends an alert only when the alert can go out in time, and leaves the rest to the next run.
+- An error-change alert that a busy check run had to put off now goes out on a later run. Before, it was lost unless the error changed again.
+- The hub keeps every row under the 2 MB that Cloudflare documents. History parts are measured in bytes, so long errors in non-Latin scripts no longer make a part too big. The upgrade splits any larger part that 3.2.0 to 3.4.0 wrote, and cuts an incident from before 3.2.0 down to its first and its latest 99 error changes. CI fails a config whose monitor ids are so long that an hour of latency samples could not fit in one row.
+
+### Changed
+
+- Wrangler 4.149.0, with workerd 1.20261006.1.
+- The docs say that Cloudflare counts the ping and sign-in limits in each of its locations, and only roughly. Signing out ends the session at once where you are, and can take a minute or more to reach Cloudflare's other locations.
+
 ## 3.4.0 - 2026-10-09
 
 A certificate close to expiry now shows its monitor as degraded and sends one warning, instead of taking it down. If a monitor is down today only because of its certificate, its next check closes that outage, and the outage stays in History.
