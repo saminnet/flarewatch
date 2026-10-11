@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test';
+import { signInAs } from './auth';
 import { test } from './fixtures';
 import { captureLatencyCall } from './latency-call';
 
@@ -38,9 +39,7 @@ test('serves a private monitor and its latency to a member', async ({ page }) =>
   const captured = await captureLatencyCall(page, ALLOWED, ALLOWED_ROW);
   const { cookie: _cookie, ...headers } = await captured.allHeaders();
 
-  await page.goto('/login');
-  await page.getByRole('link', { name: 'Continue with Test ID' }).click();
-  await page.getByRole('link', { name: 'member@e2e.test' }).click();
+  await signInAs(page, 'member@e2e.test');
   await expect(
     page.getByRole('button', { name: /Account menu, signed in as member/ }),
   ).toBeVisible();

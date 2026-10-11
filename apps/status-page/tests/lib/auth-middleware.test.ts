@@ -4,6 +4,8 @@ import { accessConfig } from '@flarewatch/config/access';
 import { passwordIdentity } from '@/lib/operator.server';
 import { authMiddlewareServer } from '@/server/auth-middleware';
 import { buildAuthSecret } from '../helpers/auth-secret';
+import { restoreAfterEach } from '../helpers/config';
+import { memoryKv } from '../helpers/kv';
 
 function call(pathname: string, init?: RequestInit) {
   const next = vi.fn(async () => new Response('next'));
@@ -11,19 +13,19 @@ function call(pathname: string, init?: RequestInit) {
   return { next, response: authMiddlewareServer({ request, pathname, next } as never) };
 }
 
-function sessionKv(validId: string, secret = 'configured') {
-  return {
-    get: async (key: string) =>
-      key === `admin_session:${validId}`
-        ? JSON.stringify({
-            createdAt: 123,
-            ip: '127.0.0.1',
-            identity: await passwordIdentity(secret),
-          })
-        : null,
-    put: async () => {},
-    delete: async () => {},
-  };
+const IDENTITIES = {
+  configured: await passwordIdentity('configured'),
+  'admin:secret': await passwordIdentity('admin:secret'),
+};
+
+function sessionKv(validId: string, secret: keyof typeof IDENTITIES = 'configured') {
+  return memoryKv({
+    [`admin_session:${validId}`]: JSON.stringify({
+      createdAt: 123,
+      ip: '127.0.0.1',
+      identity: IDENTITIES[secret],
+    }),
+  });
 }
 
 describe('auth middleware private-only pages', () => {
@@ -160,10 +162,7 @@ describe('auth middleware admin access', () => {
   });
 
   describe('with provider sign-in only', () => {
-    afterEach(() => {
-      delete accessConfig.providers;
-      delete accessConfig.operators;
-    });
+    restoreAfterEach(accessConfig, ['providers', 'operators']);
 
     it('lets the operator reach admin APIs and anyone sign out', async () => {
       accessConfig.providers = [
@@ -179,12 +178,9 @@ describe('auth middleware admin access', () => {
         groups: [],
       };
       vi.stubGlobal('__env__', {
-        FLAREWATCH_STATE: {
-          get: async (key: string) =>
-            key === 'admin_session:abc'
-              ? JSON.stringify({ createdAt: 1, ip: null, identity })
-              : null,
-        },
+        FLAREWATCH_STATE: memoryKv({
+          'admin_session:abc': JSON.stringify({ createdAt: 1, ip: null, identity }),
+        }),
       });
       vi.stubEnv('DEV', false);
 

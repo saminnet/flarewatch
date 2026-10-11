@@ -1,10 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { accessConfig } from '@flarewatch/config/access';
 import type { Identity } from '@/lib/auth/access';
 import { passwordIdentity } from '@/lib/operator.server';
 import { Route } from '@/routes/api/admin/check';
 import { authMiddlewareServer } from '@/server/auth-middleware';
 import { buildAuthSecret } from '../helpers/auth-secret';
+import { stubMonitorWorker } from '../helpers/bindings';
+import { restoreAfterEach } from '../helpers/config';
+import { memoryKv } from '../helpers/kv';
 
 type Handler = (ctx: { request: Request }) => Promise<Response>;
 
@@ -53,7 +56,7 @@ async function stubEnv({
 } = {}) {
   const worker = vi.fn(async (_input: string, _init?: RequestInit) => answer());
   const calls = new Map<string, number>();
-  vi.stubGlobal('__env__', {
+  stubMonitorWorker(worker, {
     FLAREWATCH_ADMIN_BASIC_AUTH: ADMIN_SECRET,
     LOGIN_RATE_LIMIT: {
       limit: async ({ key }: { key: string }) => {
@@ -61,21 +64,19 @@ async function stubEnv({
         return { success: !limited && (perMinute === undefined || calls.get(key)! <= perMinute) };
       },
     },
-    FLAREWATCH_STATE: {
-      get: async (key: string) => {
-        const session = sessions[key.replace('admin_session:', '')];
-        return session ? JSON.stringify(session) : null;
-      },
-    },
-    MONITOR_WORKER: { fetch: worker },
+    FLAREWATCH_STATE: memoryKv(
+      Object.fromEntries(
+        Object.entries(sessions).map(([id, session]) => [
+          `admin_session:${id}`,
+          JSON.stringify(session),
+        ]),
+      ),
+    ),
   });
   return worker;
 }
 
-afterEach(() => {
-  delete accessConfig.providers;
-  delete accessConfig.members;
-});
+restoreAfterEach(accessConfig, ['providers', 'members']);
 
 describe('POST /api/admin/check', () => {
   it('runs one check for an operator script and keeps the answer out of shared caches', async () => {

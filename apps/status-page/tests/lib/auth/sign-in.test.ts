@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vite-plus/test';
-import type { AccessConfig, JsonObject } from '@flarewatch/shared';
+import type { AccessConfig } from '@flarewatch/shared';
 import { finishSignIn, startSignIn } from '@/lib/auth/sign-in.server';
 import type { Fetch } from '@/lib/auth/providers';
 import { memoryKv } from '../../helpers/kv';
+import { discovery, idToken } from '../../helpers/oidc';
 
 const ISSUER = 'https://id.sign-in.test';
 const access: AccessConfig = {
@@ -11,24 +12,13 @@ const access: AccessConfig = {
   operators: ['owner@example.com'],
 };
 
-function idToken(claims: JsonObject): string {
-  const encode = (value: unknown) => btoa(JSON.stringify(value)).replaceAll('=', '');
-  return `${encode({ alg: 'none' })}.${encode(claims)}.x`;
-}
-
 /** A provider that signs in `email` and echoes the nonce it was given at authorize time. */
 function fakeProvider(email: string) {
   let nonce = '';
   let challenge = '';
   let method = '';
   const fetchFn = vi.fn<Fetch>(async (url, init) => {
-    if (url === `${ISSUER}/.well-known/openid-configuration`) {
-      return Response.json({
-        issuer: ISSUER,
-        authorization_endpoint: `${ISSUER}/authorize`,
-        token_endpoint: `${ISSUER}/token`,
-      });
-    }
+    if (url === `${ISSUER}/.well-known/openid-configuration`) return discovery(ISSUER);
     if (url === `${ISSUER}/token`) {
       const verifier =
         new URLSearchParams(typeof init?.body === 'string' ? init.body : '').get('code_verifier') ??

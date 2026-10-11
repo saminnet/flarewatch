@@ -1,17 +1,28 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vite-plus/test';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import { CopyPingUrlButton } from '@/components/copy-ping-url-button';
+import { createTestQueryClient } from '../helpers/render';
 
 const getHeartbeatPingUrl = vi.fn<(id: string) => Promise<string | null>>();
+const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+
+beforeEach(() => {
+  getHeartbeatPingUrl.mockReset();
+});
+
+afterEach(() => {
+  if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+  else Reflect.deleteProperty(navigator, 'clipboard');
+});
 
 function setup(writeText = vi.fn(async () => undefined)) {
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={createTestQueryClient()}>
       <CopyPingUrlButton
         monitorId="backup"
         monitorName="Backup"

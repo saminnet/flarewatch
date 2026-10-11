@@ -1,54 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { workerConfig } from '@flarewatch/config/worker';
 import { forgetCachedView } from '@/lib/snapshots';
-import { authMiddlewareServer } from '@/server/auth-middleware';
 import { Route } from '@/routes/api/badge[.]svg';
+import { BADGE_TIME, callBadge, stubBadgeView } from '../helpers/badge';
+import { forgetViewAroundEachTest } from '../helpers/snapshots';
 
-const T = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const originalMonitors = workerConfig.monitors;
 afterEach(() => {
   workerConfig.monitors = originalMonitors;
-  forgetCachedView();
 });
+forgetViewAroundEachTest();
 
-function stubView(status: 'up' | 'down' = 'up', extra = {}) {
-  vi.stubEnv('DEV', false);
-  vi.stubGlobal('__env__', {
-    MONITOR_WORKER: {
-      fetch: async () =>
-        Response.json({
-          lastUpdate: T,
-          maintenances: [],
-          announcements: [],
-          monitors: {
-            demo_example: {
-              status,
-              startedAt: T,
-              incidents: status === 'down' ? [{ start: [T], error: ['Outage'] }] : [],
-              ...extra,
-            },
-          },
-        }),
-    },
-  });
-}
-
-type Handler = (ctx: { request: Request }) => Promise<Response>;
-function get(path = '/api/badge.svg?id=demo_example') {
-  const options = Route.options as { server?: { handlers?: Record<string, Handler> } };
-  const handler = options.server?.handlers?.GET;
-  if (!handler) throw new Error('Missing badge SVG GET');
-  const request = new Request(`https://flarewatch.test${path}`);
-  return authMiddlewareServer({
-    request,
-    pathname: new URL(request.url).pathname,
-    next: () => handler({ request }),
-  } as never) as Promise<Response>;
-}
+const get = (path = '/api/badge.svg?id=demo_example') => callBadge(Route, path);
 
 describe('GET /api/badge.svg', () => {
   it('serves a flat badge with its security and JSON cache headers', async () => {
-    stubView();
+    stubBadgeView();
     const response = await get('/api/badge.svg?id=demo_example&label=api&up=OK');
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/svg+xml');
@@ -71,7 +38,7 @@ describe('GET /api/badge.svg', () => {
   });
 
   it('maps down and degraded messages and accepts named and hex colors', async () => {
-    stubView('down');
+    stubBadgeView('down');
     const down = await get('/api/badge.svg?id=demo_example&down=OUT&colorDown=important');
     const downSvg = await down.text();
     expect(downSvg).toContain('fill="#fe7d37"');
@@ -80,7 +47,7 @@ describe('GET /api/badge.svg', () => {
     workerConfig.monitors = originalMonitors.map((m) =>
       m.id === 'demo_example' ? { ...m, maxLatencyMs: 10 } : m,
     );
-    stubView('up', { latest: { ping: 100, loc: 'HEL', time: T } });
+    stubBadgeView('up', { latest: { ping: 100, loc: 'HEL', time: BADGE_TIME } });
     const degraded = await get(
       '/api/badge.svg?id=demo_example&degraded=SLOW&colorDegraded=%23123abc',
     );
@@ -93,7 +60,7 @@ describe('GET /api/badge.svg', () => {
   });
 
   it('rejects color injection and inherited object keys', async () => {
-    stubView();
+    stubBadgeView();
     for (const color of [
       'url(https://evil.test)',
       'constructor',
@@ -112,7 +79,7 @@ describe('GET /api/badge.svg', () => {
   });
 
   it('escapes XML and caps label and every status message at 64 code points', async () => {
-    stubView();
+    stubBadgeView();
     const svg = await (
       await get('/api/badge.svg?id=demo_example&label=%3Cscript%3E%26%22%27&up=%3Csvg%3E')
     ).text();
@@ -124,8 +91,8 @@ describe('GET /api/badge.svg', () => {
       workerConfig.monitors = originalMonitors.map((m) =>
         m.id === 'demo_example' ? { ...m, maxLatencyMs: 10 } : m,
       );
-      stubView(status === 'down' ? 'down' : 'up', {
-        latest: { ping: status === 'degraded' ? 100 : 1, loc: 'HEL', time: T },
+      stubBadgeView(status === 'down' ? 'down' : 'up', {
+        latest: { ping: status === 'degraded' ? 100 : 1, loc: 'HEL', time: BADGE_TIME },
       });
       const long = encodeURIComponent('😀'.repeat(70));
       const capped = await (
@@ -137,13 +104,13 @@ describe('GET /api/badge.svg', () => {
   });
 
   it('keeps private and missing monitors out, serves unknown before a first result, and preserves failure statuses', async () => {
-    stubView();
+    stubBadgeView();
     workerConfig.monitors = originalMonitors.map((m) => ({ ...m, private: true }));
     expect((await get()).status).toBe(404);
     expect((await get('/api/badge.svg')).status).toBe(400);
     workerConfig.monitors = originalMonitors;
     forgetCachedView();
-    stubView('up', { startedAt: undefined });
+    stubBadgeView('up', { startedAt: undefined });
     const firstResultPending = await get();
     expect(firstResultPending.status).toBe(200);
     expect(await firstResultPending.text()).toContain('>unknown</text>');

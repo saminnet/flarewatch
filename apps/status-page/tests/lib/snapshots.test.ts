@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { HubView } from '@flarewatch/shared';
-import { forgetCachedView, readVisitorSnapshot } from '@/lib/snapshots';
+import { readVisitorSnapshot } from '@/lib/snapshots';
+import { stubMonitorWorker } from '../helpers/bindings';
+import { forgetViewAroundEachTest } from '../helpers/snapshots';
 
 const NOW = Date.parse('2026-06-10T12:00:00Z');
 const view = (lastUpdate: number): HubView => ({
@@ -13,18 +15,14 @@ const view = (lastUpdate: number): HubView => ({
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
-  forgetCachedView();
 });
-
-afterEach(() => {
-  forgetCachedView();
-});
+forgetViewAroundEachTest();
 
 describe('visitor snapshots', () => {
   it('reuses the view before expiry and refreshes after twenty seconds', async () => {
     const fetch = vi.fn(async () => Response.json(view(200)));
     fetch.mockResolvedValueOnce(Response.json(view(100)));
-    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+    stubMonitorWorker(fetch);
 
     expect((await readVisitorSnapshot()).state?.lastUpdate).toBe(100);
     vi.setSystemTime(NOW + 19_999);
@@ -37,7 +35,7 @@ describe('visitor snapshots', () => {
   it('recovers immediately after a rejected view instead of caching the failure', async () => {
     const fetch = vi.fn(async () => Response.json(view(200)));
     fetch.mockRejectedValueOnce(new Error('Hub unavailable'));
-    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+    stubMonitorWorker(fetch);
 
     expect((await readVisitorSnapshot()).state).toBeNull();
     expect((await readVisitorSnapshot()).state?.lastUpdate).toBe(200);
@@ -52,7 +50,7 @@ describe('visitor snapshots', () => {
     const fetch = vi.fn(async () => Response.json(view(300)));
     fetch.mockReturnValueOnce(oldResponse);
     fetch.mockResolvedValueOnce(Response.json(view(200)));
-    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+    stubMonitorWorker(fetch);
 
     const oldSnapshot = readVisitorSnapshot();
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
@@ -74,7 +72,7 @@ describe('visitor snapshots', () => {
       }
       return Response.json(view(0));
     });
-    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+    stubMonitorWorker(fetch);
 
     expect((await readVisitorSnapshot()).state?.lastUpdate).toBe(0);
     expect(triggers).toBe(1);

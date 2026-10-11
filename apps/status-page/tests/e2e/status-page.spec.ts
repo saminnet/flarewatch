@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, type APIResponse, type Page } from '@playwright/test';
+import { signInAs } from './auth';
 import { test } from './fixtures';
 import { isJsonObject } from '@flarewatch/shared';
 import { workerConfig } from './config/worker';
@@ -947,9 +948,7 @@ test.describe.serial('operator maintenance lifecycle', () => {
   });
 
   test('repeats a maintenance window weekly from History', async ({ page }) => {
-    await page.goto('/login');
-    await page.getByRole('link', { name: 'Continue with Test ID' }).click();
-    await page.getByRole('link', { name: 'operator@e2e.test' }).click();
+    await signInAs(page, 'operator@e2e.test');
     await page.getByRole('link', { name: 'History' }).click();
 
     await page.getByRole('button', { name: 'Add maintenance window' }).click();
@@ -999,12 +998,6 @@ test.describe.serial('operator maintenance lifecycle', () => {
 
 test.describe('provider sign-in', () => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), 'needs the local fake provider');
-
-  async function signInAs(page: Page, email: string): Promise<void> {
-    await page.goto('/login');
-    await page.getByRole('link', { name: 'Continue with Test ID' }).click();
-    await page.getByRole('link', { name: email }).click();
-  }
 
   test('a member sees every monitor, private ones too, and edits nothing', async ({ page }) => {
     await signInAs(page, 'member@e2e.test');

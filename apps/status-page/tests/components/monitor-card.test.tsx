@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from 'react';
-import { hydrateRoot } from 'react-dom/client';
+import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vite-plus/test';
@@ -80,12 +80,19 @@ describe('MonitorRow for a check slower than its maxLatencyMs', () => {
     container.innerHTML = html;
     document.body.appendChild(container);
     const errors: unknown[] = [];
-    await act(async () => {
-      hydrateRoot(container, row(), { onRecoverableError: (error) => errors.push(error) });
-    });
+    let root: Root | undefined;
+    try {
+      await act(async () => {
+        root = hydrateRoot(container, row(), {
+          onRecoverableError: (error) => errors.push(error),
+        });
+      });
 
-    expect(errors).toEqual([]);
-    expect(container.innerHTML).toBe(serverMarkup.innerHTML);
-    container.remove();
+      expect(errors).toEqual([]);
+      expect(container.innerHTML).toBe(serverMarkup.innerHTML);
+    } finally {
+      act(() => root?.unmount());
+      container.remove();
+    }
   });
 });

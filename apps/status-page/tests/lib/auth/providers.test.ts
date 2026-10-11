@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { AuthProvider, JsonObject } from '@flarewatch/shared';
 import { authorizationUrl, identify, SignInError, type Fetch } from '@/lib/auth/providers';
+import { discovery, idToken } from '../../helpers/oidc';
+
+const RS256 = { alg: 'RS256' };
 
 const NOW = 1_800_000_000;
 let issuerCount = 0;
@@ -16,25 +19,15 @@ function oidcProvider(): Extract<AuthProvider, { issuer: string }> {
   };
 }
 
-function idToken(claims: JsonObject): string {
-  const encode = (value: unknown) => btoa(JSON.stringify(value)).replaceAll('=', '');
-  return `${encode({ alg: 'RS256' })}.${encode(claims)}.signature`;
-}
-
 function fakeOidc(provider: { issuer: string }, claims: JsonObject, scopes = ['openid']) {
   const tokenBodies: string[] = [];
   const fetchFn = vi.fn<Fetch>(async (url, init) => {
     if (url === `${provider.issuer}/.well-known/openid-configuration`) {
-      return Response.json({
-        issuer: provider.issuer,
-        authorization_endpoint: `${provider.issuer}/authorize`,
-        token_endpoint: `${provider.issuer}/token`,
-        scopes_supported: scopes,
-      });
+      return discovery(provider.issuer, scopes);
     }
     if (url === `${provider.issuer}/token`) {
       tokenBodies.push(typeof init?.body === 'string' ? init.body : '');
-      return Response.json({ id_token: idToken(claims) });
+      return Response.json({ id_token: idToken(claims, RS256) });
     }
     return new Response('not found', { status: 404 });
   });
@@ -171,7 +164,7 @@ describe('OpenID Connect sign-in', () => {
     const plain = `http://${new URL(provider.issuer).host}/token`;
     const fetchFn = vi.fn<Fetch>(async (url) =>
       url === plain
-        ? Response.json({ id_token: idToken(good(provider.issuer)) })
+        ? Response.json({ id_token: idToken(good(provider.issuer), RS256) })
         : Response.json({
             issuer: provider.issuer,
             authorization_endpoint: `${provider.issuer}/authorize`,
@@ -205,12 +198,15 @@ describe('OpenID Connect sign-in', () => {
     const fetchFn = vi.fn<Fetch>(async (url) =>
       url === 'https://evil.example/t'
         ? Response.json({
-            id_token: idToken({
-              iss: 'https://evil.example',
-              aud: 'fw',
-              exp: NOW + 60,
-              nonce: 'nonce-1',
-            }),
+            id_token: idToken(
+              {
+                iss: 'https://evil.example',
+                aud: 'fw',
+                exp: NOW + 60,
+                nonce: 'nonce-1',
+              },
+              RS256,
+            ),
           })
         : Response.json({
             issuer: 'https://evil.example',

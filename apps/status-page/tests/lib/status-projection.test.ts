@@ -2,21 +2,12 @@ import { describe, expect, it } from 'vite-plus/test';
 import type { Maintenance, MonitorView, StatusView } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
 import { projectBadgeStatus, projectPublicData, projectTimeline } from '@/lib/status-projection';
+import { statusView } from '../helpers/status-view';
 
-function createState(
+const createState = (
   monitors: Record<string, Partial<MonitorView>> = {},
   lastUpdate = 1_789_000_000,
-): StatusView {
-  return {
-    lastUpdate,
-    monitors: Object.fromEntries(
-      Object.entries(monitors).map(([id, monitor]) => [
-        id,
-        { status: 'up', incidents: [], ...monitor },
-      ]),
-    ),
-  };
-}
+): StatusView => statusView(monitors, lastUpdate);
 
 function publicMonitor(id: string, name = id): PublicMonitor {
   return { id, method: 'GET', name };

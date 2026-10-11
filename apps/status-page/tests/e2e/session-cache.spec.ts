@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test';
+import { signInAs } from './auth';
 import { test } from './fixtures';
 
 declare global {
@@ -11,9 +12,7 @@ test('an open tab forgets the previous account when another one signs in', async
   page,
   context,
 }) => {
-  await page.goto('/login');
-  await page.getByRole('link', { name: 'Continue with Test ID' }).click();
-  await page.getByRole('link', { name: 'member@e2e.test' }).click();
+  await signInAs(page, 'member@e2e.test');
   await expect(page.getByRole('heading', { name: 'Internal Vault Backup' })).toBeVisible();
   const visitorView = page.getByRole('menuitemcheckbox', { name: 'Visitor view' });
   // The menu opens only once the page has hydrated, so retry the click.

@@ -7,21 +7,12 @@ import {
   generateDailyStatus,
   getMonitorError,
 } from '@/lib/uptime';
+import { statusView } from '../helpers/status-view';
 
-function view(
+const view = (
   monitors: Record<string, Partial<MonitorView>>,
   lastUpdate = Math.floor(Date.now() / 1000),
-): StatusView {
-  return {
-    lastUpdate,
-    monitors: Object.fromEntries(
-      Object.entries(monitors).map(([id, monitor]) => [
-        id,
-        { status: 'up', incidents: [], ...monitor },
-      ]),
-    ),
-  };
-}
+): StatusView => statusView(monitors, lastUpdate);
 
 describe('uptime utilities', () => {
   beforeEach(() => {

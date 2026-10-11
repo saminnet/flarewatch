@@ -6,9 +6,11 @@ import { createServer } from 'node:http';
 const port = Number(process.env.FAKE_OIDC_PORT ?? 3102);
 const issuer = `http://127.0.0.1:${port}`;
 const people = ['operator@e2e.test', 'member@e2e.test', 'partner@e2e.test', 'stranger@e2e.test'];
+/** A code is good once, and only for a minute, as a real provider's is. */
+const CODE_MS = 60_000;
 const codes = new Map<
   string,
-  { email: string; nonce: string; challenge: string; method: string }
+  { email: string; nonce: string; challenge: string; method: string; expires: number }
 >();
 
 const encode = (value: unknown) =>
@@ -31,6 +33,7 @@ createServer((request, response) => {
   }
 
   if (url.pathname === '/authorize') {
+    for (const [code, { expires }] of codes) if (expires < Date.now()) codes.delete(code);
     const back = new URL(url.searchParams.get('redirect_uri') ?? '/');
     const links = people.map((email) => {
       const code = crypto.randomUUID();
@@ -39,6 +42,7 @@ createServer((request, response) => {
         nonce: url.searchParams.get('nonce') ?? '',
         challenge: url.searchParams.get('code_challenge') ?? '',
         method: url.searchParams.get('code_challenge_method') ?? '',
+        expires: Date.now() + CODE_MS,
       });
       back.search = new URLSearchParams({
         code,
@@ -57,11 +61,13 @@ createServer((request, response) => {
     request.on('data', (chunk: string) => (body += chunk));
     request.on('end', () => {
       const params = new URLSearchParams(body);
-      const grant = codes.get(params.get('code') ?? '');
+      const code = params.get('code') ?? '';
+      const grant = codes.get(code);
       const verifier = params.get('code_verifier') ?? '';
       response.setHeader('Content-Type', 'application/json');
       if (
         !grant ||
+        grant.expires < Date.now() ||
         !verifier ||
         grant.method !== 'S256' ||
         createHash('sha256').update(verifier).digest('base64url') !== grant.challenge
@@ -70,6 +76,7 @@ createServer((request, response) => {
         response.end(JSON.stringify({ error: 'invalid_grant' }));
         return;
       }
+      codes.delete(code);
       const claims = {
         iss: issuer,
         aud: 'flarewatch-e2e',

@@ -5,6 +5,8 @@ import { workerConfig } from '@flarewatch/config/worker';
 import type { HubView } from '@flarewatch/shared';
 import { readVisitorSnapshot, forgetCachedView } from '@/lib/snapshots';
 import { Route } from '@/routes/feed[.]atom';
+import { stubMonitorWorker } from '../helpers/bindings';
+import { forgetViewAroundEachTest } from '../helpers/snapshots';
 
 const originalMonitors = workerConfig.monitors;
 const originalTitle = pageConfig.title;
@@ -12,8 +14,8 @@ const T = 1736942400;
 afterEach(() => {
   workerConfig.monitors = originalMonitors;
   pageConfig.title = originalTitle;
-  forgetCachedView();
 });
+forgetViewAroundEachTest();
 
 function fixture(): HubView {
   workerConfig.monitors = [
@@ -74,13 +76,9 @@ function fixture(): HubView {
 }
 function stub(view: HubView) {
   const requests: string[] = [];
-  vi.stubGlobal('__env__', {
-    MONITOR_WORKER: {
-      fetch: async (url: string) => {
-        requests.push(url);
-        return Response.json(view);
-      },
-    },
+  stubMonitorWorker(async (url) => {
+    requests.push(url);
+    return Response.json(view);
   });
   return requests;
 }

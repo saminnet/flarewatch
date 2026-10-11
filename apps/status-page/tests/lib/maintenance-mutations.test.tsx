@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import { useState, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import type { Maintenance } from '@flarewatch/shared';
 import { qk } from '@/lib/query/keys';
 import type { Snapshot } from '@/lib/public-view';
+import { createTestQueryClient } from '../helpers/render';
 import {
   useCreateMaintenance,
   useDeleteMaintenance,
@@ -29,7 +30,7 @@ function setup(saved: Maintenance, initial: Maintenance[] = []) {
     else windows = [saved, ...windows];
     return Response.json(saved, { status: 201 });
   });
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = createTestQueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(qk.operatorSnapshot, snapshotWith(initial));
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

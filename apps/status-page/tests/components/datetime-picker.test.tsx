@@ -13,7 +13,8 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  process.env.TZ = originalTimeZone;
+  if (originalTimeZone === undefined) delete process.env.TZ;
+  else process.env.TZ = originalTimeZone;
 });
 
 describe('DateTimePicker', () => {

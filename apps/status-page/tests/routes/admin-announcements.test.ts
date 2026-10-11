@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { isValidAnnouncement, type Announcement } from '@flarewatch/shared';
 import { Route } from '@/routes/api/admin/announcements';
 import { authMiddlewareServer } from '@/server/auth-middleware';
-import { forgetCachedView, readVisitorSnapshot } from '@/lib/snapshots';
+import { readVisitorSnapshot } from '@/lib/snapshots';
 import { buildAuthSecret } from '../helpers/auth-secret';
+import { stubMonitorWorker } from '../helpers/bindings';
+import { forgetViewAroundEachTest } from '../helpers/snapshots';
 
 const current: Announcement = {
   id: 'ann_1',
@@ -13,9 +15,7 @@ const current: Announcement = {
   createdAt: 1,
   updatedAt: 1,
 };
-afterEach(() => {
-  forgetCachedView();
-});
+forgetViewAroundEachTest();
 
 type Handler = (ctx: { request: Request }) => Promise<Response>;
 function send(method: string, body?: unknown) {
@@ -32,29 +32,25 @@ function send(method: string, body?: unknown) {
 
 function stubHub(initial: Announcement[] = [current]) {
   let announcements = initial;
-  vi.stubGlobal('__env__', {
-    MONITOR_WORKER: {
-      fetch: async (url: string, init?: RequestInit) => {
-        if (init?.method === 'PUT') {
-          if (typeof init.body !== 'string') throw new Error('Expected JSON text');
-          const value: unknown = JSON.parse(init.body);
-          if (!isValidAnnouncement(value)) throw new Error('Expected announcement');
-          announcements = [value, ...announcements.filter((a) => a.id !== value.id)];
-          return new Response(null, { status: 204 });
-        }
-        if (init?.method === 'DELETE') {
-          const id = decodeURIComponent(new URL(url).pathname.split('/').at(-1) ?? '');
-          const found = announcements.some((a) => a.id === id);
-          announcements = announcements.filter((a) => a.id !== id);
-          return new Response(null, { status: found ? 204 : 404 });
-        }
-        return Response.json(
-          url.endsWith('/view')
-            ? { lastUpdate: 100, monitors: {}, maintenances: [], announcements }
-            : announcements,
-        );
-      },
-    },
+  stubMonitorWorker(async (url, init) => {
+    if (init?.method === 'PUT') {
+      if (typeof init.body !== 'string') throw new Error('Expected JSON text');
+      const value: unknown = JSON.parse(init.body);
+      if (!isValidAnnouncement(value)) throw new Error('Expected announcement');
+      announcements = [value, ...announcements.filter((a) => a.id !== value.id)];
+      return new Response(null, { status: 204 });
+    }
+    if (init?.method === 'DELETE') {
+      const id = decodeURIComponent(new URL(url).pathname.split('/').at(-1) ?? '');
+      const found = announcements.some((a) => a.id === id);
+      announcements = announcements.filter((a) => a.id !== id);
+      return new Response(null, { status: found ? 204 : 404 });
+    }
+    return Response.json(
+      url.endsWith('/view')
+        ? { lastUpdate: 100, monitors: {}, maintenances: [], announcements }
+        : announcements,
+    );
   });
 }
 
@@ -128,11 +124,9 @@ describe('/api/admin/announcements', () => {
   });
 
   it('returns hub refusals and contains failures', async () => {
-    vi.stubGlobal('__env__', {
-      MONITOR_WORKER: {
-        fetch: async () => Response.json({ error: 'Too many announcements' }, { status: 400 }),
-      },
-    });
+    stubMonitorWorker(async () =>
+      Response.json({ error: 'Too many announcements' }, { status: 400 }),
+    );
     const refused = await send('POST', { title: 'Update', body: 'Details' });
     expect(refused.status).toBe(400);
     expect(await refused.json()).toEqual({ error: 'Too many announcements' });

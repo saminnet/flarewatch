@@ -8,12 +8,13 @@ import {
   forwardPing,
   triggerCheckRun,
 } from '@/lib/monitor-worker';
+import { stubMonitorWorker } from '../helpers/bindings';
 
 function stubEnv() {
   const fetch = vi.fn(
     async (_input: Request | string, _init?: RequestInit) => new Response('OK', { status: 200 }),
   );
-  vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+  stubMonitorWorker(fetch);
   return { fetch };
 }
 

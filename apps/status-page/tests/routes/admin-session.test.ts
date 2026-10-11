@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { Route } from '@/routes/api/admin/session';
 import { memoryKv } from '../helpers/kv';
 
@@ -11,12 +11,6 @@ function getPostHandler(): SessionHandler {
   return post;
 }
 
-const originalEnv = globalThis.__env__;
-
-afterEach(() => {
-  globalThis.__env__ = originalEnv;
-});
-
 function postRequest(body: string): Request {
   return new Request('https://flarewatch.test/api/admin/session', {
     method: 'POST',
@@ -27,7 +21,7 @@ function postRequest(body: string): Request {
 
 describe('POST /api/admin/session body guard', () => {
   it('rejects malformed JSON with 400 before touching KV', async () => {
-    globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: 'e2e-admin:secret' };
+    vi.stubGlobal('__env__', { FLAREWATCH_ADMIN_BASIC_AUTH: 'e2e-admin:secret' });
 
     const response = await getPostHandler()({ request: postRequest('{not json') });
 
@@ -35,7 +29,7 @@ describe('POST /api/admin/session body guard', () => {
   });
 
   it('rejects array and scalar JSON bodies with 400 before touching KV', async () => {
-    globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: 'e2e-admin:secret' };
+    vi.stubGlobal('__env__', { FLAREWATCH_ADMIN_BASIC_AUTH: 'e2e-admin:secret' });
 
     for (const body of ['[]', '[1,2]', '7', '"str"', 'null', 'true']) {
       const response = await getPostHandler()({ request: postRequest(body) });
@@ -44,7 +38,7 @@ describe('POST /api/admin/session body guard', () => {
   });
 
   it('rejects a body over 4 KiB with 400 before touching KV', async () => {
-    globalThis.__env__ = { FLAREWATCH_ADMIN_BASIC_AUTH: 'e2e-admin:secret' };
+    vi.stubGlobal('__env__', { FLAREWATCH_ADMIN_BASIC_AUTH: 'e2e-admin:secret' });
     const body = JSON.stringify({ username: 'e2e-admin', password: 'x'.repeat(5000) });
 
     const response = await getPostHandler()({ request: postRequest(body) });
@@ -94,11 +88,11 @@ describe('POST /api/admin/session login rate limit', () => {
   it('turns the right password away once the IP is over its limit', async () => {
     const kv = memoryKv();
     const { limit, binding } = limiter(false);
-    globalThis.__env__ = {
+    vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: await adminSecret('e2e-password'),
       FLAREWATCH_STATE: kv,
       LOGIN_RATE_LIMIT: binding,
-    };
+    });
 
     const blocked = await getPostHandler()({ request: loginRequest('e2e-password') });
 
@@ -109,10 +103,10 @@ describe('POST /api/admin/session login rate limit', () => {
 
   it('refuses to check a password when the rate-limit binding is missing', async () => {
     const kv = memoryKv();
-    globalThis.__env__ = {
+    vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: await adminSecret('e2e-password'),
       FLAREWATCH_STATE: kv,
-    };
+    });
 
     const response = await getPostHandler()({ request: loginRequest('e2e-password') });
 
@@ -122,11 +116,11 @@ describe('POST /api/admin/session login rate limit', () => {
 
   it('never keys the limit on a header the client chooses', async () => {
     const { limit, binding } = limiter(true);
-    globalThis.__env__ = {
+    vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: await adminSecret('e2e-password'),
       FLAREWATCH_STATE: memoryKv(),
       LOGIN_RATE_LIMIT: binding,
-    };
+    });
 
     for (const forwarded of ['198.51.100.1', '198.51.100.2']) {
       await getPostHandler()({
@@ -143,11 +137,11 @@ describe('POST /api/admin/session login rate limit', () => {
 
   it('writes nothing for a wrong password and a session for the right one', async () => {
     const kv = memoryKv();
-    globalThis.__env__ = {
+    vi.stubGlobal('__env__', {
       FLAREWATCH_ADMIN_BASIC_AUTH: await adminSecret('e2e-password'),
       FLAREWATCH_STATE: kv,
       LOGIN_RATE_LIMIT: limiter(true).binding,
-    };
+    });
 
     const wrong = await getPostHandler()({ request: loginRequest('wrong') });
     expect(wrong.status).toBe(401);

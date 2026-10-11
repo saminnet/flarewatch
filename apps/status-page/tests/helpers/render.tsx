@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, type QueryClientConfig } from '@tanstack/react-query';
 import {
   createMemoryHistory,
   createRootRoute,
@@ -7,6 +7,20 @@ import {
   RouterContextProvider,
 } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
+import { afterEach } from 'vite-plus/test';
+
+const clients: QueryClient[] = [];
+
+afterEach(() => {
+  for (const client of clients.splice(0)) client.clear();
+});
+
+/** A query client cleared after the test that made it, so no cache timer outlives the test. */
+export function createTestQueryClient(config?: QueryClientConfig): QueryClient {
+  const client = new QueryClient(config);
+  clients.push(client);
+  return client;
+}
 
 /** `ui` inside the query and router contexts the app's hooks read. */
 export function withProviders(ui: ReactNode) {
@@ -15,7 +29,7 @@ export function withProviders(ui: ReactNode) {
     history: createMemoryHistory(),
   });
   return (
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={createTestQueryClient()}>
       <RouterContextProvider router={router}>{ui}</RouterContextProvider>
     </QueryClientProvider>
   );

@@ -1,12 +1,8 @@
-import { describe, expect, it, afterEach, vi } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import type { Maintenance } from '@flarewatch/shared';
 import { normalizeMaintenanceUpdates, Route } from '@/routes/api/admin/maintenances';
-
-const originalEnv = globalThis.__env__;
-
-afterEach(() => {
-  globalThis.__env__ = originalEnv;
-});
+import { stubMonitorWorker } from '../helpers/bindings';
+import { memoryKv } from '../helpers/kv';
 
 function getHandler(method: 'POST' | 'PUT') {
   const options = Route.options as { server?: { handlers?: Record<string, Handler> } };
@@ -98,7 +94,7 @@ describe('POST /api/admin/maintenances', () => {
       saved.push(typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body);
       return new Response(null, { status: 204 });
     });
-    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+    stubMonitorWorker(fetch);
 
     const response = await getPostHandler()({
       request: postRequest({
@@ -143,7 +139,7 @@ describe('POST /api/admin/maintenances', () => {
       saved.push(typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body);
       return new Response(null, { status: 204 });
     });
-    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+    stubMonitorWorker(fetch);
     const window = { body: 'Backups', start: '2026-06-01T01:00:00Z', end: '2026-06-01T02:00:00Z' };
 
     const created = await getPostHandler()({
@@ -169,9 +165,8 @@ describe('POST /api/admin/maintenances', () => {
   });
 
   it('rejects invalid dates with 400 without writing', async () => {
-    const put = vi.fn(async () => {});
-    const kv = { get: vi.fn(async () => null), put };
-    globalThis.__env__ = { FLAREWATCH_STATE: kv as typeof kv & KVNamespace };
+    const kv = memoryKv();
+    vi.stubGlobal('__env__', { FLAREWATCH_STATE: kv });
 
     for (const start of ['not-a-date', null]) {
       const response = await getPostHandler()({
@@ -184,33 +179,31 @@ describe('POST /api/admin/maintenances', () => {
     });
     expect(badEnd.status).toBe(400);
 
-    expect(put).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it('rejects monitors that are not all ids with 400 without writing', async () => {
-    const put = vi.fn(async () => {});
-    const kv = { get: vi.fn(async () => null), put };
-    globalThis.__env__ = { FLAREWATCH_STATE: kv as typeof kv & KVNamespace };
+    const kv = memoryKv();
+    vi.stubGlobal('__env__', { FLAREWATCH_STATE: kv });
 
     const response = await getPostHandler()({
       request: postRequest({ body: 'Maintenance', start: '2026-01-01T00:00:00Z', monitors: [1] }),
     });
 
     expect(response.status).toBe(400);
-    expect(put).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 
   it('rejects a body over 64 KiB with 400 without writing', async () => {
-    const put = vi.fn(async () => {});
-    const kv = { get: vi.fn(async () => null), put };
-    globalThis.__env__ = { FLAREWATCH_STATE: kv as typeof kv & KVNamespace };
+    const kv = memoryKv();
+    vi.stubGlobal('__env__', { FLAREWATCH_STATE: kv });
 
     const response = await getPostHandler()({
       request: postRequest({ body: 'x'.repeat(65 * 1024), start: '2026-01-01T00:00:00Z' }),
     });
 
     expect(response.status).toBe(400);
-    expect(put).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 });
 
@@ -224,7 +217,7 @@ describe('PUT /api/admin/maintenances', () => {
       }
       return Response.json([current]);
     });
-    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+    stubMonitorWorker(fetch);
     return saved;
   }
 
@@ -285,7 +278,7 @@ describe('the hub refusing a window', () => {
         ? Response.json({ error: 'Too many maintenance windows' }, { status: 400 })
         : Response.json([current]),
     );
-    vi.stubGlobal('__env__', { MONITOR_WORKER: { fetch } });
+    stubMonitorWorker(fetch);
   }
 
   const send = (method: 'POST' | 'PUT', body: unknown) =>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
   createRoute,
@@ -12,6 +12,7 @@ import { act, render, screen } from '@testing-library/react';
 import { expect, it } from 'vite-plus/test';
 import { Route } from '@/routes/login';
 import type { Session } from '@/lib/session';
+import { createTestQueryClient } from '../helpers/render';
 
 it('keeps hook order when sign-in becomes available on the login page', async () => {
   const session: Session = {
@@ -37,7 +38,7 @@ it('keeps hook order when sign-in becomes available on the login page', async ()
   });
   await router.load();
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={createTestQueryClient()}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
