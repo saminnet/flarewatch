@@ -49,7 +49,7 @@ export async function checkDns(target: MonitorTarget, fetcher: Fetcher): Promise
     const response = await fetcher(url.toString(), {
       headers: { accept: 'application/dns-json' },
       timeout: target.timeout ?? DEFAULT_HTTP_TIMEOUT,
-      redirect: 'error',
+      redirect: 'manual',
     });
     if (!response.ok) return failure(`DNS resolver HTTP ${response.status}`, latency());
     const reply = replySchema.safeParse(await readJsonUpTo(response, MAX_BODY_BYTES));

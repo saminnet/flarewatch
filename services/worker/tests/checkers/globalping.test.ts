@@ -81,7 +81,7 @@ describe('GlobalPingChecker', () => {
         Authorization: 'Bearer CaseSensitiveToken',
       },
       timeout: 5000,
-      redirect: 'error',
+      redirect: 'manual',
     });
     expect(typeof body).toBe('string');
     expect(JSON.parse(body as string)).toEqual({

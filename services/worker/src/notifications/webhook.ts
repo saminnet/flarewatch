@@ -319,7 +319,7 @@ export class WebhookNotifier {
       const response = await this.fetcher(finalUrl, {
         ...requestInit,
         timeout,
-        redirect: 'error',
+        redirect: 'manual',
       });
 
       if (!response.ok) {

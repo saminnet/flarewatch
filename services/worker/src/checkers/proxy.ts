@@ -89,7 +89,7 @@ export async function checkExternalProxy(
         ...(monitor.sslCheckEnabled && { sslCheckDaysBeforeExpiry: 0 }),
       }),
       timeout,
-      redirect: 'error',
+      redirect: 'manual',
     });
 
     if (!response.ok) {

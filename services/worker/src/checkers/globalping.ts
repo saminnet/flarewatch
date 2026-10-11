@@ -193,7 +193,7 @@ async function createMeasurement(
   if (response.status !== 202) {
     const errorBody = z
       .object({ error: z.optional(z.object({ message: z.string() })) })
-      .safeParse(await readJsonUpTo(response, MAX_BODY_BYTES));
+      .safeParse(await readJsonUpTo(response, MAX_BODY_BYTES).catch(() => undefined));
     throw new Error(
       (errorBody.success ? errorBody.data.error?.message : undefined) ??
         `API error: ${response.status}`,
@@ -224,6 +224,7 @@ async function pollMeasurement(
     const response = await fetcher(`${GLOBALPING_API}/${measurementId}`, {
       timeout: API_TIMEOUT,
     });
+    if (!response.ok) throw new Error(`API error: ${response.status}`);
     const parsed = measurementResultSchema.safeParse(await readJsonUpTo(response, MAX_BODY_BYTES));
     if (!parsed.success) {
       throw new Error('invalid measurement payload');
@@ -296,7 +297,7 @@ export class GlobalPingChecker {
         budget.subrequests -= 1;
       }
       const timeout = Math.min(options.timeout ?? API_TIMEOUT, remaining);
-      return this.fetcher(input, { ...options, timeout, redirect: 'error' });
+      return this.fetcher(input, { ...options, timeout, redirect: 'manual' });
     };
     try {
       const config = parseProxyUrl(url);
