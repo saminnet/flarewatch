@@ -13,10 +13,24 @@ const state: StatusView = {
   monitors: { api: { status: 'up', incidents: [], startedAt: NOW - 120 * DAY } },
 };
 
-function bars() {
+function days() {
   const { container } = render(<StatusBar monitorId="api" monitorName="API" state={state} />);
-  const count = (selector: string) => container.querySelectorAll(`${selector} [aria-label]`).length;
-  return { desktop: count('.sm\\:flex'), mobile: count('.sm\\:hidden') };
+  const labels = (selector: string) =>
+    [...container.querySelectorAll(`${selector} [aria-label]`)].map((day) =>
+      day.getAttribute('aria-label'),
+    );
+  return { desktop: labels('.sm\\:flex'), mobile: labels('.sm\\:hidden') };
+}
+
+function bars() {
+  const { desktop, mobile } = days();
+  return { desktop: desktop.length, mobile: mobile.length };
+}
+
+function measureWidth(width: number): void {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+    DOMRect.fromRect({ width, height: 24 }),
+  );
 }
 
 describe('StatusBar', () => {
@@ -25,9 +39,15 @@ describe('StatusBar', () => {
   });
 
   it('shows every day on a mobile bar wide enough for them', () => {
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
-      DOMRect.fromRect({ width: 10_000, height: 24 }),
-    );
+    measureWidth(10_000);
     expect(bars()).toEqual({ desktop: 90, mobile: 90 });
+  });
+
+  it('shows the latest days that fit on a phone-width bar', () => {
+    measureWidth(360);
+    const { desktop, mobile } = days();
+    expect(mobile.length).toBeGreaterThan(0);
+    expect(mobile.length).toBeLessThan(desktop.length);
+    expect(mobile).toEqual(desktop.slice(-mobile.length));
   });
 });

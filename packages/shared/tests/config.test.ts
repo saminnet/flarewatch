@@ -340,7 +340,11 @@ describe('config validation', () => {
     expect(
       isValid(configWithWebhook({ payloadType: 'x-www-form-urlencoded', payload: null })),
     ).toBe(false);
+    expect(isValid(configWithWebhook({ payloadType: 'x-www-form-urlencoded' }))).toBe(false);
     expect(isValid(configWithWebhook({ payloadType: 'param', template: 'slack' }))).toBe(true);
+    expect(
+      isValid(configWithWebhook({ payloadType: 'x-www-form-urlencoded', payload: { m: '$MSG' } })),
+    ).toBe(true);
   });
 
   it.each(HTTP_METHODS)('accepts %s with http and https URL targets', (method) => {
