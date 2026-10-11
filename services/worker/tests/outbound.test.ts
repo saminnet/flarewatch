@@ -52,6 +52,26 @@ async function answer(request: IncomingMessage, response: ServerResponse): Promi
     json(response, finished);
   } else if (path === '/polled/api.globalping.io/v1/measurements/measurement-1') {
     json(response, finished, 302);
+  } else if (path === '/data.iana.org/rdap/dns.json') {
+    json(response, {
+      services: [
+        [['com'], ['https://rdap.test/']],
+        [['org'], ['http://rdap-plain.test/']],
+      ],
+    });
+  } else if (path.startsWith('/rdap.test/domain/') || path.startsWith('/rdap2.test/domain/')) {
+    const domain = path.split('/').pop() ?? '';
+    const redirect = { 'moved.com': 'https:', 'insecure.com': 'http:' }[domain];
+    if (redirect && path.startsWith('/rdap.test/')) {
+      response.writeHead(302, { Location: `${redirect}//rdap2.test/domain/${domain}` }).end();
+      return;
+    }
+    const expiry = domain === 'expired.com' ? '2000-01-01T00:00:00Z' : '2100-01-01T00:00:00Z';
+    json(response, {
+      objectClassName: 'domain',
+      ldhName: domain.toUpperCase(),
+      events: [{ eventAction: 'expiration', eventDate: expiry }],
+    });
   } else {
     response.writeHead(200).end();
   }
@@ -100,6 +120,28 @@ describe('outbound requests on workerd', () => {
       '/api.globalping.io/v1/measurements',
       '/api.globalping.io/v1/measurements/measurement-1',
     ]);
+  });
+});
+
+describe('RDAP domain checks on workerd', () => {
+  const checkDomain = (target: string) =>
+    worker.post(`/?internet=${encodeURIComponent(origin)}`, {
+      id: 'domain',
+      name: 'Domain',
+      method: 'DOMAIN',
+      target,
+    });
+
+  it.each([
+    ['passes a domain far from expiry', 'example.com', undefined],
+    ['follows an HTTPS redirect to another RDAP server', 'moved.com', undefined],
+    ['fails an expired domain', 'expired.com', /expired/i],
+    ['refuses a redirect to HTTP', 'insecure.com', /redirect/i],
+    ['refuses a TLD with only an HTTP service', 'example.org', /HTTPS/],
+  ])('%s', async (_, target, error) => {
+    const result = (await checkDomain(target)) as { ok: boolean; error?: string };
+    expect(result.ok).toBe(error === undefined);
+    if (error) expect(result.error).toMatch(error);
   });
 });
 
