@@ -69,7 +69,7 @@ export function StatusBar({ monitorId, monitorName, state }: StatusBarProps) {
     ? Math.min(Math.floor(width / STATUS_BAR.MOBILE_BAR_WIDTH), dailyStatus.length)
     : 0;
 
-  const mobileBars = dailyStatus.slice(-mobileBarCount);
+  const mobileBars = mobileBarCount > 0 ? dailyStatus.slice(-mobileBarCount) : [];
 
   function handleDayClick(day: DailyStatusData) {
     if (day.downtime > 0 && day.incidents.length > 0) {
