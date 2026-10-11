@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { configIssues, parseSecretWebhooks } from '../src/config';
-import type { JsonValue, PullMonitor, RuntimeConfig } from '../src/types';
+import type { JsonValue, PullMonitor, RuntimeConfig, Webhook } from '../src/types';
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 
@@ -328,6 +328,19 @@ describe('config validation', () => {
     expect(isValid(configWithWebhookPayload('x-www-form-urlencoded', ['a', 'b']))).toBe(false);
     expect(isValid(configWithWebhookPayload('param', { msg: '$MSG' }))).toBe(true);
     expect(isValid(configWithWebhookPayload('json', 'plain text'))).toBe(true);
+  });
+
+  it('rejects a param or form webhook without a payload unless a template builds it', () => {
+    const configWithWebhook = (webhook: Partial<Webhook>) =>
+      createRuntimeConfig({
+        notification: { webhook: { url: 'https://hooks.example.com', ...webhook } },
+      });
+
+    expect(isValid(configWithWebhook({ payloadType: 'param' }))).toBe(false);
+    expect(
+      isValid(configWithWebhook({ payloadType: 'x-www-form-urlencoded', payload: null })),
+    ).toBe(false);
+    expect(isValid(configWithWebhook({ payloadType: 'param', template: 'slack' }))).toBe(true);
   });
 
   it.each(HTTP_METHODS)('accepts %s with http and https URL targets', (method) => {

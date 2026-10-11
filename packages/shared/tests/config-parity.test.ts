@@ -140,12 +140,12 @@ const runtimeConfigCases: Array<[string, unknown, boolean]> = [
     false,
   ],
   [
-    'param payload null accepted',
+    'param payload null rejected',
     {
       monitors: [],
       notification: { webhook: { url: 'https://a.com', payloadType: 'param', payload: null } },
     },
-    true,
+    false,
   ],
   [
     'unknown payloadType rejected',

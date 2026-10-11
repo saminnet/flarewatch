@@ -101,7 +101,7 @@ Leave out `template` and write the payload yourself. `$MSG` is replaced with the
 }
 ```
 
-`payloadType` can also be `'param'` (query string) or `'x-www-form-urlencoded'`.
+`payloadType` can also be `'param'` (query string) or `'x-www-form-urlencoded'`. Both send the fields of `payload`, so it must be an object.
 
 ## Settings
 

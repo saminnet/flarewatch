@@ -119,14 +119,14 @@ function targetIssue(method: string, target: string): string | null {
     : null;
 }
 
-function isAllowedPayload(payloadType: string | undefined, payload: unknown): boolean {
-  return (
-    payloadType === undefined ||
-    payloadType === 'json' ||
-    payload === undefined ||
-    payload === null ||
-    isJsonObject(payload)
-  );
+/** Without a template, a param or form webhook sends its payload's fields, so it needs an object. */
+function isAllowedPayload(
+  template: string | undefined,
+  payloadType: string | undefined,
+  payload: unknown,
+): boolean {
+  if (payloadType === undefined || payloadType === 'json' || isJsonObject(payload)) return true;
+  return template !== undefined && (payload === undefined || payload === null);
 }
 
 function asTypeGuard<T>(schema: z.ZodMiniType<SchemaOutput<T>>): (value: unknown) => value is T {
@@ -496,7 +496,9 @@ const webhookShape = {
 // Strict: a misspelt `monitors` would otherwise vanish and route every monitor to the webhook.
 const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
   .strictObject(webhookShape)
-  .check(z.refine((webhook) => isAllowedPayload(webhook.payloadType, webhook.payload)));
+  .check(
+    z.refine((webhook) => isAllowedPayload(webhook.template, webhook.payloadType, webhook.payload)),
+  );
 
 const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.object({
   summaryAfter: z.optional(intInRange('summaryAfter', 2, 50)),
