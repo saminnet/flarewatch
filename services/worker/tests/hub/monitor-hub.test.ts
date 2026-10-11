@@ -711,26 +711,68 @@ describe('MonitorHub after an upgrade from 3.1', () => {
   });
 });
 
-it('sends a deferred error change on a later run, even when the error stays the same', () => {
-  const { hub } = createHub();
-  const run = (now: number, error: string) =>
-    hub.record(
-      now,
-      [{ monitor: monitor('api'), check: { location: 'HEL', result: { ok: false, error } } }],
-      POLICY,
-    ).alerts;
-  const confirm = (alerts: ReturnType<typeof run>, outcome: { deferred?: boolean }) =>
-    hub.confirmAlerts(
-      alerts.map((alert) => ({ ...alert, delivered: !outcome.deferred, ...outcome })),
-    );
+describe('a deferred error change', () => {
+  function hubRuns() {
+    const { hub } = createHub();
+    const run = (now: number, error?: string) =>
+      hub.record(
+        now,
+        [
+          {
+            monitor: monitor('api'),
+            check: {
+              location: 'HEL',
+              result: error === undefined ? { ok: true, latency: 1 } : { ok: false, error },
+            },
+          },
+        ],
+        POLICY,
+      ).alerts;
+    const confirm = (alerts: ReturnType<typeof run>, outcome: { deferred?: boolean }) =>
+      hub.confirmAlerts(
+        alerts.map((alert) => ({ ...alert, delivered: !outcome.deferred, ...outcome })),
+      );
+    const kinds = (alerts: ReturnType<typeof run>) =>
+      alerts.map(({ kind, error }) => [kind, error]);
+    return { run, confirm, kinds };
+  }
 
-  confirm(run(1000, 'Timeout'), {});
-  const changed = run(1060, 'HTTP 500');
-  expect(changed.map(({ kind, error }) => [kind, error])).toEqual([['error', 'HTTP 500']]);
-  confirm(changed, { deferred: true });
+  it('goes out on a later run, even when the error stays the same', () => {
+    const { run, confirm, kinds } = hubRuns();
+    confirm(run(1000, 'Timeout'), {});
+    const changed = run(1060, 'HTTP 500');
+    expect(kinds(changed)).toEqual([['error', 'HTTP 500']]);
+    confirm(changed, { deferred: true });
 
-  const retried = run(1120, 'HTTP 500');
-  expect(retried.map(({ kind, error }) => [kind, error])).toEqual([['error', 'HTTP 500']]);
-  confirm(retried, {});
-  expect(run(1180, 'HTTP 500')).toEqual([]);
+    const retried = run(1120, 'HTTP 500');
+    expect(kinds(retried)).toEqual([['error', 'HTTP 500']]);
+    confirm(retried, {});
+    expect(run(1180, 'HTTP 500')).toEqual([]);
+  });
+
+  it('stays quiet while a reopened outage waits out its recovery', () => {
+    const { run, confirm, kinds } = hubRuns();
+    confirm(run(1000, 'Timeout'), {});
+    confirm(run(1060), {});
+    const reopened = run(1120, 'Timeout');
+    expect(kinds(reopened)).toEqual([['down', 'Timeout']]);
+    confirm(reopened, {});
+    const changed = run(1180, 'HTTP 500');
+    expect(kinds(changed)).toEqual([['error', 'HTTP 500']]);
+    confirm(changed, { deferred: true });
+
+    expect(run(1240)).toEqual([]);
+  });
+
+  it('is not owed again when an overlapping run sent a newer one', () => {
+    const { run, confirm, kinds } = hubRuns();
+    confirm(run(1000, 'Timeout'), {});
+    const older = run(1060, 'HTTP 500');
+    const newer = run(1120, 'HTTP 503');
+    expect(kinds(newer)).toEqual([['error', 'HTTP 503']]);
+    confirm(newer, {});
+    confirm(older, { deferred: true });
+
+    expect(run(1180, 'HTTP 503')).toEqual([]);
+  });
 });

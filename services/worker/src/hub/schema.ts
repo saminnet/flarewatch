@@ -156,7 +156,11 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
   ],
   [(sql) => new Incidents(sql).splitOversized()],
   // An error change a run deferred, so the next run sends it though the error stays the same.
-  [`ALTER TABLE incidents ADD COLUMN error_due INTEGER NOT NULL DEFAULT 0`],
+  // error_run is the run that claimed the last one, so only its own deferral owes it again.
+  [
+    `ALTER TABLE incidents ADD COLUMN error_due INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE incidents ADD COLUMN error_run INTEGER`,
+  ],
 ];
 
 export function migrate(sql: Sql): void {

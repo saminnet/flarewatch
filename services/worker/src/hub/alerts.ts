@@ -209,12 +209,14 @@ export class Alerts {
         state === 'sent' &&
         (change?.changeType === 'error' || open.alert.errorDue) &&
         !quiet &&
+        !recovering &&
         !policy.skipErrorChanges &&
         errorAlerts < MAX_ERROR_ALERTS
       ) {
         // Counted now, so an overlapping run cannot pass the cap; a refused one is given back.
         this.sql.exec(
-          'UPDATE incidents SET error_alerts = error_alerts + 1, error_due = 0 WHERE id = ?',
+          'UPDATE incidents SET error_alerts = error_alerts + 1, error_due = 0, error_run = ? WHERE id = ?',
+          runNumber,
           open.id,
         );
         alerts.push({
@@ -333,9 +335,10 @@ export class Alerts {
       if (kind === 'error' && !delivered) {
         this.sql.exec(
           `UPDATE incidents SET error_alerts = error_alerts - 1,
-             error_due = CASE WHEN ? THEN 1 ELSE error_due END
+             error_due = CASE WHEN ? AND error_run IS ? THEN 1 ELSE error_due END
            WHERE id = ? AND error_alerts > 0 AND reopened_at IS ?`,
           deferred ? 1 : 0,
+          run,
           incident,
           reopenedAt,
         );
