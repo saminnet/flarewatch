@@ -237,10 +237,11 @@ export function runBudget(
   monitors: readonly Monitor[],
   webhooks: number,
   now = Date.now(),
+  windowMs = CHECK_WINDOW_MS,
 ): RunBudget {
   const primaries = monitors.reduce((sum, monitor) => sum + primaryCost(monitor), 0);
   return {
-    deadline: now + CHECK_WINDOW_MS,
+    deadline: now + windowMs,
     subrequests: Math.max(0, checkRoom(webhooks) - primaries),
   };
 }

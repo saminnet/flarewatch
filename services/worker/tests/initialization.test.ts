@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vite-plus/test';
 import Worker, { runChecks } from '../src/index';
+import type { CheckContext, MonitorTarget } from '@flarewatch/shared';
 import { checkMonitor } from '../src/checkers';
 import { createNotifier } from '../src/notifications/webhook';
 import { getEdgeLocation } from '../src/utils/location';
@@ -158,4 +159,35 @@ it('initialization admission leaves room for hub recording and an alert', async 
   ).toBeLessThanOrEqual(50);
   expect(deliveries).toBe(1);
   expect(Object.keys(hub.view().monitors)).toHaveLength(40);
+});
+
+// Cloudflare stops waitUntil work 30 seconds after the response, and the run still
+// has to record its checks and send its alerts once they end.
+it('ends the checks of a triggered run within 20 seconds', async () => {
+  const { hub } = createHub();
+  const env = { MONITOR_HUB: hubNamespace(hub) };
+  const deadlines: number[] = [];
+  const deps = {
+    checkMonitor: async (_monitor: MonitorTarget, ctx: CheckContext) => {
+      deadlines.push(ctx.budget.deadline);
+      return { location: 'HEL', result: { ok: true as const, latency: 1 } };
+    },
+    createNotifier,
+    getEdgeLocation: async () => 'HEL',
+    staticConfig: {
+      monitors: [{ id: 'api', name: 'API', method: 'GET' as const, target: 'https://api.test' }],
+    },
+  };
+  const pending: Promise<unknown>[] = [];
+  const ctx = { waitUntil: (promise: Promise<unknown>) => void pending.push(promise) };
+  const start = Date.now();
+  await Worker.fetch(
+    new Request('https://internal/trigger', { method: 'POST' }),
+    env,
+    ctx as typeof ctx & ExecutionContext,
+    deps,
+  );
+  await Promise.all(pending);
+  expect(deadlines).toHaveLength(1);
+  expect(deadlines[0]! - start).toBeLessThanOrEqual(20_000);
 });

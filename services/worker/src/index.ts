@@ -35,6 +35,8 @@ function checkDue(monitor: MonitorTarget, minute: number): boolean {
 export { MonitorHub } from './hub/monitor-hub';
 
 const log = createLogger('Worker');
+/** Cloudflare ends waitUntil work 30 seconds after the response; the run records and alerts after its checks. */
+const TRIGGER_WINDOW_MS = 20_000;
 
 async function safeCallback<T extends unknown[]>(
   callback: ((...args: T) => Promise<void>) | undefined,
@@ -83,6 +85,7 @@ export async function runChecks(
   deps: WorkerDeps = defaultWorkerDeps,
   scheduledAt?: number,
   spentSubrequests = 0,
+  checkWindowMs?: number,
 ): Promise<void> {
   const startedAt = Date.now();
   const location = await deps.getEdgeLocation();
@@ -105,7 +108,7 @@ export async function runChecks(
       monitors: due.filter(({ id }) => !dueIds.has(id)).map(({ id }) => id),
     });
   }
-  const budget = runBudget(checks, webhooks.length, startedAt);
+  const budget = runBudget(checks, webhooks.length, startedAt, checkWindowMs);
   budget.subrequests = Math.max(0, budget.subrequests - spentSubrequests);
 
   const ctx: CheckContext = { env, budget };
@@ -260,7 +263,7 @@ const Worker = {
     // holds wrangler.toml to that). Routing it publicly needs an auth check first.
     if (url.pathname === '/trigger' && request.method === 'POST') {
       const admitted = await getHub(env).claimInitialCheck(Date.now());
-      if (admitted) ctx.waitUntil(runChecks(env, deps, undefined, 1));
+      if (admitted) ctx.waitUntil(runChecks(env, deps, undefined, 1, TRIGGER_WINDOW_MS));
       return Response.json(
         {
           success: true,
