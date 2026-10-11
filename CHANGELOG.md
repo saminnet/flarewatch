@@ -2,6 +2,12 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- An error-change alert that no webhook accepted, or that a busy check run put off, now goes out later even when the monitor failed again while its outage waited to close. Before, that alert was lost and used up one of the outage's five. A reminder sent at that moment now counts, so the next reminder has the right number.
+
 ## 3.5.0 - 2026-10-11
 
 ### Added

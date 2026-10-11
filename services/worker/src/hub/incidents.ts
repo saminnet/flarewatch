@@ -38,6 +38,8 @@ export interface OpenIncident {
   incident: Incident;
   alert: IncidentAlert;
   reopenedAt: number | null;
+  /** When the monitor last failed again while waiting to close, since the incident last opened. */
+  relapsedAt: number | null;
   /** When a reopened incident's monitor last came back up, while it waits to close. */
   upSince: number | null;
 }
@@ -49,6 +51,7 @@ type IncidentRow = {
   errors: string;
   end_at: number | null;
   reopened_at: number | null;
+  relapsed_at: number | null;
   up_since: number | null;
 };
 
@@ -69,7 +72,7 @@ export class Incidents {
     return new Map(
       this.sql
         .exec<IncidentRow & AlertRow>(
-          `SELECT id, monitor_id, starts, errors, end_at, reopened_at, up_since, ${ALERT_COLUMNS}
+          `SELECT id, monitor_id, starts, errors, end_at, reopened_at, relapsed_at, up_since, ${ALERT_COLUMNS}
            FROM incidents WHERE end_at IS NULL`,
         )
         .map((row) => [
@@ -80,6 +83,7 @@ export class Incidents {
             incident: toIncident(row),
             alert: readAlert(row),
             reopenedAt: row.reopened_at,
+            relapsedAt: row.relapsed_at,
             upSince: row.up_since,
           },
         ]),
@@ -175,7 +179,7 @@ export class Incidents {
     if (segments) {
       this.sql.exec(
         `UPDATE incidents SET starts = ?, errors = ?, up_since = NULL,
-           reopened_at = CASE WHEN up_since IS NULL THEN reopened_at ELSE ? END
+           relapsed_at = CASE WHEN up_since IS NULL THEN relapsed_at ELSE ? END
          WHERE id = ?`,
         JSON.stringify(segments.start),
         JSON.stringify(segments.error),
@@ -185,7 +189,7 @@ export class Incidents {
       this.setNewest(monitorId, segments, true);
     } else if (open.upSince !== null) {
       this.sql.exec(
-        'UPDATE incidents SET up_since = NULL, reopened_at = ? WHERE id = ?',
+        'UPDATE incidents SET up_since = NULL, relapsed_at = ? WHERE id = ?',
         now,
         open.id,
       );
@@ -314,7 +318,7 @@ export class Incidents {
     const incident = { start, error: errors };
     const reopened = addSegment(incident, error, now) ?? incident;
     this.sql.exec(
-      `UPDATE incidents SET end_at = NULL, reopened_at = ?, starts = ?, errors = ?,
+      `UPDATE incidents SET end_at = NULL, reopened_at = ?, relapsed_at = NULL, starts = ?, errors = ?,
          ${REOPEN_ALERT_RESET}
        WHERE id = ?`,
       now,

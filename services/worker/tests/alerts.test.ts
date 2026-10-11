@@ -460,6 +460,50 @@ describe('alert state', () => {
     expect(d.alerts()).toEqual(['api still down']);
   });
 
+  it('waits a full grace period again when a monitor fails during its recovery hold', async () => {
+    const d = deployment([pull('api')], { gracePeriod: 2 });
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    await d.run(T + 60);
+    d.down('api');
+    await d.run(T + 120);
+    d.up('api');
+    await d.run(T + 180);
+    d.down('api');
+    await d.run(T + 200);
+    await d.run(T + 260);
+    await d.run(T + 300);
+    expect(d.alerts()).toEqual([]);
+
+    await d.run(T + 340);
+    expect(d.alerts()).toEqual(['api still down']);
+  });
+
+  it('times the grace period of a reopen from the reopen, not from an earlier relapse', async () => {
+    const d = deployment([pull('api')], { gracePeriod: 2 });
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    await d.run(T + 60);
+    d.down('api');
+    await d.run(T + 120);
+    d.up('api');
+    await d.run(T + 180);
+    d.down('api');
+    await d.run(T + 200);
+    d.up('api');
+    await d.run(T + 260);
+    await d.run(T + 1160);
+    d.down('api');
+    await d.run(T + 1160);
+    await d.run(T + 1220);
+    expect(d.alerts()).toEqual([]);
+
+    await d.run(T + 1280);
+    expect(d.alerts()).toEqual(['api still down']);
+  });
+
   it('sends at most five error changes per outage', async () => {
     const d = deployment([pull('api')]);
     d.down('api', 'error 0');
@@ -559,6 +603,37 @@ describe('alert state', () => {
     for (let i = 2; i <= 9; i++) {
       d.down('api', `second ${i}`);
       await d.run(T + 60 * i);
+    }
+
+    expect(d.alerts()).toEqual([
+      'api down',
+      'api up',
+      'api still down',
+      ...Array<string>(5).fill('api still down'),
+    ]);
+  });
+
+  it('gives back an error change refused while the outage relapsed in its recovery hold', async () => {
+    const d = deployment([pull('api')]);
+    d.down('api', 'first');
+    await d.run(T);
+    d.up('api');
+    await d.run(T + 60);
+    d.down('api', 'second 0');
+    await d.run(T + 120);
+    d.down('api', 'second 1');
+    d.whileDelivering(async () => {
+      d.up('api');
+      await d.run(T + 190);
+      d.down('api', 'second 1');
+      await d.run(T + 200);
+      d.refuse();
+    });
+    await d.run(T + 180);
+    d.accept();
+    for (let i = 2; i <= 9; i++) {
+      d.down('api', `second ${i}`);
+      await d.run(T + 180 + 60 * i);
     }
 
     expect(d.alerts()).toEqual([
@@ -918,6 +993,32 @@ describe('reminders', () => {
       'api still down',
       'api reminder 1',
       'api reminder 1',
+    ]);
+  });
+
+  it('counts a reminder delivered while the outage relapsed in its recovery hold', async () => {
+    const d = deployment([reminding('api')]);
+    d.down('api');
+    await d.run(T);
+    d.up('api');
+    await d.run(T + 60);
+    d.down('api');
+    const due = await runs(d, T + 120, 30);
+    d.whileDelivering(async () => {
+      d.up('api');
+      await d.run(due + 10);
+      d.down('api');
+      await d.run(due + 20);
+    });
+    await d.run(due);
+    await runs(d, due + 60, 30);
+
+    expect(d.alerts()).toEqual([
+      'api down',
+      'api up',
+      'api still down',
+      'api reminder 1',
+      'api reminder 2',
     ]);
   });
 

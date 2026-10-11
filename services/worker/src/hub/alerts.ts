@@ -185,7 +185,13 @@ export class Alerts {
         const grace = monitor.method === 'HEARTBEAT' ? 0 : policy.gracePeriodSeconds;
         // One run's wait lets a dependency that fails a run later cover this monitor.
         const held = (monitor.dependsOn?.length ?? 0) > 0 && change?.changeType === 'down';
-        if (quiet || held || recovering || now - (open.reopenedAt ?? start) < grace) continue;
+        if (
+          quiet ||
+          held ||
+          recovering ||
+          now - (open.relapsedAt ?? open.reopenedAt ?? start) < grace
+        )
+          continue;
         // Claimed so an overlapping run skips it, until record hears how delivery went.
         this.sql.exec(
           "UPDATE incidents SET alert = 'sending', alert_claimed_at = ?, alert_run = ? WHERE id = ?",
