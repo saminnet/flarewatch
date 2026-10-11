@@ -652,8 +652,7 @@ describe('MonitorHub in workerd storage sizes', () => {
       const sql = await storage(hub);
       const largest = async (table: string) =>
         (await sql.exec(`SELECT MAX(LENGTH(CAST(data AS BLOB))) AS bytes FROM ${table}`))[0]?.bytes;
-      // The Durable Objects limit for a row. Production took 8 MB on 2026-10-02, but
-      // nothing documents that, and workerd builds have differed.
+      // The Durable Objects row limit.
       expect(await largest('incident_lists')).toBeLessThanOrEqual(2_000_000);
       expect(await largest('latency')).toBeLessThanOrEqual(2_000_000);
       await evict(hub);

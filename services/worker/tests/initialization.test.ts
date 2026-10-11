@@ -161,8 +161,6 @@ it('initialization admission leaves room for hub recording and an alert', async 
   expect(Object.keys(hub.view().monitors)).toHaveLength(40);
 });
 
-// Cloudflare stops waitUntil work 30 seconds after the response, and the run still
-// has to record its checks and send its alerts once they end.
 it('ends the checks of a triggered run within 20 seconds', async () => {
   const { hub } = createHub();
   const env = { MONITOR_HUB: hubNamespace(hub) };

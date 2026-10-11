@@ -7,7 +7,7 @@ import {
   type AlertRow,
   type IncidentAlert,
 } from './alerts';
-import { parseJson, type Sql } from './sql';
+import { parseJson, ROW_BYTES, type Sql } from './sql';
 
 /** A failure this soon after recovering reopens the incident, so a flapping target adds no rows. */
 const FLAP_SECONDS = 15 * 60;
@@ -19,12 +19,8 @@ const MAX_HISTORY_CHARS = 1_000_000;
 const MAX_INCIDENT_SEGMENTS = 100;
 /** With the segment cap, bounds how many list parts a monitor's history can fill. */
 const MAX_ERROR_CHARS = 500;
-/**
- * UTF-8 bytes per list part, under the 2 MB Durable Objects row limit. Production
- * stored 8 MB on 2026-10-02, but no doc promises that.
- */
-const PART_BYTES = 1_900_000;
-const utf8Bytes = (text: string) => new TextEncoder().encode(text).byteLength;
+const encoder = new TextEncoder();
+const utf8Bytes = (text: string) => encoder.encode(text).byteLength;
 /** Rows importHistory reads per query, and ids per delete: a query binds at most 100 values. */
 const IMPORT_PAGE = 100;
 
@@ -280,18 +276,13 @@ export class Incidents {
     }
   }
 
-  /** Splits again each history with a part over PART_BYTES: releases before 3.4.1 sized parts in characters. */
+  /** Splits again each history with a part over ROW_BYTES: releases before 3.4.1 sized parts in characters. */
   splitOversized(): void {
     for (const { monitor_id } of this.sql.exec<{ monitor_id: string }>(
       'SELECT DISTINCT monitor_id FROM incident_lists WHERE LENGTH(CAST(data AS BLOB)) > ?',
-      PART_BYTES,
+      ROW_BYTES,
     )) {
-      const list = this.sql
-        .exec<{ data: string }>(
-          'SELECT data FROM incident_lists WHERE monitor_id = ? ORDER BY part',
-          monitor_id,
-        )
-        .flatMap(({ data }) => parseList(data));
+      const list = this.readList(monitor_id);
       this.sql.exec('DELETE FROM incident_lists WHERE monitor_id = ?', monitor_id);
       this.writeParts(
         monitor_id,
@@ -300,14 +291,13 @@ export class Incidents {
     }
   }
 
-  /** Writes a monitor's incidents, given as JSON, in as few parts as PART_BYTES allows. */
   private writeParts(monitorId: string, incidents: string[]): void {
     const parts: string[][] = [];
     let size = 0;
     for (const json of incidents) {
       const current = parts[parts.length - 1];
       const bytes = utf8Bytes(json);
-      if (current && size + bytes + 1 <= PART_BYTES) {
+      if (current && size + bytes + 1 <= ROW_BYTES) {
         current.push(json);
         size += bytes + 1;
       } else {
@@ -352,7 +342,7 @@ export class Incidents {
     const list = last ? parseList(last.data) : [];
     if (replace) list.pop();
     const data = JSON.stringify([...list, incident]);
-    if (utf8Bytes(data) <= PART_BYTES) {
+    if (utf8Bytes(data) <= ROW_BYTES) {
       this.writePart(monitorId, part, data);
     } else {
       this.writePart(monitorId, part, JSON.stringify(list));
@@ -362,12 +352,7 @@ export class Incidents {
 
   /** Deletes the oldest closed incidents past the caps. Earliest end is oldest, so the end_at index finds them. */
   private capClosed(monitorId: string): void {
-    const list = this.sql
-      .exec<{ data: string }>(
-        'SELECT data FROM incident_lists WHERE monitor_id = ? ORDER BY part',
-        monitorId,
-      )
-      .flatMap(({ data }) => parseList(data));
+    const list = this.readList(monitorId);
     const sizes = list.map((incident) => JSON.stringify(incident).length + 1);
     let closed = list.filter(({ end }) => end !== undefined).length;
     let size = sizes.reduce((total, n) => total + n, 0);
@@ -409,6 +394,15 @@ export class Incidents {
         );
       }
     }
+  }
+
+  private readList(monitorId: string): Incident[] {
+    return this.sql
+      .exec<{ data: string }>(
+        'SELECT data FROM incident_lists WHERE monitor_id = ? ORDER BY part',
+        monitorId,
+      )
+      .flatMap(({ data }) => parseList(data));
   }
 
   private writePart(monitorId: string, part: number, data: string): void {

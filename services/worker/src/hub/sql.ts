@@ -1,6 +1,9 @@
 export type SqlValue = string | number | null;
 export type SqlRow = Record<string, SqlValue>;
 
+/** Bytes a row may take, under the 2 MB Durable Objects limit on a string, BLOB or row. */
+export const ROW_BYTES = 1_900_000;
+
 /** The part of Durable Object SQL storage the hub uses. Tests back it with node:sqlite. */
 export interface Sql {
   exec<T extends SqlRow>(query: string, ...bindings: SqlValue[]): T[];
