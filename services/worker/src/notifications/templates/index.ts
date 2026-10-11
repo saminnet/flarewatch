@@ -12,6 +12,7 @@ import { pushoverTemplate } from './pushover';
 import { gotifyTemplate } from './gotify';
 import { zulipTemplate } from './zulip';
 import { resendTemplate } from './resend';
+import { mattermostTemplate } from './mattermost';
 
 type TemplateFunction = (ctx: TemplateContext) => TemplateOutput;
 
@@ -37,8 +38,8 @@ const templates = {
   gotify: gotifyTemplate,
   zulip: zulipTemplate,
   resend: resendTemplate,
-  mattermost: slackTemplate,
-  rocketchat: slackTemplate,
+  mattermost: mattermostTemplate,
+  rocketchat: mattermostTemplate,
 } satisfies Record<NotificationTemplate, TemplateFunction>;
 
 export function getTemplate(name: NotificationTemplate): TemplateFunction {

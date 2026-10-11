@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,43 +9,61 @@ import {
 
 export * from '@flarewatch/unwrapped-wrangler';
 
-// Wrangler writes .wrangler next to its config. A copy outside the repo keeps the task cache fingerprint stable.
-function copyOutsideRepo(config: string): string {
-  const copy = path.join(mkdtempSync(path.join(tmpdir(), 'flarewatch-workerd-')), 'wrangler.toml');
+/**
+ * Wrangler writes .wrangler next to its config. A copy outside the repo keeps the task
+ * cache fingerprint stable; `remove` deletes the copy and that state.
+ */
+function copyOutsideRepo(config: string) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'flarewatch-workerd-'));
+  const file = path.join(dir, 'wrangler.toml');
   const toml = readFileSync(config, 'utf8').replace(
     /^main = "(.*)"$/m,
     (_, main: string) => `main = ${JSON.stringify(path.resolve(path.dirname(config), main))}`,
   );
-  writeFileSync(copy, toml);
-  return copy;
+  writeFileSync(file, toml);
+  return { file, remove: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 export const createTestHarness: typeof createRealTestHarness = (options) => {
   if (!options) return createRealTestHarness(options);
   const root = options.root ?? process.cwd();
-  return createRealTestHarness({
+  const copies: (() => void)[] = [];
+  const harness = createRealTestHarness({
     ...options,
-    workers: options.workers.map((worker) =>
-      'configPath' in worker
-        ? {
-            ...worker,
-            configPath: copyOutsideRepo(
-              path.resolve(
-                root,
-                typeof worker.configPath === 'string'
-                  ? worker.configPath
-                  : fileURLToPath(worker.configPath.href),
-              ),
-            ),
-          }
-        : worker,
-    ),
+    workers: options.workers.map((worker) => {
+      if (!('configPath' in worker)) return worker;
+      const copy = copyOutsideRepo(
+        path.resolve(
+          root,
+          typeof worker.configPath === 'string'
+            ? worker.configPath
+            : fileURLToPath(worker.configPath.href),
+        ),
+      );
+      copies.push(copy.remove);
+      return { ...worker, configPath: copy.file };
+    }),
+  });
+  const close = harness.close.bind(harness);
+  return Object.assign(harness, {
+    close: async () => {
+      await close();
+      for (const remove of copies) remove();
+    },
   });
 };
 
-export function unstable_startWorker({
+export async function unstable_startWorker({
   config,
   ...options
 }: Parameters<typeof startRealWorker>[0] & { config?: string }) {
-  return startRealWorker({ ...options, config: config && copyOutsideRepo(config) });
+  const copy = config === undefined ? undefined : copyOutsideRepo(config);
+  const worker = await startRealWorker({ ...options, config: copy?.file });
+  const dispose = worker.dispose.bind(worker);
+  return Object.assign(worker, {
+    dispose: async () => {
+      await dispose();
+      copy?.remove();
+    },
+  });
 }
