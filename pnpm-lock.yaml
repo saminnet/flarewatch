@@ -279,9 +279,6 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.4.0
-      status-page:
-        specifier: workspace:*
-        version: link:../../apps/status-page
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

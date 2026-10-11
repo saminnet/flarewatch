@@ -22,7 +22,6 @@
     "@flarewatch/ts-config": "workspace:*",
     "@flarewatch/vitest-config": "workspace:*",
     "@types/node": "catalog:",
-    "status-page": "workspace:*",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "wrangler": "catalog:"

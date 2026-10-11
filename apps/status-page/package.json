@@ -2,9 +2,6 @@
   "name": "status-page",
   "private": true,
   "type": "module",
-  "exports": {
-    "./lib/*": "./src/lib/*.ts"
-  },
   "scripts": {
     "compile": "vp check --no-fmt --no-lint",
     "dev": "vp dev --port 3000",

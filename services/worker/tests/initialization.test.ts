@@ -1,22 +1,14 @@
-import { expect, it, onTestFinished, vi } from 'vite-plus/test';
+import { expect, it, vi } from 'vite-plus/test';
 import Worker, { runChecks } from '../src/index';
 import type { CheckContext, MonitorTarget } from '@flarewatch/shared';
 import { checkMonitor } from '../src/checkers';
 import { createNotifier } from '../src/notifications/webhook';
 import { getEdgeLocation } from '../src/utils/location';
-import type { env as workersEnv } from './helpers/cloudflare-workers';
 import { createHub, hubNamespace } from './helpers/hub';
 import { freezeClock } from '@flarewatch/shared/testing/clock';
 
-async function pageIsolate(binding: NonNullable<typeof workersEnv.MONITOR_WORKER>) {
-  vi.resetModules();
-  onTestFinished(() => void vi.resetModules());
-  (await import('./helpers/cloudflare-workers')).env.MONITOR_WORKER = binding;
-  return import('status-page/lib/snapshots');
-}
-
 it.each([0, 60_001])(
-  'two page isolates share initialization admission; retry after %i ms',
+  'concurrent triggers share initialization admission; retry after %i ms',
   async (retryMs) => {
     vi.useFakeTimers();
     const start = 1736942400000;
@@ -45,21 +37,24 @@ it.each([0, 60_001])(
         pending.push(promise);
       },
     };
-    const binding = {
-      fetch: (input: Request | string, init?: RequestInit) =>
-        Worker.fetch(new Request(input, init), env, ctx as typeof ctx & ExecutionContext, deps),
-    };
-    const first = await pageIsolate(binding);
-    const second = await pageIsolate(binding);
-    await Promise.all([first.readVisitorSnapshot(), second.readVisitorSnapshot()]);
+    // Every status page isolate that finds an empty hub sends one of these.
+    const trigger = () =>
+      Worker.fetch(
+        new Request('https://internal/trigger', { method: 'POST' }),
+        env,
+        ctx as typeof ctx & ExecutionContext,
+        deps,
+      );
+    const triggerTwice = () => Promise.all([trigger(), trigger()]);
+    await triggerTwice();
     await vi.waitFor(() => expect(completions).toHaveLength(1));
     expect(pending).toHaveLength(1);
     vi.setSystemTime(start + 20_001);
-    await Promise.all([first.readVisitorSnapshot(), second.readVisitorSnapshot()]);
+    await triggerTwice();
     expect(pending).toHaveLength(1);
     if (retryMs) {
       vi.setSystemTime(start + retryMs);
-      await Promise.all([first.readVisitorSnapshot(), second.readVisitorSnapshot()]);
+      await triggerTwice();
       await vi.waitFor(() => expect(completions).toHaveLength(2));
       expect(pending).toHaveLength(2);
       completions[1]?.(new Response('ok'));
@@ -71,7 +66,7 @@ it.each([0, 60_001])(
       completions[0]?.(new Response('ok'));
       await Promise.all(pending);
       vi.setSystemTime(start + 60_001);
-      await Promise.all([first.readVisitorSnapshot(), second.readVisitorSnapshot()]);
+      await triggerTwice();
       expect(pending).toHaveLength(1);
       expect(hub.view().lastUpdate).toBe(start / 1000);
     }

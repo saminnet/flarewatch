@@ -7,7 +7,6 @@ export default defineConfig({
   cacheDir: '../../node_modules/.vite/worker',
   resolve: {
     alias: {
-      '@': path.resolve(import.meta.dirname, '../../apps/status-page/src'),
       'cloudflare:workers': path.resolve(
         import.meta.dirname,
         './tests/helpers/cloudflare-workers.ts',
