@@ -72,7 +72,6 @@ test('the operator signs in to the full page and signs out to the sign-in page',
   await expect(page.getByText('This status page is private.')).toBeVisible();
 });
 
-/** `captured` sent again from a fresh context, with its sign-in cookie or without it. */
 async function replay(
   captured: Request,
   baseURL: string | undefined,

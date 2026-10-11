@@ -98,7 +98,6 @@ it('backfills each monitor’s latest sample on upgrade before any new check', a
   expect((await view(hub)).body).toEqual(upgraded.body);
 }, 60_000);
 
-/** Takes a hub back to the schema after migration step `target`; its next start runs the rest. */
 async function rewindTo(sql: Awaited<ReturnType<typeof storage>>, target: number) {
   const [row] = await sql.exec('SELECT MAX(id) AS applied FROM _migrations');
   for (const statement of rewindStatements(Number(row?.applied), target)) await sql.exec(statement);

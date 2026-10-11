@@ -47,7 +47,6 @@ export function decodeAlert(url: string, body: unknown): Delivered | undefined {
   };
 }
 
-/** Collects the alerts sent to `host`; `otherwise` answers every other request. */
 export function webhookCapture(
   host: string,
   otherwise: (url: string) => Promise<Response> = async () => new Response('ok'),

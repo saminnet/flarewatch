@@ -1,6 +1,5 @@
 import type { HeartbeatMonitor, MonitorTarget } from '../../src/types';
 
-/** A valid HTTP monitor; a test overrides the fields it is about. */
 export function createMonitor(overrides: Partial<MonitorTarget> = {}): MonitorTarget {
   return {
     id: 'test-monitor',
@@ -11,7 +10,6 @@ export function createMonitor(overrides: Partial<MonitorTarget> = {}): MonitorTa
   };
 }
 
-/** A valid heartbeat job; a test overrides the fields it is about. */
 export function createHeartbeat(overrides: Partial<HeartbeatMonitor> = {}): HeartbeatMonitor {
   return {
     id: 'backup',

@@ -138,7 +138,6 @@ describe('RDAP domain checks on workerd', () => {
   });
 });
 
-/** The body as fields: JSON, or a form. */
 function fields({ headers, body }: Received): JsonObject {
   if (headers['content-type']?.includes('application/x-www-form-urlencoded')) {
     return Object.fromEntries(new URLSearchParams(body));
@@ -148,7 +147,6 @@ function fields({ headers, body }: Received): JsonObject {
   return value;
 }
 
-/** A field as text; a nested value as its JSON. */
 function textOf(value: JsonValue | undefined): string {
   return typeof value === 'string' ? value : (JSON.stringify(value) ?? '');
 }
@@ -158,7 +156,6 @@ function posted(request: Received): JsonObject {
   return fields(request);
 }
 
-/** The one attachment of a Mattermost or Rocket.Chat message: Slack's attachment fields, no blocks. */
 function chatAttachment(request: Received): void {
   const { attachments } = posted(request);
   const [attachment] = Array.isArray(attachments) ? attachments : [];

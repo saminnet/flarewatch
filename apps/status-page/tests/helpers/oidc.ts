@@ -6,7 +6,6 @@ export function idToken(claims: JsonObject, header: JsonObject = { alg: 'none' }
   return `${encode(header)}.${encode(claims)}.signature`;
 }
 
-/** The discovery document of `issuer`, with `scopes_supported` only when `scopes` is given. */
 export function discovery(issuer: string, scopes?: string[]): Response {
   return Response.json({
     issuer,

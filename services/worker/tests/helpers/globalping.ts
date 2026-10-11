@@ -1,6 +1,5 @@
 import type { JsonObject } from '@flarewatch/shared';
 
-/** A finished HTTP measurement from one probe, as Globalping's API answers a poll. */
 export function finishedMeasurement(
   result: JsonObject = {},
   probe: JsonObject = { country: 'FI', city: 'Helsinki' },

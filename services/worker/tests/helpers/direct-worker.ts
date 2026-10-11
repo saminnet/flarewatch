@@ -1,10 +1,7 @@
 import { afterAll, beforeAll } from 'vite-plus/test';
 import { unstable_startWorker } from 'wrangler';
 
-/**
- * tests/workerd/direct/entry.ts in workerd, started before the file's tests and
- * disposed after them. Its outbound requests leave from workerd, not Node.
- */
+/** Outbound requests leave from workerd, not Node. */
 export function useDirectWorker() {
   let worker: Awaited<ReturnType<typeof unstable_startWorker>> | undefined;
   beforeAll(async () => {

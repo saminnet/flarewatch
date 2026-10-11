@@ -9,12 +9,10 @@ import type { WorkerDeps } from '../../src/index';
 
 type Connect = ConstructorParameters<typeof TcpChecker>[0];
 
-/** A socket a test does not expect: any TCP check fails it loudly. */
 export const refuseSockets: Connect = async () => {
   throw new Error('Unexpected socket');
 };
 
-/** The checkers over `fetcher` and `connect`, at a fixed edge location. */
 export function createCheckDeps(
   fetcher: Fetcher,
   connect: Connect = refuseSockets,

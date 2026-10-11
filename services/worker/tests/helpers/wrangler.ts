@@ -9,10 +9,7 @@ import {
 
 export * from '@flarewatch/unwrapped-wrangler';
 
-/**
- * Wrangler writes .wrangler next to its config. A copy outside the repo keeps the task
- * cache fingerprint stable; `remove` deletes the copy and that state.
- */
+// Wrangler writes .wrangler next to its config. A copy outside the repo keeps the task cache fingerprint stable.
 function copyOutsideRepo(config: string) {
   const dir = mkdtempSync(path.join(tmpdir(), 'flarewatch-workerd-'));
   const file = path.join(dir, 'wrangler.toml');

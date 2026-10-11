@@ -3,7 +3,6 @@ import type { Server } from 'node:net';
 
 const HOST = '127.0.0.1';
 
-/** Starts `server` on a free local port and returns the port. */
 export async function listen(server: Server): Promise<number> {
   server.listen(0, HOST);
   await once(server, 'listening');
@@ -12,7 +11,6 @@ export async function listen(server: Server): Promise<number> {
   return address.port;
 }
 
-/** Stops `server`, ends its open connections and waits until it has closed. */
 export async function close(server: Server & { closeAllConnections?: () => void }): Promise<void> {
   if (!server.listening) return;
   const closed = once(server, 'close');

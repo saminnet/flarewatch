@@ -1,7 +1,6 @@
 import type { NotificationContext } from '../../src/notifications/webhook';
 import { createMonitor } from '../../../../packages/shared/tests/helpers/monitors';
 
-/** A down alert as it opens; a test overrides the fields it is about. */
 export function notificationContext(
   overrides: Partial<NotificationContext> = {},
 ): NotificationContext {

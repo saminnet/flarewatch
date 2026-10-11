@@ -4,7 +4,6 @@ import { stubMonitorWorker } from './bindings';
 
 export const BADGE_TIME = Date.parse('2025-01-15T12:00:00Z') / 1000;
 
-/** The hub's view of demo_example for a badge route, in production mode. */
 export function stubBadgeView(status: 'up' | 'down' = 'up', extra = {}): void {
   vi.stubEnv('DEV', false);
   stubMonitorWorker(async () =>
@@ -26,7 +25,6 @@ export function stubBadgeView(status: 'up' | 'down' = 'up', extra = {}): void {
 
 type Handler = (ctx: { request: Request }) => Promise<Response>;
 
-/** A GET to a badge route as the app serves it: the auth middleware first, then the route. */
 export function callBadge(route: { options: unknown }, path: string): Promise<Response> {
   const options = route.options as { server?: { handlers?: Record<string, Handler> } };
   const handler = options.server?.handlers?.GET;

@@ -626,7 +626,6 @@ describe('MonitorHub after an upgrade from 3.2', () => {
   });
 });
 
-/** Rewinds a new hub's storage to the schema after migration step `target`. */
 function rewindTo(db: DatabaseSync, target: number): void {
   const [row] = db.prepare('SELECT MAX(id) AS applied FROM _migrations').all();
   for (const statement of rewindStatements(Number(row?.applied), target)) db.exec(statement);

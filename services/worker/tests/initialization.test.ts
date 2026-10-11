@@ -8,7 +8,6 @@ import type { env as workersEnv } from './helpers/cloudflare-workers';
 import { createHub, hubNamespace } from './helpers/hub';
 import { freezeClock } from '../../../packages/shared/tests/helpers/clock';
 
-/** The status page's snapshot module in a fresh isolate, its MONITOR_WORKER binding set to `binding`. */
 async function pageIsolate(binding: NonNullable<typeof workersEnv.MONITOR_WORKER>) {
   vi.resetModules();
   onTestFinished(() => void vi.resetModules());

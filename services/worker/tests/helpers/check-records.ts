@@ -5,7 +5,6 @@ import { createMonitor } from '../../../../packages/shared/tests/helpers/monitor
 export const up = (latency = 10): CheckResult => ({ ok: true, latency });
 export const down = (error = 'Unavailable'): CheckResult => ({ ok: false, error });
 
-/** A check run's record of the monitor `id`, checked from `location`. */
 export function check(
   id: string,
   result: CheckResult,
