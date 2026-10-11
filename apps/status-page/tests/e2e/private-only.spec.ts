@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { expect, request as playwrightRequest, type Page } from '@playwright/test';
 import { test } from './fixtures';
 import { captureLatencyCall } from './latency-call';
@@ -116,4 +117,35 @@ test('the latency call serves the operator and refuses visitors', async ({ page,
   const anonymous = await replay(false);
   expect(anonymous).not.toContain('"loc"');
   expect(anonymous).toContain('"a":[]');
+});
+
+/** A ping URL's token: base64url(HMAC-SHA256(secret, `v1:<id>`)), 32 characters. */
+function pingToken(id: string): string {
+  return createHmac('sha256', 'e2e-heartbeat-secret')
+    .update(`v1:${id}`)
+    .digest('base64url')
+    .slice(0, 32);
+}
+
+// A ping changes the job's phase at the next check run, and the suite runs no cron,
+// so the test reads the run a success ping adds to the history at once.
+test('a job pings through the private page and the operator sees its run', async ({
+  page,
+  request,
+}) => {
+  const ping = `/ping/demo_private_backup/${pingToken('demo_private_backup')}`;
+  await signIn(page);
+
+  const start = await request.post(`${ping}/start`);
+  expect([start.status(), await start.text()]).toEqual([200, 'OK']);
+  const done = await request.get(ping);
+  expect([done.status(), await done.text()]).toEqual([200, 'OK']);
+  await expect(async () => {
+    await page.goto('/');
+    await expect(
+      page.getByRole('link', { name: /^Internal Vault Backup, operational, .*last 2 runs/ }),
+    ).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
+
+  expect((await request.get(`/ping/demo_private_backup/${'x'.repeat(32)}`)).status()).toBe(404);
 });
