@@ -154,6 +154,7 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
       claimed_at INTEGER
     ) WITHOUT ROWID`,
   ],
+  [(sql) => new Incidents(sql).splitOversized()],
 ];
 
 export function migrate(sql: Sql): void {

@@ -8,7 +8,7 @@ import { pageConfig as demoPage } from '../../../packages/config/src/demo/public
 import { accessConfig as accessExample } from '../../../packages/config/src/access.example';
 import { pageConfig as pageExample } from '../../../packages/config/src/public.example';
 import { workerConfig as workerExample } from '../../../packages/config/src/worker.example';
-import { capacityIssue, planIssues } from '../src/checkers';
+import { capacityIssue, latencyRowIssue, planIssues } from '../src/checkers';
 import type { MonitorTarget } from '@flarewatch/shared';
 
 describe.each([
@@ -37,6 +37,10 @@ describe.each([
   it('fits the checks due every minute into one check run', () => {
     const webhooks = [worker.notification?.webhook ?? []].flat().length;
     expect(capacityIssue(worker.monitors, webhooks)).toBeUndefined();
+  });
+
+  it('keeps an hour of latency samples within one hub row', () => {
+    expect(latencyRowIssue(worker.monitors)).toBeUndefined();
   });
 });
 
@@ -112,4 +116,27 @@ describe('wrangler config', () => {
       expect(toml).not.toMatch(/^\s*(\[\[)?(routes?|custom_domain)\b/m);
     },
   );
+});
+
+describe('latencyRowIssue', () => {
+  const gets = (count: number, idLength: number, checkEveryMinutes = 1): MonitorTarget[] =>
+    Array.from({ length: count }, (_, i) => ({
+      id: `m${i}-`.padEnd(idLength, 'x'),
+      name: `M${i}`,
+      method: 'GET',
+      target: `https://m${i}.example.com`,
+      checkEveryMinutes,
+    }));
+
+  it('fits a full run of every-minute checks with ordinary ids', () => {
+    expect(latencyRowIssue(gets(47, 40))).toBeUndefined();
+  });
+
+  it('refuses ids long enough to push an hour of samples past 2 MB', () => {
+    expect(latencyRowIssue(gets(47, 1000))).toBeDefined();
+  });
+
+  it('counts a monitor checked every 60 minutes once an hour', () => {
+    expect(latencyRowIssue(gets(47, 1000, 60))).toBeUndefined();
+  });
 });

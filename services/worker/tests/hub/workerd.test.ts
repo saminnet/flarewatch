@@ -652,12 +652,10 @@ describe('MonitorHub in workerd storage sizes', () => {
       const sql = await storage(hub);
       const largest = async (table: string) =>
         (await sql.exec(`SELECT MAX(LENGTH(CAST(data AS BLOB))) AS bytes FROM ${table}`))[0]?.bytes;
-      // Measured on production on 2026-10-02: an 8 MB value succeeds, 10 MB throws.
-      // The Durable Objects docs still say 2 MB.
-      expect(await largest('incident_lists')).toBeLessThanOrEqual(8_000_000);
-      expect(await largest('latency')).toBeLessThanOrEqual(8_000_000);
-      // incidents.ts keeps a part to 2,000,000 characters, at most 3 bytes each.
-      expect(await largest('incident_lists')).toBeLessThanOrEqual(6_000_000);
+      // The Durable Objects limit for a row. Production took 8 MB on 2026-10-02, but
+      // nothing documents that, and workerd builds have differed.
+      expect(await largest('incident_lists')).toBeLessThanOrEqual(2_000_000);
+      expect(await largest('latency')).toBeLessThanOrEqual(2_000_000);
       await evict(hub);
       const incidents = (await view(hub)).body.monitors.api?.incidents ?? [];
       expect(closed(incidents).length).toBeLessThanOrEqual(1000);
@@ -682,7 +680,13 @@ describe('MonitorHub in workerd storage sizes', () => {
     }
     expect(JSON.stringify(stored).length).toBeLessThan(1_000_000);
     await view(hub);
-    await insertHistory(await storage(hub), 'api', T0, stored, 2_000_000);
+    // As 3.4.0 stored it, in parts of up to 2,000,000 characters. Undoing the last
+    // step makes the next start run it again, as on the upgrade to 3.4.1.
+    const sql = await storage(hub);
+    await insertHistory(sql, 'api', T0, stored, 2_000_000);
+    await sql.exec('DELETE FROM _migrations WHERE id = (SELECT MAX(id) FROM _migrations)');
+    await evict(hub);
+    expect((await view(hub)).body.monitors.api?.incidents).toEqual(stored);
 
     const short: Run[] = [];
     for (let i = 1000; i < 1100; i++, now += FLAP_SECONDS + 120) {

@@ -20,12 +20,11 @@ const MAX_INCIDENT_SEGMENTS = 100;
 /** With the segment cap, bounds how many list parts a monitor's history can fill. */
 const MAX_ERROR_CHARS = 500;
 /**
- * JSON characters per list part. A capped history fits one part. A UTF-16 unit
- * takes at most 3 bytes in UTF-8, so a part stays under 6 MB: an 8 MB value
- * stored in production on 2026-10-02 and a 10 MB one failed, whatever the
- * Durable Objects docs say about 2 MB.
+ * UTF-8 bytes per list part, under the 2 MB Durable Objects row limit. Production
+ * stored 8 MB on 2026-10-02, but no doc promises that.
  */
-const PART_CHARS = 2_000_000;
+const PART_BYTES = 1_900_000;
+const utf8Bytes = (text: string) => new TextEncoder().encode(text).byteLength;
 /** Rows importHistory reads per query, and ids per delete: a query binds at most 100 values. */
 const IMPORT_PAGE = 100;
 
@@ -274,20 +273,49 @@ export class Incidents {
       this.sql.exec(`DELETE FROM incidents WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids);
     }
     for (const [monitorId, { list }] of histories) {
-      const parts: string[][] = [];
-      let size = 0;
-      for (const { json } of list) {
-        const current = parts[parts.length - 1];
-        if (current && size + json.length + 1 <= PART_CHARS) {
-          current.push(json);
-          size += json.length + 1;
-        } else {
-          parts.push([json]);
-          size = json.length + 2;
-        }
-      }
-      parts.forEach((part, index) => this.writePart(monitorId, index, `[${part.join(',')}]`));
+      this.writeParts(
+        monitorId,
+        list.map(({ json }) => json),
+      );
     }
+  }
+
+  /** Splits again each history with a part over PART_BYTES: releases before 3.4.1 sized parts in characters. */
+  splitOversized(): void {
+    for (const { monitor_id } of this.sql.exec<{ monitor_id: string }>(
+      'SELECT DISTINCT monitor_id FROM incident_lists WHERE LENGTH(CAST(data AS BLOB)) > ?',
+      PART_BYTES,
+    )) {
+      const list = this.sql
+        .exec<{ data: string }>(
+          'SELECT data FROM incident_lists WHERE monitor_id = ? ORDER BY part',
+          monitor_id,
+        )
+        .flatMap(({ data }) => parseList(data));
+      this.sql.exec('DELETE FROM incident_lists WHERE monitor_id = ?', monitor_id);
+      this.writeParts(
+        monitor_id,
+        list.map((incident) => JSON.stringify(incident)),
+      );
+    }
+  }
+
+  /** Writes a monitor's incidents, given as JSON, in as few parts as PART_BYTES allows. */
+  private writeParts(monitorId: string, incidents: string[]): void {
+    const parts: string[][] = [];
+    let size = 0;
+    for (const json of incidents) {
+      const current = parts[parts.length - 1];
+      const bytes = utf8Bytes(json);
+      if (current && size + bytes + 1 <= PART_BYTES) {
+        current.push(json);
+        size += bytes + 1;
+      } else {
+        parts.push([json]);
+        size = bytes + 2;
+      }
+    }
+    parts.forEach((part, index) => this.writePart(monitorId, index, `[${part.join(',')}]`));
   }
 
   /** The grace period before a down alert restarts at the reopen. */
@@ -324,7 +352,7 @@ export class Incidents {
     const list = last ? parseList(last.data) : [];
     if (replace) list.pop();
     const data = JSON.stringify([...list, incident]);
-    if (data.length <= PART_CHARS) {
+    if (utf8Bytes(data) <= PART_BYTES) {
       this.writePart(monitorId, part, data);
     } else {
       this.writePart(monitorId, part, JSON.stringify(list));
