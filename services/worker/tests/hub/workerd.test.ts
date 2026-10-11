@@ -719,6 +719,28 @@ describe('MonitorHub in workerd storage sizes', () => {
     expect(incidents.length).toBe(closed(incidents).length + 1);
     expect(incidents[incidents.length - 1]).toEqual({ start: [now], error: [error('open')] });
   }, 120_000);
+
+  it('splits a legacy incident too large for one row down to its first and latest segments', async () => {
+    const hub = 'legacy-segments';
+    // A release before 3.2.0 kept every segment, and 1,400 of them pass 2 MB.
+    const start = Array.from({ length: 1400 }, (_, i) => T0 + i * 60);
+    const error = start.map((_, i) => `e${i} `.padEnd(500, '漢'));
+    const legacy: Incident = { start, error };
+    await view(hub);
+    const sql = await storage(hub);
+    await insertHistory(sql, 'api', T0, [legacy], 6_000_000);
+    await sql.exec('DELETE FROM _migrations WHERE id = (SELECT MAX(id) FROM _migrations)');
+    await evict(hub);
+
+    const kept = [0, ...Array.from({ length: 99 }, (_, i) => 1301 + i)];
+    expect((await view(hub)).body.monitors.api?.incidents).toEqual([
+      { start: kept.map((i) => start[i]), error: kept.map((i) => error[i]) },
+    ]);
+    const [largest] = await (
+      await storage(hub)
+    ).exec('SELECT MAX(LENGTH(CAST(data AS BLOB))) AS bytes FROM incident_lists');
+    expect(largest?.bytes).toBeLessThanOrEqual(2_000_000);
+  }, 60_000);
 });
 
 it('rolls back every change when storage fails and accepts the same run on retry', async () => {

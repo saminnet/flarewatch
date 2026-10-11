@@ -35,7 +35,10 @@ function checkDue(monitor: MonitorTarget, minute: number): boolean {
 export { MonitorHub } from './hub/monitor-hub';
 
 const log = createLogger('Worker');
-/** Cloudflare ends waitUntil work 30 seconds after the response; the run records and alerts after its checks. */
+/**
+ * Cloudflare ends waitUntil work 30 seconds after the response. The first run records its
+ * checks after this and leaves alerts, whose webhooks can take longer, to the next cron run.
+ */
 const TRIGGER_WINDOW_MS = 20_000;
 
 async function safeCallback<T extends unknown[]>(
@@ -85,7 +88,7 @@ export async function runChecks(
   deps: WorkerDeps = defaultWorkerDeps,
   scheduledAt?: number,
   spentSubrequests = 0,
-  checkWindowMs?: number,
+  triggered = false,
 ): Promise<void> {
   const startedAt = Date.now();
   const location = await deps.getEdgeLocation();
@@ -108,7 +111,12 @@ export async function runChecks(
       monitors: due.filter(({ id }) => !dueIds.has(id)).map(({ id }) => id),
     });
   }
-  const budget = runBudget(checks, webhooks.length, startedAt, checkWindowMs);
+  const budget = runBudget(
+    checks,
+    webhooks.length,
+    startedAt,
+    triggered ? TRIGGER_WINDOW_MS : undefined,
+  );
   budget.subrequests = Math.max(0, budget.subrequests - spentSubrequests);
 
   const ctx: CheckContext = { env, budget };
@@ -121,19 +129,20 @@ export async function runChecks(
     }),
   );
 
-  const policy: AlertPolicy | undefined = notifier
-    ? {
-        gracePeriodSeconds: (config.notification?.gracePeriod ?? 0) * 60,
-        // A monitor no webhook takes is never claimed, so it cannot use up its tries.
-        skipIds: [
-          ...(config.notification?.skipNotificationIds ?? []),
-          ...config.monitors
-            .filter(({ id }) => !webhooks.some((webhook) => routes(webhook, id)))
-            .map(({ id }) => id),
-        ],
-        skipErrorChanges: Boolean(config.notification?.skipErrorChangeNotification),
-      }
-    : undefined;
+  const policy: AlertPolicy | undefined =
+    notifier && !triggered
+      ? {
+          gracePeriodSeconds: (config.notification?.gracePeriod ?? 0) * 60,
+          // A monitor no webhook takes is never claimed, so it cannot use up its tries.
+          skipIds: [
+            ...(config.notification?.skipNotificationIds ?? []),
+            ...config.monitors
+              .filter(({ id }) => !webhooks.some((webhook) => routes(webhook, id)))
+              .map(({ id }) => id),
+          ],
+          skipErrorChanges: Boolean(config.notification?.skipErrorChangeNotification),
+        }
+      : undefined;
   const { updates, alerts } = await hub.record(currentTime, records, policy);
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
@@ -263,7 +272,7 @@ const Worker = {
     // holds wrangler.toml to that). Routing it publicly needs an auth check first.
     if (url.pathname === '/trigger' && request.method === 'POST') {
       const admitted = await getHub(env).claimInitialCheck(Date.now());
-      if (admitted) ctx.waitUntil(runChecks(env, deps, undefined, 1, TRIGGER_WINDOW_MS));
+      if (admitted) ctx.waitUntil(runChecks(env, deps, undefined, 1, true));
       return Response.json(
         {
           success: true,

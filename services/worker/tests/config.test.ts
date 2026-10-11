@@ -139,4 +139,19 @@ describe('latencyRowIssue', () => {
   it('counts a monitor checked every 60 minutes once an hour', () => {
     expect(latencyRowIssue(gets(47, 1000, 60))).toBeUndefined();
   });
+
+  it('counts ids as the hub stores them, escaped in JSON', () => {
+    const monitors = gets(47, 4).map((monitor) => ({
+      ...monitor,
+      id: '\\'.repeat(400) + monitor.id,
+    }));
+    const run = Object.fromEntries(monitors.map(({ id }) => [id, [60_000, 'L'.repeat(64)]]));
+    const hour = JSON.stringify(
+      Object.fromEntries(
+        Array.from({ length: 60 }, (_, i) => [String(1_800_000_000 + i * 60), run]),
+      ),
+    );
+    expect(new TextEncoder().encode(hour).byteLength).toBeGreaterThan(2_000_000);
+    expect(latencyRowIssue(monitors)).toBeDefined();
+  });
 });

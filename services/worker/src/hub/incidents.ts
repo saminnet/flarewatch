@@ -416,21 +416,24 @@ export class Incidents {
   }
 }
 
-/** Errors cut as new ones are: a release before 3.2.0 stored them whole. */
+/** Errors and segments cut as new ones are: a release before 3.2.0 stored them whole. */
 function toIncident(row: Pick<IncidentRow, 'starts' | 'errors' | 'end_at'>): Incident {
   return {
-    start: startsSchema.safeParse(parseJson(row.starts)).data ?? [],
-    error: (errorsSchema.safeParse(parseJson(row.errors)).data ?? []).map((error) =>
-      error.slice(0, MAX_ERROR_CHARS),
+    start: capSegments(startsSchema.safeParse(parseJson(row.starts)).data ?? []),
+    error: capSegments(
+      (errorsSchema.safeParse(parseJson(row.errors)).data ?? []).map((error) =>
+        error.slice(0, MAX_ERROR_CHARS),
+      ),
     ),
     ...(row.end_at !== null && { end: row.end_at }),
   };
 }
 
+/** Segments cut too: 3.2.0 copied legacy incidents into the lists whole. */
 function parseList(data: string): Incident[] {
   return (listSchema.safeParse(parseJson(data)).data ?? []).map(({ start, error, end }) => ({
-    start,
-    error,
+    start: capSegments(start),
+    error: capSegments(error),
     ...(end !== undefined && { end }),
   }));
 }

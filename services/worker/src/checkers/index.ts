@@ -213,16 +213,18 @@ export function capacityIssue(monitors: readonly Monitor[], webhooks: number): s
     : undefined;
 }
 
-/** A sample's bytes besides its id: a 5-digit latency and a 64-character location of 3-byte characters. */
-const SAMPLE_BYTES = 210;
+/** A sample's bytes besides its JSON id: a 5-digit latency and a 64-character location, each character escaped to 6 bytes. */
+const SAMPLE_BYTES = 400;
+/** Each run's key in the hour: a quoted 10-digit time and its braces. */
+const RUN_BYTES = 16;
 const encoder = new TextEncoder();
 
 export function latencyRowIssue(monitors: readonly Monitor[]): string | undefined {
-  let bytes = 0;
+  let bytes = 60 * RUN_BYTES;
   for (const monitor of monitors) {
     if (monitor.method === 'HEARTBEAT') continue;
     const samples = Math.ceil(60 / checkInterval(monitor));
-    bytes += samples * (encoder.encode(monitor.id).byteLength + SAMPLE_BYTES);
+    bytes += samples * (encoder.encode(JSON.stringify(monitor.id)).byteLength + SAMPLE_BYTES);
   }
   return bytes > ROW_BYTES
     ? `an hour of latency samples can take ${bytes} bytes, but the hub's row holds ${ROW_BYTES}: shorten the monitor ids`
