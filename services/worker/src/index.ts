@@ -20,6 +20,7 @@ import {
   formatNotificationMessage,
   type NotificationContext,
   routes,
+  DEFAULT_WEBHOOK_TIMEOUT_MS,
 } from './notifications/webhook';
 import type { Alert, AlertOutcome, AlertPolicy } from './hub/alerts';
 import type { CheckRecord } from './hub/monitor-hub';
@@ -36,10 +37,11 @@ export { MonitorHub } from './hub/monitor-hub';
 
 const log = createLogger('Worker');
 /**
- * Cloudflare ends waitUntil work 30 seconds after the response. The first run records its
- * checks after this and leaves alerts, whose webhooks can take longer, to the next cron run.
+ * Cloudflare ends waitUntil work 30 seconds after the response, so the first run ends its
+ * checks early and starts only the alerts that finish in time. Later runs send the rest.
  */
 const TRIGGER_WINDOW_MS = 20_000;
+const TRIGGER_DELIVERY_MS = 27_000;
 
 async function safeCallback<T extends unknown[]>(
   callback: ((...args: T) => Promise<void>) | undefined,
@@ -118,6 +120,7 @@ export async function runChecks(
     triggered ? TRIGGER_WINDOW_MS : undefined,
   );
   budget.subrequests = Math.max(0, budget.subrequests - spentSubrequests);
+  const deliverBy = triggered ? startedAt + TRIGGER_DELIVERY_MS : Infinity;
 
   const ctx: CheckContext = { env, budget };
   const records = await Promise.all(
@@ -129,20 +132,19 @@ export async function runChecks(
     }),
   );
 
-  const policy: AlertPolicy | undefined =
-    notifier && !triggered
-      ? {
-          gracePeriodSeconds: (config.notification?.gracePeriod ?? 0) * 60,
-          // A monitor no webhook takes is never claimed, so it cannot use up its tries.
-          skipIds: [
-            ...(config.notification?.skipNotificationIds ?? []),
-            ...config.monitors
-              .filter(({ id }) => !webhooks.some((webhook) => routes(webhook, id)))
-              .map(({ id }) => id),
-          ],
-          skipErrorChanges: Boolean(config.notification?.skipErrorChangeNotification),
-        }
-      : undefined;
+  const policy: AlertPolicy | undefined = notifier
+    ? {
+        gracePeriodSeconds: (config.notification?.gracePeriod ?? 0) * 60,
+        // A monitor no webhook takes is never claimed, so it cannot use up its tries.
+        skipIds: [
+          ...(config.notification?.skipNotificationIds ?? []),
+          ...config.monitors
+            .filter(({ id }) => !webhooks.some((webhook) => routes(webhook, id)))
+            .map(({ id }) => id),
+        ],
+        skipErrorChanges: Boolean(config.notification?.skipErrorChangeNotification),
+      }
+    : undefined;
   const { updates, alerts } = await hub.record(currentTime, records, policy);
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
@@ -209,12 +211,14 @@ export async function runChecks(
       for (const webhook of webhooks) {
         const routed = entries.filter(({ alert, ctx }) => ctx && routes(webhook, alert.monitorId));
         if (routed.length === 0) continue;
+        const inTime = () =>
+          Date.now() + (webhook.timeout ?? DEFAULT_WEBHOOK_TIMEOUT_MS) <= deliverBy;
         let next = 0;
         if (routed.length < summaryAfter) {
-          for (; next < routed.length - 1 && spend(false); next++)
+          for (; next < routed.length - 1 && inTime() && spend(false); next++)
             await send(webhook, [routed[next]!]);
         }
-        if (spend(true)) await send(webhook, routed.slice(next));
+        if (inTime() && spend(true)) await send(webhook, routed.slice(next));
       }
     }
     return entries.map(({ alert, delivered, attempted }): AlertOutcome => ({

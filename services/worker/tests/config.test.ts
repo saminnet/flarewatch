@@ -140,6 +140,11 @@ describe('latencyRowIssue', () => {
     expect(latencyRowIssue(gets(47, 1000, 60))).toBeUndefined();
   });
 
+  it("counts the first run's sample on top of the scheduled ones", () => {
+    // One 30,000-byte sample per monitor fits an hour; the first run's second one does not.
+    expect(latencyRowIssue(gets(47, 30_000, 60))).toBeDefined();
+  });
+
   it('counts ids as the hub stores them, escaped in JSON', () => {
     const monitors = gets(47, 4).map((monitor) => ({
       ...monitor,

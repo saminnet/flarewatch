@@ -104,7 +104,7 @@ it('cron completion prevents a later initialization trigger', async () => {
   expect(pending).toHaveLength(0);
 });
 
-it('initialization admission leaves room for hub recording and sends no alert', async () => {
+it('initialization admission leaves room for hub recording and an alert', async () => {
   vi.resetModules();
   const { default: worker } = await import('../src/index');
   const { checkMonitor: check } = await import('../src/checkers');
@@ -157,7 +157,7 @@ it('initialization admission leaves room for hub recording and sends no alert', 
       recording.mock.calls.length +
       confirmation.mock.calls.length,
   ).toBeLessThanOrEqual(50);
-  expect(deliveries).toBe(0);
+  expect(deliveries).toBe(1);
   expect(Object.keys(hub.view().monitors)).toHaveLength(40);
 });
 
@@ -190,7 +190,10 @@ it('ends the checks of a triggered run within 20 seconds', async () => {
   expect(deadlines[0]! - start).toBeLessThanOrEqual(20_000);
 });
 
-it('leaves the alerts of a triggered run to the next scheduled run', async () => {
+it('defers an alert the triggered run cannot send in time to the next run', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  const start = 1_800_000_000_000;
+  vi.setSystemTime(start);
   const { hub } = createHub();
   const env = { MONITOR_HUB: hubNamespace(hub) };
   const hooks: string[] = [];
@@ -199,10 +202,11 @@ it('leaves the alerts of a triggered run to the next scheduled run', async () =>
     return new Response('ok');
   });
   const deps = {
-    checkMonitor: async () => ({
-      location: 'HEL',
-      result: { ok: false as const, error: 'Unavailable' },
-    }),
+    checkMonitor: async () => {
+      // A slow first run: a 5 s webhook started now would end past 27 s.
+      vi.setSystemTime(start + 23_000);
+      return { location: 'HEL', result: { ok: false as const, error: 'Unavailable' } };
+    },
     createNotifier,
     getEdgeLocation: async () => 'HEL',
     staticConfig: {

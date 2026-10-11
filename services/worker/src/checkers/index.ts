@@ -223,7 +223,8 @@ export function latencyRowIssue(monitors: readonly Monitor[]): string | undefine
   let bytes = 60 * RUN_BYTES;
   for (const monitor of monitors) {
     if (monitor.method === 'HEARTBEAT') continue;
-    const samples = Math.ceil(60 / checkInterval(monitor));
+    // The first run can record in the same hour as the scheduled ones.
+    const samples = Math.ceil(60 / checkInterval(monitor)) + 1;
     bytes += samples * (encoder.encode(JSON.stringify(monitor.id)).byteLength + SAMPLE_BYTES);
   }
   return bytes > ROW_BYTES

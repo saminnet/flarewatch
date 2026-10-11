@@ -18,6 +18,8 @@ import { singleLine } from './templates/format';
 
 const log = createLogger('Webhook');
 
+export const DEFAULT_WEBHOOK_TIMEOUT_MS = 5000;
+
 function createDateFormatter(timeZone: string) {
   return new Intl.DateTimeFormat('en-US', {
     month: 'numeric',
@@ -271,7 +273,15 @@ export class WebhookNotifier {
     ctx: NotificationContext,
     message: string,
   ): Promise<WebhookResult> {
-    const { url, template, method, headers, payload, payloadType, timeout = 5000 } = webhook;
+    const {
+      url,
+      template,
+      method,
+      headers,
+      payload,
+      payloadType,
+      timeout = DEFAULT_WEBHOOK_TIMEOUT_MS,
+    } = webhook;
     let finalUrl = url;
     try {
       let requestInit: RequestInit;
