@@ -147,6 +147,9 @@ importers:
       '@flarewatch/ts-config':
         specifier: workspace:*
         version: link:../../packages/ts-config
+      '@flarewatch/vitest-config':
+        specifier: workspace:*
+        version: link:../../packages/vitest-config
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
@@ -195,6 +198,9 @@ importers:
       vite:
         specifier: 'catalog:'
         version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1)'
+      vite-plus:
+        specifier: 'catalog:'
+        version: 1.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(@vitest/ui@5.0.1(vitest@5.0.1))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.0.1)(typescript@7.0.2)(yaml@2.9.1)
       wrangler:
         specifier: 'catalog:'
         version: 4.149.0(@cloudflare/workers-types@5.20261010.1)(@types/node@26.4.0)
@@ -221,14 +227,33 @@ importers:
       '@flarewatch/ts-config':
         specifier: workspace:*
         version: link:../ts-config
+      '@flarewatch/vitest-config':
+        specifier: workspace:*
+        version: link:../vitest-config
       '@types/node':
         specifier: 'catalog:'
         version: 26.4.0
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+      vite-plus:
+        specifier: 'catalog:'
+        version: 1.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(@vitest/ui@5.0.1(vitest@5.0.1))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.0.1)(typescript@7.0.2)(yaml@2.9.1)
 
   packages/ts-config: {}
+
+  packages/vitest-config:
+    dependencies:
+      vite-plus:
+        specifier: 'catalog:'
+        version: 1.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(@vitest/ui@5.0.1(vitest@5.0.1))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.0.1)(typescript@7.0.2)(yaml@2.9.1)
+    devDependencies:
+      '@flarewatch/ts-config':
+        specifier: workspace:*
+        version: link:../ts-config
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
 
   services/worker:
     dependencies:
@@ -248,12 +273,21 @@ importers:
       '@flarewatch/ts-config':
         specifier: workspace:*
         version: link:../../packages/ts-config
+      '@flarewatch/vitest-config':
+        specifier: workspace:*
+        version: link:../../packages/vitest-config
       '@types/node':
         specifier: 'catalog:'
         version: 26.4.0
+      status-page:
+        specifier: workspace:*
+        version: link:../../apps/status-page
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+      vite-plus:
+        specifier: 'catalog:'
+        version: 1.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(@vitest/ui@5.0.1(vitest@5.0.1))(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.0.1)(typescript@7.0.2)(yaml@2.9.1)
       wrangler:
         specifier: 'catalog:'
         version: 4.149.0(@cloudflare/workers-types@5.20261010.1)(@types/node@26.4.0)
@@ -5614,7 +5648,7 @@ snapshots:
   '@jridgewell/trace-mapping@0.3.31':
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
-      '@jridgewell/sourcemap-codec': 1.5.5
+      '@jridgewell/sourcemap-codec': 1.6.0
 
   '@jridgewell/trace-mapping@0.3.9':
     dependencies:

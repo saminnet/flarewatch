@@ -12,8 +12,8 @@ import { deriveHeartbeatToken } from '../src/ping';
 import { createHub, hubNamespace } from './helpers/hub';
 import type { PingKind } from '../src/hub/heartbeat';
 import { createWorkerDeps } from './helpers/worker-deps';
-import { createHeartbeat } from '../../../packages/shared/tests/helpers/monitors';
-import { freezeClock } from '../../../packages/shared/tests/helpers/clock';
+import { createHeartbeat } from '@flarewatch/shared/testing/monitors';
+import { freezeClock } from '@flarewatch/shared/testing/clock';
 
 const workerConfigMock: WorkerConfig = { monitors: [] };
 

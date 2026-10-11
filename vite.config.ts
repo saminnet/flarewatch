@@ -184,7 +184,7 @@ export default defineConfig({
         },
       },
       'worker-build': {
-        command: 'pnpm exec wrangler deploy src/index.ts --outdir dist --dry-run',
+        command: 'vp exec wrangler deploy src/index.ts --outdir dist --dry-run',
         cwd: 'services/worker',
         cache: {
           input: [{ auto: true }, '!services/worker/dist/**'],

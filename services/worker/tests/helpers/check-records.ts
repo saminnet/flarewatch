@@ -1,6 +1,6 @@
 import type { CheckResult, MonitorTarget } from '@flarewatch/shared';
 import type { CheckRecord } from '../../src/hub/monitor-hub';
-import { createMonitor } from '../../../../packages/shared/tests/helpers/monitors';
+import { createMonitor } from '@flarewatch/shared/testing/monitors';
 
 export const up = (latency = 10): CheckResult => ({ ok: true, latency });
 export const down = (error = 'Unavailable'): CheckResult => ({ ok: false, error });

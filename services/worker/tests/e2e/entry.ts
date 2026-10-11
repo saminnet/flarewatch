@@ -1,7 +1,7 @@
 import fixture from '@flarewatch/e2e-hub-fixture';
 import type { Env } from '../../src/env';
 import { MonitorHub as Hub } from '../../src/hub/monitor-hub';
-import type { HubFixture } from './hub-fixture';
+import type { HubFixture } from '@flarewatch/shared/testing/hub-fixture';
 
 export { default } from '../../src/index';
 

@@ -6,8 +6,8 @@ import {
   WebhookNotifier,
   type NotificationContext,
 } from '../../src/notifications/webhook';
-import { createMonitor } from '../../../../packages/shared/tests/helpers/monitors';
-import { freezeClock } from '../../../../packages/shared/tests/helpers/clock';
+import { createMonitor } from '@flarewatch/shared/testing/monitors';
+import { freezeClock } from '@flarewatch/shared/testing/clock';
 import { notificationContext } from '../helpers/notification-context';
 
 const createContext = (overrides: Partial<NotificationContext> = {}): NotificationContext =>

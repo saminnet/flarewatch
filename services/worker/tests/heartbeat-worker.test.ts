@@ -12,7 +12,7 @@ import type { PingKind } from '../src/hub/heartbeat';
 import { createHub, hubNamespace } from './helpers/hub';
 import { createWorkerDeps } from './helpers/worker-deps';
 import { webhookCapture, type Delivered } from './helpers/webhook-delivery';
-import { createHeartbeat } from '../../../packages/shared/tests/helpers/monitors';
+import { createHeartbeat } from '@flarewatch/shared/testing/monitors';
 
 const workerConfigMock: WorkerConfig = { monitors: [] };
 

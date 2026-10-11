@@ -1,0 +1,16 @@
+{
+  "name": "@flarewatch/vitest-config",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/options.ts",
+    "./setup": "./src/setup.ts"
+  },
+  "dependencies": {
+    "vite-plus": "catalog:"
+  },
+  "devDependencies": {
+    "@flarewatch/ts-config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

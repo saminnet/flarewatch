@@ -4,7 +4,7 @@ import type {
   Incident,
   LatencySample,
   Maintenance,
-} from '@flarewatch/shared';
+} from '../../src/types';
 
 /** What the browser tests start the hub with, keyed by monitor id. */
 export type HubFixture = {

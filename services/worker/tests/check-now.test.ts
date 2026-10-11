@@ -9,7 +9,7 @@ import type { Env } from '../src/env';
 import Worker from '../src/index';
 import { createHub, hubNamespace } from './helpers/hub';
 import { createWorkerDeps } from './helpers/worker-deps';
-import { createHeartbeat } from '../../../packages/shared/tests/helpers/monitors';
+import { createHeartbeat } from '@flarewatch/shared/testing/monitors';
 
 const NOW = Date.parse('2025-01-15T12:00:00Z') / 1000;
 

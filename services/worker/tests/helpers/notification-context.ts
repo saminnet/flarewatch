@@ -1,5 +1,5 @@
 import type { NotificationContext } from '../../src/notifications/webhook';
-import { createMonitor } from '../../../../packages/shared/tests/helpers/monitors';
+import { createMonitor } from '@flarewatch/shared/testing/monitors';
 
 export function notificationContext(
   overrides: Partial<NotificationContext> = {},

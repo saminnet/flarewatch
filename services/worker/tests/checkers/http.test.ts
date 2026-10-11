@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vite-plus/test';
 import type { Fetcher } from '@flarewatch/shared';
 import { HttpChecker } from '../../src/checkers/http';
-import { createMonitor } from '../../../../packages/shared/tests/helpers/monitors';
+import { createMonitor } from '@flarewatch/shared/testing/monitors';
 
 const fetchMock = vi.fn<Fetcher>();
 const checker = new HttpChecker(fetchMock);

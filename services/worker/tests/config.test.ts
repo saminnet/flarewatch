@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vite-plus/test';
 import { accessConfigIssues, configIssues } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
-import { workerConfig as demoWorker } from '../../../packages/config/src/demo/worker';
-import { pageConfig as demoPage } from '../../../packages/config/src/demo/public';
-import { accessConfig as accessExample } from '../../../packages/config/src/access.example';
-import { pageConfig as pageExample } from '../../../packages/config/src/public.example';
-import { workerConfig as workerExample } from '../../../packages/config/src/worker.example';
+import { workerConfig as demoWorker } from '@flarewatch/config/demo/worker';
+import { pageConfig as demoPage } from '@flarewatch/config/demo/public';
+import { accessConfig as accessExample } from '@flarewatch/config/access.example';
+import { pageConfig as pageExample } from '@flarewatch/config/public.example';
+import { workerConfig as workerExample } from '@flarewatch/config/worker.example';
 import { capacityIssue, latencyRowIssue, planIssues } from '../src/checkers';
 import type { MonitorTarget } from '@flarewatch/shared';
 

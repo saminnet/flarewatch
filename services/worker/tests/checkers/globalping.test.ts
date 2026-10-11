@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { Fetcher, JsonValue, MonitorTarget } from '@flarewatch/shared';
 import { GlobalPingChecker } from '../../src/checkers/globalping';
 import { finishedMeasurement } from '../helpers/globalping';
-import { createMonitor as createHttpMonitor } from '../../../../packages/shared/tests/helpers/monitors';
-import { freezeClock } from '../../../../packages/shared/tests/helpers/clock';
+import { createMonitor as createHttpMonitor } from '@flarewatch/shared/testing/monitors';
+import { freezeClock } from '@flarewatch/shared/testing/clock';
 
 const fetchMock = vi.fn<Fetcher>();
 const checker = new GlobalPingChecker(fetchMock);

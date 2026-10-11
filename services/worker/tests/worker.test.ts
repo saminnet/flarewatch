@@ -13,7 +13,7 @@ import { createNotifier } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
 import { createWorkerDeps } from './helpers/worker-deps';
 import { webhookCapture, type Delivered } from './helpers/webhook-delivery';
-import { freezeClock } from '../../../packages/shared/tests/helpers/clock';
+import { freezeClock } from '@flarewatch/shared/testing/clock';
 
 const network = vi.fn<Fetcher>();
 const workerConfigMock: WorkerConfig = { monitors: [] };

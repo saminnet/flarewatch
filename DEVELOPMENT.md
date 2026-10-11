@@ -29,13 +29,14 @@ The last two tests each hold a short table of the cases where FlareWatch and the
 
 ## Layout
 
-| Path                | Holds                                                         |
-| ------------------- | ------------------------------------------------------------- |
-| `services/worker`   | The monitor Worker: checks, the hub, alerts, heartbeat pings. |
-| `apps/status-page`  | The status page Worker, a TanStack Start app.                 |
-| `packages/config`   | The user's config: monitors, alerts, page settings.           |
-| `packages/shared`   | Types and helpers both Workers use.                           |
-| `.github/workflows` | CI and the deploy workflow.                                   |
+| Path                     | Holds                                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `services/worker`        | The monitor Worker: checks, the hub, alerts, heartbeat pings.                                          |
+| `apps/status-page`       | The status page Worker, a TanStack Start app.                                                          |
+| `packages/config`        | The user's config: monitors, alerts, page settings.                                                    |
+| `packages/shared`        | Types and helpers both Workers use. Tests import its test helpers from `@flarewatch/shared/testing/*`. |
+| `packages/vitest-config` | The Vitest options and setup file every package's tests use.                                           |
+| `.github/workflows`      | CI and the deploy workflow.                                                                            |
 
 The monitor Worker keeps incidents, latency, heartbeat pings and maintenance windows in the hub, a SQLite Durable Object in `services/worker/src/hub`. The status page reads and edits it through its `MONITOR_WORKER` service binding. KV (`FLAREWATCH_STATE`) holds sign-in sessions.
 

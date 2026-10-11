@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./utils": "./src/utils.ts"
+    "./utils": "./src/utils.ts",
+    "./testing/*": "./tests/helpers/*.ts"
   },
   "scripts": {
     "compile": "vp check --no-fmt --no-lint",
@@ -18,7 +19,9 @@
   },
   "devDependencies": {
     "@flarewatch/ts-config": "workspace:*",
+    "@flarewatch/vitest-config": "workspace:*",
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
   }
 }

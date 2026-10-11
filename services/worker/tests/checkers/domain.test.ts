@@ -5,7 +5,7 @@ import { createNotifier } from '../../src/notifications/webhook';
 import { createHub, hubNamespace } from '../helpers/hub';
 import { createWorkerDeps } from '../helpers/worker-deps';
 import { getEdgeLocation } from '../../src/utils/location';
-import { freezeClock } from '../../../../packages/shared/tests/helpers/clock';
+import { freezeClock } from '@flarewatch/shared/testing/clock';
 
 const NOW = Date.parse('2025-01-15T01:37:00Z');
 const monitor: PullMonitor = { id: 'a', name: 'Domain', method: 'DOMAIN', target: 'example.com' };

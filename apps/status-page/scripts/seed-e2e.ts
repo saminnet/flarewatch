@@ -2,7 +2,7 @@ import { cpSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { HeartbeatRun, HeartbeatState, Maintenance } from '@flarewatch/shared';
 import { formatUtcShort, isJsonObject } from '@flarewatch/shared/utils';
-import type { HubFixture } from '../../../services/worker/tests/e2e/hub-fixture.ts';
+import type { HubFixture } from '@flarewatch/shared/testing/hub-fixture';
 import { privateMonitor } from '../tests/e2e/config/worker.ts';
 
 // Writes the hub fixture that the monitor Worker's test entry loads into an

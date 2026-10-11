@@ -2,6 +2,9 @@
   "name": "status-page",
   "private": true,
   "type": "module",
+  "exports": {
+    "./lib/*": "./src/lib/*.ts"
+  },
   "scripts": {
     "compile": "vp check --no-fmt --no-lint",
     "dev": "vp dev --port 3000",
@@ -38,6 +41,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
     "@flarewatch/ts-config": "workspace:*",
+    "@flarewatch/vitest-config": "workspace:*",
     "@playwright/test": "^1.62.1",
     "@rolldown/plugin-babel": "^0.2.3",
     "@rolldown/plugin-transform-imports": "^0.1.1",
@@ -54,6 +58,7 @@
     "react-doctor": "0.9.17",
     "typescript": "catalog:",
     "vite": "catalog:",
+    "vite-plus": "catalog:",
     "wrangler": "catalog:"
   }
 }

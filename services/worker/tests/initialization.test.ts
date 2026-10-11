@@ -6,13 +6,13 @@ import { createNotifier } from '../src/notifications/webhook';
 import { getEdgeLocation } from '../src/utils/location';
 import type { env as workersEnv } from './helpers/cloudflare-workers';
 import { createHub, hubNamespace } from './helpers/hub';
-import { freezeClock } from '../../../packages/shared/tests/helpers/clock';
+import { freezeClock } from '@flarewatch/shared/testing/clock';
 
 async function pageIsolate(binding: NonNullable<typeof workersEnv.MONITOR_WORKER>) {
   vi.resetModules();
   onTestFinished(() => void vi.resetModules());
   (await import('./helpers/cloudflare-workers')).env.MONITOR_WORKER = binding;
-  return import('../../../apps/status-page/src/lib/snapshots');
+  return import('status-page/lib/snapshots');
 }
 
 it.each([0, 60_001])(

@@ -14,8 +14,8 @@ import { getEdgeLocation } from '../src/utils/location';
 import { HttpChecker } from '../src/checkers/http';
 import { createNotifier } from '../src/notifications/webhook';
 import { createHub, hubNamespace } from './helpers/hub';
-import { visitorSnapshot } from '../../../apps/status-page/src/lib/public-view';
-import { projectPublicData } from '../../../apps/status-page/src/lib/status-projection';
+import { visitorSnapshot } from 'status-page/lib/public-view';
+import { projectPublicData } from 'status-page/lib/status-projection';
 
 const NOW = 1736942400;
 const TOKEN = 'proxy-secret-123456';

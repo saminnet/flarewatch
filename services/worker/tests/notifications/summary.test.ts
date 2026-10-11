@@ -1,7 +1,7 @@
 import { expect, it } from 'vite-plus/test';
 import { NOTIFICATION_TEMPLATES } from '@flarewatch/shared';
 import { WebhookNotifier, type NotificationContext } from '../../src/notifications/webhook';
-import { createMonitor } from '../../../../packages/shared/tests/helpers/monitors';
+import { createMonitor } from '@flarewatch/shared/testing/monitors';
 import { notificationContext } from '../helpers/notification-context';
 
 const context = (

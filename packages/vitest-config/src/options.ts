@@ -1,7 +1,7 @@
 export const commonTestOptions = {
   globals: true,
   environment: 'node',
-  setupFiles: ['../../vitest.setup.ts'],
+  setupFiles: ['@flarewatch/vitest-config/setup'],
   restoreMocks: true,
   mockReset: true,
   unstubEnvs: true,

@@ -2,7 +2,7 @@ import { vi } from 'vite-plus/test';
 
 /**
  * Stops the clock at `at`: every timer, or only `Date` when timers must keep running.
- * vitest.setup.ts restores real timers after each test.
+ * @flarewatch/vitest-config/setup restores real timers after each test.
  */
 export function freezeClock(at: number | Date, { dateOnly = false } = {}): void {
   vi.useFakeTimers(dateOnly ? { toFake: ['Date'] } : undefined);

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { defineConfig } from 'vite-plus/test/config';
-import { commonTestOptions } from '../../vitest.common';
+import { commonTestOptions } from '@flarewatch/vitest-config';
 
 export default defineConfig({
   plugins: [

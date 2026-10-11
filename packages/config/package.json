@@ -7,7 +7,12 @@
   "exports": {
     "./worker": "./src/worker.ts",
     "./access": "./src/access.ts",
-    ".": "./src/public.ts"
+    ".": "./src/public.ts",
+    "./demo/public": "./src/demo/public.ts",
+    "./demo/worker": "./src/demo/worker.ts",
+    "./access.example": "./src/access.example.ts",
+    "./public.example": "./src/public.example.ts",
+    "./worker.example": "./src/worker.example.ts"
   },
   "scripts": {
     "compile": "vp check --no-fmt --no-lint"
