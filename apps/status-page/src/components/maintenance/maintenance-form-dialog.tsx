@@ -189,7 +189,7 @@ export function MaintenanceFormDialog({
                   <Badge
                     key={name}
                     variant={formData.weekdays.includes(day) ? 'default' : 'outline'}
-                    className="h-7 w-full cursor-pointer px-1 aria-[pressed=false]:hover:bg-muted"
+                    className="h-7 w-full cursor-pointer"
                     onClick={() => toggleWeekday(day)}
                     render={<button type="button" aria-label={name} />}
                     aria-pressed={formData.weekdays.includes(day)}
