@@ -10,7 +10,7 @@ All notable changes to FlareWatch will be documented in this file.
 
 ### Changed
 
-- Dependencies updated, including pnpm 12, React 19.3 and Vite+ 1.1. After you pull, run `vp install`, and Vite+ fetches pnpm 12 for you. ([#104](https://github.com/saminnet/flarewatch/pull/104))
+- Dependencies updated, including pnpm 12, React 19.3, TanStack Start 1.169 (its first stable release) and Vite+ 1.2. After you pull, run `vp install`, and Vite+ fetches pnpm 12 for you. ([#104](https://github.com/saminnet/flarewatch/pull/104))
 
 ## 3.5.0 - 2026-10-11
 
