@@ -39,7 +39,7 @@ export function stepOutbox(state: OutboxState, event: OutboxEvent): OutboxState 
       return { ...state, status: OutboxStatus.Finished, batch: null };
     case 'batch built':
       return state.status === OutboxStatus.Waiting
-        ? { ...state, status: OutboxStatus.Sending, batch: { ...event.batch } }
+        ? { ...state, status: OutboxStatus.Sending, batch: event.batch }
         : state;
     case 'recipient sent':
       return state.status === OutboxStatus.Sending

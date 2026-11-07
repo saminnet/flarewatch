@@ -12,7 +12,6 @@ import { parseJson, setMeta } from './sql';
 import type { Sql } from './sql';
 import type { Alert } from './alerts';
 import { isPublicMonitor, type Monitor } from '@flarewatch/shared';
-
 import { readNotice, stepNotice, noticeColumns, type NoticeColumns } from './subscriber-notices';
 import {
   readOutbox,

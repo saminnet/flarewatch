@@ -88,11 +88,8 @@ export function AnnouncementFormDialog({
   const [title, setTitle] = useState(defaults.title);
   const [body, setBody] = useState(defaults.body);
   const [end, setEnd] = useState(defaults.end);
-  const callbacks = {
-    onSuccess: onClose,
-  };
-  const createMutation = useCreateAnnouncement(callbacks);
-  const updateMutation = useUpdateAnnouncement(callbacks);
+  const createMutation = useCreateAnnouncement({ onSuccess: onClose });
+  const updateMutation = useUpdateAnnouncement({ onSuccess: onClose });
   const mutation = announcement ? updateMutation : createMutation;
   const errorMessage = mutation.error ? mutationErrorMessage(mutation.error) : null;
 

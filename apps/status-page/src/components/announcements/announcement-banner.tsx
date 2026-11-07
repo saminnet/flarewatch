@@ -1,6 +1,6 @@
 import type { PublicMonitor } from '@/lib/public-view';
 import { useReducer } from 'react';
-import { dialogStep, type DialogState } from '@/lib/dialog-state';
+import { CLOSED_DIALOG, dialogStep } from '@/lib/dialog-state';
 import { IconBroadcast, IconPencil, IconTrash } from '@tabler/icons-react';
 import { formatUtcShort, isAnnouncementActive, type Announcement } from '@flarewatch/shared';
 import { Badge } from '@/components/ui/badge';
@@ -16,8 +16,6 @@ interface AnnouncementBannerProps {
   showEnded?: boolean;
 }
 
-const CLOSED: DialogState<Announcement> = { status: 'closed', key: 0 };
-
 export function AnnouncementBanner({
   announcements,
   nowMs,
@@ -28,8 +26,8 @@ export function AnnouncementBanner({
   const active = showEnded
     ? announcements
     : announcements.filter((announcement) => isAnnouncementActive(announcement, nowMs));
-  const [editing, edit] = useReducer(dialogStep<Announcement>, CLOSED);
-  const [deleting, remove] = useReducer(dialogStep<Announcement>, CLOSED);
+  const [editing, edit] = useReducer(dialogStep<Announcement>, CLOSED_DIALOG);
+  const [deleting, remove] = useReducer(dialogStep<Announcement>, CLOSED_DIALOG);
   const openEdit = (announcement: Announcement) => edit({ type: 'open', target: announcement });
   const openDelete = (announcement: Announcement) => remove({ type: 'open', target: announcement });
 

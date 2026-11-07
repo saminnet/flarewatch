@@ -1,5 +1,5 @@
 import { useReducer } from 'react';
-import { dialogStep, type DialogState } from '@/lib/dialog-state';
+import { CLOSED_DIALOG, dialogStep } from '@/lib/dialog-state';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 import { getRouteApi } from '@tanstack/react-router';
@@ -37,8 +37,6 @@ function getCurrentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-const CLOSED: DialogState<Maintenance> = { status: 'closed', key: 0 };
-
 export function HistoryPage() {
   usePageHydrated();
   const audience = useAudience();
@@ -46,8 +44,8 @@ export function HistoryPage() {
   const {
     data: { monitors, state, maintenances, announcements },
   } = useSuspenseQuery(snapshotQuery(audience));
-  const [editing, edit] = useReducer(dialogStep<Maintenance>, CLOSED);
-  const [deleting, remove] = useReducer(dialogStep<Maintenance>, CLOSED);
+  const [editing, edit] = useReducer(dialogStep<Maintenance>, CLOSED_DIALOG);
+  const [deleting, remove] = useReducer(dialogStep<Maintenance>, CLOSED_DIALOG);
   const { loaderNowMs } = historyRoute.useLoaderData();
   const nowMs = useNow({ serverTime: loaderNowMs });
   const {

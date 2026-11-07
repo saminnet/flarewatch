@@ -1,5 +1,5 @@
 import { useReducer } from 'react';
-import { dialogStep, type DialogState } from '@/lib/dialog-state';
+import { CLOSED_DIALOG, dialogStep } from '@/lib/dialog-state';
 import { IconBroadcast } from '@tabler/icons-react';
 import type { Announcement } from '@flarewatch/shared';
 import type { PublicMonitor } from '@/lib/public-view';
@@ -8,10 +8,7 @@ import { AnnouncementFormDialog } from './announcement-form-dialog';
 import { AnnouncementBanner } from './announcement-banner';
 
 export function AddAnnouncementButton({ monitors }: { monitors?: PublicMonitor[] }) {
-  const [dialog, dispatch] = useReducer(dialogStep, {
-    status: 'closed',
-    key: 0,
-  } satisfies DialogState);
+  const [dialog, dispatch] = useReducer(dialogStep<undefined>, CLOSED_DIALOG);
   return (
     <>
       <Button variant="outline" onClick={() => dispatch({ type: 'open' })}>
