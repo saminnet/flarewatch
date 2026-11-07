@@ -22,8 +22,8 @@ catalog:
   '@tanstack/react-start': 1.169.1
   '@types/node': 26.6.6
   date-fns: 4.4.0
-  react: 19.3.0
-  react-dom: 19.3.0
+  react: 19.3.1
+  react-dom: 19.3.1
   tailwindcss: 4.3.3
   typescript: 7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@1.4.0
