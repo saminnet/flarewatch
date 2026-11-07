@@ -7,6 +7,7 @@ import {
   type AlertRow,
   type IncidentAlert,
 } from './alerts';
+import { withoutConfirmationNote } from '../checkers/confirmation-note';
 import { parseJson, ROW_BYTES, type Sql } from './sql';
 
 /** A failure this soon after recovering reopens the incident, so a flapping target adds no rows. */
@@ -442,9 +443,14 @@ function parseList(data: string): Incident[] {
   }));
 }
 
-/** The incident with `error` starting at `now`, or null when that is already its error. */
+/**
+ * The incident with `error` starting at `now`, or null when that is already its error.
+ * A confirmer that comes and goes changes only the note, which is not a new failure.
+ */
 function addSegment(incident: Incident, error: string, now: number): Incident | null {
-  if (incident.error[incident.error.length - 1] === error) return null;
+  const latest = incident.error[incident.error.length - 1];
+  if (latest !== undefined && withoutConfirmationNote(latest) === withoutConfirmationNote(error))
+    return null;
   return {
     ...incident,
     start: capSegments([...incident.start, now]),

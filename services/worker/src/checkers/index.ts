@@ -18,6 +18,11 @@ import { defaultCheckDeps, type CheckDeps } from './deps';
 import { PREPAID_REQUESTS } from './globalping';
 import { checkExternalProxy } from './proxy';
 import { checkDns } from './dns';
+import {
+  CONFIRMATION_NOTES,
+  withConfirmationNote,
+  type ConfirmationNote,
+} from './confirmation-note';
 import { checkDomain } from './domain';
 import { checkVpc } from './vpc';
 import { ROW_BYTES } from '../hub/sql';
@@ -356,16 +361,15 @@ export async function checkMonitor(
     const results = await Promise.all(started.map((next) => attempt(target, next, ctx, deps)));
     const answered = results.filter((result) => !result.unreachable);
     const down = answered.filter((result) => !result.result.ok);
-    // The suffix must not change from run to run: a changed error opens a new incident segment.
-    let suffix: string;
+    let note: ConfirmationNote;
     if (answered.length < quorum) {
-      suffix = '(no confirmation available)';
+      note = CONFIRMATION_NOTES.unconfirmed;
     } else if (1 + down.length > (1 + answered.length) / 2) {
-      suffix = '(confirmed elsewhere)';
+      note = CONFIRMATION_NOTES.confirmed;
     } else {
       return recorded(answered.find((result) => result.result.ok) ?? checked);
     }
-    const error = `${checked.result.error.slice(0, 499 - suffix.length)} ${suffix}`;
+    const error = withConfirmationNote(checked.result.error, note);
     return { location: checked.location, result: { ...checked.result, error } };
   } catch (error) {
     log.error('Check failed', { monitor: target.id, error: String(error) });
