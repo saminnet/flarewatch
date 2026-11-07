@@ -2,6 +2,7 @@ import {
   DEFAULT_HTTP_TIMEOUT,
   type CheckResultWithLocation,
   failure,
+  unreachable,
   type Fetcher,
   type MonitorTarget,
   type RunBudget,
@@ -29,10 +30,11 @@ export async function checkVpc(
   getEdgeLocation: () => Promise<string>,
   budget: RunBudget,
 ): Promise<CheckResultWithLocation> {
-  if (!binding) return { location: 'ERROR', result: failure(MISSING_BINDING) };
+  if (!binding) return unreachable(failure(MISSING_BINDING));
   const checker =
     target.method === 'TCP_PING'
       ? new TcpChecker((address) => binding.connect(address))
       : new HttpChecker(vpcFetcher(binding));
-  return { location: await getEdgeLocation(), result: await checker.check(target, budget) };
+  const [location, result] = await Promise.all([getEdgeLocation(), checker.check(target, budget)]);
+  return { location, result };
 }

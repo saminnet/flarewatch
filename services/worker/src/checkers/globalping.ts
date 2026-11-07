@@ -5,6 +5,7 @@ import {
   type SSLCertificateInfo,
   success,
   failure,
+  unreachable,
   fetchWithTimeout,
   type Fetcher,
   validateHttpResponse,
@@ -248,13 +249,17 @@ async function parseMeasurementResult(
     throw new Error('No probe result returned');
   }
 
-  if (measurement.status !== 'finished' || probeResult.result.status !== 'finished') {
-    throw new Error(
-      `Measurement failed: ${probeResult.result.rawOutput?.slice(0, 100) ?? 'Unknown error'}`,
-    );
-  }
-
   const location = `${probeResult.probe.country}/${probeResult.probe.city}`;
+  if (measurement.status !== 'finished' || probeResult.result.status === 'offline') {
+    throw new Error(`Measurement ${probeResult.result.status}: the probe did not answer`);
+  }
+  // The probe answered and the target failed its test, which is a down vote, not an outage of
+  // the probe.
+  if (probeResult.result.status !== 'finished') {
+    const detail = probeResult.result.rawOutput?.slice(0, 100) ?? 'Unknown error';
+    log.info('Check failed', { name: target.name, error: detail, location });
+    return { location, result: failure(`Measurement failed: ${detail}`) };
+  }
 
   if (target.method === 'TCP_PING') {
     const latency = Math.round(probeResult.result.stats?.avg ?? 0);
@@ -318,10 +323,9 @@ export class GlobalPingChecker {
 
       log.error('Error', { name: target.name, error: errorMessage });
 
-      return {
-        location: 'ERROR',
-        result: failure(`GlobalPing: ${errorMessage}`, isTimeout ? target.timeout : undefined),
-      };
+      return unreachable(
+        failure(`GlobalPing: ${errorMessage}`, isTimeout ? target.timeout : undefined),
+      );
     }
   }
 }

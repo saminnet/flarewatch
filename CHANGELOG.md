@@ -4,6 +4,10 @@ All notable changes to FlareWatch will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- `confirmVia` accepts a list of up to five places, and `confirmQuorum` sets how many must answer before their vote counts. FlareWatch records the primary error with `(confirmed elsewhere)`, or `(no confirmation available)` when too few places answer. See [Monitors](docs/monitors.md#confirm-from-a-second-place).
+
 ### Fixed
 
 - A fork that replaces the demo monitors passes CI and deploys again. ([#111](https://github.com/saminnet/flarewatch/issues/111))
@@ -12,6 +16,7 @@ All notable changes to FlareWatch will be documented in this file.
 
 ### Changed
 
+- Check now starts the check while it looks up the Cloudflare location, so it no longer waits for that lookup first. Scheduled runs still finish the lookup first: a Worker can have only six connections waiting at once, and a seventh would add its wait to one monitor's latency.
 - Dependencies updated, including pnpm 12, React 19.3, TanStack Start 1.169 (its first stable release) and Vite+ 1.2. After you pull, run `vp install`, and Vite+ fetches pnpm 12 for you. ([#104](https://github.com/saminnet/flarewatch/pull/104))
 
 ## 3.5.0 - 2026-10-11

@@ -59,7 +59,8 @@ export const workerConfig: WorkerConfig = {
     //   name: 'Website',
     //   method: 'GET',
     //   target: 'https://example.com',
-    //   confirmVia: 'https://your-proxy.example.com/check', // or 'globalping://TOKEN?magic=fra'
+    //   confirmVia: ['https://your-proxy.example.com/check', 'globalping://TOKEN?magic=fra'],
+    //   confirmQuorum: 2,
     // },
 
     // TCP port check (runs from the Worker; a proxy is only needed for private networks)

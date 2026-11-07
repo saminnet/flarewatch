@@ -150,6 +150,7 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: {
         ok: false,
         error: 'GlobalPing: GlobalPing measurement timeout',
@@ -256,6 +257,40 @@ describe('GlobalPingChecker', () => {
     expect(JSON.stringify(result)).not.toContain('NaN');
   });
 
+  it('records a failed probe test as the target down at the probe location', async () => {
+    mockCompletedMeasurement({
+      status: 'finished',
+      results: [
+        {
+          probe: { country: 'DE', city: 'Frankfurt' },
+          result: { status: 'failed', rawOutput: 'connect: connection refused' },
+        },
+      ],
+    });
+
+    const result = await check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'DE/Frankfurt',
+      result: { ok: false, error: 'Measurement failed: connect: connection refused' },
+    });
+  });
+
+  it('treats a probe that went offline as unreachable', async () => {
+    mockCompletedMeasurement({
+      status: 'finished',
+      results: [{ probe: { country: 'DE', city: 'Frankfurt' }, result: { status: 'offline' } }],
+    });
+
+    const result = await check(createMonitor());
+
+    expect(result).toEqual({
+      location: 'ERROR',
+      unreachable: true,
+      result: { ok: false, error: 'GlobalPing: Measurement offline: the probe did not answer' },
+    });
+  });
+
   it('fails a measurement that finishes without a probe result', async () => {
     mockCompletedMeasurement({ status: 'finished', results: [] });
 
@@ -263,6 +298,7 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: { ok: false, error: 'GlobalPing: No probe result returned' },
     });
   });
@@ -305,6 +341,7 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: { ok: false, error: 'GlobalPing: service unavailable' },
     });
   });
@@ -319,6 +356,7 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: { ok: false, error: 'GlobalPing: invalid measurement payload' },
     });
   });
@@ -336,6 +374,7 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: { ok: false, error: 'GlobalPing: response is over 1048576 bytes' },
     });
   });
@@ -347,6 +386,7 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: {
         ok: false,
         error: 'GlobalPing: invalid measurement creation response',
@@ -361,6 +401,7 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: { ok: false, error: 'GlobalPing: Invalid token' },
     });
   });
@@ -372,6 +413,7 @@ describe('GlobalPingChecker', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: { ok: false, error: 'GlobalPing: API error: 429' },
     });
   });

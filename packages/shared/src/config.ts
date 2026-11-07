@@ -301,7 +301,23 @@ const pullMonitorShape = {
   ),
   checkProxy: z.optional(checkLocation('checkProxy')),
   checkProxyFallback: optionalBoolean('checkProxyFallback'),
-  confirmVia: z.optional(checkLocation('confirmVia')),
+  confirmVia: z.optional(
+    z.union(
+      [
+        checkLocation('confirmVia'),
+        z.array(checkLocation('confirmVia')).check(
+          z.refine((places) => places.length >= 1 && places.length <= 5, {
+            error: 'confirmVia must have 1 to 5 places',
+          }),
+          z.refine((places) => new Set(places).size === places.length, {
+            error: 'confirmVia must not contain duplicates',
+          }),
+        ),
+      ],
+      { error: "confirmVia must be an http(s) URL, globalping://<token> or 'vpc'" },
+    ),
+  ),
+  confirmQuorum: z.optional(intInRange('confirmQuorum', 1, 5)),
   pingProtocol: z.optional(
     z.enum(['tcp', 'icmp'], { error: "pingProtocol must be 'tcp' or 'icmp'" }),
   ),
@@ -318,16 +334,35 @@ const unknownFieldError = {
       : undefined,
 };
 
+export function confirmPlaces(confirmVia: string | string[] | undefined): string[] {
+  return confirmVia === undefined ? [] : [confirmVia].flat();
+}
+
 const pullMonitorSchema = z.strictObject(pullMonitorShape, unknownFieldError).check((ctx) => {
-  const { method, target, responseJsonPath, responseJsonValue, checkProxy, confirmVia } = ctx.value;
+  const {
+    method,
+    target,
+    responseJsonPath,
+    responseJsonValue,
+    checkProxy,
+    confirmVia,
+    confirmQuorum,
+  } = ctx.value;
+  const confirmers = confirmPlaces(confirmVia);
   const issues = [
     targetIssue(method, target),
     networkMonitorIssue(ctx.value),
     (responseJsonPath === undefined) !== (responseJsonValue === undefined)
       ? 'responseJsonPath and responseJsonValue go together'
       : null,
-    confirmVia !== undefined && confirmVia === checkProxy
+    confirmers.some((place) => place === checkProxy)
       ? 'confirmVia must be another place than checkProxy'
+      : null,
+    confirmQuorum !== undefined && confirmers.length === 0
+      ? 'confirmQuorum requires confirmVia'
+      : null,
+    confirmQuorum !== undefined && confirmQuorum > confirmers.length
+      ? 'confirmQuorum must not exceed the number of confirmVia places'
       : null,
   ];
   for (const message of issues) {

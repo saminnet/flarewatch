@@ -1,5 +1,6 @@
 import type {
   CheckFailure,
+  CheckResultWithLocation,
   CheckSuccess,
   JsonObject,
   MonitorTarget,
@@ -258,6 +259,11 @@ export function failure(error: string, latency?: number): CheckFailure {
     return { ok: false, error, latency };
   }
   return { ok: false, error };
+}
+
+/** The place could not check at all, so it does not vote in `confirmVia`. */
+export function unreachable(result: CheckFailure, location = 'ERROR'): CheckResultWithLocation {
+  return { location, unreachable: true, result };
 }
 
 type LogLevel = 'info' | 'warn' | 'error';

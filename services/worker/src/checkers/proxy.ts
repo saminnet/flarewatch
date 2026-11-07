@@ -5,6 +5,7 @@ import {
   type MonitorTarget,
   DEFAULT_HTTP_TIMEOUT,
   failure,
+  unreachable,
   fetchWithTimeout,
   type Fetcher,
   getErrorMessage,
@@ -97,34 +98,25 @@ export async function checkExternalProxy(
       // can echo the token or the monitor config it was sent.
       const body = await readTextUpTo(response, 4096);
       log.warn('Proxy failed', { status: response.status, body: redact(body).slice(0, 200) });
-      return { location: 'ERROR', result: failure(`Proxy HTTP ${response.status}`) };
+      return unreachable(failure(`Proxy HTTP ${response.status}`));
     }
 
     const data = await readJsonUpTo(response, MAX_BODY_BYTES);
     if (!isProxyCheckResponse(data)) {
-      return {
-        location: 'ERROR',
-        result: failure('Proxy returned invalid response'),
-      };
+      return unreachable(failure('Proxy returned invalid response'));
     }
 
     const asserts =
       monitor.responseHeaderEquals !== undefined || monitor.responseJsonPath !== undefined;
     if (asserts && !runsAssertions(data)) {
-      return {
-        location: 'ERROR',
-        result: failure(
-          'Proxy is too old for header and JSON checks: update to flarewatch-proxy 2.0.0',
-        ),
-      };
+      return unreachable(
+        failure('Proxy is too old for header and JSON checks: update to flarewatch-proxy 2.0.0'),
+      );
     }
 
     if (!data.result.ok) data.result.error = redact(data.result.error);
     return { location: redact(data.location), result: data.result };
   } catch (error) {
-    return {
-      location: 'ERROR',
-      result: failure(`Proxy error: ${redact(getErrorMessage(error))}`),
-    };
+    return unreachable(failure(`Proxy error: ${redact(getErrorMessage(error))}`));
   }
 }

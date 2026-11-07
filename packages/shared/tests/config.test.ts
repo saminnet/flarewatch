@@ -354,6 +354,7 @@ describe('config validation', () => {
   });
 
   it.each([
+    [{ confirmVia: [] }, 'confirmVia must have 1 to 5 places'],
     [{ id: '' }, 'id must be a non-empty string'],
     [{ id: '__proto__' }, 'id cannot be __proto__'],
     [{ name: '' }, 'name must be a non-empty string'],
@@ -540,6 +541,40 @@ describe('config validation', () => {
     });
 
     expect(configIssues(config)).toEqual([]);
+  });
+
+  it('accepts confirmVia lists and a quorum', () => {
+    expect(
+      configIssues(
+        createConfigWithMonitor({
+          confirmVia: ['https://one.example/check', 'globalping://TOKEN?magic=fra'],
+          confirmQuorum: 2,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [{ confirmVia: [] }, 'confirmVia must have 1 to 5 places'],
+    [
+      { confirmVia: ['https://one.example/check', 'https://one.example/check'] },
+      'confirmVia must not contain duplicates',
+    ],
+    [
+      { checkProxy: 'https://one.example/check', confirmVia: ['https://one.example/check'] },
+      'confirmVia must be another place than checkProxy',
+    ],
+    [
+      { confirmVia: Array.from({ length: 6 }, (_, index) => `https://${index}.example/check`) },
+      'confirmVia must have 1 to 5 places',
+    ],
+    [
+      { confirmVia: ['https://one.example/check'], confirmQuorum: 2 },
+      'confirmQuorum must not exceed the number of confirmVia places',
+    ],
+    [{ confirmQuorum: 1 }, 'confirmQuorum requires confirmVia'],
+  ])('rejects invalid confirmer config %j', (overrides, message) => {
+    expect(configIssues(createConfigWithMonitor(overrides)).join('\n')).toContain(message);
   });
 
   it.each([

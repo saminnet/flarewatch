@@ -9,7 +9,9 @@ import {
   TimeoutError,
   createLogger,
   failure,
+  unreachable,
   withTimeout,
+  confirmPlaces,
   networkMonitorIssue,
 } from '@flarewatch/shared';
 import { defaultCheckDeps, type CheckDeps } from './deps';
@@ -115,16 +117,19 @@ function locate(url: string, via: 'checkProxy' | 'confirmVia'): Attempt {
   return { adapter: url.startsWith('globalping://') ? 'globalping' : 'proxy', url, via };
 }
 
-/** Where to check, in order: each later attempt runs only when the one before it failed. */
-function plan(target: MonitorTarget): [Attempt, ...Attempt[]] {
-  const attempts: [Attempt, ...Attempt[]] = [
+/**
+ * Where to check, in order. The fallback runs only when the primary failed. The confirmers run
+ * together, only after every attempt before them failed.
+ */
+function plan(target: MonitorTarget) {
+  const chain: [Attempt, ...Attempt[]] = [
     target.checkProxy ? locate(target.checkProxy, 'checkProxy') : { adapter: 'direct' },
   ];
   if (target.checkProxy && target.checkProxyFallback) {
-    attempts.push({ adapter: 'direct', via: 'checkProxyFallback' });
+    chain.push({ adapter: 'direct', via: 'checkProxyFallback' });
   }
-  if (target.confirmVia) attempts.push(locate(target.confirmVia, 'confirmVia'));
-  return attempts;
+  const confirmers = confirmPlaces(target.confirmVia).map((place) => locate(place, 'confirmVia'));
+  return { chain, confirmers };
 }
 
 /** A TCP_PING only connects, wherever it runs: no status, body, headers or certificate to check. */
@@ -160,10 +165,11 @@ function refusal(target: MonitorTarget, attempt: Attempt): string | undefined {
 
 /** What this monitor asks of a place that cannot honour it. Empty when every attempt can run. */
 export function planIssues(target: MonitorTarget): string[] {
+  const { chain, confirmers } = plan(target);
   return [
     networkMonitorIssue(target) ?? undefined,
     methodRefusal(target),
-    ...plan(target).map((attempt) => refusal(target, attempt)),
+    ...[...chain, ...confirmers].map((attempt) => refusal(target, attempt)),
   ].filter((issue) => issue !== undefined);
 }
 
@@ -173,7 +179,7 @@ export function checkInterval(monitor: MonitorTarget): number {
 
 function primaryCost(monitor: Monitor): number {
   if (monitor.method === 'HEARTBEAT') return 0;
-  return monitor.method === 'DOMAIN' ? 2 : CAPABILITIES[plan(monitor)[0].adapter].subrequests;
+  return monitor.method === 'DOMAIN' ? 2 : CAPABILITIES[plan(monitor).chain[0].adapter].subrequests;
 }
 
 /** Subrequests a run has for its checks once the hub and each webhook have theirs. */
@@ -271,12 +277,17 @@ async function run(
   if (attempt.adapter === 'vpc') {
     return checkVpc(target, ctx.env.VPC, deps.getEdgeLocation, ctx.budget);
   }
-  const location = await deps.getEdgeLocation();
-  if (target.method === 'DNS') return { location, result: await checkDns(target, deps.fetcher) };
-  if (target.method === 'DOMAIN')
-    return { location, result: await checkDomain(target, ctx.budget, deps.fetcher) };
-  if (target.method === 'TCP_PING') return { location, result: await deps.tcp.check(target) };
-  return { location, result: await deps.http.check(target, ctx.budget) };
+  const [location, result] = await Promise.all([
+    deps.getEdgeLocation(),
+    target.method === 'DNS'
+      ? checkDns(target, deps.fetcher)
+      : target.method === 'DOMAIN'
+        ? checkDomain(target, ctx.budget, deps.fetcher)
+        : target.method === 'TCP_PING'
+          ? deps.tcp.check(target)
+          : deps.http.check(target, ctx.budget),
+  ]);
+  return { location, result };
 }
 
 /** One attempt, its timeout cut to what is left of the run, and stopped at the deadline. */
@@ -292,11 +303,16 @@ async function attempt(
     return await withTimeout(run({ ...target, timeout }, next, ctx, deps), remaining);
   } catch (error) {
     if (!(error instanceof TimeoutError)) throw error;
-    return {
-      location: await deps.getEdgeLocation(),
-      result: failure('Check stopped at the end of the check run', remaining),
-    };
+    return unreachable(
+      failure('Check stopped at the end of the check run', remaining),
+      await deps.getEdgeLocation(),
+    );
   }
+}
+
+/** The unreachable flag serves the vote and stays out of what the hub records. */
+function recorded({ location, result }: CheckResultWithLocation): CheckResultWithLocation {
+  return { location, result };
 }
 
 /**
@@ -312,9 +328,12 @@ export async function checkMonitor(
     const [issue] = planIssues(target);
     if (issue) return { location: await deps.getEdgeLocation(), result: failure(issue) };
 
-    const [first, ...rest] = plan(target);
+    const {
+      chain: [first, ...fallbacks],
+      confirmers,
+    } = plan(target);
     let checked = await attempt(target, first, ctx, deps);
-    for (const next of rest) {
+    for (const next of fallbacks) {
       if (checked.result.ok) break;
       if (!afford(ctx.budget, next)) {
         log.info('No budget left for another attempt', { monitor: target.id });
@@ -322,7 +341,32 @@ export async function checkMonitor(
       }
       checked = await attempt(target, next, ctx, deps);
     }
-    return checked;
+    if (checked.result.ok || confirmers.length === 0) return recorded(checked);
+
+    const quorum = target.confirmQuorum ?? 1;
+    // Cheapest first, so a tight budget reaches the quorum with proxies before it buys Globalping.
+    const cost = (next: Attempt) => CAPABILITIES[next.adapter].subrequests;
+    let started = [...confirmers]
+      .sort((a, b) => cost(a) - cost(b))
+      .filter((next) => afford(ctx.budget, next));
+    if (started.length < quorum) {
+      for (const next of started) ctx.budget.subrequests += CAPABILITIES[next.adapter].subrequests;
+      started = [];
+    }
+    const results = await Promise.all(started.map((next) => attempt(target, next, ctx, deps)));
+    const answered = results.filter((result) => !result.unreachable);
+    const down = answered.filter((result) => !result.result.ok);
+    // The suffix must not change from run to run: a changed error opens a new incident segment.
+    let suffix: string;
+    if (answered.length < quorum) {
+      suffix = '(no confirmation available)';
+    } else if (1 + down.length > (1 + answered.length) / 2) {
+      suffix = '(confirmed elsewhere)';
+    } else {
+      return recorded(answered.find((result) => result.result.ok) ?? checked);
+    }
+    const error = `${checked.result.error.slice(0, 499 - suffix.length)} ${suffix}`;
+    return { location: checked.location, result: { ...checked.result, error } };
   } catch (error) {
     log.error('Check failed', { monitor: target.id, error: String(error) });
     return {

@@ -140,10 +140,13 @@ export type PullMonitor = {
   checkProxy?: string;
   checkProxyFallback?: boolean;
   /**
-   * Another place to check from, in `checkProxy`'s formats. When the check fails, it runs once
-   * more from here, and this result is the one recorded.
+   * One to five places to check from, in `checkProxy`'s formats, after the primary check and
+   * any fallback fail. The failed primary and each place that answered vote, and the monitor is
+   * down when more than half of the votes are down. A place that cannot be reached does not vote.
    */
-  confirmVia?: string;
+  confirmVia?: string | string[];
+  /** How many `confirmVia` places must answer before the vote counts. Defaults to one. */
+  confirmQuorum?: number;
   pingProtocol?: 'tcp' | 'icmp';
   sslCheckEnabled?: boolean;
   sslCheckDaysBeforeExpiry?: number;
@@ -355,6 +358,7 @@ export type CheckResult = CheckSuccess | CheckFailure;
 export interface CheckResultWithLocation {
   location: string;
   result: CheckResult;
+  unreachable?: true;
 }
 
 /** What one check run can still spend. Every monitor in the run shares one. */
