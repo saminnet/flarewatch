@@ -14,8 +14,8 @@ export type ExpiryReceipt =
 export type ExpiryReceiptEvent = { type: 'delivered' | 'refused' | 'deferred'; run: number };
 
 export function stepExpiryReceipt(current: ExpiryReceipt, event: ExpiryReceiptEvent) {
-  if (current.state === ExpiryReceiptState.Absent || current.run !== event.run)
-    return { next: current, effect: 'none' as const };
+  const keep = { next: current, effect: 'none' as const };
+  if (current.state === ExpiryReceiptState.Absent || current.run !== event.run) return keep;
   switch (event.type) {
     case 'deferred':
       return { next: { state: ExpiryReceiptState.Absent } as const, effect: 'delete' as const };
@@ -29,9 +29,9 @@ export function stepExpiryReceipt(current: ExpiryReceipt, event: ExpiryReceiptEv
             } as const,
             effect: 'wait' as const,
           }
-        : { next: current, effect: 'none' as const };
+        : keep;
     case 'delivered':
-      return { next: current, effect: 'none' as const };
+      return keep;
     default: {
       const unreachable: never = event.type;
       return unreachable;

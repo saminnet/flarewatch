@@ -1,11 +1,6 @@
 import { ExpiryReceiptState, stepExpiryReceipt } from './expiry-lifecycle';
 import { RecoveryState, stepRecovery, type Recovery } from './recovery-lifecycle';
-import {
-  ErrorFollowUpState,
-  ReminderState,
-  stepErrorFollowUp,
-  stepReminder,
-} from './follow-up-lifecycle';
+import { ErrorFollowUpState, stepErrorFollowUp, stepReminder } from './follow-up-lifecycle';
 import { DownAlertState, stepDownAlert } from './down-alert-lifecycle';
 import { coversMonitor, type Maintenance, type Monitor } from '@flarewatch/shared';
 import type { IncidentUpdate, OpenIncident } from './incidents';
@@ -528,14 +523,7 @@ export function errorFollowUpLifecycle(alert: IncidentAlert, generation: number 
 }
 
 export function reminderLifecycle(alert: IncidentAlert, generation: number | null) {
-  return alert.run === null
-    ? ({ state: ReminderState.Unscheduled, run: null, count: alert.reminders, generation } as const)
-    : ({
-        state: ReminderState.Scheduled,
-        run: alert.run,
-        count: alert.reminders,
-        generation,
-      } as const);
+  return { run: alert.run, count: alert.reminders, generation };
 }
 
 export function recoveryAlert(

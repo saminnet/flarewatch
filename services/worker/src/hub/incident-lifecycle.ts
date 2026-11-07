@@ -30,7 +30,6 @@ type IncidentEffect = 'none' | 'insert' | 'reopen' | 'close' | 'hold' | 'relapse
 interface IncidentTransition {
   next: IncidentLifecycle;
   effect: IncidentEffect;
-  end?: number;
 }
 
 export function stepIncident(current: IncidentLifecycle, event: IncidentEvent): IncidentTransition {
@@ -67,23 +66,9 @@ export function stepIncident(current: IncidentLifecycle, event: IncidentEvent): 
             effect: 'hold',
           };
         if (event.now - current.upSince < FLAP_SECONDS) return { next: current, effect: 'none' };
-        return {
-          next: {
-            state: IncidentState.Closed,
-            end: current.upSince,
-          },
-          effect: 'close',
-          end: current.upSince,
-        };
+        return { next: { state: IncidentState.Closed, end: current.upSince }, effect: 'close' };
       }
-      return {
-        next: {
-          state: IncidentState.Closed,
-          end: event.now,
-        },
-        effect: 'close',
-        end: event.now,
-      };
+      return { next: { state: IncidentState.Closed, end: event.now }, effect: 'close' };
     default: {
       const unreachable: never = event;
       return unreachable;

@@ -1,7 +1,6 @@
 import { expect, it } from 'vite-plus/test';
 import {
   ErrorFollowUpState,
-  ReminderState,
   stepErrorFollowUp,
   stepReminder,
   type ErrorFollowUp,
@@ -76,17 +75,11 @@ it('replays captured reminder cadence and duplicate accepted outcomes', () => {
     ['reminder cadence', 2],
     ['duplicate reminder outcomes', 1],
   ] as const) {
-    let state: Reminder = {
-      state: ReminderState.Unscheduled,
-      run: null,
-      count: 0,
-      generation: null,
-    };
+    let state: Reminder = { run: null, count: 0, generation: null };
     let run = 0;
     for (const entry of capturedLifecycle(name)) {
       for (const outcome of entry.outcomes ?? []) {
-        if (outcome.kind === 'down')
-          state = { ...state, state: ReminderState.Scheduled, run: outcome.run };
+        if (outcome.kind === 'down') state = { ...state, run: outcome.run };
         if (outcome.kind === 'reminder')
           state = stepReminder(state, {
             type: outcome.delivered ? 'delivered' : 'refused',

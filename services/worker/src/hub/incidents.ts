@@ -177,8 +177,8 @@ export class Incidents {
           open.incident.error[open.incident.error.length - 1] ?? '',
         );
       const transition = stepIncident(lifecycle, { type: 'passed', now, legacyCertificate });
-      if (transition.effect === 'close') {
-        this.close(open, transition.end ?? now);
+      if (transition.effect === 'close' && transition.next.state === IncidentState.Closed) {
+        this.close(open, transition.next.end);
         return up(true);
       }
       if (transition.effect === 'hold')

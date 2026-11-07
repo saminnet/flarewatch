@@ -37,8 +37,8 @@ it('replays captured incident boundaries, relapse and certificate recovery', () 
       state = transition.next;
       if (entry.updates[0]?.changeType === 'error') expect(transition.effect).toBe('segment');
       const history = entry.history?.[0];
-      if (state.state === IncidentState.Closed)
-        expect(transition.end).toBe(history && 'end' in history ? history.end : undefined);
+      if (transition.effect === 'close' && state.state === IncidentState.Closed)
+        expect(state.end).toBe(history && 'end' in history ? history.end : undefined);
       if (state.state === IncidentState.RecoveryHold)
         expect(entry.updates[0]?.changeType).toBe('none');
     }

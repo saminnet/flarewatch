@@ -70,14 +70,7 @@ export function stepErrorFollowUp(current: ErrorFollowUp, event: ErrorFollowUpEv
   }
 }
 
-export enum ReminderState {
-  Unscheduled,
-  Scheduled,
-}
-
-export type Reminder =
-  | { state: ReminderState.Unscheduled; run: null; count: number; generation: number | null }
-  | { state: ReminderState.Scheduled; run: number; count: number; generation: number | null };
+export type Reminder = { run: number | null; count: number; generation: number | null };
 
 export type ReminderEvent =
   | { type: 'eligible'; run: number; interval: number | undefined; eligible: boolean }
@@ -95,10 +88,7 @@ export function stepReminder(current: Reminder, event: ReminderEvent) {
         event.run - (current.run ?? 0) < event.interval
       )
         return { next: current, claim: false };
-      return {
-        next: { ...current, state: ReminderState.Scheduled, run: event.run } as const,
-        claim: true,
-      };
+      return { next: { ...current, run: event.run }, claim: true };
     case 'delivered':
       return {
         next:

@@ -1151,10 +1151,12 @@ test('saves a group toggle once and keeps it across a reload', async ({ page }) 
   await page.waitForLoadState('networkidle');
   expect(saves).toEqual([]);
 
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && response.url().includes('/_serverFn/'),
+  );
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect.poll(() => saves.length).toBe(1);
-  await page.waitForLoadState('networkidle');
+  await saved;
   expect(saves).toHaveLength(1);
 
   await page.reload();
