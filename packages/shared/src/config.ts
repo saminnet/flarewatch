@@ -492,6 +492,17 @@ const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.strictObject
   {
     title: z.optional(z.string()),
     visibility: z.optional(z.enum(['public', 'private'])),
+    subscribers: z.optional(
+      z.strictObject(
+        {
+          provider: z.optional(z.enum(['resend', 'cloudflare'])),
+          from: z.string().check(z.minLength(3), z.maxLength(320), z.regex(/^[^\r\n]+@[^\r\n]+$/)),
+          dailySendCap: z.optional(intInRange('dailySendCap', 1, 100000)),
+          maxSubscribers: z.optional(intInRange('maxSubscribers', 1, 100000)),
+        },
+        unknownFieldError,
+      ),
+    ),
     links: z.optional(
       z.array(
         z.object({

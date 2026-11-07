@@ -22,6 +22,7 @@ export type PublicMonitor = Pick<Monitor, 'id' | 'name' | 'tooltip' | 'method'> 
 export type AdminMonitor = PublicMonitor & { private?: boolean };
 
 export type Snapshot = {
+  subscriberCount?: number;
   monitors: AdminMonitor[];
   groups: PageConfigGroup;
   state: StatusView | null;

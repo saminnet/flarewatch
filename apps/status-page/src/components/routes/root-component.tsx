@@ -15,7 +15,7 @@ import { useAccountSync } from '@/lib/query/auth.mutations';
 const rootRoute = getRouteApi('__root__');
 
 export function RootComponent() {
-  const { theme: themePreference, statusPage, title } = rootRoute.useLoaderData();
+  const { theme: themePreference, statusPage, subscribers, title } = rootRoute.useLoaderData();
   const { session } = rootRoute.useRouteContext();
   useAccountSync(session);
   // An embed sits in someone else's page: no site chrome, and its theme comes from the URL.
@@ -60,7 +60,12 @@ export function RootComponent() {
             >
               Skip to main content
             </a>
-            <Header config={statusPage} session={session} visitorView={visitorView} />
+            <Header
+              config={statusPage}
+              subscribers={subscribers}
+              session={session}
+              visitorView={visitorView}
+            />
             {visitorView && <VisitorViewBar />}
 
             <main id="main-content" className="flex-1">

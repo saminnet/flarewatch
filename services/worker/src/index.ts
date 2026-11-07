@@ -1,4 +1,6 @@
 import {
+  isPublicMonitor,
+  type PageConfig,
   type CheckContext,
   createLogger,
   type CheckResultWithLocation,
@@ -7,11 +9,13 @@ import {
   type Webhook,
   type WorkerConfig,
 } from '@flarewatch/shared';
+import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
 
 import { CHECK_NOW_PREFIX, handleCheckNow } from './check-now';
 import { getHub, type Env } from './env';
 import { handleHubRequest } from './hub/routes';
+import { handleSubscriberRequest } from './subscriber-routes';
 import { handlePing, handlePingUrl } from './ping';
 import { getEdgeLocation } from './utils/location';
 import { affordableChecks, checkInterval, checkMonitor, runBudget } from './checkers';
@@ -76,6 +80,7 @@ export interface WorkerDeps {
   readonly createNotifier: typeof createNotifier;
   readonly getEdgeLocation: () => Promise<string>;
   readonly staticConfig: WorkerConfig;
+  readonly pageConfig?: PageConfig;
 }
 
 const defaultWorkerDeps: WorkerDeps = {
@@ -83,6 +88,7 @@ const defaultWorkerDeps: WorkerDeps = {
   createNotifier,
   getEdgeLocation,
   staticConfig: workerConfig,
+  pageConfig,
 };
 
 export async function runChecks(
@@ -132,20 +138,39 @@ export async function runChecks(
     }),
   );
 
-  const policy: AlertPolicy | undefined = notifier
-    ? {
-        gracePeriodSeconds: (config.notification?.gracePeriod ?? 0) * 60,
-        // A monitor no webhook takes is never claimed, so it cannot use up its tries.
-        skipIds: [
-          ...(config.notification?.skipNotificationIds ?? []),
-          ...config.monitors
-            .filter(({ id }) => !webhooks.some((webhook) => routes(webhook, id)))
-            .map(({ id }) => id),
-        ],
-        skipErrorChanges: Boolean(config.notification?.skipErrorChangeNotification),
-      }
-    : undefined;
-  const { updates, alerts } = await hub.record(currentTime, records, policy);
+  const subscribers = Boolean(
+    deps.pageConfig?.subscribers && deps.pageConfig.visibility !== 'private',
+  );
+  const webhookIds = new Set(
+    config.monitors
+      .filter(({ id }) => webhooks.some((webhook) => routes(webhook, id)))
+      .map(({ id }) => id),
+  );
+  const policy: AlertPolicy | undefined =
+    notifier || subscribers
+      ? {
+          gracePeriodSeconds: (config.notification?.gracePeriod ?? 0) * 60,
+          webhookIds: [...webhookIds],
+          // Claim a monitor only when a webhook or the published subscriber list takes its alerts.
+          skipIds: [
+            ...(config.notification?.skipNotificationIds ?? []),
+            ...config.monitors
+              .filter(
+                (monitor) =>
+                  !(subscribers && isPublicMonitor(monitor)) && !webhookIds.has(monitor.id),
+              )
+              .map(({ id }) => id),
+          ],
+          skipErrorChanges: Boolean(config.notification?.skipErrorChangeNotification),
+        }
+      : undefined;
+  const { updates, alerts } = await hub.record(
+    currentTime,
+    records,
+    policy,
+    subscribers,
+    deps.pageConfig ?? {},
+  );
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
   // The run held back one request per webhook. Each webhook spends it last, so the alerts that
@@ -179,16 +204,28 @@ export async function runChecks(
   };
   const deliver = async (batch: Alert[]) => {
     const summaryAfter = config.notification?.summaryAfter ?? Infinity;
-    const entries = batch.flatMap((alert) => {
-      const ctx = context(alert);
-      return !ctx && summaryAfter !== Infinity && notifier
-        ? []
-        : [{ alert, ctx, delivered: false, attempted: !notifier || !ctx }];
-    });
+    type DeliveryStatus = 'waiting' | 'attempted' | 'delivered' | 'subscriber-only';
+    const entries = batch.flatMap(
+      (alert): { alert: Alert; ctx: NotificationContext | undefined; status: DeliveryStatus }[] => {
+        const ctx = context(alert);
+        const monitor = monitors.get(alert.monitorId);
+        const status: DeliveryStatus =
+          subscribers &&
+          monitor &&
+          isPublicMonitor(monitor) &&
+          !webhookIds.has(alert.monitorId) &&
+          (alert.kind === 'down' || alert.kind === 'recovered')
+            ? 'subscriber-only'
+            : !notifier || !ctx
+              ? 'attempted'
+              : 'waiting';
+        return !ctx && summaryAfter !== Infinity && notifier ? [] : [{ alert, ctx, status }];
+      },
+    );
     if (notifier) {
       type Entry = (typeof entries)[number];
       const send = async (webhook: Webhook, group: Entry[]) => {
-        for (const entry of group) entry.attempted = true;
+        for (const entry of group) if (entry.status === 'waiting') entry.status = 'attempted';
         try {
           const results =
             group.length > 1
@@ -204,7 +241,7 @@ export async function runChecks(
                   webhook,
                 );
           if (results.some((result) => result.success))
-            for (const entry of group) entry.delivered = true;
+            for (const entry of group) entry.status = 'delivered';
         } catch (error) {
           log.error('Alert failed', { error: String(error) });
         }
@@ -222,10 +259,10 @@ export async function runChecks(
         if (inTime() && spend(true)) await send(webhook, routed.slice(next));
       }
     }
-    return entries.map(({ alert, delivered, attempted }): AlertOutcome => ({
+    return entries.map(({ alert, status }): AlertOutcome => ({
       ...alert,
-      delivered,
-      ...(!attempted && { deferred: true }),
+      delivered: status === 'delivered' || status === 'subscriber-only',
+      ...(status === 'waiting' && { deferred: true }),
     }));
   };
   if (alerts.length > 0) await hub.confirmAlerts(await deliver(alerts));
@@ -289,6 +326,9 @@ const Worker = {
     if (url.pathname.startsWith(CHECK_NOW_PREFIX) && request.method === 'POST') {
       return handleCheckNow(request, env, deps);
     }
+
+    if (url.pathname === '/subscribers' || url.pathname.startsWith('/subscribers/'))
+      return handleSubscriberRequest(request, env, deps.pageConfig);
 
     const hubResponse = await handleHubRequest(request, env);
     if (hubResponse) return hubResponse;

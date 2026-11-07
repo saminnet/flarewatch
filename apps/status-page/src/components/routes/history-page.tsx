@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useReducer } from 'react';
+import { dialogStep, type DialogState } from '@/lib/dialog-state';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 import { getRouteApi } from '@tanstack/react-router';
@@ -36,10 +37,7 @@ function getCurrentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-/** Dialogs stay mounted with their last target so they can animate out. */
-type DialogTarget = { open: boolean; maintenance?: Maintenance; key: number };
-
-const CLOSED: DialogTarget = { open: false, key: 0 };
+const CLOSED: DialogState<Maintenance> = { status: 'closed', key: 0 };
 
 export function HistoryPage() {
   usePageHydrated();
@@ -48,14 +46,8 @@ export function HistoryPage() {
   const {
     data: { monitors, state, maintenances, announcements },
   } = useSuspenseQuery(snapshotQuery(audience));
-  const [editing, setEditing] = useState(CLOSED);
-  const [deleting, setDeleting] = useState(CLOSED);
-  const openFor = (maintenance?: Maintenance) => (prev: DialogTarget) => ({
-    open: true,
-    maintenance,
-    key: prev.key + 1,
-  });
-  const closeDialog = (prev: DialogTarget) => ({ ...prev, open: false });
+  const [editing, edit] = useReducer(dialogStep<Maintenance>, CLOSED);
+  const [deleting, remove] = useReducer(dialogStep<Maintenance>, CLOSED);
   const { loaderNowMs } = historyRoute.useLoaderData();
   const nowMs = useNow({ serverTime: loaderNowMs });
   const {
@@ -82,8 +74,8 @@ export function HistoryPage() {
   function maintenanceActions(maintenance: Maintenance) {
     if (!operator) return {};
     return {
-      onEdit: () => setEditing(openFor(maintenance)),
-      onDelete: () => setDeleting(openFor(maintenance)),
+      onEdit: () => edit({ type: 'open', target: maintenance }),
+      onDelete: () => remove({ type: 'open', target: maintenance }),
     };
   }
 
@@ -111,7 +103,7 @@ export function HistoryPage() {
         {operator && (
           <div className="flex flex-wrap gap-2">
             <AddAnnouncementButton monitors={monitors} />
-            <Button onClick={() => setEditing(openFor())}>
+            <Button onClick={() => edit({ type: 'open' })}>
               <IconPlus className="size-4" />
               Add maintenance window
             </Button>
@@ -258,16 +250,16 @@ export function HistoryPage() {
         <>
           <MaintenanceFormDialog
             key={editing.key}
-            open={editing.open}
-            maintenance={editing.maintenance}
+            open={editing.status === 'open'}
+            maintenance={editing.target}
             monitors={monitors}
-            onClose={() => setEditing(closeDialog)}
+            onClose={() => edit({ type: 'close' })}
           />
           <DeleteMaintenanceDialog
             key={deleting.key}
-            open={deleting.open}
-            maintenance={deleting.maintenance}
-            onClose={() => setDeleting(closeDialog)}
+            open={deleting.status === 'open'}
+            maintenance={deleting.target}
+            onClose={() => remove({ type: 'close' })}
           />
         </>
       )}

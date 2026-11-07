@@ -1,7 +1,11 @@
+import type { SubscriberEmailBinding } from './notifications/subscriber-sender';
 import type { VpcBinding } from '@flarewatch/shared';
 import type { MonitorHub } from './hub/monitor-hub';
 
 export interface Env {
+  RESEND_API_KEY?: string;
+  SUBSCRIBER_EMAIL?: SubscriberEmailBinding;
+  SUBSCRIBER_SECRET?: string;
   MONITOR_HUB?: DurableObjectNamespace<MonitorHub>;
   /** Optional so forks without a VPC tunnel deploy with the committed wrangler.toml. */
   VPC?: VpcBinding;

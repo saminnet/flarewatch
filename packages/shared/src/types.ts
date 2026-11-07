@@ -1,4 +1,10 @@
 export type PageConfig = {
+  subscribers?: {
+    provider?: 'resend' | 'cloudflare';
+    from: string;
+    dailySendCap?: number;
+    maxSubscribers?: number;
+  };
   title?: string;
   links?: PageConfigLink[];
   group?: PageConfigGroup;

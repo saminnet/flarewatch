@@ -15,7 +15,7 @@ const MAX_ERROR_ALERTS = 5;
 export type AlertKind = 'down' | 'error' | 'reminder' | 'recovered' | 'expiry';
 
 /**
- * Whether the incident's down alert reached a webhook: 'pending', 'sending'
+ * Whether a webhook or subscriber outbox accepted the incident's down alert: 'pending', 'sending'
  * (claimed by a run), 'sent', 'failed' (gave up) or 'silent' (never alert).
  */
 type AlertState = 'pending' | 'sending' | 'sent' | 'failed' | 'silent';
@@ -32,11 +32,12 @@ export interface IncidentAlert {
   run: number | null;
   /** Reminders a webhook accepted since the incident last opened. */
   reminders: number;
+  subscriberNotified: boolean;
 }
 
 /** The alert columns, for the query that loads the open incidents. */
 export const ALERT_COLUMNS =
-  'alert, alert_claimed_at, error_alerts, error_due, alert_run, reminders';
+  'alert, alert_claimed_at, error_alerts, error_due, alert_run, reminders, subscriber_notified';
 
 export type AlertRow = {
   alert: AlertState;
@@ -45,6 +46,7 @@ export type AlertRow = {
   error_due: number;
   alert_run: number | null;
   reminders: number;
+  subscriber_notified: number;
 };
 
 export function readAlert(row: AlertRow): IncidentAlert {
@@ -55,6 +57,7 @@ export function readAlert(row: AlertRow): IncidentAlert {
     errorDue: row.error_due === 1,
     run: row.alert_run,
     reminders: row.reminders,
+    subscriberNotified: row.subscriber_notified === 1,
   };
 }
 
@@ -69,9 +72,14 @@ export const REOPEN_ALERT_RESET = `error_alerts = 0, error_due = 0, reminders = 
 /** The notification settings the hub decides alerts with. */
 export interface AlertPolicy {
   gracePeriodSeconds: number;
-  /** Monitors that never alert: skipNotificationIds, and monitors no webhook routes. */
+  webhookIds?: string[];
+  /** Monitors excluded from every alert channel. */
   skipIds: string[];
   skipErrorChanges: boolean;
+}
+
+export function routesToWebhook(policy: AlertPolicy, id: string): boolean {
+  return !policy.webhookIds || policy.webhookIds.includes(id);
 }
 
 export interface Alert {
@@ -100,7 +108,7 @@ export interface Alert {
   run: number;
 }
 
-/** Whether any webhook accepted an alert. */
+/** Whether a delivery channel accepted an alert. */
 export interface AlertOutcome {
   monitorId?: string;
   expiryDate?: number;
@@ -175,6 +183,7 @@ export class Alerts {
         blocked(monitor.id) ||
         activeMaintenances.some((maintenance) => coversMonitor(maintenance, monitor.id));
       const { state, claimedAt, errorAlerts, reminders } = open.alert;
+      const webhook = routesToWebhook(policy, monitor.id);
       // A flapping monitor that is up again, waiting to close, is not down now.
       const recovering = open.upSince !== null;
 
@@ -214,6 +223,7 @@ export class Alerts {
             .map((other) => other.name),
         });
       } else if (
+        webhook &&
         state === 'sent' &&
         (change?.changeType === 'error' || open.alert.errorDue) &&
         !quiet &&
@@ -238,6 +248,7 @@ export class Alerts {
           alsoDown: [],
         });
       } else if (
+        webhook &&
         state === 'sent' &&
         monitor.reminderEveryChecks !== undefined &&
         open.incident.acked_at === undefined &&
@@ -326,7 +337,7 @@ export class Alerts {
   }
 
   /**
-   * Records how each alert's delivery went. A down alert no webhook accepted is
+   * Records how each alert's delivery went. A down alert no delivery channel accepted is
    * due again next run, until MAX_ALERT_ATTEMPTS failures; a deferred one is due
    * again with no failure counted. A recovery goes once tried and waits for a
    * later run when deferred. A delivered outage that ended while its alert was
@@ -436,7 +447,7 @@ type PendingRecoveryRow = {
   claimed_at: number | null;
 };
 
-function recoveryAlert(
+export function recoveryAlert(
   monitorId: string,
   incident: number,
   reopenedAt: number | null,

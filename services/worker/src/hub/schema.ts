@@ -169,6 +169,30 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
     `ALTER TABLE incidents ADD COLUMN acked_by TEXT`,
     `ALTER TABLE pending_recoveries ADD COLUMN acked_by TEXT`,
   ],
+  [
+    `CREATE TABLE subscribers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      state TEXT NOT NULL CHECK (state IN ('pending', 'confirmed')),
+      created_at INTEGER NOT NULL,
+      confirmed_at INTEGER
+    )`,
+    `CREATE INDEX subscribers_pending ON subscribers (state, created_at)`,
+    `CREATE TABLE subscriber_outbox (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      monitor_id TEXT,
+      payload TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      sent_to INTEGER NOT NULL DEFAULT 0,
+      batch_index INTEGER NOT NULL DEFAULT 0,
+      batch TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0
+    )`,
+    `CREATE INDEX subscriber_outbox_expiry ON subscriber_outbox (kind, created_at)`,
+    `ALTER TABLE incidents ADD COLUMN subscriber_notified INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE incidents ADD COLUMN subscriber_recovered INTEGER NOT NULL DEFAULT 0`,
+  ],
 ];
 
 export function migrate(sql: Sql): void {

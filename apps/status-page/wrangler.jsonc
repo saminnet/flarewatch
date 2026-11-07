@@ -40,6 +40,11 @@
   // About five sign-in attempts per minute per IP, counted per Cloudflare location.
   "ratelimits": [
     {
+      "name": "SUBSCRIBE_RATE_LIMIT",
+      "namespace_id": "1003",
+      "simple": { "limit": 5, "period": 60 },
+    },
+    {
       "name": "LOGIN_RATE_LIMIT",
       "namespace_id": "1002",
       "simple": { "limit": 5, "period": 60 },

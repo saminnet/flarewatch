@@ -88,14 +88,14 @@ export function AnnouncementFormDialog({
   const [title, setTitle] = useState(defaults.title);
   const [body, setBody] = useState(defaults.body);
   const [end, setEnd] = useState(defaults.end);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
   const callbacks = {
     onSuccess: onClose,
-    onError: (error: Error) => setErrorMessage(mutationErrorMessage(error)),
   };
   const createMutation = useCreateAnnouncement(callbacks);
   const updateMutation = useUpdateAnnouncement(callbacks);
+  const mutation = announcement ? updateMutation : createMutation;
+  const errorMessage = mutation.error ? mutationErrorMessage(mutation.error) : null;
+
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   const fields = incidentConfig(incident);
@@ -106,7 +106,6 @@ export function AnnouncementFormDialog({
 
   function handleSubmit() {
     if ('error' in result || emptyUpdate) return;
-    setErrorMessage(null);
     if (announcement) {
       updateMutation.mutate({
         id: announcement.id,

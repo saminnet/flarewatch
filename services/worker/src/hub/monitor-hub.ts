@@ -21,15 +21,30 @@ import {
   type HeartbeatState,
   type LatencySample,
   type MonitorTarget,
+  type Monitor,
   type MonitorView,
   type HubView,
+  type PageConfig,
 } from '@flarewatch/shared';
 import type { Env } from '../env';
-import { Alerts, type Alert, type AlertOutcome, type AlertPolicy } from './alerts';
+import {
+  Subscribers,
+  drainSubscribers,
+  subscriberAlarmSchema,
+  type SubscriberSettings,
+} from './subscribers';
+import {
+  Alerts,
+  recoveryAlert,
+  routesToWebhook,
+  type Alert,
+  type AlertOutcome,
+  type AlertPolicy,
+} from './alerts';
 import { applyPing, evaluateHeartbeat, withMisses, type PingKind } from './heartbeat';
 import { Incidents, type IncidentUpdate } from './incidents';
 import { migrate, parseHour, parseLatest } from './schema';
-import { durableObjectSql, parseJson, ROW_BYTES, type Sql, utf8Bytes } from './sql';
+import { durableObjectSql, parseJson, ROW_BYTES, setMeta, type Sql, utf8Bytes } from './sql';
 
 /** How long History keeps closed incidents and ended maintenance windows. */
 const HISTORY_RETENTION_SECONDS = 90 * 24 * 60 * 60;
@@ -68,6 +83,7 @@ export class MonitorHub extends DurableObject<Env> {
   private readonly sql: Sql;
   private readonly incidents: Incidents;
   private readonly alerts: Alerts;
+  private readonly subscribers: Subscribers;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -75,6 +91,7 @@ export class MonitorHub extends DurableObject<Env> {
     migrate(this.sql);
     this.incidents = new Incidents(this.sql);
     this.alerts = new Alerts(this.sql);
+    this.subscribers = new Subscribers(this.sql);
   }
 
   claimInitialCheck(nowMs: number): boolean {
@@ -88,23 +105,21 @@ export class MonitorHub extends DurableObject<Env> {
         )
       )
         return false;
-      this.sql.exec(
-        `INSERT INTO meta (key, value) VALUES ('initial_trigger', ?)
-         ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
-        String(nowMs),
-      );
+      setMeta(this.sql, 'initial_trigger', String(nowMs));
       return true;
     });
   }
 
   /**
-   * Stores one check run. With a policy (a webhook is configured) it also
+   * Stores one check run. With an alert policy it also
    * decides the run's alerts; confirmAlerts records how each one's delivery went.
    */
   record(
     now: number,
     records: CheckRecord[],
     policy?: AlertPolicy,
+    subscribers = false,
+    page?: Pick<PageConfig, 'subscribers' | 'visibility'>,
   ): { updates: IncidentUpdate[]; alerts: Alert[] } {
     return this.sql.transaction(() => {
       const [last] = this.sql.exec<{ value: string; runs: number; latest: string }>(
@@ -112,6 +127,25 @@ export class MonitorHub extends DurableObject<Env> {
       );
       // A run that outlasted a later one would put older results over newer ones.
       if (last && now < Number(last.value)) return { updates: [], alerts: [] };
+      if (page) {
+        const value = JSON.stringify(
+          subscriberAlarmSchema.parse({
+            subscribers: page.subscribers,
+            visibility: page.visibility,
+            monitors: records.map(({ monitor }) => monitor),
+          }),
+        );
+        if (new TextEncoder().encode(value).length > ROW_BYTES)
+          throw new Error('Subscriber alarm settings exceed the hub row limit');
+        const [stored] = this.sql.exec<{ value: string }>(
+          "SELECT value FROM meta WHERE key = 'subscriber_settings'",
+        );
+        if (stored?.value !== value) {
+          setMeta(this.sql, 'subscriber_settings', value);
+          if (page.subscribers && page.visibility !== 'private')
+            this.ctx.waitUntil(this.scheduleSubscriberAlarm(now));
+        }
+      }
       const run = (last?.runs ?? 0) + 1;
       const rows = new Map(
         this.sql
@@ -234,6 +268,7 @@ export class MonitorHub extends DurableObject<Env> {
           const warning = warnings.get(monitor.id);
           if (
             !warning ||
+            !routesToWebhook(policy, monitor.id) ||
             policy.skipIds.includes(monitor.id) ||
             activeMaintenances.some((maintenance) => coversMonitor(maintenance, monitor.id))
           )
@@ -325,9 +360,91 @@ export class MonitorHub extends DurableObject<Env> {
             policy,
           )
         : [];
+      if (subscribers) {
+        const monitors = records.map(({ monitor }) => monitor);
+        const enqueue = (event: Alert) => {
+          if (this.subscribers.enqueue(event, monitors, now)) {
+            this.ctx.waitUntil(this.scheduleSubscriberAlarm(now));
+          }
+        };
+        for (const event of alerts) enqueue(event);
+        for (const update of updates) {
+          if (update.changeType !== 'up' || policy?.skipIds.includes(update.monitorId)) continue;
+          const closed = open.get(update.monitorId);
+          if (closed?.alert.subscriberNotified && closed.alert.state !== 'sent') {
+            enqueue(
+              recoveryAlert(
+                update.monitorId,
+                closed.id,
+                closed.reopenedAt,
+                run,
+                update.incidentStartTime,
+                closed.upSince ?? now,
+              ),
+            );
+          }
+        }
+      }
       if (!policy) this.sql.exec('DELETE FROM pending_recoveries');
       return { updates, alerts: [...alerts, ...warningAlerts] };
     });
+  }
+
+  subscribe(email: string, now: number, maxSubscribers = 200): boolean {
+    const added = this.subscribers.subscribe(email, now, maxSubscribers);
+    if (added) this.ctx.waitUntil(this.scheduleSubscriberAlarm(now));
+    return added;
+  }
+
+  confirmSubscriber(email: string, generation: string, now: number): boolean {
+    return this.subscribers.confirm(email, generation, now);
+  }
+
+  unsubscribe(email: string): void {
+    this.subscribers.unsubscribe(email);
+  }
+
+  subscriberCount(): number {
+    return this.subscribers.count();
+  }
+
+  private async scheduleSubscriberAlarm(now: number): Promise<void> {
+    const alarm = await this.ctx.storage.getAlarm();
+    if (alarm === null || alarm > now * 1000) await this.ctx.storage.setAlarm(now * 1000);
+  }
+
+  async drainSubscriberOutbox(
+    settings: SubscriberSettings,
+    monitors: Monitor[],
+    now: number,
+  ): Promise<void> {
+    await drainSubscribers(
+      this.subscribers,
+      this.sql,
+      this.ctx.storage,
+      settings,
+      monitors,
+      this.env,
+      () => now,
+    );
+  }
+
+  override async alarm(): Promise<void> {
+    const [stored] = this.sql.exec<{ value: string }>(
+      "SELECT value FROM meta WHERE key = 'subscriber_settings'",
+    );
+    if (!stored) return;
+    const settings = subscriberAlarmSchema.parse(parseJson(stored.value));
+    if (!settings.subscribers || settings.visibility === 'private') return;
+    await drainSubscribers(
+      this.subscribers,
+      this.sql,
+      this.ctx.storage,
+      settings.subscribers,
+      settings.monitors,
+      this.env,
+      () => Math.floor(Date.now() / 1000),
+    );
   }
 
   confirmAlerts(outcomes: AlertOutcome[]): void {

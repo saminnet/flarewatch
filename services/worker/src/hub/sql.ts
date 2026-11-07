@@ -19,6 +19,14 @@ export function durableObjectSql(storage: DurableObjectStorage): Sql {
   };
 }
 
+export function setMeta(sql: Sql, key: string, value: string): void {
+  sql.exec(
+    'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
+    key,
+    value,
+  );
+}
+
 /** A JSON column's value, or undefined when it is null or not JSON. */
 export function parseJson(text: string | null): unknown {
   if (text === null) return undefined;

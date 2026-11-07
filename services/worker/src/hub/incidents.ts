@@ -8,6 +8,7 @@ import {
   type IncidentAlert,
 } from './alerts';
 import { withoutConfirmationNote } from '../checkers/confirmation-note';
+import { readNotice, stepNotice, noticeColumns, type NoticeColumns } from './subscriber-notices';
 import { parseJson, ROW_BYTES, type Sql, utf8Bytes } from './sql';
 
 /** A failure this soon after recovering reopens the incident, so a flapping target adds no rows. */
@@ -175,8 +176,8 @@ export class Incidents {
 
     const error = result.error.slice(0, MAX_ERROR_CHARS);
     if (!open) {
-      const [recent] = this.sql.exec<IncidentRow>(
-        `SELECT id, starts, errors, acked_at, acked_by FROM incidents
+      const [recent] = this.sql.exec<IncidentRow & NoticeColumns>(
+        `SELECT id, starts, errors, acked_at, acked_by, subscriber_notified, subscriber_recovered FROM incidents
          WHERE monitor_id = ? AND end_at >= ? ORDER BY id DESC LIMIT 1`,
         monitorId,
         now - FLAP_SECONDS,
@@ -338,16 +339,25 @@ export class Incidents {
   }
 
   /** The grace period before a down alert restarts at the reopen. */
-  private reopen(monitorId: string, row: IncidentRow, error: string, now: number): IncidentUpdate {
-    const { end: _end, ...incident } = toIncident(row);
+  private reopen(
+    monitorId: string,
+    row: IncidentRow & NoticeColumns,
+    error: string,
+    now: number,
+  ): IncidentUpdate {
+    const { end: _end, acked_at: _ackedAt, acked_by: _ackedBy, ...incident } = toIncident(row);
+    const notices = noticeColumns(stepNotice(readNotice(row), 'reopen'));
     const reopened = addSegment(incident, error, now) ?? incident;
     this.sql.exec(
       `UPDATE incidents SET end_at = NULL, reopened_at = ?, relapsed_at = NULL, starts = ?, errors = ?,
-         ${REOPEN_ALERT_RESET}
+         acked_at = NULL, acked_by = NULL,
+         subscriber_notified = ?, subscriber_recovered = ?, ${REOPEN_ALERT_RESET}
        WHERE id = ?`,
       now,
       JSON.stringify(reopened.start),
       JSON.stringify(reopened.error),
+      notices.subscriber_notified,
+      notices.subscriber_recovered,
       row.id,
     );
     this.setNewest(monitorId, reopened, true);

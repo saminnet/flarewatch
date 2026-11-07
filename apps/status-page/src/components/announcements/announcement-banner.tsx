@@ -1,5 +1,6 @@
 import type { PublicMonitor } from '@/lib/public-view';
-import { useState } from 'react';
+import { useReducer } from 'react';
+import { dialogStep, type DialogState } from '@/lib/dialog-state';
 import { IconBroadcast, IconPencil, IconTrash } from '@tabler/icons-react';
 import { formatUtcShort, isAnnouncementActive, type Announcement } from '@flarewatch/shared';
 import { Badge } from '@/components/ui/badge';
@@ -15,9 +16,7 @@ interface AnnouncementBannerProps {
   showEnded?: boolean;
 }
 
-type DialogTarget = { open: boolean; announcement?: Announcement; key: number };
-
-const CLOSED: DialogTarget = { open: false, key: 0 };
+const CLOSED: DialogState<Announcement> = { status: 'closed', key: 0 };
 
 export function AnnouncementBanner({
   announcements,
@@ -29,15 +28,12 @@ export function AnnouncementBanner({
   const active = showEnded
     ? announcements
     : announcements.filter((announcement) => isAnnouncementActive(announcement, nowMs));
-  const [editing, setEditing] = useState(CLOSED);
-  const [deleting, setDeleting] = useState(CLOSED);
-  const openEdit = (announcement: Announcement) =>
-    setEditing((prev) => ({ open: true, announcement, key: prev.key + 1 }));
-  const openDelete = (announcement: Announcement) =>
-    setDeleting((prev) => ({ open: true, announcement, key: prev.key + 1 }));
-  const closeDialog = (prev: DialogTarget) => ({ ...prev, open: false });
+  const [editing, edit] = useReducer(dialogStep<Announcement>, CLOSED);
+  const [deleting, remove] = useReducer(dialogStep<Announcement>, CLOSED);
+  const openEdit = (announcement: Announcement) => edit({ type: 'open', target: announcement });
+  const openDelete = (announcement: Announcement) => remove({ type: 'open', target: announcement });
 
-  if (active.length === 0 && !editing.open && !deleting.open) return null;
+  if (active.length === 0 && editing.key === 0 && deleting.key === 0) return null;
 
   return (
     <div className="space-y-2" aria-label="Announcements">
@@ -109,16 +105,16 @@ export function AnnouncementBanner({
 
       <AnnouncementFormDialog
         key={editing.key}
-        open={editing.open}
-        announcement={editing.announcement}
+        open={editing.status === 'open'}
+        announcement={editing.target}
         monitors={monitors}
-        onClose={() => setEditing(closeDialog)}
+        onClose={() => edit({ type: 'close' })}
       />
       <DeleteAnnouncementDialog
         key={deleting.key}
-        open={deleting.open}
-        announcement={deleting.announcement}
-        onClose={() => setDeleting(closeDialog)}
+        open={deleting.status === 'open'}
+        announcement={deleting.target}
+        onClose={() => remove({ type: 'close' })}
       />
     </div>
   );

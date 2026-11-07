@@ -822,3 +822,47 @@ describe('config validation', () => {
     });
   });
 });
+
+describe('subscriber config', () => {
+  it('accepts both subscriber providers and rejects an unknown provider', () => {
+    for (const provider of ['resend', 'cloudflare'] as const)
+      expect(
+        isValid(
+          createRuntimeConfig({
+            statusPage: { subscribers: { from: 'status@example.com', provider } },
+          }),
+        ),
+      ).toBe(true);
+    expect(
+      isValid({
+        ...createRuntimeConfig(),
+        statusPage: { subscribers: { from: 'status@example.com', provider: 'unknown' } },
+      }),
+    ).toBe(false);
+  });
+  it('accepts the optional caps and refuses invalid senders and non-positive caps', () => {
+    expect(
+      isValid(
+        createRuntimeConfig({
+          statusPage: { subscribers: { from: 'Status <status@example.com>' } },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isValid(
+        createRuntimeConfig({
+          statusPage: {
+            subscribers: { from: 'status@example.com', dailySendCap: 90, maxSubscribers: 200 },
+          },
+        }),
+      ),
+    ).toBe(true);
+    for (const subscribers of [
+      { from: 'status@example.com\r\nBcc: victim@example.com' },
+      { from: 'status@example.com', dailySendCap: 0 },
+      { from: 'status@example.com', maxSubscribers: 0 },
+      { from: 'status@example.com', dailySendCap: 1.5 },
+    ])
+      expect(isValid(createRuntimeConfig({ statusPage: { subscribers } }))).toBe(false);
+  });
+});

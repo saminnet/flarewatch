@@ -2,7 +2,12 @@ import { createServerFn } from '@tanstack/react-start';
 import type { HubView, LatencySample } from '@flarewatch/shared';
 import { INITIAL_TRIGGER_RETRY_MS } from '@/lib/constants';
 import { getConfig, isPrivateOnly } from '@/lib/config';
-import { fetchHubView, fetchLatency, triggerCheckRun } from '@/lib/monitor-worker';
+import {
+  fetchHubView,
+  fetchLatency,
+  triggerCheckRun,
+  fetchSubscriberCount,
+} from '@/lib/monitor-worker';
 import { getPrincipal, requireMember, requireOperator } from '@/lib/operator.server';
 import {
   canReadLatency,
@@ -80,7 +85,10 @@ export const getOperatorSnapshot = createServerFn({ method: 'GET' }).handler(
   async (): Promise<Snapshot> => {
     await requireOperator();
     const view = await readHubView(true);
-    return operatorSnapshot(getConfig(), view, view.maintenances, view.announcements);
+    const snapshot = operatorSnapshot(getConfig(), view, view.maintenances, view.announcements);
+    if (getConfig().statusPage?.subscribers)
+      snapshot.subscriberCount = await fetchSubscriberCount();
+    return snapshot;
   },
 );
 

@@ -206,7 +206,7 @@ Only down counts against uptime.
 
 Other sites can show `/embed` in a frame. All other pages refuse to load in a frame. This stops other sites from framing your sign-in page.
 
-Every page sends a Content-Security-Policy header. It lets a page run scripts only from its own origin, plus the page's own inline scripts, which carry a new random nonce on each request. A script injected into the page from anywhere else doesn't run. Images may load from any `https:` address or a `data:` URL, so a logo or favicon URL in your config still works. In the Vite dev server, pages also allow inline scripts and `eval`, for hot reload.
+Every page sends a Content-Security-Policy header. It lets a page run scripts only from its own origin, plus the page's own inline scripts, which carry a new random nonce on each request. When Turnstile is enabled, scripts, frames and connections can also use `https://challenges.cloudflare.com`. Other injected scripts do not run. Images may load from any `https:` address or a `data:` URL, so a logo or favicon URL in your config still works. In the Vite dev server, pages also allow inline scripts and `eval`, for hot reload.
 
 ### Admin endpoints
 
@@ -243,3 +243,65 @@ For an image served by your own status page, use the SVG route:
 ```
 
 The SVG badge caps the label and each message at 64 characters. It accepts shields.io named colors or three- and six-digit hex colors, with or without `#`. Other colors use the status default. Query text renders as text, including `<script>`. SVG responses use the JSON badge's cache headers, `nosniff`, and `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`.
+
+## Email subscribers
+
+Visitors can subscribe to incident emails for all published monitors from the Get updates button in the page header. They receive a confirmation email first, then an email when an incident opens or recovers. Grace periods, maintenance windows, dependencies and flap holds follow the webhook alert rules. Private monitors and raw failure messages stay out of these emails. Operators see the confirmed subscriber count in their account menu.
+
+To set it up:
+
+1. Verify a sending domain in [Resend](https://resend.com/docs/dashboard/domains/introduction).
+2. Add `RESEND_API_KEY` and `SUBSCRIBER_SECRET` as GitHub secrets ([how](deploy.md#3-add-secrets-to-your-fork)). Use a random secret of at least 32 characters, such as the output of `openssl rand -base64 32`.
+3. Set `PUBLIC_ORIGIN` in `services/worker/wrangler.toml` to your status page's HTTPS origin, such as `https://status.example.com`. Email links use this origin because an alarm has no visitor request.
+4. Add `subscribers` to `pageConfig` in `packages/config/src/public.ts`:
+
+```ts
+subscribers: {
+  from: 'Status <status@example.com>',
+  dailySendCap: 90,
+  maxSubscribers: 200,
+},
+```
+
+Resend is the default provider. The sender must belong to your verified Resend domain. Both caps are optional and default to the values above. Remove `subscribers` to turn the feature off. Private-only status pages do not offer subscriptions.
+
+The subscriber cap counts pending and confirmed addresses together. Pending subscriptions and their confirmation links expire after 24 hours. Every signup answers “Check your inbox,” including an existing address or a full list. It does not reveal membership.
+
+Mail leaves from the hub's alarm, outside the check run. Confirmation emails share the daily cap with incident emails. The counter resets at midnight UTC. A full cap delays the remaining mail until the next day, so a large list can receive updates late. Resend's Free plan currently allows 100 emails a day and 3,000 a month. Keep the default cap below those limits and leave room for other mail sent by your Resend account.
+
+A batch reserves quota before sending. A failed or interrupted request keeps that reservation because Resend may already have accepted it. Retries reuse the saved body and idempotency key. The alarm stops retrying an ambiguous batch after 23 hours, before Resend's 24-hour key expires, and logs `Expired ambiguous subscriber batch`. That batch can lose mail rather than send duplicates. An unsubscribe takes effect before the next batch is prepared. A batch already submitted to Resend cannot be recalled.
+
+Each email includes an unsubscribe link and RFC 8058 one-click unsubscribe headers. Opening the link shows a button. A mail client's one-click POST unsubscribes directly. The monitor Worker checks HMAC tokens without a token table. Rotating `SUBSCRIBER_SECRET` invalidates outstanding confirmation and unsubscribe links.
+
+Resend reports delivery bounces asynchronously. This version does not consume bounce webhooks or remove those addresses from the local list. Resend manages its own suppression list. Check bounces and suppressions in Resend before raising the subscriber cap.
+
+### Cloudflare Email Service
+
+Set `provider: 'cloudflare'` in `subscribers` to send through Cloudflare instead of Resend. Omit `provider` or set `provider: 'resend'` for Resend.
+
+Cloudflare requires the Workers Paid plan for arbitrary subscriber addresses. Outbound mail to arbitrary recipients is unavailable on Free. Paid includes 3,000 emails per month, then costs $0.35 per 1,000. Onboard the sending domain to [Email Service](https://developers.cloudflare.com/email-service/get-started/send-emails/) before enabling this provider. See [pricing](https://developers.cloudflare.com/email-service/platform/pricing/).
+
+Add this block to `services/worker/wrangler.toml`, the monitor Worker's config:
+
+```toml
+[[send_email]]
+name = "SUBSCRIBER_EMAIL"
+```
+
+The equivalent JSON configuration is `"send_email": [{ "name": "SUBSCRIBER_EMAIL" }]`. The committed config leaves the binding out so the default deployment stays on Free. Keep `SUBSCRIBER_SECRET` and `PUBLIC_ORIGIN` as above. Cloudflare needs no `RESEND_API_KEY`. Use a plain verified address for `from`, such as `status@example.com`.
+
+The [Workers API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/) accepts plain objects with `from`, `to`, `subject`, `text`, `html` and `headers`. It does not require the legacy `EmailMessage` from `cloudflare:email`. Each call allows up to 50 addresses across `to`, `cc` and `bcc`, with a 5 MiB message limit. Custom headers have a 16 KB total limit and a 2,048-byte limit per value. FlareWatch sends one message per recipient to keep addresses private.
+
+Cloudflare has no batch endpoint or idempotency key. The alarm prepares up to ten recipients at a time and saves a sent index after each successful call. A retry resumes after that index, including after 24 hours. A crash between a send and its progress write can double-send one message. Both providers reserve quota before sending and keep the daily cap and retry backoff. A retry on a new UTC day reserves quota only for Cloudflare's remaining recipients.
+
+Errors are `Error` objects with a `code`. FlareWatch retries `E_RATE_LIMIT_EXCEEDED` with backoff. It logs `E_SENDER_NOT_VERIFIED` and `E_SENDER_DOMAIN_NOT_AVAILABLE` as permanent failures and drops the affected outbox event. Fix the domain setup before accepting more subscriptions. These failures can lose queued mail. Cloudflare bounces and suppressions do not remove addresses from FlareWatch's list.
+
+### Optional Turnstile
+
+Create a Turnstile widget for the status page hostname. Add its secret as the GitHub secret `TURNSTILE_SECRET`, and add its public site key to `apps/status-page/wrangler.jsonc`:
+
+```jsonc
+"vars": { "TURNSTILE_SITE_KEY": "your-public-site-key" },
+```
+
+When `TURNSTILE_SECRET` is set, signup requires a valid token for that hostname. Without it, the form needs no challenge. The separate `SUBSCRIBE_RATE_LIMIT` binding always limits subscribe, confirm and unsubscribe requests to roughly five per minute per IP and Cloudflare location.

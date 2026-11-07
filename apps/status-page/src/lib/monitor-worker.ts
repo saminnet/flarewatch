@@ -228,3 +228,28 @@ export async function forwardPing(request: Request): Promise<Response> {
     return new Response('Not Found', { status: 404, headers: PING_RESPONSE_HEADERS });
   }
 }
+
+export async function submitSubscriber(email: string): Promise<Response> {
+  return callMonitorWorker('/subscribers', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function actOnSubscriber(
+  action: 'confirm' | 'unsubscribe',
+  token: string,
+): Promise<Response> {
+  return callMonitorWorker(`/subscribers/${action}?token=${encodeURIComponent(token)}`, {
+    method: 'POST',
+  });
+}
+
+export async function fetchSubscriberCount(): Promise<number> {
+  const result = await fromMonitorWorker('/subscribers/count');
+  if (
+    !isJsonObject(result) ||
+    typeof result.count !== 'number' ||
+    !Number.isSafeInteger(result.count) ||
+    result.count < 0
+  )
+    throw new Error('Monitor worker sent an invalid subscriber count');
+  return result.count;
+}
