@@ -54,6 +54,7 @@ const UNDO = new Map([
       'ALTER TABLE incidents DROP COLUMN subscriber_recovered',
     ],
   ],
+  [19, ['ALTER TABLE expiry_alerts DROP COLUMN retry_run']],
 ]);
 
 /** The schema step each release ended at. */

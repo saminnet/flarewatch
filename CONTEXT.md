@@ -118,3 +118,11 @@ _Avoid_: Outage, event
 **Hub**:
 The Durable Object in the monitor Worker that stores incidents, latency samples, heartbeat pings, maintenance windows and announcements. The status page reads it through the monitor Worker.
 _Avoid_: State, KV state, database
+
+**Lifecycle**:
+The states one thing moves through, such as an incident, a down alert or a subscriber batch. Each lifecycle has a state enum and a step function in `services/worker/src/hub`.
+_Avoid_: Status flag, phase
+
+**Step function**:
+The pure function that takes a lifecycle's state and an event and returns the next state. The hub writes what it returns.
+_Avoid_: Handler, reducer (on the worker)

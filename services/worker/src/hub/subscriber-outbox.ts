@@ -66,6 +66,10 @@ export function stepOutbox(state: OutboxState, event: OutboxEvent): OutboxState 
             attempts: 0,
           }
         : state;
+    default: {
+      const unreachable: never = event;
+      return unreachable;
+    }
   }
 }
 

@@ -607,20 +607,20 @@ describe('MonitorHub in workerd row budgets', () => {
 
   it('writes two rows for a reminder, its claim and its outcome, and reads only those rows', () => {
     expect(large.alertReminder, report()).toEqual(small.alertReminder);
-    // Measured 22 read and 4 written on workerd 1.20260930: a steady run plus two
-    // updates of the incident row, each reading the row it writes.
+    // Measured 25 read and 4 written on workerd 1.20260930: a steady run, two updates of the
+    // incident row, each reading the row it writes, and the read that the outcome steps from.
     expect(small.alertReminder.written, report()).toBeLessThanOrEqual(
       small.alertSteady.written + 2,
     );
-    expect(small.alertReminder.read, report()).toBeLessThanOrEqual(small.alertSteady.read + 2);
+    expect(small.alertReminder.read, report()).toBeLessThanOrEqual(small.alertSteady.read + 3);
   });
 
   it.each([
     // Measured on workerd 1.20260930 with the recovery queue, which every alerting run reads.
     ['alertOpening', { read: 27, written: 8 }],
     ['alertSteady', { read: 22, written: 2 }],
-    ['alertErrorChange', { read: 25, written: 5 }],
-    ['alertRecovery', { read: 27, written: 9 }],
+    ['alertErrorChange', { read: 26, written: 5 }],
+    ['alertRecovery', { read: 28, written: 9 }],
   ] as const)('reads and writes no more rows than before for %s', (name, before) => {
     expect(large[name], report()).toEqual(small[name]);
     expect(small[name].read, report()).toBeLessThanOrEqual(before.read);

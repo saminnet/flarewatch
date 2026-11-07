@@ -1,3 +1,4 @@
+import { FailureStreakState, stepFailureStreak } from './failure-streak';
 import { DurableObject } from 'cloudflare:workers';
 import * as z from 'zod/mini';
 import {
@@ -227,27 +228,33 @@ export class MonitorHub extends DurableObject<Env> {
         if (warningJson !== (row?.warning ?? null))
           this.sql.exec('UPDATE monitors SET warning = ? WHERE id = ?', warningJson, monitor.id);
         warnings.set(monitor.id, warning);
-        let firstFailure = now;
-        if (monitor.method !== 'HEARTBEAT') {
-          const count = row?.failure_count ?? 0;
-          if (result.ok && count > 0) {
-            this.sql.exec(
-              'UPDATE monitors SET failure_count = 0, first_failure_at = NULL WHERE id = ?',
-              monitor.id,
-            );
-          } else if (!result.ok && !open.has(monitor.id) && (monitor.downAfterChecks ?? 1) > 1) {
-            firstFailure = row?.first_failure_at ?? now;
-            this.sql.exec(
-              'UPDATE monitors SET failure_count = ?, first_failure_at = ? WHERE id = ?',
-              count + 1,
-              firstFailure,
-              monitor.id,
-            );
-            if (count + 1 < monitor.downAfterChecks!) continue;
-          }
+        const streak = stepFailureStreak(
+          row && row.failure_count > 0
+            ? {
+                state: FailureStreakState.Counting,
+                count: row.failure_count,
+                first: row.first_failure_at ?? now,
+              }
+            : { state: FailureStreakState.Clear },
+          {
+            type: result.ok ? 'passed' : 'failed',
+            now,
+            heartbeat: monitor.method === 'HEARTBEAT',
+            hasOpenIncident: open.has(monitor.id),
+            threshold: monitor.method === 'HEARTBEAT' ? 1 : (monitor.downAfterChecks ?? 1),
+          },
+        );
+        if (streak.write) {
+          this.sql.exec(
+            'UPDATE monitors SET failure_count = ?, first_failure_at = ? WHERE id = ?',
+            streak.next.state === FailureStreakState.Counting ? streak.next.count : 0,
+            streak.next.state === FailureStreakState.Counting ? streak.next.first : null,
+            monitor.id,
+          );
         }
+        if (!streak.apply) continue;
         updates.push(
-          this.incidents.apply(monitor.id, result, open.get(monitor.id), now, firstFailure),
+          this.incidents.apply(monitor.id, result, open.get(monitor.id), now, streak.first),
         );
       }
 
@@ -280,7 +287,8 @@ export class MonitorHub extends DurableObject<Env> {
           );
           const claimed = this.sql.exec(
             `INSERT INTO expiry_alerts (monitor_id, expiry_date, run) VALUES (?, ?, ?)
-               ON CONFLICT DO NOTHING RETURNING monitor_id`,
+               ON CONFLICT DO UPDATE SET run = excluded.run, retry_run = NULL
+               WHERE retry_run IS NOT NULL AND retry_run <= excluded.run RETURNING monitor_id`,
             monitor.id,
             warning.expiryDate,
             run,

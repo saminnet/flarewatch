@@ -15,6 +15,10 @@ export function stepNotice(state: NoticeState, event: NoticeEvent): NoticeState 
       return state === NoticeState.Waiting ? NoticeState.DownSent : state;
     case 'recovery notice sent':
       return state === NoticeState.DownSent ? NoticeState.RecoverySent : state;
+    default: {
+      const unreachable: never = event;
+      return unreachable;
+    }
   }
 }
 

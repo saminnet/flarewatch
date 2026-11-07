@@ -186,7 +186,8 @@ async function alert(hub: Stub, runs: Run[]) {
     const { alerts } = await hub.record(now, records, policy, subscribers, page);
     if (alerts.length > 0) {
       await hub.confirmAlerts(
-        alerts.map(({ incident, kind, reopenedAt, run }) => ({
+        alerts.map(({ monitorId, incident, kind, reopenedAt, run }) => ({
+          monitorId,
           incident,
           kind,
           reopenedAt,

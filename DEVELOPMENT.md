@@ -73,6 +73,10 @@ The status page renders on the server, then React hydrates it in the browser. Di
 
 A pull request that changes behavior adds an entry to `CHANGELOG.md` under the next version. Write it for someone upgrading.
 
+## Before a major release
+
+Look for implicit state machines: flags that gate each other, nullable columns that mean a state, and rules spread across SQL statements. The checks only protect machines that already exist, so finding a new one takes reading the code. [ADR 0003](docs/adr/0003-lifecycles-are-explicit-state-machines.md) says what counts and what doesn't.
+
 ## Deploy by hand
 
 GitHub Actions deploys normally (see [docs/deploy.md](docs/deploy.md)). To deploy from your machine:

@@ -624,7 +624,8 @@ describe('MonitorHub after an upgrade from 3.2', () => {
     const before = createHub(db).hub;
     const { alerts } = before.record(T0, [check('api', down())], POLICY);
     before.confirmAlerts(
-      alerts.map(({ incident, kind, reopenedAt, run }) => ({
+      alerts.map(({ monitorId, incident, kind, reopenedAt, run }) => ({
+        monitorId,
         incident,
         kind,
         reopenedAt,

@@ -13,3 +13,5 @@ See [README.md](README.md) for what FlareWatch is, [DEVELOPMENT.md](DEVELOPMENT.
 - Before you add a variant in `components/ui`, check that no existing variant, size or theme token does the job.
 - Seed data in `apps/status-page/scripts/seed-e2e.ts` must read like a real status page. A test that needs hostile input must create it and delete it.
 - Hub migrations in `schema.ts` only grow. Append a step. Never edit a shipped one. A step runs in the hub's constructor and blocks its first request. A step that rewrites rows must page through them and bound what it keeps, as step 7 does.
+- Logic that tracks a lifecycle gets a state enum and a pure `step(state, event)`, ending its switch with a `never` check. Do not add a flag or a nullable column that gates another one. Each event needs a production caller. Bulk SQL stays outside the machines. See [docs/adr/0003-lifecycles-are-explicit-state-machines.md](docs/adr/0003-lifecycles-are-explicit-state-machines.md).
+- A write to a lifecycle column takes its value from the step function. `services/worker/tests/hub/lifecycle-writers.test.ts` lists who writes each column. Add a line there only after you check that.

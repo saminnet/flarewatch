@@ -1,18 +1,20 @@
+import { IncidentState, stepIncident, type IncidentLifecycle } from './incident-lifecycle';
 import * as z from 'zod/mini';
 import type { CheckResult, Incident } from '@flarewatch/shared';
 import {
   ALERT_COLUMNS,
+  errorFollowUpLifecycle,
   readAlert,
-  REOPEN_ALERT_RESET,
+  reminderLifecycle,
   type AlertRow,
   type IncidentAlert,
 } from './alerts';
 import { withoutConfirmationNote } from '../checkers/confirmation-note';
+import { stepDownAlert } from './down-alert-lifecycle';
+import { ErrorFollowUpState, stepErrorFollowUp, stepReminder } from './follow-up-lifecycle';
 import { readNotice, stepNotice, noticeColumns, type NoticeColumns } from './subscriber-notices';
 import { parseJson, ROW_BYTES, type Sql, utf8Bytes } from './sql';
 
-/** A failure this soon after recovering reopens the incident, so a flapping target adds no rows. */
-const FLAP_SECONDS = 15 * 60;
 /** Closed incidents kept per monitor, however many fit in the retention window. */
 const MAX_CLOSED_INCIDENTS = 1000;
 /** JSON characters of history kept per monitor, so long, changing errors cannot fill memory. */
@@ -145,6 +147,22 @@ export class Incidents {
   ): IncidentUpdate {
     const incidentStartTime = open?.incident.start[0] ?? now;
 
+    const lifecycle: IncidentLifecycle = !open
+      ? { state: IncidentState.Absent }
+      : open.reopenedAt === null
+        ? { state: IncidentState.Open }
+        : open.upSince === null
+          ? {
+              state: IncidentState.ReopenedDown,
+              generation: open.reopenedAt,
+              relapse: open.relapsedAt,
+            }
+          : {
+              state: IncidentState.RecoveryHold,
+              generation: open.reopenedAt,
+              relapse: open.relapsedAt,
+              upSince: open.upSince,
+            };
     if (result.ok) {
       const up = (changed: boolean): IncidentUpdate => ({
         monitorId,
@@ -158,31 +176,29 @@ export class Incidents {
         /^(?:SSL certificate|Certificate) expires in \d+ days \(threshold: \d+\)$/.test(
           open.incident.error[open.incident.error.length - 1] ?? '',
         );
-      if (open.reopenedAt === null || legacyCertificate) {
-        this.close(open, now);
+      const transition = stepIncident(lifecycle, { type: 'passed', now, legacyCertificate });
+      if (transition.effect === 'close') {
+        this.close(open, transition.end ?? now);
         return up(true);
       }
-      // Closes only once it stays up, so each flip writes one value.
-      const upSince = open.upSince ?? now;
-      if (now - upSince < FLAP_SECONDS) {
-        if (open.upSince === null) {
-          this.sql.exec('UPDATE incidents SET up_since = ? WHERE id = ?', now, open.id);
-        }
-        return up(false);
-      }
-      this.close(open, upSince);
-      return up(true);
+      if (transition.effect === 'hold')
+        this.sql.exec('UPDATE incidents SET up_since = ? WHERE id = ?', now, open.id);
+      return up(false);
     }
 
     const error = result.error.slice(0, MAX_ERROR_CHARS);
     if (!open) {
-      const [recent] = this.sql.exec<IncidentRow & NoticeColumns>(
-        `SELECT id, starts, errors, acked_at, acked_by, subscriber_notified, subscriber_recovered FROM incidents
-         WHERE monitor_id = ? AND end_at >= ? ORDER BY id DESC LIMIT 1`,
+      const [recent] = this.sql.exec<IncidentRow & NoticeColumns & AlertRow>(
+        `SELECT id, starts, errors, end_at, reopened_at, acked_at, acked_by, subscriber_recovered, ${ALERT_COLUMNS} FROM incidents
+         WHERE monitor_id = ? AND end_at IS NOT NULL ORDER BY end_at DESC, id DESC LIMIT 1`,
         monitorId,
-        now - FLAP_SECONDS,
       );
-      if (recent) return this.reopen(monitorId, recent, error, now);
+      const transition = stepIncident(
+        recent ? { state: IncidentState.Closed, end: recent.end_at ?? now } : lifecycle,
+        { type: 'failed', now, changed: false },
+      );
+      if (transition.effect === 'reopen' && recent)
+        return this.reopen(monitorId, recent, error, now);
       this.sql.exec(
         'INSERT INTO incidents (monitor_id, starts, errors) VALUES (?, ?, ?)',
         monitorId,
@@ -202,6 +218,11 @@ export class Incidents {
     // Down again during a wait to close: the grace period before a down alert
     // starts over, as at a reopen. One update, so a changing error costs one write.
     const segments = addSegment(open.incident, error, now);
+    const transition = stepIncident(lifecycle, {
+      type: 'failed',
+      now,
+      changed: segments !== null,
+    });
     if (segments) {
       this.sql.exec(
         `UPDATE incidents SET starts = ?, errors = ?, up_since = NULL,
@@ -213,7 +234,7 @@ export class Incidents {
         open.id,
       );
       this.setNewest(monitorId, segments, true);
-    } else if (open.upSince !== null) {
+    } else if (transition.effect === 'relapse') {
       this.sql.exec(
         'UPDATE incidents SET up_since = NULL, relapsed_at = ? WHERE id = ?',
         now,
@@ -341,23 +362,39 @@ export class Incidents {
   /** The grace period before a down alert restarts at the reopen. */
   private reopen(
     monitorId: string,
-    row: IncidentRow & NoticeColumns,
+    row: IncidentRow & NoticeColumns & AlertRow,
     error: string,
     now: number,
   ): IncidentUpdate {
     const { end: _end, acked_at: _ackedAt, acked_by: _ackedBy, ...incident } = toIncident(row);
     const notices = noticeColumns(stepNotice(readNotice(row), 'reopen'));
+    const alert = readAlert(row);
+    const down = stepDownAlert(alert, { type: 'reopened' }).next;
+    const followUp = stepErrorFollowUp(errorFollowUpLifecycle(alert, row.reopened_at), {
+      type: 'reopened',
+      generation: now,
+    }).next;
+    const reminder = stepReminder(reminderLifecycle(alert, row.reopened_at), {
+      type: 'reopened',
+      generation: now,
+    }).next;
     const reopened = addSegment(incident, error, now) ?? incident;
     this.sql.exec(
       `UPDATE incidents SET end_at = NULL, reopened_at = ?, relapsed_at = NULL, starts = ?, errors = ?,
          acked_at = NULL, acked_by = NULL,
-         subscriber_notified = ?, subscriber_recovered = ?, ${REOPEN_ALERT_RESET}
+         subscriber_notified = ?, subscriber_recovered = ?, error_alerts = ?, error_due = ?,
+         reminders = ?, alert_attempts = ?, alert = ?
        WHERE id = ?`,
       now,
       JSON.stringify(reopened.start),
       JSON.stringify(reopened.error),
       notices.subscriber_notified,
       notices.subscriber_recovered,
+      followUp.count,
+      Number(followUp.state === ErrorFollowUpState.Owed),
+      reminder.count,
+      down.attempts,
+      down.state,
       row.id,
     );
     this.setNewest(monitorId, reopened, true);

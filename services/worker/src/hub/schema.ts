@@ -193,6 +193,7 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
     `ALTER TABLE incidents ADD COLUMN subscriber_notified INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE incidents ADD COLUMN subscriber_recovered INTEGER NOT NULL DEFAULT 0`,
   ],
+  ['ALTER TABLE expiry_alerts ADD COLUMN retry_run INTEGER'],
 ];
 
 export function migrate(sql: Sql): void {
