@@ -88,8 +88,7 @@ export function useDeleteAnnouncement(callbacks?: MutationCallbacks<string>) {
   });
 }
 
-export type AnnouncementUpdatePatch = {
-  title: string;
-  body: string;
+export type AnnouncementUpdatePatch = Omit<AnnouncementConfig, 'end'> & {
+  addUpdate?: { status: NonNullable<AnnouncementConfig['status']>; body: string };
   end: string | null;
 };

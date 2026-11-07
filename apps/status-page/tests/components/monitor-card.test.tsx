@@ -5,7 +5,7 @@ import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vite-plus/test';
-import type { Maintenance, StatusView } from '@flarewatch/shared';
+import type { Incident, Maintenance, StatusView } from '@flarewatch/shared';
 import type { AdminMonitor } from '@/lib/public-view';
 import { renderWithProviders, withProviders } from '../helpers/render';
 
@@ -34,7 +34,14 @@ const coveringWindow: Maintenance = {
 };
 
 const row = (maintenances: Maintenance[] = []) =>
-  withProviders(<MonitorRow monitor={api} state={slowState} maintenances={maintenances} />);
+  withProviders(
+    <MonitorRow
+      monitor={api}
+      state={slowState}
+      maintenances={maintenances}
+      nowMs={LAST_UPDATE * 1000}
+    />,
+  );
 
 describe('MonitorRow for a check slower than its maxLatencyMs', () => {
   it('shows an expiry warning with degraded status and unchanged uptime', () => {
@@ -50,7 +57,9 @@ describe('MonitorRow for a check slower than its maxLatencyMs', () => {
       },
     };
     renderWithProviders(
-      withProviders(<MonitorRow monitor={api} state={state} maintenances={[]} />),
+      withProviders(
+        <MonitorRow monitor={api} state={state} maintenances={[]} nowMs={LAST_UPDATE * 1000} />,
+      ),
     );
     expect(screen.getByText('Certificate expires soon')).toBeTruthy();
     expect(screen.queryByText('Slow response, over 500ms')).toBeNull();
@@ -94,5 +103,49 @@ describe('MonitorRow for a check slower than its maxLatencyMs', () => {
       act(() => root?.unmount());
       container.remove();
     }
+  });
+});
+
+describe('MonitorRow with an open incident', () => {
+  const checkout: AdminMonitor = { id: 'checkout', name: 'Checkout API', method: 'GET' };
+  const downWith = (incident: Incident): StatusView => ({
+    lastUpdate: LAST_UPDATE,
+    monitors: {
+      checkout: { status: 'down', startedAt: LAST_UPDATE - 86_400, incidents: [incident] },
+    },
+  });
+  const open: Incident = { start: [LAST_UPDATE - 20 * 60], error: ['HTTP 503'] };
+  const acked: Incident = { ...open, acked_at: LAST_UPDATE - 12 * 60, acked_by: 'Pat' };
+  const renderRow = (incident: Incident, operator: boolean) =>
+    renderWithProviders(
+      <MonitorRow
+        monitor={checkout}
+        state={downWith(incident)}
+        maintenances={[]}
+        nowMs={LAST_UPDATE * 1000}
+        operator={operator}
+      />,
+    );
+  const page = () => document.body.textContent ?? '';
+
+  it('gives the operator no action on the card, only on the incident', () => {
+    renderRow(open, true);
+    expect(screen.queryByRole('button', { name: /acknowledg/i })).toBeNull();
+    expect(page()).not.toContain('Acknowledged');
+  });
+
+  it('shows the operator who acknowledged it as part of the status line', () => {
+    renderRow(acked, true);
+    expect(page()).toContain('HTTP 503');
+    expect(page()).toContain('Acknowledged 12m ago by Pat');
+    expect(
+      screen.getByRole('link', { name: /^Checkout API, not operational, acknowledged, / }),
+    ).toBeTruthy();
+  });
+
+  it('shows a visitor that it is acknowledged without the responder', () => {
+    renderRow(acked, false);
+    expect(page()).toContain('Acknowledged 12m ago');
+    expect(page()).not.toContain('Pat');
   });
 });

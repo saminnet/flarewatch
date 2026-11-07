@@ -21,7 +21,13 @@ const state: StatusView = { lastUpdate: 0, monitors: {} };
 
 function renderDetail(monitor: AdminMonitor, operator: boolean) {
   renderWithProviders(
-    <MonitorDetail monitor={monitor} state={state} maintenances={[]} operator={operator} />,
+    <MonitorDetail
+      monitor={monitor}
+      state={state}
+      maintenances={[]}
+      nowMs={0}
+      operator={operator}
+    />,
   );
 }
 
@@ -120,7 +126,7 @@ describe('Check now on the monitor page', () => {
           <button type="button" onClick={() => setMonitor(docs)}>
             Open Docs
           </button>
-          <MonitorDetail monitor={monitor} state={state} maintenances={[]} operator />
+          <MonitorDetail monitor={monitor} state={state} maintenances={[]} nowMs={0} operator />
         </>
       );
     }

@@ -70,6 +70,7 @@ function DashboardPage() {
             monitors={monitors}
             state={state}
             maintenances={maintenances}
+            nowMs={nowMs}
             groups={groups}
             uiPrefs={uiPrefs}
             operator={audience === 'operator'}

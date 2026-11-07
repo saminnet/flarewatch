@@ -4,7 +4,7 @@ import { alsoDownList, escapeMarkup, jsonOutput, reminderNote, statusText } from
 export function telegramTemplate(ctx: TemplateContext): TemplateOutput {
   const up = ctx.kind === 'recovered';
   const emoji = up ? '✅' : '🔴';
-  const status = statusText(ctx);
+  const status = escapeHtml(statusText(ctx));
 
   const lines: string[] = [
     `${emoji} <b>${escapeHtml(ctx.monitorName)}</b>${reminderNote(ctx)}`,

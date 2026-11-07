@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { IconBroadcast } from '@tabler/icons-react';
 import type { Announcement } from '@flarewatch/shared';
+import type { PublicMonitor } from '@/lib/public-view';
 import { Button } from '@/components/ui/button';
 import { AnnouncementFormDialog } from './announcement-form-dialog';
 import { AnnouncementBanner } from './announcement-banner';
 
-export function AddAnnouncementButton() {
+export function AddAnnouncementButton({ monitors }: { monitors?: PublicMonitor[] }) {
   const [dialog, setDialog] = useState({ open: false, key: 0 });
   return (
     <>
@@ -19,6 +20,7 @@ export function AddAnnouncementButton() {
       <AnnouncementFormDialog
         key={dialog.key}
         open={dialog.open}
+        monitors={monitors}
         onClose={() => setDialog((prev) => ({ ...prev, open: false }))}
       />
     </>
@@ -29,16 +31,24 @@ export function ManageAnnouncements({
   announcements,
   nowMs,
   operator,
+  monitors,
 }: {
   announcements: Announcement[];
+  monitors?: PublicMonitor[];
   nowMs: number;
   operator: boolean;
 }) {
-  if (!operator || announcements.length === 0) return null;
+  if (announcements.length === 0) return null;
   return (
-    <section aria-label="Manage announcements" className="mb-6">
+    <section aria-label={operator ? 'Manage announcements' : 'Announcements'} className="mb-6">
       <h2 className="mb-2 text-base font-semibold">Announcements</h2>
-      <AnnouncementBanner announcements={announcements} nowMs={nowMs} operator showEnded />
+      <AnnouncementBanner
+        announcements={announcements}
+        nowMs={nowMs}
+        monitors={monitors}
+        operator={operator}
+        showEnded
+      />
     </section>
   );
 }

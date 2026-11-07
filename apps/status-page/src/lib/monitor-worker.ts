@@ -55,6 +55,16 @@ export async function fetchMaintenances(): Promise<Maintenance[]> {
   return maintenances;
 }
 
+export async function ackIncident(id: string, by: string): Promise<boolean> {
+  const response = await callMonitorWorker(`/incidents/${encodeURIComponent(id)}`, {
+    method: 'POST',
+    body: JSON.stringify({ by }),
+  });
+  if (response.status === 409) return false;
+  if (!response.ok) throw new Error(`Acknowledgement answered ${response.status}`);
+  return true;
+}
+
 export async function fetchAnnouncements(): Promise<Announcement[]> {
   const announcements = await fromMonitorWorker('/announcements');
   if (!Array.isArray(announcements) || !announcements.every(isValidAnnouncement)) {
@@ -63,10 +73,40 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
   return announcements;
 }
 
-export class AnnouncementRefused extends Error {}
+export class AnnouncementRefused extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 404 | 409 = 400,
+  ) {
+    super(message);
+  }
+}
+
+export async function appendAnnouncementUpdate(
+  id: string,
+  update: { status: string; body: string; by: string },
+): Promise<Announcement> {
+  const response = await callMonitorWorker(`/announcements/${encodeURIComponent(id)}/updates`, {
+    method: 'POST',
+    body: JSON.stringify(update),
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (response.status === 400 || response.status === 404 || response.status === 409) {
+    if (isJsonObject(body) && typeof body.error === 'string')
+      throw new AnnouncementRefused(body.error, response.status);
+  }
+  if (!response.ok) throw new Error(`Appending announcement update answered ${response.status}`);
+  if (!isValidAnnouncement(body)) throw new Error('Monitor worker sent an invalid announcement');
+  return body;
+}
 
 export async function saveAnnouncement(announcement: Announcement): Promise<void> {
-  return putRecord('announcements', announcement.id, announcement, AnnouncementRefused);
+  return putRecord(
+    'announcements',
+    announcement.id,
+    { ...announcement, updates: undefined },
+    AnnouncementRefused,
+  );
 }
 
 /** The hub turned a window down, for a reason the operator can act on. */

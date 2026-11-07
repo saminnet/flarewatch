@@ -6,7 +6,7 @@ export function discordTemplate(ctx: TemplateContext): TemplateOutput {
   // Discord uses decimal color values
   const color = up ? 0x36a64f : 0xdc3545;
   const emoji = up ? '✅' : '🔴';
-  const status = statusText(ctx);
+  const status = ctx.ackedBy ? inlineCode(statusText(ctx)) : statusText(ctx);
 
   const fields: { name: string; value: string; inline?: boolean }[] = [
     { name: 'Status', value: status, inline: true },

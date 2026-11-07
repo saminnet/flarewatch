@@ -1,6 +1,7 @@
 import type { Env } from '../../src/env';
 import type { AlertPolicy } from '../../src/hub/alerts';
 import { MonitorHub as Hub, type CheckRecord } from '../../src/hub/monitor-hub';
+import { handleHubRequest } from '../../src/hub/routes';
 
 /** Rows read and written as Durable Objects bill them. */
 export interface Rows {
@@ -124,7 +125,17 @@ export default {
   async fetch(request: Request, env: { MONITOR_HUB: DurableObjectNamespace<MonitorHub> }) {
     const url = new URL(request.url);
     const hub = env.MONITOR_HUB.getByName(url.searchParams.get('hub') ?? 'hub');
+    if (url.pathname.startsWith('/announcements')) {
+      return (await handleHubRequest(request, env)) ?? new Response(null, { status: 404 });
+    }
     switch (url.pathname) {
+      case '/ack':
+        return measured(hub, () =>
+          hub.ackIncident(
+            url.searchParams.get('id') ?? '',
+            url.searchParams.get('by') ?? 'operator',
+          ),
+        );
       case '/view':
         return measured(hub, () => hub.view());
       case '/latency': {

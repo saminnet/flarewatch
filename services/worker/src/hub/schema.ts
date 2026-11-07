@@ -164,6 +164,11 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
   // A relapse in the wait to close restarts the grace period without moving reopened_at,
   // which outcomes match to tell a reopen's reset counters from the ones they claimed.
   [`ALTER TABLE incidents ADD COLUMN relapsed_at INTEGER`],
+  [
+    `ALTER TABLE incidents ADD COLUMN acked_at INTEGER`,
+    `ALTER TABLE incidents ADD COLUMN acked_by TEXT`,
+    `ALTER TABLE pending_recoveries ADD COLUMN acked_by TEXT`,
+  ],
 ];
 
 export function migrate(sql: Sql): void {

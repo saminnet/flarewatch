@@ -377,3 +377,54 @@ describe('snapshots', () => {
     });
   });
 });
+
+it('strips responders and private monitor ids from visitor output', () => {
+  const incident = {
+    start: [100],
+    error: ['HTTP 503'],
+    acked_at: 110,
+    acked_by: 'private@example.com',
+  };
+  const snapshot = visitorSnapshot(
+    config,
+    {
+      ...state,
+      monitors: { ...state.monitors, public: { status: 'down', incidents: [incident] } },
+    },
+    [],
+    [
+      {
+        id: 'mixed',
+        title: 'API delays',
+        body: 'Working on it.',
+        kind: 'incident',
+        monitors: ['public', 'hidden'],
+        status: 'investigating',
+        createdAt: 1,
+        updatedAt: 1,
+      },
+      {
+        id: 'private',
+        title: 'Private issue',
+        body: 'Private details',
+        kind: 'incident',
+        monitors: ['hidden'],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  );
+  expect(snapshot.state?.monitors.public?.incidents).toEqual([
+    { start: [100], error: ['HTTP 503'], acked_at: 110 },
+  ]);
+  expect(snapshot.announcements.map((a) => a.monitors)).toEqual([['public']]);
+  expect(JSON.stringify(snapshot)).not.toContain('private@example.com');
+  expect(JSON.stringify(snapshot)).not.toContain('hidden');
+  expect(
+    operatorSnapshot(
+      config,
+      { lastUpdate: 120, monitors: { public: { status: 'down', incidents: [incident] } } },
+      [],
+    ).state?.monitors.public?.incidents[0]?.acked_by,
+  ).toBe('private@example.com');
+});

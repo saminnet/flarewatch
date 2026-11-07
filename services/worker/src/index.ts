@@ -173,6 +173,7 @@ export async function runChecks(
       reason: alert.error,
       timeZone: config.notification?.timeZone ?? 'UTC',
       alsoDown: alert.alsoDown,
+      ...(alert.ackedBy !== undefined && { ackedBy: alert.ackedBy }),
       ...(alert.reminder !== undefined && { reminder: alert.reminder }),
     };
   };

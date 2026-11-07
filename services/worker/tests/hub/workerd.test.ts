@@ -1,6 +1,12 @@
 import { createTestHarness } from 'wrangler';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vite-plus/test';
-import type { CheckResult, HubView, Incident, LatencySample } from '@flarewatch/shared';
+import {
+  isValidAnnouncement,
+  type CheckResult,
+  type HubView,
+  type Incident,
+  type LatencySample,
+} from '@flarewatch/shared';
 import type { CheckRecord } from '../../src/hub/monitor-hub';
 import { check, down, up } from '../helpers/check-records';
 import { RELEASE_STEP, rewindStatements } from '../helpers/schema-rewind';
@@ -21,6 +27,37 @@ const T0 = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const HOUR = 60 * 60;
 const DAY = 24 * HOUR;
 const FLAP_SECONDS = 15 * 60;
+
+it('atomically appends progress, accepts eleven CJK updates and enforces update limits', async () => {
+  const send = (method: string, body: unknown, path = '/announcements/progress') =>
+    server.fetch(path, {
+      method,
+      body: JSON.stringify(body),
+    });
+  expect(
+    (
+      await send('PUT', {
+        id: 'progress',
+        kind: 'incident',
+        title: 'API delays',
+        body: 'Investigating',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+    ).status,
+  ).toBe(204);
+  const append = (body: string) =>
+    send('POST', { status: 'monitoring', body, by: 'Pat' }, '/announcements/progress/updates');
+  const concurrent = await Promise.all([append('First'), append('Second')]);
+  expect(concurrent.map((r) => r.status)).toEqual([200, 200]);
+  const saved: unknown = await concurrent[1]!.json();
+  if (!isValidAnnouncement(saved)) throw new Error('Expected announcement');
+  expect(saved.updates?.map((u) => u.body)).toEqual(['First', 'Second']);
+  expect((await append('x'.repeat(2001))).status).toBe(400);
+  for (let i = 0; i < 11; i++) expect((await append('界'.repeat(2000))).status).toBe(200);
+  for (let i = 13; i < 20; i++) expect((await append(`Update ${i}`)).status).toBe(200);
+  expect((await append('Overflow')).status).toBe(409);
+});
 
 async function call<T>(hub: string, path: string, query = '', runs?: Run[]) {
   const response = await server.fetch(
@@ -788,3 +825,39 @@ it('keeps expiry warnings and their delivered claims across a restart', async ()
     ['api expiry'],
   ]);
 }, 60_000);
+
+it('acknowledges once with one row written, holds reminders, and carries the responder through recovery', async () => {
+  const hub = 'ack';
+  const failed = check('api', down('HTTP 503'));
+  failed.monitor.reminderEveryChecks = 1;
+  const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+  await alert(hub, [{ now: T0, records: [failed], policy }]);
+  const ack = () => call<boolean>(hub, '/ack', '&id=api&by=Pat');
+  const first = await ack();
+  expect(first.body).toBe(true);
+  expect(first.rows.written).toBe(1);
+  const initial = (await view(hub)).body.monitors.api?.incidents[0];
+  expect(initial?.acked_by).toBe('Pat');
+  expect(initial?.acked_at).toEqual(expect.any(Number));
+  const second = await call<boolean>(hub, '/ack', '&id=api&by=Other');
+  expect(second.body).toBe(false);
+  expect(second.rows.written).toBe(0);
+  expect((await view(hub)).body.monitors.api?.incidents[0]).toEqual(initial);
+  expect((await alert(hub, [{ now: T0 + 60, records: [failed], policy }])).body).toEqual([[]]);
+  await evict(hub);
+  const recovered = await call<{ alerts: { ackedBy?: string; kind: string }[] }[]>(
+    hub,
+    '/record',
+    '',
+    [{ now: T0 + 120, records: [check('api', up())], policy }],
+  );
+  expect(recovered.body[0]?.alerts).toEqual([
+    expect.objectContaining({ kind: 'recovered', ackedBy: 'Pat' }),
+  ]);
+  expect((await ack()).body).toBe(false);
+  expect((await call<boolean>(hub, '/ack', '&id=missing&by=Pat')).body).toBe(false);
+  expect((await view(hub)).body.monitors.api?.incidents[0]).toMatchObject({
+    acked_by: 'Pat',
+    end: T0 + 120,
+  });
+});

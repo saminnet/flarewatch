@@ -8,7 +8,7 @@ export function zulipTemplate(ctx: TemplateContext): TemplateOutput {
 
   const lines: string[] = [
     `${emoji} **${stripControlChars(ctx.monitorName)} ${state}**`,
-    `- Status: ${statusText(ctx)}`,
+    `- Status: ${ctx.ackedBy ? inlineCode(statusText(ctx)) : statusText(ctx)}`,
     `- Duration: ${ctx.downtimeMinutes} minutes`,
   ];
 

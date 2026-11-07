@@ -28,3 +28,6 @@ export function parseJson(text: string | null): unknown {
     return undefined;
   }
 }
+
+const encoder = new TextEncoder();
+export const utf8Bytes = (text: string): number => encoder.encode(text).byteLength;

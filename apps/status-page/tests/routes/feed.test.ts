@@ -164,3 +164,43 @@ describe('GET /feed.atom', () => {
     expect(doc.querySelectorAll('entry')).toHaveLength(0);
   });
 });
+
+it('emits one stable Atom entry per manual incident update without private scope', async () => {
+  const view = fixture();
+  view.announcements = [
+    {
+      id: 'manual',
+      title: 'API delays',
+      body: 'Investigating.',
+      kind: 'incident',
+      monitors: ['public', 'private'],
+      status: 'resolved',
+      createdAt: T * 1000,
+      updatedAt: (T + 120) * 1000,
+      updates: [
+        {
+          at: new Date((T + 60) * 1000).toISOString(),
+          status: 'identified',
+          body: '<Cause> found.',
+          by: 'Pat',
+        },
+        {
+          at: new Date((T + 120) * 1000).toISOString(),
+          status: 'resolved',
+          body: 'Fixed.',
+          by: 'Pat',
+        },
+      ],
+    },
+  ];
+  stub(view);
+  const { doc, text } = await parse();
+  expect(
+    [...doc.querySelectorAll('entry > title')].map((node) => node.textContent).slice(0, 2),
+  ).toEqual(['API delays: resolved', 'API delays: identified']);
+  expect(doc.querySelector('entry:nth-of-type(2) > content')?.textContent).toBe('<Cause> found.');
+  expect(text).not.toContain('private');
+  expect(
+    new Set([...doc.querySelectorAll('entry > id')].map((node) => node.textContent)).size,
+  ).toBe(5);
+});

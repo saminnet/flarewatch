@@ -12,7 +12,7 @@ import {
 export function mattermostTemplate(ctx: TemplateContext): TemplateOutput {
   const up = ctx.kind === 'recovered';
   const title = singleLine(`${up ? '✅' : '🔴'} ${ctx.monitorName}${reminderNote(ctx)}`);
-  const status = statusText(ctx);
+  const status = ctx.ackedBy ? inlineCode(statusText(ctx)) : statusText(ctx);
   const fields = [
     { title: 'Status', value: status, short: true },
     { title: 'Duration', value: `${ctx.downtimeMinutes} min`, short: true },

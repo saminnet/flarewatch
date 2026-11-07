@@ -41,6 +41,7 @@ function MonitorPage() {
   usePageHydrated();
   const { monitorId } = Route.useParams();
   const audience = useAudience();
+  const operator = audience === 'operator';
   const { data: snapshot } = useSuspenseQuery(snapshotQuery(audience));
   const { monitors, state, maintenances } = snapshot;
   const nowMs = useNow({ serverTime: Route.useLoaderData().loaderNowMs });
@@ -67,13 +68,20 @@ function MonitorPage() {
           state={state}
           maintenances={maintenances}
           latency={latency}
-          operator={audience === 'operator'}
+          nowMs={nowMs}
+          operator={operator}
         />
       ) : (
         <p className="text-sm text-muted-foreground">No monitoring data available yet.</p>
       )}
 
-      <MonitorHistory monitorId={monitor.id} snapshot={snapshot} state={state} nowMs={nowMs} />
+      <MonitorHistory
+        monitorId={monitor.id}
+        snapshot={snapshot}
+        state={state}
+        nowMs={nowMs}
+        operator={operator}
+      />
     </div>
   );
 }
@@ -86,11 +94,13 @@ function MonitorHistory({
   snapshot,
   state,
   nowMs,
+  operator,
 }: {
   monitorId: string;
   snapshot: Snapshot;
   state: StatusView | null;
   nowMs: number;
+  operator: boolean;
 }) {
   const { pinned, timeline } = projectTimeline({
     state,
@@ -130,7 +140,12 @@ function MonitorHistory({
             .slice(0, RECENT_EVENTS_LIMIT)
             .map((event) =>
               event.type === 'incident' ? (
-                <IncidentCard key={`incident-${event.start}`} event={event} />
+                <IncidentCard
+                  key={`incident-${event.start}`}
+                  event={event}
+                  nowMs={nowMs}
+                  operator={operator}
+                />
               ) : (
                 <MaintenanceEventCard
                   key={`maintenance-${event.maintenance.id}-${event.occurrence.start}`}

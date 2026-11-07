@@ -8,7 +8,7 @@ export function googleChatTemplate(ctx: TemplateContext): TemplateOutput {
 
   const lines: string[] = [
     `${emoji} *${stripControlChars(ctx.monitorName)} ${state}*`,
-    `*Status:* ${statusText(ctx)}`,
+    `*Status:* ${statusText(ctx).replaceAll('<', '‹').replaceAll('>', '›')}`,
     `*Duration:* ${ctx.downtimeMinutes} minutes`,
   ];
 

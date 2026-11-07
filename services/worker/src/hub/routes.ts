@@ -17,6 +17,23 @@ export async function handleHubRequest(request: Request, env: Env): Promise<Resp
   const { pathname } = new URL(request.url);
   const { method } = request;
 
+  if (pathname.startsWith('/incidents/') && method === 'POST') {
+    const id = decodeId(pathname.slice('/incidents/'.length));
+    const body = await readJsonUpTo(request, 4096).catch(() => null);
+    if (
+      !id ||
+      !body ||
+      typeof body !== 'object' ||
+      !('by' in body) ||
+      typeof body.by !== 'string' ||
+      !body.by.trim() ||
+      body.by.length > 200
+    )
+      return Response.json({ error: 'Invalid acknowledgement' }, { status: 400 });
+    return new Response(null, {
+      status: (await getHub(env).ackIncident(id, body.by.trim())) ? 204 : 409,
+    });
+  }
   if (pathname === '/view' && method === 'GET') {
     return Response.json(await getHub(env).view());
   }
@@ -63,6 +80,15 @@ async function handleAnnouncement(
   method: string,
 ): Promise<Response | null> {
   if (!pathname.startsWith(ANNOUNCEMENT_PREFIX)) return null;
+
+  if (pathname.endsWith('/updates') && method === 'POST') {
+    const id = decodeId(pathname.slice(ANNOUNCEMENT_PREFIX.length, -'/updates'.length));
+    if (!id) return Response.json({ error: 'Invalid id' }, { status: 400 });
+    const input = await readJsonUpTo(request, 16 * 1024).catch(() => null);
+    const result = await getHub(env).appendAnnouncementUpdate(id, input);
+    if ('error' in result) return Response.json({ error: result.error }, { status: result.status });
+    return Response.json(result.announcement);
+  }
 
   const id = decodeId(pathname.slice(ANNOUNCEMENT_PREFIX.length));
   if (id === null) return Response.json({ error: 'Invalid id' }, { status: 400 });

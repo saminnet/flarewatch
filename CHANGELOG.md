@@ -7,6 +7,8 @@ All notable changes to FlareWatch will be documented in this file.
 ### Added
 
 - `confirmVia` accepts a list of up to five places, and `confirmQuorum` sets how many must answer before their vote counts. FlareWatch records the primary error with `(confirmed elsewhere)`, or `(no confirmation available)` when too few places answer. See [Monitors](docs/monitors.md#confirm-from-a-second-place).
+- Operators can acknowledge an open incident from its entry in History or on the monitor's page. Acknowledgement stops reminders, and recovery alerts name the responder. Monitor cards show who acknowledged it and when. Visitors see only when.
+- Manual incidents have a status, affected monitors and up to 20 progress updates. They appear on the dashboard, History and Atom feed without changing monitor status or uptime.
 
 ### Fixed
 

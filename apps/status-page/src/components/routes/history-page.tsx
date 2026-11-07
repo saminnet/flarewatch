@@ -110,7 +110,7 @@ export function HistoryPage() {
         </div>
         {operator && (
           <div className="flex flex-wrap gap-2">
-            <AddAnnouncementButton />
+            <AddAnnouncementButton monitors={monitors} />
             <Button onClick={() => setEditing(openFor())}>
               <IconPlus className="size-4" />
               Add maintenance window
@@ -121,7 +121,12 @@ export function HistoryPage() {
 
       {state && <UptimeCalendar monitors={monitors} state={state} selectedMonth={resolvedMonth} />}
 
-      <ManageAnnouncements announcements={announcements} nowMs={nowMs} operator={operator} />
+      <ManageAnnouncements
+        announcements={announcements}
+        nowMs={nowMs}
+        operator={operator}
+        monitors={monitors}
+      />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
@@ -231,6 +236,8 @@ export function HistoryPage() {
                   <IncidentCard
                     key={`incident-${event.monitorId}-${event.start}-${event.end ?? 'open'}`}
                     event={event}
+                    nowMs={nowMs}
+                    operator={operator}
                   />
                 ) : (
                   <MaintenanceEventCard

@@ -4,7 +4,7 @@ import { alsoDownList, escapeMarkup, jsonOutput, reminderNote, statusText } from
 export function slackTemplate(ctx: TemplateContext): TemplateOutput {
   const up = ctx.kind === 'recovered';
   const color = up ? '#36a64f' : '#dc3545';
-  const status = statusText(ctx);
+  const status = escapeMarkup(statusText(ctx));
 
   const blocks: unknown[] = [
     {

@@ -79,7 +79,15 @@ export type Maintenance = MaintenanceConfig & {
   updatedAt: number;
 };
 
+export type IncidentStatus = 'investigating' | 'identified' | 'monitoring' | 'resolved';
+
+export type AnnouncementUpdate = { at: string; status: IncidentStatus; body: string; by: string };
+
 export type AnnouncementConfig = {
+  kind?: 'notice' | 'incident';
+  monitors?: string[];
+  status?: IncidentStatus;
+  updates?: AnnouncementUpdate[];
   title: string;
   body: string;
   /** Unix timestamp (ms) or a date/time string. */
@@ -297,6 +305,8 @@ export type HeartbeatState = HeartbeatSignal & {
 
 /** A stretch of downtime. Each error change inside it starts a new segment. */
 export type Incident = {
+  acked_at?: number;
+  acked_by?: string;
   /** Unix timestamps (seconds). One per error segment. */
   start: number[];
   /** Unix timestamp (seconds). Undefined while the incident is open. */

@@ -69,6 +69,8 @@ A monitor that fails again within 15 minutes of recovering reopens the same outa
 
 If no webhook accepts a down alert, FlareWatch tries it again on each check run, up to 10 times. After that it stops alerting about that outage. A check run can make a fixed number of requests, and the checks use most of them. When more down alerts are due than the run can send, the rest go out on the following runs, in config order. Waiting doesn't count as a try. Recovery alerts, error changes and [reminders](monitors.md#reminders) are sent once, without retries. A recovery that a run has no requests left for waits for a later run. So does the recovery of an outage that ends while its down alert is still going out. A waiting recovery is dropped if the monitor goes down again first, stops alerting, or every webhook is removed. An outage sends at most 5 error changes, and 5 more each time it reopens. An error change that no webhook accepts doesn't count toward the 5.
 
+Acknowledging an open incident stops its reminders. Its recovery alert names the responder, using the signed-in provider's name or `operator` for a password sign-in. Every notification template includes this name.
+
 A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced.
 
 ## Channels

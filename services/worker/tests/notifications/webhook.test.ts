@@ -114,3 +114,16 @@ describe('webhook notifications', () => {
     });
   });
 });
+
+it('names the responder in recovery text and batched recovery alerts', async () => {
+  const ctx = createContext({ kind: 'recovered', ackedBy: 'Pat' });
+  expect(formatNotificationMessage(ctx)).toContain('Acknowledged by Pat.');
+  const requests: string[] = [];
+  const notifier = new WebhookNotifier([], async (url, init) => {
+    if (typeof init?.body !== 'string') throw new Error(`Expected text for ${url}`);
+    requests.push(init.body);
+    return new Response('ok');
+  });
+  await notifier.sendSummary({ url: 'https://hooks.example.com', template: 'text' }, [ctx]);
+  expect(requests[0]).toContain('acknowledged by Pat');
+});

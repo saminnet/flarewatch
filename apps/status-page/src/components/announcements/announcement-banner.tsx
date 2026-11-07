@@ -1,3 +1,4 @@
+import type { PublicMonitor } from '@/lib/public-view';
 import { useState } from 'react';
 import { IconBroadcast, IconPencil, IconTrash } from '@tabler/icons-react';
 import { formatUtcShort, isAnnouncementActive, type Announcement } from '@flarewatch/shared';
@@ -8,6 +9,7 @@ import { DeleteAnnouncementDialog } from './delete-announcement-dialog';
 
 interface AnnouncementBannerProps {
   announcements: Announcement[];
+  monitors?: PublicMonitor[];
   nowMs: number;
   operator?: boolean;
   showEnded?: boolean;
@@ -22,6 +24,7 @@ export function AnnouncementBanner({
   nowMs,
   operator = false,
   showEnded = false,
+  monitors,
 }: AnnouncementBannerProps) {
   const active = showEnded
     ? announcements
@@ -50,6 +53,9 @@ export function AnnouncementBanner({
                 <h3 className="wrap-break-word text-sm font-medium text-foreground">
                   {announcement.title}
                 </h3>
+                {announcement.kind === 'incident' && (
+                  <Badge variant="outline">{announcement.status ?? 'investigating'}</Badge>
+                )}
                 {showEnded && (
                   <Badge
                     variant={isAnnouncementActive(announcement, nowMs) ? 'secondary' : 'outline'}
@@ -66,6 +72,16 @@ export function AnnouncementBanner({
               <p className="mt-1.5 whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">
                 {announcement.body}
               </p>
+              {(showEnded ? announcement.updates : announcement.updates?.slice(-1))?.map(
+                (update) => (
+                  <div key={update.at} className="mbs-2 text-sm">
+                    <p>
+                      {update.status} · {formatUtcShort(Date.parse(update.at) / 1000)}
+                    </p>
+                    <p className="whitespace-pre-wrap wrap-break-word">{update.body}</p>
+                  </div>
+                ),
+              )}
             </div>
             {operator && (
               <div className="flex shrink-0 gap-1">
@@ -95,6 +111,7 @@ export function AnnouncementBanner({
         key={editing.key}
         open={editing.open}
         announcement={editing.announcement}
+        monitors={monitors}
         onClose={() => setEditing(closeDialog)}
       />
       <DeleteAnnouncementDialog

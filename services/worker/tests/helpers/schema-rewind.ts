@@ -37,6 +37,14 @@ const UNDO = new Map([
     ['ALTER TABLE incidents DROP COLUMN error_due', 'ALTER TABLE incidents DROP COLUMN error_run'],
   ],
   [16, ['ALTER TABLE incidents DROP COLUMN relapsed_at']],
+  [
+    17,
+    [
+      'ALTER TABLE incidents DROP COLUMN acked_at',
+      'ALTER TABLE incidents DROP COLUMN acked_by',
+      'ALTER TABLE pending_recoveries DROP COLUMN acked_by',
+    ],
+  ],
 ]);
 
 /** The schema step each release ended at. */

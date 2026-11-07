@@ -29,6 +29,7 @@ interface MonitorListProps {
   monitors: AdminMonitor[];
   state: StatusView;
   maintenances: Maintenance[];
+  nowMs: number;
   groups?: PageConfigGroup;
   uiPrefs?: UiPrefs;
   operator?: boolean;
@@ -96,6 +97,7 @@ export function MonitorList({
   monitors,
   state,
   maintenances,
+  nowMs,
   groups,
   uiPrefs,
   operator,
@@ -128,6 +130,7 @@ export function MonitorList({
             monitor={monitor}
             state={state}
             maintenances={maintenances}
+            nowMs={nowMs}
             operator={operator}
           />
         ))}

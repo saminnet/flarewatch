@@ -647,6 +647,8 @@ const heartbeatStateSchema = z.object({
 });
 
 const incidentSchema = z.object({
+  acked_at: z.exactOptional(z.number()),
+  acked_by: z.exactOptional(z.string()),
   start: z.array(z.number()),
   end: z.exactOptional(z.number()),
   error: z.array(z.string()),

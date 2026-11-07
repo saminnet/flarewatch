@@ -1,4 +1,4 @@
-import type { Maintenance, Occurrence } from '@flarewatch/shared';
+import type { Incident, Maintenance, Occurrence } from '@flarewatch/shared';
 
 export type IncidentEvent = {
   type: 'incident';
@@ -7,6 +7,7 @@ export type IncidentEvent = {
   start: number; // seconds
   end?: number; // seconds
   errors: string[];
+  incident: Incident;
 };
 
 export type MaintenanceEvent = {

@@ -6,6 +6,10 @@ import {
   DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS,
   maintenanceExpiresAt,
   parseAnnouncements,
+  isJsonObject,
+  MAX_ANNOUNCEMENT_UPDATES,
+  normalizeAnnouncement,
+  toStoredAnnouncement,
   parseHeartbeatSignal,
   parseMaintenances,
   type Announcement,
@@ -25,7 +29,7 @@ import { Alerts, type Alert, type AlertOutcome, type AlertPolicy } from './alert
 import { applyPing, evaluateHeartbeat, withMisses, type PingKind } from './heartbeat';
 import { Incidents, type IncidentUpdate } from './incidents';
 import { migrate, parseHour, parseLatest } from './schema';
-import { durableObjectSql, parseJson, type Sql } from './sql';
+import { durableObjectSql, parseJson, ROW_BYTES, type Sql, utf8Bytes } from './sql';
 
 /** How long History keeps closed incidents and ended maintenance windows. */
 const HISTORY_RETENTION_SECONDS = 90 * 24 * 60 * 60;
@@ -364,6 +368,10 @@ export class MonitorHub extends DurableObject<Env> {
     );
   }
 
+  ackIncident(monitorId: string, by: string): boolean {
+    return this.incidents.ack(monitorId, by, Math.floor(Date.now() / 1000));
+  }
+
   view(): HubView {
     const [meta] = this.sql.exec<{ value: string; latest: string }>(
       "SELECT value, latest FROM meta WHERE key = 'last_update'",
@@ -442,10 +450,25 @@ export class MonitorHub extends DurableObject<Env> {
   }
 
   putAnnouncement(announcement: Announcement): boolean {
-    const [existing] = this.sql.exec('SELECT 1 FROM announcements WHERE id = ?', announcement.id);
+    const [existing] = this.sql.exec<{ data: string }>(
+      'SELECT data FROM announcements WHERE id = ?',
+      announcement.id,
+    );
     if (!existing) {
       const [row] = this.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM announcements');
       if ((row?.count ?? 0) >= MAX_ANNOUNCEMENTS) return false;
+    }
+    const current = existing && toStoredAnnouncement(parseJson(existing.data), { capped: false });
+    if (current?.kind === 'incident') {
+      announcement = {
+        ...announcement,
+        kind: 'incident',
+        updates: current.updates ?? [],
+        status:
+          current.updates?.[current.updates.length - 1]?.status ??
+          announcement.status ??
+          'investigating',
+      };
     }
     this.sql.exec(
       `INSERT INTO announcements (id, data) VALUES (?, ?)
@@ -454,6 +477,44 @@ export class MonitorHub extends DurableObject<Env> {
       JSON.stringify(announcement),
     );
     return true;
+  }
+
+  appendAnnouncementUpdate(
+    id: string,
+    input: unknown,
+  ): { announcement: Announcement } | { status: 400 | 404 | 409; error: string } {
+    const [row] = this.sql.exec<{ data: string }>(
+      'SELECT data FROM announcements WHERE id = ?',
+      id,
+    );
+    const current = row && toStoredAnnouncement(parseJson(row.data), { capped: false });
+    if (!current) return { status: 404, error: 'Announcement not found' };
+    if ((current.updates?.length ?? 0) >= MAX_ANNOUNCEMENT_UPDATES)
+      return {
+        status: 409,
+        error: `Updates must contain at most ${MAX_ANNOUNCEMENT_UPDATES} entries`,
+      };
+    if (!isJsonObject(input)) return { status: 400, error: 'Invalid update' };
+    const now = Date.now();
+    const result = normalizeAnnouncement({
+      ...current,
+      updates: [
+        ...(current.updates ?? []),
+        {
+          status: input.status,
+          body: input.body,
+          by: input.by,
+          at: new Date(now).toISOString(),
+        },
+      ],
+    });
+    if ('error' in result) return { status: 400, error: result.error };
+    const announcement = { ...current, ...result.value, updatedAt: now };
+    const data = JSON.stringify(announcement);
+    if (utf8Bytes(id) + utf8Bytes(data) > ROW_BYTES)
+      return { status: 400, error: 'Announcement exceeds the row size limit' };
+    this.sql.exec('UPDATE announcements SET data = ? WHERE id = ?', data, id);
+    return { announcement };
   }
 
   deleteAnnouncement(id: string): boolean {

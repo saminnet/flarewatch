@@ -115,11 +115,21 @@ Months with fewer than 31 days get no run, so this one skips November and runs a
 - The dashboard shows the current or next run. History lists each run in its month. Covered monitors send no down alerts during a run.
 - History keeps a repeating window for 90 days after `until` plus the length of one run. One without `until` stays until you delete it.
 
+## Incident acknowledgement
+
+Operators can choose **Acknowledge** on an open incident, in History or in the History section of the monitor's page. Acknowledgement stops further reminders. It leaves the monitor's status and uptime unchanged. The monitor card then shows who acknowledged the incident and how long ago, for example "Acknowledged 12m ago by Pat". Visitors see "Acknowledged 12m ago", without the responder's name. An ended incident in History shows how long it waited, for example "Acknowledged after 2m 5s by Pat". The recovery alert names the signed-in provider's name, or `operator` for a password sign-in.
+
+Scripts can send `POST {"id":"<monitor>"}` to `/api/admin/ack` with the same authentication as the other admin endpoints. It returns 204 for the first acknowledgement, or 409 when the monitor has no unacknowledged open incident. A second call changes nothing.
+
 ## Announcements
 
 Sign in and open History, then choose **Add announcement** beside **Add maintenance window**. Give it a title and body, and optionally an end time in UTC. Active announcements appear on the dashboard under the status banner, newest first. You edit and delete them on History, as you do maintenance windows. Titles and bodies show exactly as typed. HTML tags and Markdown appear as text, so `<b>` shows as `<b>` and doesn't make text bold.
 
-The hub keeps at most 50 announcements. A title needs text and can be at most 200 characters. A body needs text and can be at most 2000 characters. Ended announcements remain in the hub and feed until you delete them. History lists them for the operator, so you can edit or delete an ended announcement too.
+The hub keeps at most 50 announcements. A title needs text and can be at most 200 characters. A body needs text and can be at most 2000 characters. Ended announcements remain in the hub and feed until you delete them. History lists announcements and their updates for everyone who can see them. Operators can edit or delete ended announcements too.
+
+Choose **Incident** in the form for a manual incident. Select its status and affected monitors, or leave the selection empty for the whole page. The statuses are `investigating`, `identified`, `monitoring` and `resolved`. A manual incident communicates what is happening. It does not change monitor status, recorded downtime or uptime.
+
+To post progress, edit the incident and choose **Add update**. Set the status and write the update, then save. Each incident keeps up to 20 updates, oldest first, with at most 2000 characters per update. The server records the time and the signed-in provider's name, or `operator` for password sign-ins. The dashboard shows the current status and latest update. History shows every update, and the Atom feed gives each update its own entry. Visitors never receive private monitor IDs. An incident scoped only to private monitors stays private.
 
 Scripts use `/api/admin/announcements` with the [same authentication as maintenance](#admin-endpoints):
 
@@ -129,6 +139,12 @@ Scripts use `/api/admin/announcements` with the [same authentication as maintena
 | `POST`   | `{"title":"Update","body":"Work is complete","end":"2026-12-01T12:00:00Z"}` | The saved announcement, with its `id` and timestamps, and status 201. Omit `end` to keep showing it. |
 | `PUT`    | `{"id":"ann_...","updates":{"body":"New details","end":null}}`              | The saved announcement. Omitted fields stay unchanged. `end: null` clears the end time.              |
 | `DELETE` | `{"id":"ann_..."}`                                                          | Status 204, or 404 for an unknown id.                                                                |
+
+A row without `kind` is a notice. To create a manual incident, send `kind: "incident"`, an optional `monitors` array of configured IDs, and `status`. An edit can keep a monitor ID that the config no longer contains. The form shows that ID as a chip you can remove. New IDs must exist in the config.
+
+To append an update, send `PUT {"id":"ann_...","updates":{"addUpdate":{"status":"identified","body":"We found the cause."}}}` to `/api/admin/announcements`. The status page forwards only the update and responder to the internal `POST /announcements/<id>/updates` endpoint. The hub records the time and appends the update atomically. Existing updates stay unchanged, including during text edits. An unknown announcement gets 404, an invalid update gets 400, and an append past 20 updates gets 409.
+
+Admin requests and internal record saves have a 64 KiB request limit. The internal append endpoint accepts up to 16 KiB per update request, independent of the accumulated history. The hub also checks the stored row against its 1.9 MB budget.
 
 A wrong field type or a limit violation gets 400 with an error that names the field. At 50 announcements, you can still edit or delete existing records.
 
@@ -200,6 +216,7 @@ These need the operator's sign-in: the session cookie, or the password sign-in's
 | -------------------------- | -------------------------------------------------------------------------------------------------- |
 | `/api/admin/maintenances`  | Lists, adds, edits and deletes [maintenance windows](#maintenance).                                |
 | `/api/admin/announcements` | Lists, adds, edits and deletes [announcements](#announcements).                                    |
+| `/api/admin/ack`           | Acknowledges the open incident for `POST {"id":"<monitor>"}`.                                      |
 | `/api/admin/check`         | `POST {"id": "<monitor>"}` runs that check monitor once and returns the result, without saving it. |
 
 ```bash

@@ -12,6 +12,7 @@ export interface TemplateContext {
   alsoDown: string[];
   /** Reminders only: this one's number, counted from 1. */
   reminder?: number;
+  ackedBy?: string;
   timestamp: string;
   timestampIso: string;
   /** Stable id for one incident, identical across its down and up notifications */

@@ -24,7 +24,8 @@ export function stateText(ctx: TemplateContext): string {
 /** The value of a Status field. */
 export function statusText(ctx: TemplateContext): string {
   if (ctx.kind === 'summary') return 'Summary';
-  if (ctx.kind === 'recovered') return 'Operational';
+  if (ctx.kind === 'recovered')
+    return `Operational${ctx.ackedBy ? ` (acknowledged by ${singleLine(ctx.ackedBy)})` : ''}`;
   if (ctx.kind === 'expiry') return 'Degraded';
   return ctx.kind === 'reminder' ? 'Still down' : 'Down';
 }
@@ -32,7 +33,7 @@ export function statusText(ctx: TemplateContext): string {
 export function notificationBody(ctx: TemplateContext): string {
   if (ctx.kind === 'summary' || ctx.kind === 'expiry') return ctx.reason;
   if (ctx.kind === 'recovered') {
-    return `Recovered after ${ctx.downtimeMinutes} minutes of downtime.`;
+    return `Recovered after ${ctx.downtimeMinutes} minutes of downtime.${ctx.ackedBy ? ` Acknowledged by ${ctx.ackedBy}.` : ''}`;
   }
   const lead = ctx.isInitialOutage
     ? `Detected at ${ctx.timestamp}`

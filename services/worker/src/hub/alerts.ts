@@ -75,6 +75,7 @@ export interface AlertPolicy {
 }
 
 export interface Alert {
+  ackedBy?: string;
   expiryDate?: number;
   monitorId: string;
   incident: number;
@@ -160,6 +161,7 @@ export class Alerts {
             closed.reopenedAt,
             change.incidentStartTime,
             closed.upSince ?? now,
+            closed.incident.acked_by ?? null,
           );
         }
         continue;
@@ -238,6 +240,7 @@ export class Alerts {
       } else if (
         state === 'sent' &&
         monitor.reminderEveryChecks !== undefined &&
+        open.incident.acked_at === undefined &&
         runNumber - (open.alert.run ?? 0) >= monitor.reminderEveryChecks &&
         !quiet &&
         !recovering
@@ -270,15 +273,17 @@ export class Alerts {
     reopenedAt: number | null,
     start: number,
     at: number,
+    ackedBy: string | null,
   ): void {
     this.sql.exec(
-      `INSERT OR REPLACE INTO pending_recoveries (monitor_id, incident, reopened_at, start, at)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO pending_recoveries (monitor_id, incident, reopened_at, start, at, acked_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       monitorId,
       incident,
       reopenedAt,
       start,
       at,
+      ackedBy,
     );
   }
 
@@ -306,7 +311,15 @@ export class Alerts {
         row.monitor_id,
       );
       claimed.push(
-        recoveryAlert(row.monitor_id, row.incident, row.reopened_at, runNumber, row.start, row.at),
+        recoveryAlert(
+          row.monitor_id,
+          row.incident,
+          row.reopened_at,
+          runNumber,
+          row.start,
+          row.at,
+          row.acked_by ?? undefined,
+        ),
       );
     }
     return claimed;
@@ -389,11 +402,12 @@ export class Alerts {
       const [row] = this.sql.exec<{
         monitor_id: string;
         start: number | null;
+        acked_by: string | null;
         end_at: number | null;
         reopened_at: number | null;
       }>(
         `UPDATE incidents SET alert = 'sent' WHERE id = ? AND alert = 'sending' AND alert_run = ?
-         RETURNING monitor_id, end_at, reopened_at,
+         RETURNING monitor_id, end_at, reopened_at, acked_by,
            CASE WHEN json_valid(starts) THEN json_extract(starts, '$[0]') END AS start`,
         incident,
         run,
@@ -405,6 +419,7 @@ export class Alerts {
           row.reopened_at,
           row.start ?? row.end_at,
           row.end_at,
+          row.acked_by,
         );
       }
     }
@@ -412,6 +427,7 @@ export class Alerts {
 }
 
 type PendingRecoveryRow = {
+  acked_by: string | null;
   monitor_id: string;
   incident: number;
   reopened_at: number | null;
@@ -427,6 +443,7 @@ function recoveryAlert(
   run: number,
   start: number,
   at: number,
+  ackedBy?: string,
 ): Alert {
   return {
     monitorId,
@@ -434,6 +451,7 @@ function recoveryAlert(
     reopenedAt,
     run,
     kind: 'recovered',
+    ...(ackedBy !== undefined && { ackedBy }),
     incidentStartTime: start,
     error: '',
     alsoDown: [],

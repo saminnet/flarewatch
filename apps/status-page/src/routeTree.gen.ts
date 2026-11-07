@@ -22,6 +22,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as EmbedMonitorIdRouteImport } from './routes/embed.$monitorId'
 import { Route as MonitorsMonitorIdRouteImport } from './routes/monitors.$monitorId'
 import { Route as PingSplatRouteImport } from './routes/ping.$'
+import { Route as ApiAdminAckRouteImport } from './routes/api/admin/ack'
 import { Route as ApiAdminAnnouncementsRouteImport } from './routes/api/admin/announcements'
 import { Route as ApiAdminCheckRouteImport } from './routes/api/admin/check'
 import { Route as ApiAdminMaintenancesRouteImport } from './routes/api/admin/maintenances'
@@ -92,6 +93,11 @@ const PingSplatRoute = PingSplatRouteImport.update({
   path: '/ping/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminAckRoute = ApiAdminAckRouteImport.update({
+  id: '/api/admin/ack',
+  path: '/api/admin/ack',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminAnnouncementsRoute = ApiAdminAnnouncementsRouteImport.update({
   id: '/api/admin/announcements',
   path: '/api/admin/announcements',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
+  '/api/admin/ack': typeof ApiAdminAckRoute
   '/api/admin/announcements': typeof ApiAdminAnnouncementsRoute
   '/api/admin/check': typeof ApiAdminCheckRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
+  '/api/admin/ack': typeof ApiAdminAckRoute
   '/api/admin/announcements': typeof ApiAdminAnnouncementsRoute
   '/api/admin/check': typeof ApiAdminCheckRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
+  '/api/admin/ack': typeof ApiAdminAckRoute
   '/api/admin/announcements': typeof ApiAdminAnnouncementsRoute
   '/api/admin/check': typeof ApiAdminCheckRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
@@ -187,6 +196,7 @@ export interface FileRouteTypes {
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
+    | '/api/admin/ack'
     | '/api/admin/announcements'
     | '/api/admin/check'
     | '/api/admin/maintenances'
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
+    | '/api/admin/ack'
     | '/api/admin/announcements'
     | '/api/admin/check'
     | '/api/admin/maintenances'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
+    | '/api/admin/ack'
     | '/api/admin/announcements'
     | '/api/admin/check'
     | '/api/admin/maintenances'
@@ -245,6 +257,7 @@ export interface RootRouteChildren {
   EmbedMonitorIdRoute: typeof EmbedMonitorIdRoute
   MonitorsMonitorIdRoute: typeof MonitorsMonitorIdRoute
   PingSplatRoute: typeof PingSplatRoute
+  ApiAdminAckRoute: typeof ApiAdminAckRoute
   ApiAdminAnnouncementsRoute: typeof ApiAdminAnnouncementsRoute
   ApiAdminCheckRoute: typeof ApiAdminCheckRoute
   ApiAdminMaintenancesRoute: typeof ApiAdminMaintenancesRoute
@@ -344,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PingSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/ack': {
+      id: '/api/admin/ack'
+      path: '/api/admin/ack'
+      fullPath: '/api/admin/ack'
+      preLoaderRoute: typeof ApiAdminAckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/announcements': {
       id: '/api/admin/announcements'
       path: '/api/admin/announcements'
@@ -389,6 +409,7 @@ const rootRouteChildren: RootRouteChildren = {
   EmbedMonitorIdRoute: EmbedMonitorIdRoute,
   MonitorsMonitorIdRoute: MonitorsMonitorIdRoute,
   PingSplatRoute: PingSplatRoute,
+  ApiAdminAckRoute: ApiAdminAckRoute,
   ApiAdminAnnouncementsRoute: ApiAdminAnnouncementsRoute,
   ApiAdminCheckRoute: ApiAdminCheckRoute,
   ApiAdminMaintenancesRoute: ApiAdminMaintenancesRoute,

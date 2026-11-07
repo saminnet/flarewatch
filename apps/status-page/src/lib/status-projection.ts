@@ -130,6 +130,7 @@ function projectIncidentEvents(
         type: 'incident',
         monitorId: monitor.id,
         monitorName: monitor.name,
+        incident,
         start: startTime,
         end: endTime,
         errors: incident.error,
