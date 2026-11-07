@@ -11,6 +11,7 @@ All notable changes to FlareWatch will be documented in this file.
 - Manual incidents have a status, affected monitors and up to 20 progress updates. They appear on the dashboard, History and Atom feed without changing monitor status or uptime.
 - Visitors can subscribe to incident and recovery emails for published monitors from a Get updates button in the page header. Manual incidents send no email. Operators see the subscriber count in their account menu. Mail goes out through Resend or Cloudflare Email Service, with double opt-in, one-click unsubscribe and daily send limits. When the provider quota runs out, mail waits for the next UTC day, and an incident that recovers before its mail goes out sends none. Turnstile is optional. See [Email subscribers](docs/status-page.md#email-subscribers) for setup.
 - `hubLocation` in `packages/config/src/worker.ts` tells Cloudflare where to create your hub, for example `'weur'` for western Europe. It only counts when the hub is first created, so an existing hub stays where it is. See [Deploy](docs/deploy.md#hub-location).
+- AI agents can read published status, monitor uptime and recent incidents through the status page's `/mcp` endpoint. It needs no sign-in and returns 404 on private-only pages.
 
 ### Fixed
 

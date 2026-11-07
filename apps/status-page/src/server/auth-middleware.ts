@@ -84,6 +84,7 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
   const { request, next } = opts;
   // The router matches routes in any letter case and with a trailing slash, so every gate here must too.
   const pathname = opts.pathname.toLowerCase().replace(/\/+$/, '');
+  if (pathname === '/mcp') return next();
   const env = await resolveRuntimeEnv();
 
   if (pathname.startsWith('/api/admin')) {

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as FeedDotatomRouteImport } from './routes/feed[.]atom'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as SubscribeRouteImport } from './routes/subscribe'
 import { Route as ApiBadgeRouteImport } from './routes/api/badge'
 import { Route as ApiBadgeDotsvgRouteImport } from './routes/api/badge[.]svg'
@@ -49,6 +50,11 @@ const HistoryRoute = HistoryRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SubscribeRoute = SubscribeRouteImport.update({
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/feed.atom': typeof FeedDotatomRoute
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
   '/subscribe': typeof SubscribeRouteWithChildren
   '/api/badge': typeof ApiBadgeRoute
   '/api/badge.svg': typeof ApiBadgeDotsvgRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/feed.atom': typeof FeedDotatomRoute
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
   '/subscribe': typeof SubscribeRouteWithChildren
   '/api/badge': typeof ApiBadgeRoute
   '/api/badge.svg': typeof ApiBadgeDotsvgRoute
@@ -189,6 +197,7 @@ export interface FileRoutesById {
   '/feed.atom': typeof FeedDotatomRoute
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
   '/subscribe': typeof SubscribeRouteWithChildren
   '/api/badge': typeof ApiBadgeRoute
   '/api/badge.svg': typeof ApiBadgeDotsvgRoute
@@ -214,6 +223,7 @@ export interface FileRouteTypes {
     | '/feed.atom'
     | '/history'
     | '/login'
+    | '/mcp'
     | '/subscribe'
     | '/api/badge'
     | '/api/badge.svg'
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/feed.atom'
     | '/history'
     | '/login'
+    | '/mcp'
     | '/subscribe'
     | '/api/badge'
     | '/api/badge.svg'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/feed.atom'
     | '/history'
     | '/login'
+    | '/mcp'
     | '/subscribe'
     | '/api/badge'
     | '/api/badge.svg'
@@ -284,6 +296,7 @@ export interface RootRouteChildren {
   FeedDotatomRoute: typeof FeedDotatomRoute
   HistoryRoute: typeof HistoryRoute
   LoginRoute: typeof LoginRoute
+  McpRoute: typeof McpRoute
   SubscribeRoute: typeof SubscribeRouteWithChildren
   ApiBadgeRoute: typeof ApiBadgeRoute
   ApiBadgeDotsvgRoute: typeof ApiBadgeDotsvgRoute
@@ -329,6 +342,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/subscribe': {
@@ -472,6 +492,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedDotatomRoute: FeedDotatomRoute,
   HistoryRoute: HistoryRoute,
   LoginRoute: LoginRoute,
+  McpRoute: McpRoute,
   SubscribeRoute: SubscribeRouteWithChildren,
   ApiBadgeRoute: ApiBadgeRoute,
   ApiBadgeDotsvgRoute: ApiBadgeDotsvgRoute,

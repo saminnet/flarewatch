@@ -200,6 +200,7 @@ Only down counts against uptime.
 | URL                           | Returns                                                                                                                                              |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/api/data`                   | Current status of every public monitor, as JSON. Each has a `status` from [above](#statuses), and `up`, which is false only when `status` is `down`. |
+| `/mcp`                        | Read-only MCP tools for AI agents, over HTTP POST.                                                                                                   |
 | `/api/maintenances`           | Maintenance windows, as JSON.                                                                                                                        |
 | `/api/badge?id=<monitor>`     | Badge data for shields.io: up, degraded or down. `label`, `up`, `degraded`, `down`, `colorUp`, `colorDegraded` and `colorDown` change it.            |
 | `/api/badge.svg?id=<monitor>` | A flat SVG badge with the same parameters as the JSON badge.                                                                                         |
@@ -209,6 +210,53 @@ Only down counts against uptime.
 Other sites can show `/embed` in a frame. All other pages refuse to load in a frame. This stops other sites from framing your sign-in page.
 
 Every page sends a Content-Security-Policy header. It lets a page run scripts only from its own origin, plus the page's own inline scripts, which carry a new random nonce on each request. When Turnstile is enabled, scripts, frames and connections can also use `https://challenges.cloudflare.com`. Other injected scripts do not run. Images may load from any `https:` address or a `data:` URL, so a logo or favicon URL in your config still works. In the Vite dev server, pages also allow inline scripts and `eval`, for hot reload.
+
+## Connect an AI agent
+
+Connect an MCP client to `https://status.example.com/mcp`, with your status page's host in place of `status.example.com`.
+The endpoint uses Streamable HTTP with JSON responses and protocol version `2025-11-25`.
+It needs no sign-in.
+
+For Claude Code:
+
+```bash
+claude mcp add --transport http flarewatch https://status.example.com/mcp
+```
+
+For clients with a JSON config, use this shape or your client's equivalent:
+
+```json
+{
+  "mcpServers": {
+    "flarewatch": {
+      "type": "http",
+      "url": "https://status.example.com/mcp"
+    }
+  }
+}
+```
+
+| Tool             | Input                                 | Returns                                                                                                             |
+| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `get_status`     | `{}`                                  | Overall state, counts of up, degraded and down monitors, last update, active announcements and maintenance windows. |
+| `list_monitors`  | `{}`                                  | Published monitor IDs, names, groups, current states, displayed uptime and open incidents.                          |
+| `get_monitor`    | `{ "id": "api" }`                     | One published monitor's current state and its newest 10 incidents.                                                  |
+| `list_incidents` | `{ "monitorId": "api", "limit": 20 }` | Incidents, newest first. Both fields are optional. The limit defaults to 50 and accepts 1 through 50.               |
+
+Each tool returns compact JSON and a one-line summary in a text block.
+Incident times and the last update use Unix seconds. Maintenance and announcement dates keep the page API's format.
+Uptime uses the same two-decimal display as the page, including `Pending` and `Starting...` before enough data arrives.
+
+An agent sees only what a visitor can read, even when the request carries a sign-in cookie.
+Private monitors and their maintenance windows stay hidden. Mixed maintenance windows list only published monitor IDs.
+An unknown or private monitor ID returns the same tool error with code 404.
+On a private-only page, every request to `/mcp` returns HTTP 404.
+Tools cannot change config, edit announcements or maintenance, run checks, or read operator details such as heartbeat ping URLs.
+
+The endpoint shares the visitor API's cache and `statusPage.apiCorsOrigins` policy.
+Requests use POST with `Content-Type: application/json` and a body of at most 16 KiB.
+After initialization, send `MCP-Protocol-Version: 2025-11-25` on each request.
+GET returns 405 because the endpoint does not offer an SSE stream.
 
 ### Admin endpoints
 
