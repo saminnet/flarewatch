@@ -10,18 +10,22 @@ All notable changes to FlareWatch will be documented in this file.
 - Operators can acknowledge an open incident from its entry in History or on the monitor's page. Acknowledgement stops reminders, and recovery alerts name the responder. Monitor cards show who acknowledged it and when. Visitors see only when.
 - Manual incidents have a status, affected monitors and up to 20 progress updates. They appear on the dashboard, History and Atom feed without changing monitor status or uptime.
 - Visitors can subscribe to incident and recovery emails for published monitors from a Get updates button in the page header. Manual incidents send no email. Operators see the subscriber count in their account menu. Mail goes out through Resend or Cloudflare Email Service, with double opt-in, one-click unsubscribe and daily send limits. When the provider quota runs out, mail waits for the next UTC day, and an incident that recovers before its mail goes out sends none. Turnstile is optional. See [Email subscribers](docs/status-page.md#email-subscribers) for setup.
+- `hubLocation` in `packages/config/src/worker.ts` tells Cloudflare where to create your hub, for example `'weur'` for western Europe. It only counts when the hub is first created, so an existing hub stays where it is. See [Deploy](docs/deploy.md#hub-location).
 
 ### Fixed
 
 - A reopened incident gets a new down alert even when the prior alert is still in flight. A late delivery report no longer marks the reopened incident as notified.
 - A fork that replaces the demo monitors passes CI and deploys again. ([#111](https://github.com/saminnet/flarewatch/issues/111))
 - A username and password typed while the sign-in page is still loading now sign you in. Before, the Sign in button stayed disabled until you typed again.
+- An open status page picks up each new check run, about once a minute. Before, it waited until its data was 5 minutes old. The "Data is stale" warning still waits 5 minutes. A page in a background tab waits until you come back to it.
+- The page no longer shows "(0s ago)" for a moment while it loads.
 - When a monitor fails again while its outage waits to close, an error-change alert that was being sent at that moment is handled as it would be otherwise. If no webhook accepted it, the outage gets its slot back. If a busy check run put it off, it goes out on a later run. Before, it was lost and used up one of the outage's five. A reminder sent at that moment now counts, so the next reminder has the right number. ([#103](https://github.com/saminnet/flarewatch/pull/103))
 
 ### Changed
 
 - A refused expiry warning is tried again after 60 check runs, about an hour. Before, it wasn't tried again.
 - Check now starts the check while it looks up the Cloudflare location, so it no longer waits for that lookup first. Scheduled runs still finish the lookup first: a Worker can have only six connections waiting at once, and a seventh would add its wait to one monitor's latency.
+- Pages load faster when your hub is far from the visitor. The status page now keeps what visitors can see for 20 seconds in each Cloudflare location, and a monitor's response times for 30 seconds, so most views skip the trip to the hub. Signed-in views still read monitor status from the hub every time. An edit you make can take up to 40 seconds to reach visitors.
 - Dependencies updated, including pnpm 12, React 19.3, TanStack Start 1.169 (its first stable release) and Vite+ 1.2. After you pull, run `vp install`, and Vite+ fetches pnpm 12 for you. ([#104](https://github.com/saminnet/flarewatch/pull/104))
 
 ## 3.5.0 - 2026-10-11

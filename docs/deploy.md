@@ -116,13 +116,21 @@ A personal or small-team page costs nothing. These are the free tier limits that
 | 1,000 KV writes/day                 | Sign-ins.                                                                                                      |
 | 5 cron triggers per account         | FlareWatch uses one.                                                                                           |
 
-Every check run is saved in the hub, the monitor Worker's Durable Object, so the charts get a sample every minute. For visitors, the status page reuses what it read from the hub for 20 seconds, so a busy page doesn't cost a hub request per view. Page traffic is the limit you're most likely to reach.
+Every check run is saved in the hub, the monitor Worker's Durable Object, so the charts get a sample every minute. For visitors, the status page keeps what it read from the hub for 20 seconds, and a monitor's response times for 30 seconds, so a busy page doesn't cost a hub request per view. It keeps them in memory and in Cloudflare's cache in each location. Signed-in views read monitor status from the hub every time. On a `workers.dev` address Cloudflare's cache does nothing, so only the memory copy helps. Page traffic is the limit you're most likely to reach.
 
 An open, visible status page refreshes about once a minute, so one tab left open all day makes at least 1,400 Worker requests. A background tab makes none.
 
 A monitor that keeps going down and coming back up adds about 1,500 rows written a day, more if its error changes each time.
 
 See Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
+
+## Hub location
+
+Cloudflare creates the hub near whatever first talks to it, and it stays there. If that was a check run in Singapore, every page view from Europe waits on a round trip to Singapore.
+
+To pick the region, set `hubLocation` in `packages/config/src/worker.ts` before your first deploy, for example `hubLocation: 'weur'` for western Europe. Choose the region closest to most of your visitors. Cloudflare treats it as a hint, not a promise. It has no effect on a hub that already exists. Leave it out to let Cloudflare choose.
+
+The values are `wnam`, `enam`, `sam`, `weur`, `eeur`, `apac`, `apac-ne`, `apac-se`, `oc`, `afr` and `me`.
 
 ## Update your fork
 

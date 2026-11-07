@@ -2,6 +2,8 @@
 
 The status page is a Worker that reads what the monitor Worker saves. Visitors see public monitors, their uptime and response times, and the incident and maintenance history.
 
+An open page picks up each new check run on its own, about once a minute, without a reload. A page in a background tab waits until you come back to it. If no check run has finished for 5 minutes, the page says its data is stale.
+
 ## Sign in
 
 There are two ways to sign in at `/login`, and you can use both. The footer links to it.
@@ -154,7 +156,7 @@ Subscribe to `/feed.atom` in an Atom reader. The page head also advertises the f
 
 The feed lists the newest 50 public incidents, maintenance windows and announcements, ordered by incident start, maintenance start or announcement creation time. Entries keep their IDs when you edit an announcement, reschedule maintenance or an incident recovers. Repeating maintenance has one entry per stored window. Ended announcements stay in the feed until deleted.
 
-The feed uses the visitor snapshot, including the same 20-second hub cache as the page. Its `updated` value comes from the last check run, so an operator edit updates an entry before the feed timestamp advances. Private monitors and maintenance windows that cover only private monitors never appear. Text remains plain text. If the hub cannot answer, the feed has no entries and uses the Unix epoch as its update time.
+The feed shows what a visitor sees, and can be up to 40 seconds behind the hub, like the page. Its `updated` value comes from the last check run, so an operator edit updates an entry before the feed timestamp advances. Private monitors and maintenance windows that cover only private monitors never appear. Text remains plain text. If the hub cannot answer, the feed has no entries and uses the Unix epoch as its update time.
 
 ## Private page
 

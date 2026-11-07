@@ -3,7 +3,7 @@ import { isJsonObject, isNonEmptyString } from '@flarewatch/shared';
 import { ackIncident } from '@/lib/monitor-worker';
 import { jsonError, readBody } from '@/lib/admin-http';
 import { operatorName } from '@/lib/operator.server';
-import { forgetCachedView } from '@/lib/snapshots';
+import { forgetCachedView } from '@/lib/hub-cache';
 
 export const Route = createFileRoute('/api/admin/ack')({
   server: {
@@ -15,7 +15,7 @@ export const Route = createFileRoute('/api/admin/ack')({
             return jsonError('id is required', 400);
           if (!(await ackIncident(body.id, await operatorName(request))))
             return jsonError('No unacknowledged open incident', 409);
-          forgetCachedView();
+          await forgetCachedView();
           return new Response(null, { status: 204 });
         } catch (error) {
           console.error('Error acknowledging incident:', error);

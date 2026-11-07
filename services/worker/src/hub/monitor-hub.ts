@@ -1,5 +1,6 @@
 import { FailureStreakState, stepFailureStreak } from './failure-streak';
 import { DurableObject } from 'cloudflare:workers';
+import { initialRunStatus } from '@flarewatch/shared/initial-run';
 import * as z from 'zod/mini';
 import {
   isMaintenanceActive,
@@ -101,11 +102,8 @@ export class MonitorHub extends DurableObject<Env> {
       const rows = this.sql.exec<{ key: string; value: string }>(
         "SELECT key, value FROM meta WHERE key IN ('last_update', 'initial_trigger')",
       );
-      if (
-        rows.some(({ key, value }) =>
-          key === 'last_update' ? Number(value) > 0 : nowMs - Number(value) < 60_000,
-        )
-      )
+      const meta = Object.fromEntries(rows.map(({ key, value }) => [key, value]));
+      if (initialRunStatus(meta.last_update, meta.initial_trigger, nowMs).status !== 'no-run')
         return false;
       setMeta(this.sql, 'initial_trigger', String(nowMs));
       return true;

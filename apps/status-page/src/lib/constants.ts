@@ -19,8 +19,8 @@ export const TIME_MS = {
 export const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
 export const STALE_THRESHOLD_SECONDS = 300;
-
-export const INITIAL_TRIGGER_RETRY_MS = 60_000;
+export const REFRESH_THRESHOLD_SECONDS = 75;
+export const REFRESH_COOLDOWN_SECONDS = 30;
 
 export const AUTO_REFRESH_MIN_OPEN_SECONDS = 10;
 

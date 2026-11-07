@@ -198,7 +198,23 @@ export function isPublicMonitor(monitor: Pick<MonitorTarget, 'private'>): boolea
   return monitor.private !== true;
 }
 
+export const HUB_LOCATIONS = [
+  'wnam',
+  'enam',
+  'sam',
+  'weur',
+  'eeur',
+  'apac',
+  'apac-ne',
+  'apac-se',
+  'oc',
+  'afr',
+  'me',
+] as const;
+
 export type WorkerConfig = {
+  /** Placement hint for a new hub only. An existing hub does not move. */
+  hubLocation?: (typeof HUB_LOCATIONS)[number];
   monitors: Monitor[];
   notification?: NotificationConfig;
   callbacks?: {
@@ -276,6 +292,7 @@ export type Webhook = {
 export type WebhookConfig = Webhook | Webhook[];
 
 export type RuntimeConfig = {
+  hubLocation?: WorkerConfig['hubLocation'];
   monitors: Monitor[];
   statusPage?: PageConfig;
   notification?: NotificationConfig;

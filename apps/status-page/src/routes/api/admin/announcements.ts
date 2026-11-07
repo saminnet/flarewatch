@@ -16,8 +16,8 @@ import {
   saveAnnouncement,
 } from '@/lib/monitor-worker';
 import { getConfig } from '@/lib/config';
+import { forgetCachedView } from '@/lib/hub-cache';
 import { operatorName } from '@/lib/operator.server';
-import { forgetCachedView } from '@/lib/snapshots';
 import { jsonError, readBody } from '@/lib/admin-http';
 
 function generateAnnouncementId(): string {
@@ -75,7 +75,7 @@ export const Route = createFileRoute('/api/admin/announcements')({
           };
 
           await saveAnnouncement(announcement);
-          forgetCachedView();
+          await forgetCachedView();
 
           return Response.json(announcement, { status: 201 });
         } catch (error) {
@@ -113,7 +113,7 @@ export const Route = createFileRoute('/api/admin/announcements')({
 
           if (update && !FIELDS.some((field) => updates[field] !== undefined)) {
             const updated = await appendAnnouncementUpdate(payload.id, update);
-            forgetCachedView();
+            await forgetCachedView();
             return Response.json(updated);
           }
 
@@ -150,7 +150,7 @@ export const Route = createFileRoute('/api/admin/announcements')({
             )
           )
             await saveAnnouncement(updated);
-          forgetCachedView();
+          await forgetCachedView();
 
           return Response.json(
             saved
@@ -180,7 +180,7 @@ export const Route = createFileRoute('/api/admin/announcements')({
           if (!(await deleteAnnouncement(payload.id))) {
             return jsonError('Announcement not found', 404);
           }
-          forgetCachedView();
+          await forgetCachedView();
           return new Response(null, { status: 204 });
         } catch (error) {
           console.error('Error deleting announcement:', error);

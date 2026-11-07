@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import type { Announcement, Maintenance, StatusView } from '@flarewatch/shared';
 import { getConfig } from '@/lib/config';
-import { readVisitorSnapshot } from '@/lib/snapshots';
+import { readVisitorSnapshot } from '@/lib/hub-cache';
 import type { PublicMonitor } from '@/lib/public-view';
 import { escapeXml } from '@/lib/xml';
 

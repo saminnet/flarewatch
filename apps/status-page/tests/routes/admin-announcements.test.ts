@@ -3,7 +3,7 @@ import { isValidAnnouncement, type Announcement } from '@flarewatch/shared';
 import { Route } from '@/routes/api/admin/announcements';
 import { authMiddlewareServer } from '@/server/auth-middleware';
 import { isJsonObject, normalizeAnnouncement } from '@flarewatch/shared';
-import { readVisitorSnapshot } from '@/lib/snapshots';
+import { readVisitorSnapshot } from '@/lib/hub-cache';
 import { buildAuthSecret } from '../helpers/auth-secret';
 import { stubMonitorWorker } from '../helpers/bindings';
 import { forgetViewAroundEachTest } from '../helpers/snapshots';

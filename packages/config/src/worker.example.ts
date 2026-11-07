@@ -5,6 +5,7 @@
 import type { WorkerConfig } from '@flarewatch/shared';
 
 export const workerConfig: WorkerConfig = {
+  // hubLocation: 'weur', // Placement hint for a new hub only. Existing hubs do not move.
   monitors: [
     // Monitor name links: HTTP/HTTPS targets auto-link by default. Use
     // `link: false` to disable, or `link: 'url'` to override.

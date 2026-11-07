@@ -44,7 +44,7 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
   const monitorCount = monitors.length;
   const jobCount = monitors.filter((monitor) => monitor.method === 'HEARTBEAT').length;
   const status = getOverallStatus(counts);
-  const { currentTime, isStale, willRefreshSoon, refreshCountdown } = useAutoRefresh({
+  const { currentTime, isHydrated, isStale, willRefreshSoon, refreshCountdown } = useAutoRefresh({
     lastUpdate: state.lastUpdate,
   });
 
@@ -121,7 +121,7 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
             <p className="text-xs text-muted-foreground">
               {isInitialState
                 ? 'Running first check...'
-                : `Last updated ${formatUtcShort(state.lastUpdate)} (${secondsAgo}s ago)`}
+                : `Last updated ${formatUtcShort(state.lastUpdate)}${isHydrated ? ` (${secondsAgo}s ago)` : ''}`}
             </p>
 
             {!isInitialState && isStale && (
@@ -136,7 +136,7 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
                   <span>{getRefreshMessage()}</span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  Page will auto-refresh when data is more than 5 minutes old
+                  Checks run every minute, and none has finished in the last 5 minutes
                 </TooltipContent>
               </Tooltip>
             )}

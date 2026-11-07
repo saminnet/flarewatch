@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 
-import { screen } from '@testing-library/react';
-import { describe, expect, it } from 'vite-plus/test';
+import { act, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { HeartbeatStatus, StatusView } from '@flarewatch/shared';
+import { useQuery } from '@tanstack/react-query';
+import { qk } from '@/lib/query/keys';
+import { renderToString } from 'react-dom/server';
+import { useAutoRefresh } from '@/lib/hooks/use-auto-refresh';
 import { OverallStatus } from '@/components/overall-status';
 import type { PublicMonitor } from '@/lib/public-view';
-import { renderWithProviders } from '../helpers/render';
+import { renderWithProviders, withProviders } from '../helpers/render';
 
 /** A page whose last `jobs` monitors are heartbeats. */
 function page(statuses: Array<HeartbeatStatus | 'slow' | 'expiry'>, jobs: number) {
@@ -116,5 +120,66 @@ describe('OverallStatus', () => {
 
     expect(screen.getByRole('heading').textContent).toBe('Some systems are degraded (2 out of 4)');
     expect(screen.getByText('2 up / 1 late / 1 slow / 0 down')).toBeTruthy();
+  });
+});
+
+const NOW = 1_800_000_000;
+const snapshotFetch = vi.fn(async () => 1);
+function Probe({ lastUpdate }: { lastUpdate: number }) {
+  const refresh = useAutoRefresh({ lastUpdate });
+  useQuery({ queryKey: qk.snapshot, queryFn: snapshotFetch, initialData: 0, staleTime: Infinity });
+  return (
+    <output data-testid="clock" data-stale={String(refresh.isStale)}>
+      {refresh.currentTime}
+    </output>
+  );
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW * 1000);
+});
+
+describe('auto refresh', () => {
+  it('refetches after 75 seconds, keeps the cooldown, and warns only after 300 seconds', async () => {
+    const { container } = renderWithProviders(<Probe lastUpdate={NOW} />);
+    const button = screen.getByTestId('clock');
+    await act(() => vi.advanceTimersByTimeAsync(75_000));
+    expect(container.textContent).toBe(String(NOW + 75));
+    expect(snapshotFetch).toHaveBeenCalledTimes(0);
+    expect(button.dataset.stale).toBe('false');
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(button.dataset.stale).toBe('false');
+    expect(snapshotFetch).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(29_000));
+    expect(snapshotFetch).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(snapshotFetch).toHaveBeenCalledTimes(2);
+    await act(() => vi.advanceTimersByTimeAsync(195_000));
+    expect(button.dataset.stale).toBe('true');
+  });
+
+  it('refetches only while visible, including when opened with old data', async () => {
+    const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    renderWithProviders(<Probe lastUpdate={NOW - 100} />);
+    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    expect(snapshotFetch).not.toHaveBeenCalled();
+    visible.mockReturnValue('visible');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await act(() => vi.advanceTimersByTimeAsync(12_000));
+    expect(snapshotFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the seconds count on the server and shows it after hydration', () => {
+    const ui = (
+      <OverallStatus monitors={[]} state={{ lastUpdate: NOW, monitors: {} }} maintenances={[]} />
+    );
+    const html = renderToString(withProviders(ui));
+    expect(html).toContain('Last updated');
+    expect(html).not.toContain('s ago');
+    renderWithProviders(ui);
+    expect(screen.getByText(/s ago/).textContent).toContain('(0s ago)');
   });
 });

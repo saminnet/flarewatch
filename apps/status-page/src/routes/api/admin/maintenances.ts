@@ -13,7 +13,7 @@ import {
   MaintenanceRefused,
   saveMaintenance,
 } from '@/lib/monitor-worker';
-import { forgetCachedView } from '@/lib/snapshots';
+import { forgetCachedView } from '@/lib/hub-cache';
 import { jsonError, readBody } from '@/lib/admin-http';
 
 function generateMaintenanceId(): string {
@@ -90,7 +90,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           };
 
           await saveMaintenance(maintenance);
-          forgetCachedView();
+          await forgetCachedView();
 
           return Response.json(maintenance, { status: 201 });
         } catch (error) {
@@ -129,7 +129,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           };
 
           await saveMaintenance(updated);
-          forgetCachedView();
+          await forgetCachedView();
 
           return Response.json(updated);
         } catch (error) {
@@ -150,7 +150,7 @@ export const Route = createFileRoute('/api/admin/maintenances')({
           if (!(await deleteMaintenance(payload.id))) {
             return jsonError('Maintenance not found', 404);
           }
-          forgetCachedView();
+          await forgetCachedView();
           return new Response(null, { status: 204 });
         } catch (error) {
           console.error('Error deleting maintenance:', error);

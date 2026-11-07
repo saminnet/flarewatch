@@ -1,5 +1,6 @@
 import * as z from 'zod/mini';
 import {
+  HUB_LOCATIONS,
   NOTIFICATION_TEMPLATES,
   type AccessConfig,
   type Announcement,
@@ -558,6 +559,7 @@ const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.ob
 const runtimeConfigSchema: z.ZodMiniType<SchemaOutput<RuntimeConfig>> = z
   .object({
     monitors: monitorListSchema,
+    hubLocation: z.optional(z.enum(HUB_LOCATIONS)),
     statusPage: z.optional(statusPageSchema),
     notification: z.optional(notificationSchema),
   })

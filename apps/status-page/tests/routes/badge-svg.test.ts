@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { workerConfig } from '@flarewatch/config/worker';
-import { forgetCachedView } from '@/lib/snapshots';
+import { forgetCachedView } from '@/lib/hub-cache';
 import { Route } from '@/routes/api/badge[.]svg';
 import { BADGE_TIME, callBadge, stubBadgeView } from '../helpers/badge';
 import { forgetViewAroundEachTest } from '../helpers/snapshots';
@@ -43,7 +43,7 @@ describe('GET /api/badge.svg', () => {
     const downSvg = await down.text();
     expect(downSvg).toContain('fill="#fe7d37"');
     expect(downSvg).toContain('>OUT</text>');
-    forgetCachedView();
+    await forgetCachedView();
     workerConfig.monitors = originalMonitors.map((m) =>
       m.id === 'demo_example' ? { ...m, maxLatencyMs: 10 } : m,
     );
@@ -87,7 +87,7 @@ describe('GET /api/badge.svg', () => {
     expect(svg).toContain('&lt;svg&gt;');
     expect(svg).not.toContain('<script>');
     for (const status of ['up', 'down', 'degraded']) {
-      forgetCachedView();
+      await forgetCachedView();
       workerConfig.monitors = originalMonitors.map((m) =>
         m.id === 'demo_example' ? { ...m, maxLatencyMs: 10 } : m,
       );
@@ -109,12 +109,12 @@ describe('GET /api/badge.svg', () => {
     expect((await get()).status).toBe(404);
     expect((await get('/api/badge.svg')).status).toBe(400);
     workerConfig.monitors = originalMonitors;
-    forgetCachedView();
+    await forgetCachedView();
     stubBadgeView('up', { startedAt: undefined });
     const firstResultPending = await get();
     expect(firstResultPending.status).toBe(200);
     expect(await firstResultPending.text()).toContain('>unknown</text>');
-    forgetCachedView();
+    await forgetCachedView();
     vi.stubGlobal('__env__', {});
     const unavailable = await get();
     expect(unavailable.status).toBe(503);

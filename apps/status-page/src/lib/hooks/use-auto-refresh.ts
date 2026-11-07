@@ -1,10 +1,15 @@
-import { useRef, useState, useEffect } from 'react';
+import { useReducer, useEffect, useEffectEvent } from 'react';
+import { refreshReducer, stepRefresh, type RefreshState } from './auto-refresh';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useWindowVisibility } from './use-window-visibility';
 import { useHydrated } from './use-hydrated';
 import { qk } from '@/lib/query/keys';
-import { STALE_THRESHOLD_SECONDS, AUTO_REFRESH_MIN_OPEN_SECONDS } from '@/lib/constants';
+import {
+  STALE_THRESHOLD_SECONDS,
+  REFRESH_THRESHOLD_SECONDS,
+  AUTO_REFRESH_MIN_OPEN_SECONDS,
+} from '@/lib/constants';
 
 interface UseAutoRefreshOptions {
   lastUpdate: number; // Unix timestamp in seconds
@@ -12,6 +17,7 @@ interface UseAutoRefreshOptions {
 
 interface UseAutoRefreshReturn {
   currentTime: number;
+  isHydrated: boolean;
   isStale: boolean;
   willRefreshSoon: boolean;
   refreshCountdown: number | null;
@@ -23,11 +29,12 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
   const isWindowVisible = useWindowVisibility();
   const isHydrated = useHydrated();
 
-  const [currentTime, setCurrentTime] = useState(lastUpdate);
-  const [openTime, setOpenTime] = useState(lastUpdate);
-  const openTimeRef = useRef(lastUpdate);
-  const openTimeInitialized = useRef(false);
-  const lastInvalidateAt = useRef(0);
+  const [state, dispatch] = useReducer(refreshReducer, {
+    status: 'waiting',
+    currentTime: lastUpdate,
+  });
+  const currentTime = state.currentTime;
+  const openTime = state.status === 'open' ? state.openTime : lastUpdate;
 
   // Use stable time for SSR to avoid hydration mismatch
   const displayTime = isHydrated ? currentTime : lastUpdate;
@@ -36,42 +43,39 @@ export function useAutoRefresh({ lastUpdate }: UseAutoRefreshOptions): UseAutoRe
   const dataAge = displayTime - lastUpdate;
   const isStale = dataAge > STALE_THRESHOLD_SECONDS;
   const pageOpenedLongEnough = currentTime - displayOpenTime > AUTO_REFRESH_MIN_OPEN_SECONDS;
-  const willRefreshSoon = isStale && pageOpenedLongEnough && isWindowVisible;
-  const refreshCountdown = isStale
+  const needsRefresh = dataAge > REFRESH_THRESHOLD_SECONDS;
+  const willRefreshSoon = needsRefresh && pageOpenedLongEnough && isWindowVisible;
+  const refreshCountdown = needsRefresh
     ? Math.max(0, AUTO_REFRESH_MIN_OPEN_SECONDS - (currentTime - displayOpenTime))
     : null;
 
+  const tick = useEffectEvent((previous: RefreshState | undefined) => {
+    const event = {
+      type: 'tick' as const,
+      time: Math.round(Date.now() / 1000),
+      visible: isWindowVisible,
+      lastUpdate,
+    };
+    const transition = stepRefresh(previous ?? state, event);
+    dispatch(event);
+    if (transition.invalidate) {
+      void queryClient.invalidateQueries({ queryKey: qk.snapshot });
+      void router.invalidate();
+    }
+    return transition.state;
+  });
+
   useEffect(() => {
+    let previous: RefreshState | undefined;
     const interval = setInterval(() => {
-      if (!isWindowVisible) return;
-      const now = Math.round(Date.now() / 1000);
-
-      if (!openTimeInitialized.current) {
-        openTimeInitialized.current = true;
-        openTimeRef.current = now;
-        setOpenTime(now);
-      }
-
-      const openTime = openTimeRef.current;
-
-      // Revalidates instead of reloading; the cooldown avoids hammering the hub if the worker stalls.
-      if (
-        now - lastUpdate > STALE_THRESHOLD_SECONDS &&
-        now - openTime > AUTO_REFRESH_MIN_OPEN_SECONDS
-      ) {
-        if (now - lastInvalidateAt.current >= AUTO_REFRESH_MIN_OPEN_SECONDS) {
-          lastInvalidateAt.current = now;
-          void queryClient.invalidateQueries({ queryKey: qk.snapshot });
-          void router.invalidate();
-        }
-      }
-      setCurrentTime(now);
+      previous = tick(previous);
     }, 1000);
     return () => clearInterval(interval);
-  }, [isWindowVisible, lastUpdate, queryClient, router]);
+  }, []);
 
   return {
     currentTime: displayTime,
+    isHydrated,
     isStale,
     willRefreshSoon,
     refreshCountdown,

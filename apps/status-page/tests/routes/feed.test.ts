@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
 import type { HubView } from '@flarewatch/shared';
-import { readVisitorSnapshot, forgetCachedView } from '@/lib/snapshots';
+import { readVisitorSnapshot, forgetCachedView } from '@/lib/hub-cache';
 import { Route } from '@/routes/feed[.]atom';
 import { stubMonitorWorker } from '../helpers/bindings';
 import { forgetViewAroundEachTest } from '../helpers/snapshots';
@@ -127,7 +127,7 @@ describe('GET /feed.atom', () => {
     view.announcements[0]!.title = 'Edited notice';
     view.announcements[0]!.updatedAt += 60000;
     view.monitors.public!.incidents[0]!.end = T + 60;
-    forgetCachedView();
+    await forgetCachedView();
     const after = (await parse()).doc;
     const ids = (doc: Document) =>
       [...doc.querySelectorAll('entry > id')].map((e) => e.textContent).sort();

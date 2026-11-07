@@ -1,4 +1,5 @@
 import type { SubscriberEmailBinding } from './notifications/subscriber-sender';
+import { workerConfig } from '@flarewatch/config/worker';
 import type { VpcBinding } from '@flarewatch/shared';
 import type { MonitorHub } from './hub/monitor-hub';
 
@@ -24,5 +25,8 @@ export interface Env {
 /** Every deployment has one hub; its name only has to be stable. */
 export function getHub(env: Env): DurableObjectStub<MonitorHub> {
   if (!env.MONITOR_HUB) throw new Error('MONITOR_HUB binding not found');
-  return env.MONITOR_HUB.getByName('flarewatch');
+  return env.MONITOR_HUB.getByName(
+    'flarewatch',
+    workerConfig.hubLocation ? { locationHint: workerConfig.hubLocation } : undefined,
+  );
 }

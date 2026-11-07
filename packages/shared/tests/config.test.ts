@@ -38,6 +38,26 @@ function createConfigWithMonitor(monitor: MonitorOverrides) {
 const isValid = (value: unknown) => configIssues(value).length === 0;
 
 describe('config validation', () => {
+  it('accepts every hub location hint and rejects invalid hub locations', () => {
+    for (const hubLocation of [
+      'wnam',
+      'enam',
+      'sam',
+      'weur',
+      'eeur',
+      'apac',
+      'apac-ne',
+      'apac-se',
+      'oc',
+      'afr',
+      'me',
+    ]) {
+      expect(configIssues({ monitors: [], hubLocation })).toEqual([]);
+    }
+    for (const hubLocation of ['SIN', 'eu', '', null, 1, {}]) {
+      expect(configIssues({ monitors: [], hubLocation }).join()).toContain('hubLocation');
+    }
+  });
   it.each([[], [''], [1], '192.0.2.1', [null]].map((dnsExpected) => ({ dnsExpected })))(
     'rejects DNS expected values %j',
     ({ dnsExpected }) => {
