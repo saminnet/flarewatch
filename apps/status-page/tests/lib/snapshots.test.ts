@@ -186,6 +186,30 @@ describe('location cache', () => {
     expect((await (await isolate()).readVisitorSnapshot()).state?.lastUpdate).toBe(300);
   });
 
+  it('keeps no view read from the location cache while an edit deletes it', async () => {
+    const cache = memoryCache();
+    vi.stubGlobal('caches', { default: cache });
+    let update = 100;
+    stubMonitorWorker(async () => Response.json(hubView(update)));
+    const snapshots = await isolate();
+    await snapshots.readVisitorSnapshot();
+    update = 200;
+    let finishDelete!: () => void;
+    const deleting = new Promise<void>((resolve) => {
+      finishDelete = resolve;
+    });
+    cache.delete.mockImplementationOnce(async (key) => {
+      await deleting;
+      return cache.entries.delete(key);
+    });
+    const invalidation = snapshots.forgetCachedView();
+    await vi.waitFor(() => expect(cache.delete).toHaveBeenCalledTimes(1));
+    expect((await snapshots.readVisitorSnapshot()).state?.lastUpdate).toBe(100);
+    finishDelete();
+    await invalidation;
+    expect((await snapshots.readVisitorSnapshot()).state?.lastUpdate).toBe(200);
+  });
+
   it('shares only visitor data across isolates and expires the view after twenty seconds', async () => {
     const cache = memoryCache();
     vi.stubGlobal('caches', { default: cache });

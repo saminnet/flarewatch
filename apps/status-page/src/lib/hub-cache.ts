@@ -112,6 +112,8 @@ export async function forgetCachedView(): Promise<void> {
   } catch (error) {
     console.warn('Location cache delete failed:', error);
   }
+  // A read during the delete can have restored the old view from the location cache.
+  cachedView = null;
 }
 
 function readVisitorView(nowMs: number): Promise<HubView> {
