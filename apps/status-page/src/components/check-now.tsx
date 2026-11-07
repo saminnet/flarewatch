@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { IconCircleCheck, IconCircleX, IconRefresh } from '@tabler/icons-react';
 import { getErrorMessage, type CheckResultWithLocation } from '@flarewatch/shared';
 import { Button } from '@/components/ui/button';
@@ -12,21 +12,14 @@ interface CheckNowProps {
 
 /** Operator only. The result stays in this component: the hub records nothing for it. */
 export function CheckNow({ monitorId }: CheckNowProps) {
-  const [isPending, setIsPending] = useState(false);
-  const [result, setResult] = useState<CheckResultWithLocation | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function check() {
-    setIsPending(true);
-    setResult(null);
-    setError(null);
-    try {
-      setResult(await requestCheckNow(monitorId));
-    } catch (error) {
-      setError(getErrorMessage(error));
-    }
-    setIsPending(false);
-  }
+  const {
+    isPending,
+    data: result,
+    error,
+    mutate,
+  } = useMutation({
+    mutationFn: () => requestCheckNow(monitorId),
+  });
 
   return (
     <div className="mt-3 text-sm">
@@ -35,7 +28,7 @@ export function CheckNow({ monitorId }: CheckNowProps) {
         size="sm"
         disabled={isPending}
         aria-busy={isPending}
-        onClick={() => void check()}
+        onClick={() => mutate()}
       >
         <IconRefresh
           data-icon="inline-start"
@@ -48,7 +41,9 @@ export function CheckNow({ monitorId }: CheckNowProps) {
         {isPending && <p className="mt-2 text-xs text-muted-foreground">Checking...</p>}
         {result && <CheckNowResult check={result} />}
         {error !== null && (
-          <p className="mt-2 text-xs text-status-down-text wrap-break-word">{error}</p>
+          <p className="mt-2 text-xs text-status-down-text wrap-break-word">
+            {getErrorMessage(error)}
+          </p>
         )}
       </div>
     </div>

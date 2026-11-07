@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import { CopyPingUrlButton } from '@/components/copy-ping-url-button';
@@ -15,13 +15,14 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
   else Reflect.deleteProperty(navigator, 'clipboard');
 });
 
 function setup(writeText = vi.fn(async () => undefined)) {
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-  render(
+  const view = render(
     <QueryClientProvider client={createTestQueryClient()}>
       <CopyPingUrlButton
         monitorId="backup"
@@ -30,7 +31,11 @@ function setup(writeText = vi.fn(async () => undefined)) {
       />
     </QueryClientProvider>,
   );
-  return { writeText, button: screen.getByRole('button', { name: 'Copy ping URL for Backup' }) };
+  return {
+    ...view,
+    writeText,
+    button: screen.getByRole('button', { name: 'Copy ping URL for Backup' }),
+  };
 }
 
 const UNAVAILABLE = 'Set HEARTBEAT_SECRET to generate ping URLs';
@@ -94,4 +99,51 @@ describe('CopyPingUrlButton', () => {
     expect(input.hasAttribute('readonly')).toBe(true);
     expect(screen.getByText('Copy failed, select the URL manually')).toBeTruthy();
   });
+});
+
+it('keeps the tick for 2000ms after the second copy', async () => {
+  vi.useFakeTimers();
+  getHeartbeatPingUrl.mockResolvedValue('https://status.test/ping/backup/tok');
+  const { button } = setup();
+  await act(async () => {
+    fireEvent.click(button);
+  });
+  expect(screen.getByText('Copied')).toBeTruthy();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  await act(async () => {
+    fireEvent.click(button);
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1999);
+  });
+  expect(screen.getByText('Copied')).toBeTruthy();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(screen.queryByText('Copied')).toBeNull();
+});
+
+it('cancels the live expiry callback on unmount', async () => {
+  vi.useFakeTimers();
+  const schedule = globalThis.setTimeout;
+  const expired = vi.fn();
+  vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay) =>
+    schedule(() => {
+      if (delay === 2000) expired();
+      if (typeof callback === 'function') callback();
+    }, delay),
+  );
+  getHeartbeatPingUrl.mockResolvedValue('https://status.test/ping/backup/tok');
+  const { button, unmount } = setup();
+  await act(async () => {
+    fireEvent.click(button);
+  });
+  expect(screen.getByText('Copied')).toBeTruthy();
+  unmount();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(expired).not.toHaveBeenCalled();
 });

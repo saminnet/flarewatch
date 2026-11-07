@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -52,21 +51,19 @@ export function MaintenanceFormDialog({
 }: MaintenanceFormDialogProps) {
   const { formData, updateField, toggleMonitor, toggleWeekday, error, isValid } =
     useMaintenanceForm(maintenance);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const callbacks = {
     onSuccess: onClose,
-    onError: (error: Error) => setErrorMessage(mutationErrorMessage(error)),
   };
   const createMutation = useCreateMaintenance(callbacks);
   const updateMutation = useUpdateMaintenance(callbacks);
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const mutation = maintenance ? updateMutation : createMutation;
   const selectedMonitors = new Set(formData.monitors);
 
   function handleSubmit() {
     const { start } = formData;
     if (!isValid || !start) return;
-    setErrorMessage(null);
     if (maintenance) {
       updateMutation.mutate({
         id: maintenance.id,
@@ -86,9 +83,9 @@ export function MaintenanceFormDialog({
           </DialogTitle>
         </DialogHeader>
 
-        {errorMessage && (
+        {mutation.error && (
           <Alert variant="destructive">
-            <AlertDescription>{errorMessage}</AlertDescription>
+            <AlertDescription>{mutationErrorMessage(mutation.error)}</AlertDescription>
           </Alert>
         )}
 

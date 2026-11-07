@@ -160,3 +160,24 @@ describe('Check now on the monitor page', () => {
     });
   });
 });
+
+it.each([
+  [200, { location: 'HEL', result: { ok: true, latency: 87 } }, 'Up'],
+  [401, { error: 'Not authenticated' }, 'Not authenticated'],
+])('clears the previous outcome during a second run after %s', async (status, body, previous) => {
+  const fetch = stubServer(status, body);
+  renderDetail(api, true);
+  fireEvent.click(checkNowButton()!);
+  await waitFor(() => expect(result().textContent).toContain(previous));
+  let answer: (response: Response) => void = () => {};
+  fetch.mockImplementationOnce(
+    () =>
+      new Promise<Response>((resolve) => {
+        answer = resolve;
+      }),
+  );
+  fireEvent.click(checkNowButton()!);
+  await waitFor(() => expect(result().textContent).toBe('Checking...'));
+  answer(Response.json({ location: 'FRA', result: { ok: false, error: 'HTTP 503' } }));
+  await waitFor(() => expect(result().textContent).toContain('HTTP 503'));
+});

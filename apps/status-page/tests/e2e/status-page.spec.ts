@@ -1137,3 +1137,26 @@ test('public feed and SVG badge keep private data out and advertise the feed', a
   await testInfo.attach('status-feed.atom', { body: xml, contentType: 'application/atom+xml' });
   await testInfo.attach('announcements.html', { body: html, contentType: 'text/html' });
 });
+
+test('saves a group toggle once and keeps it across a reload', async ({ page }) => {
+  const saves: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/_serverFn/')) {
+      saves.push(request.url());
+    }
+  });
+  await page.goto('/');
+  const toggle = page.getByRole('button', { name: 'Toggle Websites (2 monitors)' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.waitForLoadState('networkidle');
+  expect(saves).toEqual([]);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(() => saves.length).toBe(1);
+  await page.waitForLoadState('networkidle');
+  expect(saves).toHaveLength(1);
+
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+});
