@@ -30,6 +30,7 @@ import {
 import type { Env } from '../env';
 import {
   Subscribers,
+  defaultMaxSubscribers,
   drainSubscribers,
   subscriberAlarmSchema,
   type SubscriberSettings,
@@ -398,7 +399,7 @@ export class MonitorHub extends DurableObject<Env> {
     });
   }
 
-  subscribe(email: string, now: number, maxSubscribers = 200): boolean {
+  subscribe(email: string, now: number, maxSubscribers = defaultMaxSubscribers()): boolean {
     const added = this.subscribers.subscribe(email, now, maxSubscribers);
     if (added) this.ctx.waitUntil(this.scheduleSubscriberAlarm(now));
     return added;

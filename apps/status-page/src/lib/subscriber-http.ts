@@ -14,31 +14,37 @@ export async function handleSubscription(
   const env = await resolveRuntimeEnv();
   if (!env.SUBSCRIBE_RATE_LIMIT)
     return new Response('Subscriptions are unavailable', { status: 503, headers: HEADERS });
-  if (!(await env.SUBSCRIBE_RATE_LIMIT.limit({ key: clientIp(request) ?? 'unknown' })).success)
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token') ?? '';
+  // Mail providers send one-click POSTs from shared addresses, so each link has its own limit.
+  const key = (action === 'unsubscribe' && token) || (clientIp(request) ?? 'unknown');
+  if (!(await env.SUBSCRIBE_RATE_LIMIT.limit({ key })).success)
     return new Response('Too many attempts. Try again in a minute.', {
       status: 429,
       headers: HEADERS,
     });
-  const url = new URL(request.url);
-  if (action === 'unsubscribe' && request.method === 'GET') {
-    return new Response(
-      `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unsubscribe</title><main><h1>Unsubscribe from incident emails</h1><form method="post" action="${escapeXml(url.pathname + url.search)}"><input type="hidden" name="List-Unsubscribe" value="One-Click"><button type="submit">Unsubscribe</button></form><p><a href="/">Back to status page</a></p></main></html>`,
-      { headers: { ...HEADERS, 'Content-Type': 'text/html; charset=utf-8' } },
+  // Mail scanners open links, so a GET only shows the button.
+  if (action === 'unsubscribe' && request.method === 'GET')
+    return actionPage(
+      url,
+      'Unsubscribe from incident emails',
+      'Unsubscribe',
+      '<input type="hidden" name="List-Unsubscribe" value="One-Click">',
     );
-  }
+  if (action === 'confirm' && request.method === 'GET')
+    return actionPage(url, 'Confirm your subscription', 'Confirm', '');
   try {
-    if (action === 'confirm' && request.method === 'GET')
-      return withHeaders(await actOnSubscriber('confirm', url.searchParams.get('token') ?? ''));
     if (request.method !== 'POST')
       return new Response('Method Not Allowed', { status: 405, headers: HEADERS });
     const body = await readTextUpTo(request, 4097);
     if (new TextEncoder().encode(body).length > 4096)
       return new Response('Payload Too Large', { status: 413, headers: HEADERS });
-    const fields = new URLSearchParams(body);
+    if (action === 'confirm') return withHeaders(await actOnSubscriber('confirm', token));
+    const fields = await readFields(body, request.headers.get('Content-Type'));
     if (action === 'unsubscribe') {
       if (fields.get('List-Unsubscribe') !== 'One-Click')
         return new Response('Invalid unsubscribe request', { status: 400, headers: HEADERS });
-      return withHeaders(await actOnSubscriber('unsubscribe', url.searchParams.get('token') ?? ''));
+      return withHeaders(await actOnSubscriber('unsubscribe', token));
     }
     const config = getConfig();
     if (!config.statusPage?.subscribers || isPrivateOnly(config))
@@ -80,6 +86,25 @@ export async function handleSubscription(
       headers: HEADERS,
     });
   }
+}
+
+function actionPage(url: URL, heading: string, button: string, field: string): Response {
+  return new Response(
+    `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${button}</title><main><h1>${heading}</h1><form method="post" action="${escapeXml(url.pathname + url.search)}">${field}<button type="submit">${button}</button></form><p><a href="/">Back to status page</a></p></main></html>`,
+    { headers: { ...HEADERS, 'Content-Type': 'text/html; charset=utf-8' } },
+  );
+}
+
+/** RFC 8058 clients should send multipart/form-data and can send a URL-encoded form. */
+async function readFields(body: string, contentType: string | null): Promise<URLSearchParams> {
+  if (!contentType?.toLowerCase().startsWith('multipart/form-data'))
+    return new URLSearchParams(body);
+  const form = await new Response(body, { headers: { 'Content-Type': contentType } })
+    .formData()
+    .catch(() => new FormData());
+  return new URLSearchParams(
+    [...form].flatMap(([name, value]) => (typeof value === 'string' ? [[name, value]] : [])),
+  );
 }
 
 function withHeaders(response: Response): Response {

@@ -23,6 +23,12 @@ import {
 } from './subscriber-outbox';
 
 export const PENDING_SECONDS = 24 * 60 * 60;
+export const DEFAULT_DAILY_SEND_CAP = 90;
+
+/** Half the cap, so one outage and its recovery reach the whole list within a day. */
+export function defaultMaxSubscribers(dailySendCap = DEFAULT_DAILY_SEND_CAP): number {
+  return Math.max(1, Math.floor(dailySendCap / 2));
+}
 
 export class Subscribers {
   constructor(private readonly sql: Sql) {}
@@ -186,7 +192,9 @@ export async function drainSubscribers(
     const now = clock();
     const day = Math.floor(now / PENDING_SECONDS);
     const tomorrow = (day + 1) * PENDING_SECONDS;
-    const [row] = sql.exec<OutboxRow>('SELECT * FROM subscriber_outbox ORDER BY id LIMIT 1');
+    const [row] = sql.exec<OutboxRow>(
+      "SELECT * FROM subscriber_outbox ORDER BY kind = 'confirm', id LIMIT 1",
+    );
     if (!row) {
       const [pending] = sql.exec<{ at: number | null }>(
         "SELECT MIN(created_at) AS at FROM subscribers WHERE state = 'pending'",
@@ -214,7 +222,10 @@ export async function drainSubscribers(
     );
     const quota = quotaSchema.safeParse(parseJson(meta?.value ?? null)).data;
     const used = quota?.day === day ? quota.count : 0;
-    const available = Math.max(0, (settings.dailySendCap ?? 90) - used);
+    const cap = settings.dailySendCap ?? DEFAULT_DAILY_SEND_CAP;
+    // Signups can come from anyone, so they never use the half of the day's mail kept for incidents.
+    const limit = row.kind === 'confirm' ? Math.ceil(cap / 2) : cap;
+    const available = Math.max(0, limit - used);
     let batch = state.batch;
     // Resend forgets idempotency keys after 24 hours. Never replay an ambiguous older send.
     if (!cloudflare && batch && now - batch.preparedAt >= 23 * 3600) {

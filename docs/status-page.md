@@ -246,7 +246,7 @@ The SVG badge caps the label and each message at 64 characters. It accepts shiel
 
 ## Email subscribers
 
-Visitors can subscribe to incident emails for all published monitors from the Get updates button in the page header. They receive a confirmation email first, then an email when an incident opens or recovers. Grace periods, maintenance windows, dependencies and flap holds follow the webhook alert rules. Private monitors and raw failure messages stay out of these emails. Operators see the confirmed subscriber count in their account menu.
+Visitors can subscribe to incident emails for all published monitors from the Get updates button in the page header. They receive a confirmation email first, then an email when a monitor's incident opens or recovers. A manual incident and its updates appear on the page and in the feed, but send no email. Grace periods, maintenance windows, dependencies and flap holds follow the webhook alert rules. Private monitors and raw failure messages stay out of these emails. Operators see the confirmed subscriber count in their account menu.
 
 To set it up:
 
@@ -259,19 +259,19 @@ To set it up:
 subscribers: {
   from: 'Status <status@example.com>',
   dailySendCap: 90,
-  maxSubscribers: 200,
+  maxSubscribers: 45,
 },
 ```
 
-Resend is the default provider. The sender must belong to your verified Resend domain. Both caps are optional and default to the values above. Remove `subscribers` to turn the feature off. Private-only status pages do not offer subscriptions.
+Resend is the default provider. The sender must belong to your verified Resend domain. Both caps are optional and default to the values above. `maxSubscribers` defaults to half of `dailySendCap`, so one outage and its recovery reach the whole list within a day. Remove `subscribers` to turn the feature off. Private-only status pages do not offer subscriptions.
 
 The subscriber cap counts pending and confirmed addresses together. Pending subscriptions and their confirmation links expire after 24 hours. Every signup answers “Check your inbox,” including an existing address or a full list. It does not reveal membership.
 
-Mail leaves from the hub's alarm, outside the check run. Confirmation emails share the daily cap with incident emails. The counter resets at midnight UTC. A full cap delays the remaining mail until the next day, so a large list can receive updates late. Resend's Free plan currently allows 100 emails a day and 3,000 a month. Keep the default cap below those limits and leave room for other mail sent by your Resend account.
+Mail leaves from the hub's alarm, outside the check run. Incident emails go first. Confirmation emails share the daily cap, but they stop at half of it, so a burst of signups can't use up the mail kept for incidents. The counter resets at midnight UTC. A full cap delays the remaining mail until the next day, so a list larger than half the cap receives updates late. Resend's Free plan currently allows 100 emails a day and 3,000 a month. Keep the default cap below those limits and leave room for other mail sent by your Resend account.
 
 A batch reserves quota before sending. A failed or interrupted request keeps that reservation because Resend may already have accepted it. Retries reuse the saved body and idempotency key. The alarm stops retrying an ambiguous batch after 23 hours, before Resend's 24-hour key expires, and logs `Expired ambiguous subscriber batch`. That batch can lose mail rather than send duplicates. An unsubscribe takes effect before the next batch is prepared. A batch already submitted to Resend cannot be recalled.
 
-Each email includes an unsubscribe link and RFC 8058 one-click unsubscribe headers. Opening the link shows a button. A mail client's one-click POST unsubscribes directly. The monitor Worker checks HMAC tokens without a token table. Rotating `SUBSCRIBER_SECRET` invalidates outstanding confirmation and unsubscribe links.
+Each email includes an unsubscribe link and RFC 8058 one-click unsubscribe headers. Opening the link shows a button. A mail client's one-click POST unsubscribes directly, as a URL-encoded or multipart form. The link in a confirmation email also opens a button, so a mail scanner that follows it can't confirm an address. Each unsubscribe link has its own rate limit, because mail providers post from shared addresses. The monitor Worker checks HMAC tokens without a token table. Rotating `SUBSCRIBER_SECRET` invalidates outstanding confirmation and unsubscribe links.
 
 Resend reports delivery bounces asynchronously. This version does not consume bounce webhooks or remove those addresses from the local list. Resend manages its own suppression list. Check bounces and suppressions in Resend before raising the subscriber cap.
 

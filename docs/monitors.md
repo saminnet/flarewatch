@@ -204,7 +204,7 @@ Releases change `wrangler.toml` too. When a release touches the file, GitHub can
 
 For certificate expiry, set `sslCheckEnabled: true` and `sslCheckDaysBeforeExpiry: 14`. This needs Globalping or a proxy, because the Worker can't see the certificate. `sslCheckDaysBeforeExpiry` must be a whole number from 0 to 3650.
 
-A valid certificate inside this window marks the monitor as degraded, with its expiry date. FlareWatch sends one warning per monitor and expiry date, without retrying a failed delivery. A covering maintenance window pauses the alert. Renewal clears the warning, and the renewed certificate sends its own warning when it enters the window. Warnings open no incident and do not affect uptime. An expired or invalid certificate still fails the check.
+A valid certificate inside this window marks the monitor as degraded, with its expiry date. FlareWatch sends one warning per monitor and expiry date. When no webhook accepts it, FlareWatch tries again after 60 check runs, about an hour. A covering maintenance window pauses the alert. Renewal clears the warning, and the renewed certificate sends its own warning when it enters the window. Warnings open no incident and do not affect uptime. An expired or invalid certificate still fails the check.
 
 FlareWatch sends a threshold of zero to flarewatch-proxy. flarewatch-proxy fails a valid certificate in its last 24 hours because it counts whole days. Globalping uses the exact expiry time.
 

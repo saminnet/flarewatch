@@ -916,7 +916,9 @@ describe('subscribers in workerd', () => {
         "SELECT json_extract(value, '$.count') AS count FROM meta WHERE key = 'subscriber_sends'",
       ),
     ).toEqual([{ count: 1 }]);
-    expect(await sql.exec('SELECT sent_to FROM subscriber_outbox')).toEqual([{ sent_to: 1 }]);
+    expect(await sql.exec("SELECT sent_to FROM subscriber_outbox WHERE kind = 'down'")).toEqual([
+      { sent_to: 1 },
+    ]);
   });
 
   it('keeps signup idempotent and capped, and expires a pending row at 24 hours', async () => {

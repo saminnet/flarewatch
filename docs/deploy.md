@@ -118,6 +118,8 @@ A personal or small-team page costs nothing. These are the free tier limits that
 
 Every check run is saved in the hub, the monitor Worker's Durable Object, so the charts get a sample every minute. For visitors, the status page reuses what it read from the hub for 20 seconds, so a busy page doesn't cost a hub request per view. Page traffic is the limit you're most likely to reach.
 
+An open, visible status page refreshes about once a minute, so one tab left open all day makes at least 1,400 Worker requests. A background tab makes none.
+
 A monitor that keeps going down and coming back up adds about 1,500 rows written a day, more if its error changes each time.
 
 See Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).

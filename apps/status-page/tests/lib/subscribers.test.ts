@@ -121,12 +121,58 @@ describe('subscriber HTTP routes', () => {
     expect(worker).not.toHaveBeenCalled();
   });
 
-  it('forwards confirmation and refuses signup on private or disabled pages', async () => {
+  it('confirms only on a POST, so a mail scanner that opens the link changes nothing', async () => {
     const { worker } = setup();
+    const page = await handleSubscription(request('/confirm?token=abc', '', 'GET'), 'confirm');
+    expect(await page.text()).toContain('<button type="submit">Confirm</button>');
+    expect(worker).not.toHaveBeenCalled();
+
     worker.mockResolvedValueOnce(new Response('Subscription confirmed.'));
-    expect(
-      await (await handleSubscription(request('/confirm?token=abc', '', 'GET'), 'confirm')).text(),
-    ).toBe('Subscription confirmed.');
+    const confirmed = await handleSubscription(request('/confirm?token=abc', ''), 'confirm');
+    expect(await confirmed.text()).toBe('Subscription confirmed.');
+    expect(worker).toHaveBeenCalledWith('https://internal/subscribers/confirm?token=abc', {
+      method: 'POST',
+    });
+  });
+
+  it('accepts the multipart form that RFC 8058 recommends for one-click', async () => {
+    const { worker } = setup();
+    worker.mockResolvedValueOnce(new Response('Unsubscribed.'));
+    const boundary = 'one-click-boundary';
+    const multipart = (body: string) =>
+      new Request('https://status.test/subscribe/unsubscribe?token=signed-token', {
+        method: 'POST',
+        headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+        body,
+      });
+    const body = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="List-Unsubscribe"',
+      '',
+      'One-Click',
+      `--${boundary}--`,
+      '',
+    ].join('\r\n');
+
+    expect(await (await handleSubscription(multipart(body), 'unsubscribe')).text()).toBe(
+      'Unsubscribed.',
+    );
+    expect((await handleSubscription(multipart('not a form'), 'unsubscribe')).status).toBe(400);
+  });
+
+  it('rate limits unsubscribe by link, because mail providers share addresses', async () => {
+    const { limit, worker } = setup();
+    worker.mockResolvedValueOnce(new Response('Unsubscribed.'));
+    await handleSubscription(
+      request('/unsubscribe?token=signed-token', 'List-Unsubscribe=One-Click'),
+      'unsubscribe',
+    );
+    await handleSubscription(request(), 'subscribe');
+    expect(limit.mock.calls).toEqual([[{ key: 'signed-token' }], [{ key: '192.0.2.1' }]]);
+  });
+
+  it('refuses signup on private or disabled pages', async () => {
+    setup();
     pageConfig.visibility = 'private';
     expect((await handleSubscription(request(), 'subscribe')).status).toBe(404);
     pageConfig.visibility = 'public';

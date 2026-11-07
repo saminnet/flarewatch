@@ -147,3 +147,27 @@ it('accepts Cloudflare signup without a Resend key and requires its binding', as
     ).status,
   ).toBe(200);
 });
+
+it('limits the list to half the daily cap by default', async () => {
+  const { hub, db } = createHub();
+  const env = {
+    MONITOR_HUB: hubNamespace(hub),
+    SUBSCRIBER_SECRET: 'secret',
+    RESEND_API_KEY: 'test',
+    PUBLIC_ORIGIN: 'https://status.example.com',
+  };
+  const page = { subscribers: { from: 'status@example.com', dailySendCap: 4 } };
+  for (const email of ['a@example.com', 'b@example.com', 'c@example.com'])
+    await handleSubscriberRequest(
+      new Request('https://internal/subscribers', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+      env,
+      page,
+    );
+  expect(db.prepare('SELECT email FROM subscribers ORDER BY id').all()).toEqual([
+    { email: 'a@example.com' },
+    { email: 'b@example.com' },
+  ]);
+});

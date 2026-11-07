@@ -1,5 +1,6 @@
 import { isJsonObject, readJsonUpTo, type PageConfig } from '@flarewatch/shared';
 import { getHub, type Env } from './env';
+import { defaultMaxSubscribers } from './hub/subscribers';
 import { normalizeSubscriberEmail, verifySubscriberToken } from './subscriber-tokens';
 
 export async function handleSubscriberRequest(
@@ -29,7 +30,7 @@ export async function handleSubscriberRequest(
     await hub.subscribe(
       email,
       Math.floor(Date.now() / 1000),
-      page.subscribers.maxSubscribers ?? 200,
+      page.subscribers.maxSubscribers ?? defaultMaxSubscribers(page.subscribers.dailySendCap),
     );
     return new Response('Check your inbox.', { headers });
   }

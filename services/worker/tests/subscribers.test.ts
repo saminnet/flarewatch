@@ -269,6 +269,36 @@ describe('subscriber alarm drain', () => {
     expect(await storage.getAlarm()).toBeNull();
   });
 
+  it('sends incident mail ahead of confirmations queued before it', async () => {
+    const { hub, db } = createHub(undefined, mailEnv);
+    confirmed(db, 1);
+    hub.subscribe('new@example.com', T);
+    hub.record(T, [check('api', down())], policy, true);
+    const { sent } = captureMail();
+    await hub.drainSubscriberOutbox(settings, [check('api', down()).monitor], T);
+    expect(sent.map(({ body }) => body[0]?.to[0])).toEqual([
+      'person1@example.com',
+      'new@example.com',
+    ]);
+  });
+
+  it('keeps half the daily cap for incident mail during a burst of signups', async () => {
+    const { hub, db } = createHub(undefined, mailEnv);
+    for (let id = 1; id <= 6; id++) hub.subscribe(`new${id}@example.com`, T, 100);
+    const monitor = check('api', down()).monitor;
+    const { sent } = captureMail();
+    await hub.drainSubscriberOutbox({ ...settings, dailySendCap: 4 }, [monitor], T);
+    expect(sent).toHaveLength(2);
+
+    confirmed(db, 2);
+    hub.record(T + 60, [check('api', down())], policy, true);
+    await hub.drainSubscriberOutbox({ ...settings, dailySendCap: 4 }, [monitor], T + 60);
+    expect(sent.slice(2).flatMap(({ body }) => body.map(({ text }) => text))).toEqual([
+      expect.stringContaining('api is down'),
+      expect.stringContaining('api is down'),
+    ]);
+  });
+
   it('never sends a queued incident after the monitor becomes private', async () => {
     const { hub, db } = createHub(undefined, mailEnv);
     confirmed(db, 1);

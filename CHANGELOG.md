@@ -9,7 +9,7 @@ All notable changes to FlareWatch will be documented in this file.
 - `confirmVia` accepts a list of up to five places, and `confirmQuorum` sets how many must answer before their vote counts. FlareWatch records the primary error with `(confirmed elsewhere)`, or `(no confirmation available)` when too few places answer. See [Monitors](docs/monitors.md#confirm-from-a-second-place).
 - Operators can acknowledge an open incident from its entry in History or on the monitor's page. Acknowledgement stops reminders, and recovery alerts name the responder. Monitor cards show who acknowledged it and when. Visitors see only when.
 - Manual incidents have a status, affected monitors and up to 20 progress updates. They appear on the dashboard, History and Atom feed without changing monitor status or uptime.
-- Visitors can subscribe to incident and recovery emails for published monitors from a Get updates button in the page header. Operators see the subscriber count in their account menu. Mail goes out through Resend or Cloudflare Email Service, with double opt-in, one-click unsubscribe and daily send limits. Turnstile is optional. See [Email subscribers](docs/status-page.md#email-subscribers) for setup.
+- Visitors can subscribe to incident and recovery emails for published monitors from a Get updates button in the page header. Manual incidents send no email. Operators see the subscriber count in their account menu. Mail goes out through Resend or Cloudflare Email Service, with double opt-in, one-click unsubscribe and daily send limits. Turnstile is optional. See [Email subscribers](docs/status-page.md#email-subscribers) for setup.
 
 ### Fixed
 
@@ -19,6 +19,7 @@ All notable changes to FlareWatch will be documented in this file.
 
 ### Changed
 
+- A refused expiry warning is tried again after 60 check runs, about an hour. Before, it wasn't tried again.
 - Check now starts the check while it looks up the Cloudflare location, so it no longer waits for that lookup first. Scheduled runs still finish the lookup first: a Worker can have only six connections waiting at once, and a seventh would add its wait to one monitor's latency.
 - Dependencies updated, including pnpm 12, React 19.3, TanStack Start 1.169 (its first stable release) and Vite+ 1.2. After you pull, run `vp install`, and Vite+ fetches pnpm 12 for you. ([#104](https://github.com/saminnet/flarewatch/pull/104))
 
