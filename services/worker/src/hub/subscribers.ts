@@ -5,6 +5,7 @@ import {
   cloudflareSender,
   resendSender,
   PermanentSubscriberError,
+  ResendSubscriberError,
   subscriberMessageSchema,
 } from '../notifications/subscriber-sender';
 import { subscriberMail } from '../notifications/subscriber-mail';
@@ -22,7 +23,12 @@ import {
   type OutboxColumns,
 } from './subscriber-outbox';
 
-export const PENDING_SECONDS = 24 * 60 * 60;
+import {
+  MembershipState,
+  stepMembership,
+  PENDING_SECONDS,
+  type Membership,
+} from './subscriber-membership';
 export const DEFAULT_DAILY_SEND_CAP = 90;
 
 /** Half the cap, so one outage and its recovery reach the whole list within a day. */
@@ -47,14 +53,20 @@ export class Subscribers {
   subscribe(email: string, now: number, max: number): boolean {
     return this.sql.transaction(() => {
       this.purge(now);
-      const [existing] = this.sql.exec('SELECT id FROM subscribers WHERE email = ?', email);
-      if (existing) return false;
+      const [existing] = this.sql.exec<MembershipRow>(
+        'SELECT state, created_at, confirmed_at FROM subscribers WHERE email = ?',
+        email,
+      );
+      const current = readMembership(existing);
+      const next = stepMembership(current, { type: 'signup', now });
+      if (next === current || next.state !== MembershipState.Pending) return false;
       const [count] = this.sql.exec<{ total: number }>('SELECT COUNT(*) AS total FROM subscribers');
       if ((count?.total ?? 0) >= max) return false;
       const [row] = this.sql.exec<{ id: number }>(
-        "INSERT INTO subscribers (email, state, created_at) VALUES (?, 'pending', ?) RETURNING id",
+        'INSERT INTO subscribers (email, state, created_at) VALUES (?, ?, ?) RETURNING id',
         email,
-        now,
+        next.state,
+        next.createdAt,
       );
       this.sql.exec(
         "INSERT INTO subscriber_outbox (kind, payload, created_at) VALUES ('confirm', ?, ?)",
@@ -68,14 +80,23 @@ export class Subscribers {
   confirm(email: string, generation: string, now: number): boolean {
     return this.sql.transaction(() => {
       this.purge(now);
-      return (
+      const [row] = this.sql.exec<MembershipRow>(
+        'SELECT state, created_at, confirmed_at FROM subscribers WHERE email = ? AND id = ?',
+        email,
+        generation,
+      );
+      const current = readMembership(row);
+      const next = stepMembership(current, { type: 'confirm', now });
+      if (next.state !== MembershipState.Confirmed) return false;
+      if (next !== current)
         this.sql.exec(
-          "UPDATE subscribers SET state = 'confirmed', confirmed_at = COALESCE(confirmed_at, ?) WHERE email = ? AND id = ? RETURNING id",
-          now,
+          'UPDATE subscribers SET state = ?, confirmed_at = ? WHERE email = ? AND id = ?',
+          next.state,
+          next.confirmedAt,
           email,
           generation,
-        ).length > 0
-      );
+        );
+      return true;
     });
   }
 
@@ -123,9 +144,10 @@ export class Subscribers {
       alert.incident,
     );
     this.sql.exec(
-      'INSERT INTO subscriber_outbox (kind, monitor_id, payload, created_at) VALUES (?, ?, ?, ?)',
+      'INSERT INTO subscriber_outbox (kind, monitor_id, incident_id, payload, created_at) VALUES (?, ?, ?, ?, ?)',
       alert.kind,
       monitor.id,
+      alert.incident,
       JSON.stringify({ name: monitor.name, start: alert.incidentStartTime, at: alert.at ?? now }),
       now,
     );
@@ -159,6 +181,7 @@ type OutboxRow = OutboxColumns & {
   id: number;
   kind: string;
   monitor_id: string | null;
+  incident_id: number | null;
   payload: string;
   created_at: number;
 };
@@ -203,6 +226,24 @@ export async function drainSubscribers(
         await storage.setAlarm((pending.at + PENDING_SECONDS) * 1000);
       else await storage.deleteAlarm();
       return;
+    }
+    if (row.kind === 'down' && row.sent_to === 0 && row.batch_index === 0 && row.batch === null) {
+      const removed = sql.transaction(() => {
+        // A recovery row always follows its down row, so the delivery index serves this range
+        // and the outbox needs no second index, which would cost a row written per notice.
+        const [partner] = sql.exec<{ id: number }>(
+          "SELECT id FROM subscriber_outbox WHERE (kind = 'confirm') = 0 AND id > ? AND incident_id = ? AND kind = 'recovered' AND sent_to = 0 AND batch_index = 0 AND batch IS NULL LIMIT 1",
+          row.id,
+          row.incident_id,
+        );
+        if (!partner) return false;
+        sql.exec('DELETE FROM subscriber_outbox WHERE id IN (?, ?)', row.id, partner.id);
+        return true;
+      });
+      if (removed) {
+        request--;
+        continue;
+      }
     }
     if (!sender || !env.SUBSCRIBER_SECRET || !env.PUBLIC_ORIGIN) {
       await storage.setAlarm((now + 3600) * 1000);
@@ -290,7 +331,7 @@ export async function drainSubscribers(
     await storage.setAlarm((now + Math.min(3600, 30 * 2 ** Math.min(state.attempts, 7))) * 1000);
     try {
       const messages = z.array(subscriberMessageSchema).parse(parseJson(batch.body));
-      const key = `subscribers/${row.id}/${state.batchIndex}`;
+      const key = `subscribers/${subscriberInstallId(sql)}/${row.id}/${state.batchIndex}`;
       if (cloudflare) {
         while (batch.sent < messages.length) {
           const sendNow = clock();
@@ -306,6 +347,13 @@ export async function drainSubscribers(
       } else await sender.send(messages, key);
       finishBatch(sql, row, state);
     } catch (error) {
+      if (error instanceof ResendSubscriberError && error.action === 'skip batch') {
+        finishBatch(sql, row, state);
+        console.error('Subscriber batch skipped', { event: row.id, cause: String(error) });
+        continue;
+      }
+      if (error instanceof ResendSubscriberError && error.action === 'next day')
+        await storage.setAlarm(tomorrow * 1000);
       if (error instanceof PermanentSubscriberError) {
         writeOutbox(sql, row.id, stepOutbox(state, { type: 'row finished' }));
         console.error('Permanent subscriber send failure', { event: row.id, cause: String(error) });
@@ -350,10 +398,33 @@ function writeOutbox(sql: Sql, id: number, state: OutboxState): void {
   );
 }
 
+function subscriberInstallId(sql: Sql): string {
+  const [install] = sql.exec<{ value: string }>(
+    "SELECT value FROM meta WHERE key = 'subscriber_install_id'",
+  );
+  if (install) return install.value;
+  const installId = crypto.randomUUID();
+  setMeta(sql, 'subscriber_install_id', installId);
+  return installId;
+}
+
 function finishBatch(sql: Sql, row: OutboxRow, state: OutboxState): void {
   writeOutbox(
     sql,
     row.id,
     stepOutbox(state, { type: row.kind === 'confirm' ? 'row finished' : 'batch sent' }),
   );
+}
+
+type MembershipRow = {
+  state: MembershipState.Pending | MembershipState.Confirmed;
+  created_at: number;
+  confirmed_at: number | null;
+};
+
+function readMembership(row: MembershipRow | undefined): Membership {
+  if (!row) return { state: MembershipState.Absent };
+  return row.state === MembershipState.Pending
+    ? { state: row.state, createdAt: row.created_at }
+    : { state: row.state, confirmedAt: row.confirmed_at! };
 }

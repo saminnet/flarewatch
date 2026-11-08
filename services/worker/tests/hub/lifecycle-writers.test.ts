@@ -11,6 +11,7 @@ const LIFECYCLE_TABLES = new Set([
   'pending_recoveries',
   'expiry_alerts',
   'subscriber_outbox',
+  'subscribers',
 ]);
 
 /**
@@ -26,8 +27,8 @@ const WRITERS = {
   'incidents.acked_by': ['hub/incidents.ts'],
   'incidents.alert': ['hub/alerts.ts', 'hub/incidents.ts'],
   'incidents.alert_attempts': ['hub/alerts.ts', 'hub/incidents.ts'],
-  'incidents.alert_claimed_at': ['hub/alerts.ts'],
-  'incidents.alert_run': ['hub/alerts.ts'],
+  'incidents.alert_claimed_at': ['hub/alerts.ts', 'hub/incidents.ts'],
+  'incidents.alert_run': ['hub/alerts.ts', 'hub/incidents.ts'],
   'incidents.end_at': ['hub/incidents.ts'],
   'incidents.error_alerts': ['hub/alerts.ts', 'hub/incidents.ts'],
   'incidents.error_due': ['hub/alerts.ts', 'hub/incidents.ts'],
@@ -59,10 +60,15 @@ const WRITERS = {
   'subscriber_outbox.batch': ['hub/subscribers.ts'],
   'subscriber_outbox.batch_index': ['hub/subscribers.ts'],
   'subscriber_outbox.created_at': ['hub/subscribers.ts'],
+  'subscriber_outbox.incident_id': ['hub/subscribers.ts'],
   'subscriber_outbox.kind': ['hub/subscribers.ts'],
   'subscriber_outbox.monitor_id': ['hub/subscribers.ts'],
   'subscriber_outbox.payload': ['hub/subscribers.ts'],
   'subscriber_outbox.sent_to': ['hub/subscribers.ts'],
+  'subscribers.email': ['hub/subscribers.ts'],
+  'subscribers.state': ['hub/subscribers.ts'],
+  'subscribers.created_at': ['hub/subscribers.ts'],
+  'subscribers.confirmed_at': ['hub/subscribers.ts'],
 };
 
 function writtenColumns(sql: string) {

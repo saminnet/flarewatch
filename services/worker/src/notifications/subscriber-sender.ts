@@ -21,6 +21,25 @@ export type SubscriberEmailBinding = {
 
 export class PermanentSubscriberError extends Error {}
 
+export class ResendSubscriberError extends Error {
+  constructor(
+    message: string,
+    readonly action: 'skip batch' | 'next day' | 'retry',
+  ) {
+    super(message);
+  }
+}
+
+const resendErrorSchema = z.object({ name: z.string() });
+
+function resendAction(status: number, name: string): ResendSubscriberError['action'] {
+  if (status === 400 || status === 422) return 'skip batch';
+  if (status === 409 && name === 'invalid_idempotent_request') return 'skip batch';
+  if (status === 429 && (name === 'daily_quota_exceeded' || name === 'monthly_quota_exceeded'))
+    return 'next day';
+  return 'retry';
+}
+
 export function resendSender(apiKey: string, fetcher: typeof fetch = fetch): SubscriberSender {
   return {
     maxPerBatch: 100,
@@ -42,8 +61,18 @@ export function resendSender(apiKey: string, fetcher: typeof fetch = fetch): Sub
           body: JSON.stringify(messages),
           signal: controller.signal,
         });
-        if (!response.ok)
-          throw new Error(`https://api.resend.com/emails/batch answered ${response.status}`);
+        if (!response.ok) {
+          const body: unknown = await response.json().catch(() => undefined);
+          const name = (resendErrorSchema.safeParse(body).data?.name ?? 'unknown').replaceAll(
+            apiKey,
+            '[redacted]',
+          );
+          const status = response.status;
+          throw new ResendSubscriberError(
+            `https://api.resend.com/emails/batch answered ${status} (${name})`,
+            resendAction(status, name),
+          );
+        }
         const result: unknown = await response.json();
         const accepted = z
           .object({ data: z.array(z.object({ id: z.string() })) })
@@ -52,6 +81,10 @@ export function resendSender(apiKey: string, fetcher: typeof fetch = fetch): Sub
           throw new Error(
             'https://api.resend.com/emails/batch returned an invalid acknowledgement',
           );
+      } catch (error) {
+        if (error instanceof ResendSubscriberError) throw error;
+        const cause = String(error).replaceAll(apiKey, '[redacted]');
+        throw new Error(`https://api.resend.com/emails/batch: ${cause}`);
       } finally {
         clearTimeout(timeout);
       }

@@ -1008,7 +1008,10 @@ describe('subscribers in workerd', () => {
     expect((await drain(hub, T0, 1, '&fail=true')).body).toEqual([]);
     await evict(hub);
     const resumed = await drain(hub, T0 + 30, 1);
-    expect(resumed.body.map(({ key }) => key)).toEqual(['subscribers/1/0']);
+    const install = await sql.exec("SELECT value FROM meta WHERE key = 'subscriber_install_id'");
+    const installId = install[0]?.value;
+    if (typeof installId !== 'string') throw new Error('Missing install id');
+    expect(resumed.body.map(({ key }) => key)).toEqual(['subscribers/' + installId + '/1/0']);
     expect(resumed.body[0]?.recipients).toEqual(['person@example.com']);
   });
 

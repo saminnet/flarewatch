@@ -182,6 +182,7 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       kind TEXT NOT NULL,
       monitor_id TEXT,
+      incident_id INTEGER,
       payload TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       sent_to INTEGER NOT NULL DEFAULT 0,
@@ -189,7 +190,8 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
       batch TEXT,
       attempts INTEGER NOT NULL DEFAULT 0
     )`,
-    `CREATE INDEX subscriber_outbox_expiry ON subscriber_outbox (kind, created_at)`,
+    `CREATE INDEX subscriber_outbox_delivery ON subscriber_outbox ((kind = 'confirm'), id)`,
+    `CREATE INDEX subscriber_outbox_expiry ON subscriber_outbox (kind, created_at) WHERE kind = 'confirm'`,
     `ALTER TABLE incidents ADD COLUMN subscriber_notified INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE incidents ADD COLUMN subscriber_recovered INTEGER NOT NULL DEFAULT 0`,
   ],

@@ -174,12 +174,29 @@ export class Alerts {
       const recovering = open.upSince !== null;
 
       // A claim older than any run means the run that made it died before reporting back.
-      const due = stepDownAlert(open.alert, {
+      const down = stepDownAlert(open.alert, {
         type: 'eligible',
         now,
         run: runNumber,
-      }).claim;
-      if (due) {
+      });
+      const followUp = stepErrorFollowUp(errorFollowUpLifecycle(open.alert, open.reopenedAt), {
+        type: 'eligible',
+        run: runNumber,
+        changed: change?.changeType === 'error',
+        eligible: webhook && state === 'sent' && !quiet && !recovering && !policy.skipErrorChanges,
+      });
+      const reminder = stepReminder(reminderLifecycle(open.alert, open.reopenedAt), {
+        type: 'eligible',
+        run: runNumber,
+        interval: monitor.reminderEveryChecks,
+        eligible:
+          webhook &&
+          state === 'sent' &&
+          open.incident.acked_at === undefined &&
+          !quiet &&
+          !recovering,
+      });
+      if (down.claim) {
         // A job's own graceSeconds already delays its down state.
         const grace = monitor.method === 'HEARTBEAT' ? 0 : policy.gracePeriodSeconds;
         // One run's wait lets a dependency that fails a run later cover this monitor.
@@ -193,9 +210,10 @@ export class Alerts {
           continue;
         // Claimed so an overlapping run skips it, until record hears how delivery went.
         this.sql.exec(
-          "UPDATE incidents SET alert = 'sending', alert_claimed_at = ?, alert_run = ? WHERE id = ?",
-          now,
-          runNumber,
+          'UPDATE incidents SET alert = ?, alert_claimed_at = ?, alert_run = ? WHERE id = ?',
+          down.next.state,
+          down.next.claimedAt,
+          down.next.run,
           open.id,
         );
         alerts.push({
@@ -210,19 +228,13 @@ export class Alerts {
             .filter((other) => isDown(other.id) && ancestors.get(other.id)?.has(monitor.id))
             .map((other) => other.name),
         });
-      } else if (
-        stepErrorFollowUp(errorFollowUpLifecycle(open.alert, open.reopenedAt), {
-          type: 'eligible',
-          run: runNumber,
-          changed: change?.changeType === 'error',
-          eligible:
-            webhook && state === 'sent' && !quiet && !recovering && !policy.skipErrorChanges,
-        }).claim
-      ) {
+      } else if (followUp.claim) {
         // Counted now, so an overlapping run cannot pass the cap; a refused one is given back.
         this.sql.exec(
-          'UPDATE incidents SET error_alerts = error_alerts + 1, error_due = 0, error_run = ? WHERE id = ?',
-          runNumber,
+          'UPDATE incidents SET error_alerts = ?, error_due = ?, error_run = ? WHERE id = ?',
+          followUp.next.count,
+          Number(followUp.next.state === ErrorFollowUpState.Owed),
+          followUp.next.run,
           open.id,
         );
         alerts.push({
@@ -235,21 +247,13 @@ export class Alerts {
           error,
           alsoDown: [],
         });
-      } else if (
-        stepReminder(reminderLifecycle(open.alert, open.reopenedAt), {
-          type: 'eligible',
-          run: runNumber,
-          interval: monitor.reminderEveryChecks,
-          eligible:
-            webhook &&
-            state === 'sent' &&
-            open.incident.acked_at === undefined &&
-            !quiet &&
-            !recovering,
-        }).claim
-      ) {
+      } else if (reminder.claim) {
         // Moving the count on is the claim: an overlapping run finds the next reminder not due.
-        this.sql.exec('UPDATE incidents SET alert_run = ? WHERE id = ?', runNumber, open.id);
+        this.sql.exec(
+          'UPDATE incidents SET alert_run = ? WHERE id = ?',
+          reminder.next.run,
+          open.id,
+        );
         alerts.push({
           monitorId: monitor.id,
           incident: open.id,
@@ -316,11 +320,12 @@ export class Alerts {
         this.sql.exec('DELETE FROM pending_recoveries WHERE monitor_id = ?', row.monitor_id);
         continue;
       }
-      if (transition.effect !== 'claim') continue;
+      if (transition.effect !== 'claim' || transition.next.state !== RecoveryState.Claimed)
+        continue;
       this.sql.exec(
         'UPDATE pending_recoveries SET claimed_run = ?, claimed_at = ? WHERE monitor_id = ?',
-        runNumber,
-        now,
+        transition.next.run,
+        transition.next.at,
         row.monitor_id,
       );
       claimed.push(

@@ -181,8 +181,12 @@ export class Incidents {
         this.close(open, transition.next.end);
         return up(true);
       }
-      if (transition.effect === 'hold')
-        this.sql.exec('UPDATE incidents SET up_since = ? WHERE id = ?', now, open.id);
+      if (transition.effect === 'hold' && transition.next.state === IncidentState.RecoveryHold)
+        this.sql.exec(
+          'UPDATE incidents SET up_since = ? WHERE id = ?',
+          transition.next.upSince,
+          open.id,
+        );
       return up(false);
     }
 
@@ -197,8 +201,12 @@ export class Incidents {
         recent ? { state: IncidentState.Closed, end: recent.end_at ?? now } : lifecycle,
         { type: 'failed', now, changed: false },
       );
-      if (transition.effect === 'reopen' && recent)
-        return this.reopen(monitorId, recent, error, now);
+      if (
+        transition.effect === 'reopen' &&
+        transition.next.state === IncidentState.ReopenedDown &&
+        recent
+      )
+        return this.reopen(monitorId, recent, error, transition.next.generation);
       this.sql.exec(
         'INSERT INTO incidents (monitor_id, starts, errors) VALUES (?, ?, ?)',
         monitorId,
@@ -225,19 +233,21 @@ export class Incidents {
     });
     if (segments) {
       this.sql.exec(
-        `UPDATE incidents SET starts = ?, errors = ?, up_since = NULL,
-           relapsed_at = CASE WHEN up_since IS NULL THEN relapsed_at ELSE ? END
+        `UPDATE incidents SET starts = ?, errors = ?, up_since = NULL, relapsed_at = ?
          WHERE id = ?`,
         JSON.stringify(segments.start),
         JSON.stringify(segments.error),
-        now,
+        transition.next.state === IncidentState.ReopenedDown ? transition.next.relapse : null,
         open.id,
       );
       this.setNewest(monitorId, segments, true);
-    } else if (transition.effect === 'relapse') {
+    } else if (
+      transition.effect === 'relapse' &&
+      transition.next.state === IncidentState.ReopenedDown
+    ) {
       this.sql.exec(
         'UPDATE incidents SET up_since = NULL, relapsed_at = ? WHERE id = ?',
-        now,
+        transition.next.relapse,
         open.id,
       );
     }
@@ -383,7 +393,7 @@ export class Incidents {
       `UPDATE incidents SET end_at = NULL, reopened_at = ?, relapsed_at = NULL, starts = ?, errors = ?,
          acked_at = NULL, acked_by = NULL,
          subscriber_notified = ?, subscriber_recovered = ?, error_alerts = ?, error_due = ?,
-         reminders = ?, alert_attempts = ?, alert = ?
+         reminders = ?, alert_attempts = ?, alert = ?, alert_claimed_at = ?, alert_run = ?
        WHERE id = ?`,
       now,
       JSON.stringify(reopened.start),
@@ -395,6 +405,8 @@ export class Incidents {
       reminder.count,
       down.attempts,
       down.state,
+      down.claimedAt,
+      down.run,
       row.id,
     );
     this.setNewest(monitorId, reopened, true);

@@ -197,7 +197,10 @@ describe('subscriber alarm drain', () => {
     expect(sent.flatMap(({ body }) => body).flatMap(({ to }) => to)).not.toContain(
       'person101@example.com',
     );
-    expect(sent.map(({ key }) => key)).toEqual(['subscribers/1/0', 'subscribers/1/1']);
+    expect(sent.map(({ key }) => key)).toEqual([
+      expect.stringMatching(/^subscribers\/[0-9a-f-]{36}\/1\/0$/),
+      expect.stringMatching(/^subscribers\/[0-9a-f-]{36}\/1\/1$/),
+    ]);
     await hub.drainSubscriberOutbox(settings, [check('api', down()).monitor], T + 1);
     expect(sent).toHaveLength(2);
   });
@@ -251,7 +254,7 @@ describe('subscriber alarm drain', () => {
     expect(sent).toHaveLength(1);
     expect(network.mock.calls[1]?.[1]?.body).toBe(failedRequest?.body);
     expect(new Headers(network.mock.calls[1]?.[1]?.headers).get('Idempotency-Key')).toBe(
-      'subscribers/1/0',
+      new Headers(failedRequest?.headers).get('Idempotency-Key'),
     );
   });
 
@@ -543,7 +546,7 @@ it('replays the same recipients and key after a crash between send and cursor wr
     [check('api', down()).monitor],
     T + 30,
   );
-  expect(sent.map(({ key }) => key)).toEqual(['subscribers/1/0', 'subscribers/1/0']);
+  expect(sent.map(({ key }) => key)).toEqual([sent[0]?.key, sent[0]?.key]);
   expect(sent.map(({ body }) => body.map(({ to }) => to))).toEqual([
     [['person1@example.com'], ['person2@example.com']],
     [['person1@example.com'], ['person2@example.com']],
@@ -574,7 +577,10 @@ it('keeps recipient IDs stable when addresses leave and join between batches', a
     [check('api', down()).monitor],
     T,
   );
-  expect(sent.map(({ key }) => key)).toEqual(['subscribers/1/0', 'subscribers/1/1']);
+  expect(sent.map(({ key }) => key)).toEqual([
+    expect.stringMatching(/^subscribers\/[0-9a-f-]{36}\/1\/0$/),
+    expect.stringMatching(/^subscribers\/[0-9a-f-]{36}\/1\/1$/),
+  ]);
   expect(sent.flatMap(({ body }) => body.flatMap(({ to }) => to))).toEqual([
     ...Array.from({ length: 100 }, (_, index) => `person${index + 1}@example.com`),
     'person102@example.com',
@@ -590,4 +596,236 @@ it('does not enqueue recovery when subscribers missed the incident down notice',
   expect(
     db.prepare('SELECT subscriber_notified, subscriber_recovered FROM incidents').get(),
   ).toEqual({ subscriber_notified: 0, subscriber_recovered: 0 });
+});
+
+it.each([
+  [400, 'validation_error'],
+  [400, 'invalid_idempotency_key'],
+  [422, 'missing_required_field'],
+  [422, 'invalid_parameter'],
+  [409, 'invalid_idempotent_request'],
+  [400, null],
+  [422, null],
+])('skips only the rejected batch for Resend %s %s', async (status, name) => {
+  const { hub, db } = createHub(undefined, mailEnv);
+  confirmed(db, 101);
+  hub.record(T, [check('api', down())], policy, true);
+  const { network, sent } = captureMail();
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  network.mockResolvedValueOnce(
+    name === null
+      ? new Response('invalid', { status })
+      : Response.json({ name, message: mailEnv.RESEND_API_KEY }, { status }),
+  );
+  await hub.drainSubscriberOutbox(settings, [check('api', down()).monitor], T);
+  expect(sent.flatMap(({ body }) => body.flatMap(({ to }) => to))).toEqual([
+    'person101@example.com',
+  ]);
+  expect(outbox(db)).toEqual([]);
+  const error = JSON.stringify(log.mock.calls);
+  expect(error).toContain('https://api.resend.com/emails/batch');
+  expect(error).toContain(String(status));
+  expect(error).toContain(name ?? 'unknown');
+  expect(error).not.toContain(mailEnv.RESEND_API_KEY);
+});
+
+it.each(['daily_quota_exceeded', 'monthly_quota_exceeded'])(
+  'keeps the batch until next UTC day for %s',
+  async (name) => {
+    const { hub, db, storage } = createHub(undefined, mailEnv);
+    confirmed(db, 1);
+    hub.record(T, [check('api', down())], policy, true);
+    const { network, sent } = captureMail();
+    network.mockResolvedValueOnce(Response.json({ name }, { status: 429 }));
+    await hub.drainSubscriberOutbox(settings, [check('api', down()).monitor], T);
+    expect(await storage.getAlarm()).toBe((Math.floor(T / 86400) + 1) * 86400000);
+    expect(db.prepare('SELECT batch FROM subscriber_outbox').get()?.batch).toBeTypeOf('string');
+    expect(sent).toEqual([]);
+    const midnight = (Math.floor(T / 86400) + 1) * 86400;
+    await hub.drainSubscriberOutbox(settings, [check('api', down()).monitor], midnight);
+    expect(network.mock.calls[1]?.[1]?.body).toBe(network.mock.calls[0]?.[1]?.body);
+  },
+);
+
+it.each([
+  [409, 'concurrent_idempotent_requests'],
+  [409, 'resource_locked'],
+  [409, null],
+  [429, 'rate_limit_exceeded'],
+  [429, null],
+  [401, 'validation_error'],
+  [403, 'validation_error'],
+  [500, 'application_error'],
+  [503, 'service_unavailable'],
+  [401, null],
+  [403, null],
+  [503, null],
+])('retains Resend %s %s with capped backoff', async (status, name) => {
+  const { hub, db, storage } = createHub(undefined, mailEnv);
+  confirmed(db, 1);
+  hub.record(T, [check('api', down())], policy, true);
+  const { network } = captureMail();
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  network.mockImplementation(async () =>
+    name === null
+      ? new Response('invalid', { status })
+      : Response.json({ name, message: mailEnv.RESEND_API_KEY }, { status }),
+  );
+  const monitors = [check('api', down()).monitor];
+  await hub.drainSubscriberOutbox(settings, monitors, T);
+  const batch = db.prepare('SELECT batch FROM subscriber_outbox').get()?.batch;
+  expect(batch).toBeTypeOf('string');
+  expect(await storage.getAlarm()).toBe((T + 30) * 1000);
+  expect(log).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(log.mock.calls)).toContain(`answered ${status} (${name ?? 'unknown'})`);
+  expect(JSON.stringify(log.mock.calls)).toContain('https://api.resend.com/emails/batch');
+  expect(JSON.stringify(log.mock.calls)).not.toContain(mailEnv.RESEND_API_KEY);
+  db.exec('UPDATE subscriber_outbox SET attempts = 20');
+  await hub.drainSubscriberOutbox(settings, monitors, T + 30);
+  expect(await storage.getAlarm()).toBe((T + 30 + 3600) * 1000);
+  expect(db.prepare('SELECT batch FROM subscriber_outbox').get()?.batch).toBe(batch);
+});
+
+it('gives two installs distinct keys for the same row and batch', async () => {
+  const keys: (string | null)[] = [];
+  for (let install = 0; install < 2; install++) {
+    const { hub, db } = createHub(undefined, mailEnv);
+    confirmed(db, 1);
+    hub.record(T, [check('api', down())], policy, true);
+    const { sent } = captureMail();
+    await hub.drainSubscriberOutbox(settings, [check('api', down()).monitor], T);
+    keys.push(sent[0]!.key);
+    expect(sent[0]!.key).toMatch(/^subscribers\/[0-9a-f-]{36}\/1\/0$/);
+  }
+  expect(keys[0]).not.toBe(keys[1]);
+});
+
+it('uses the delivery index without a temporary B-tree', () => {
+  const { db } = createHub();
+  const plan = db
+    .prepare(
+      "EXPLAIN QUERY PLAN SELECT * FROM subscriber_outbox ORDER BY kind = 'confirm', id LIMIT 1",
+    )
+    .all();
+  expect(plan.map(({ detail }) => detail).join('\n')).toContain(
+    'USING INDEX subscriber_outbox_delivery',
+  );
+  expect(plan.map(({ detail }) => detail).join('\n')).not.toContain('TEMP B-TREE');
+  const partner = db
+    .prepare(
+      "EXPLAIN QUERY PLAN SELECT id FROM subscriber_outbox WHERE (kind = 'confirm') = 0 AND id > ? AND incident_id = ? AND kind = 'recovered' AND sent_to = 0 AND batch_index = 0 AND batch IS NULL LIMIT 1",
+    )
+    .all(1, 1);
+  expect(partner.map(({ detail }) => detail).join('\n')).toContain(
+    'USING INDEX subscriber_outbox_delivery (<expr>=? AND id>?)',
+  );
+  const expiry = db
+    .prepare(
+      "EXPLAIN QUERY PLAN DELETE FROM subscriber_outbox WHERE kind = 'confirm' AND created_at <= ?",
+    )
+    .all(T);
+  expect(expiry.map(({ detail }) => detail).join('\n')).toContain(
+    'USING INDEX subscriber_outbox_expiry',
+  );
+  const indexes = db.prepare("PRAGMA index_list('subscriber_outbox')").all();
+  expect(new Set(indexes.filter(({ partial }) => partial === 0).map(({ name }) => name))).toEqual(
+    new Set(['subscriber_outbox_delivery']),
+  );
+});
+
+it.each([1, 200])(
+  'deletes an unstarted incident pair before the quota check (cap %s)',
+  async (dailySendCap) => {
+    const { hub, db } = createHub(undefined, mailEnv);
+    confirmed(db, 1);
+    if (dailySendCap === 1)
+      db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
+        'subscriber_sends',
+        JSON.stringify({ day: Math.floor(T / 86400), count: 1 }),
+      );
+    hub.record(T, [check('api', down())], policy, true);
+    hub.record(T + 60, [check('api', up())], policy, true);
+    expect(db.prepare('SELECT incident_id FROM subscriber_outbox ORDER BY id').all()).toEqual([
+      { incident_id: 1 },
+      { incident_id: 1 },
+    ]);
+    const { network } = captureMail();
+    await hub.drainSubscriberOutbox(
+      { ...settings, dailySendCap },
+      [check('api', down()).monitor],
+      T + 60,
+    );
+    expect(outbox(db)).toEqual([]);
+    expect(network).not.toHaveBeenCalled();
+    expect(
+      db.prepare('SELECT subscriber_notified, subscriber_recovered FROM incidents').get(),
+    ).toEqual({ subscriber_notified: 1, subscriber_recovered: 1 });
+  },
+);
+
+it.each(['sent one batch', 'batch persisted'])(
+  'finishes down and recovery when down has %s',
+  async (progress) => {
+    const { hub, db } = createHub(undefined, mailEnv);
+    confirmed(db, 2);
+    hub.record(T, [check('api', down())], policy, true);
+    const { network, sent } = captureMail();
+    if (progress === 'batch persisted') network.mockRejectedValueOnce(new Error('connection lost'));
+    await hub.drainSubscriberOutbox(
+      { ...settings, dailySendCap: 1 },
+      [check('api', down()).monitor],
+      T,
+    );
+    hub.record(T + 60, [check('api', up())], policy, true);
+    await hub.drainSubscriberOutbox(settings, [check('api', down()).monitor], T + 60);
+    expect(sent.flatMap(({ body }) => body.map(({ text }) => text))).toEqual([
+      expect.stringContaining('api is down'),
+      expect.stringContaining('api is down'),
+      expect.stringContaining('api is up'),
+      expect.stringContaining('api is up'),
+    ]);
+    expect(outbox(db)).toEqual([]);
+  },
+);
+
+it('bounds twenty closed incidents while the daily cap is used up', async () => {
+  const { hub, db } = createHub(undefined, mailEnv);
+  confirmed(db, 1);
+  const { network } = captureMail();
+  for (let incident = 0; incident < 20; incident++) {
+    const at = T + incident * 1000;
+    hub.record(at, [check('api', down())], policy, true);
+    hub.record(at + 60, [check('api', up())], policy, true);
+  }
+  db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
+    'subscriber_sends',
+    JSON.stringify({ day: Math.floor((T + 20_000) / 86400), count: 1 }),
+  );
+  hub.record(T + 20_000, [check('api', down())], policy, true);
+  await hub.drainSubscriberOutbox(
+    { ...settings, dailySendCap: 1 },
+    [check('api', down()).monitor],
+    T + 20_000,
+  );
+  expect(outbox(db).map(({ kind }) => kind)).toEqual(['down']);
+  expect(network).not.toHaveBeenCalled();
+});
+
+it('rejects a stale generation after the same address signs up again', () => {
+  const { hub } = createHub();
+  hub.subscribe('one@example.com', T);
+  hub.unsubscribe('one@example.com');
+  hub.subscribe('one@example.com', T + 1);
+  expect(hub.confirmSubscriber('one@example.com', '1', T + 2)).toBe(false);
+  expect(hub.confirmSubscriber('one@example.com', '2', T + 2)).toBe(true);
+  expect(hub.confirmSubscriber('one@example.com', '2', T + 3)).toBe(true);
+  expect(hub.subscriberCount()).toBe(1);
+});
+
+it('keeps the original confirmation time on repeated confirmation', () => {
+  const { hub, db } = createHub();
+  hub.subscribe('one@example.com', T);
+  expect(hub.confirmSubscriber('one@example.com', '1', T + 1)).toBe(true);
+  expect(hub.confirmSubscriber('one@example.com', '1', T + 86400)).toBe(true);
+  expect(db.prepare('SELECT confirmed_at FROM subscribers').get()).toEqual({ confirmed_at: T + 1 });
 });

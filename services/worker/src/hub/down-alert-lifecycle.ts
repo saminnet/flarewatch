@@ -34,10 +34,7 @@ export function stepDownAlert(current: DownAlert, event: DownAlertEvent) {
   switch (event.type) {
     case 'reopened':
       return {
-        next:
-          current.state === DownAlertState.Pending || current.state === DownAlertState.Sending
-            ? current
-            : { ...current, state: DownAlertState.Pending, attempts: 0 },
+        next: { state: DownAlertState.Pending, attempts: 0, claimedAt: null, run: null },
         claim: false,
       };
     case 'eligible': {

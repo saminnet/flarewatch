@@ -238,7 +238,18 @@
             "error": "A"
           }
         ],
-        "alerts": [],
+        "alerts": [
+          {
+            "monitorId": "api",
+            "incident": 1,
+            "reopenedAt": 1960,
+            "run": 3,
+            "kind": "down",
+            "incidentStartTime": 1000,
+            "error": "A",
+            "alsoDown": []
+          }
+        ],
         "history": [
           {
             "start": [1000],
@@ -560,7 +571,18 @@
             "error": "A"
           }
         ],
-        "alerts": [],
+        "alerts": [
+          {
+            "monitorId": "api",
+            "incident": 1,
+            "reopenedAt": 1120,
+            "run": 3,
+            "kind": "down",
+            "incidentStartTime": 1000,
+            "error": "A",
+            "alsoDown": []
+          }
+        ],
         "history": [
           {
             "start": [1000],
@@ -706,7 +728,18 @@
             "error": "A"
           }
         ],
-        "alerts": [],
+        "alerts": [
+          {
+            "monitorId": "api",
+            "incident": 1,
+            "reopenedAt": 1120,
+            "run": 3,
+            "kind": "down",
+            "incidentStartTime": 1000,
+            "error": "A",
+            "alsoDown": []
+          }
+        ],
         "history": [
           {
             "start": [1000],
@@ -954,7 +987,18 @@
             "error": "A"
           }
         ],
-        "alerts": [],
+        "alerts": [
+          {
+            "monitorId": "api",
+            "incident": 1,
+            "reopenedAt": 1120,
+            "run": 3,
+            "kind": "down",
+            "incidentStartTime": 1000,
+            "error": "A",
+            "alsoDown": []
+          }
+        ],
         "history": [
           {
             "start": [1000],
@@ -1505,7 +1549,18 @@
             "error": "Certificate expires in 14 days (threshold: 30)"
           }
         ],
-        "alerts": [],
+        "alerts": [
+          {
+            "monitorId": "api",
+            "incident": 1,
+            "reopenedAt": 1120,
+            "run": 3,
+            "kind": "down",
+            "incidentStartTime": 1000,
+            "error": "Certificate expires in 14 days (threshold: 30)",
+            "alsoDown": []
+          }
+        ],
         "history": [
           {
             "start": [1000],
@@ -1695,7 +1750,18 @@
             "error": "SSL certificate expires in 14 days (threshold: 30)"
           }
         ],
-        "alerts": [],
+        "alerts": [
+          {
+            "monitorId": "api",
+            "incident": 1,
+            "reopenedAt": 1120,
+            "run": 3,
+            "kind": "down",
+            "incidentStartTime": 1000,
+            "error": "SSL certificate expires in 14 days (threshold: 30)",
+            "alsoDown": []
+          }
+        ],
         "history": [
           {
             "start": [1000],
@@ -2203,7 +2269,18 @@
             "error": "A"
           }
         ],
-        "alerts": [],
+        "alerts": [
+          {
+            "monitorId": "api",
+            "incident": 1,
+            "reopenedAt": 1240,
+            "run": 5,
+            "kind": "down",
+            "incidentStartTime": 1000,
+            "error": "A",
+            "alsoDown": []
+          }
+        ],
         "history": [
           {
             "start": [1000],
@@ -2420,7 +2497,18 @@
             "error": "A"
           }
         ],
-        "alerts": [],
+        "alerts": [
+          {
+            "monitorId": "api",
+            "incident": 1,
+            "reopenedAt": 1240,
+            "run": 5,
+            "kind": "down",
+            "incidentStartTime": 1000,
+            "error": "A",
+            "alsoDown": []
+          }
+        ],
         "history": [
           {
             "start": [1000],
@@ -3972,7 +4060,18 @@
             "error": "A"
           }
         ],
-        "alerts": [],
+        "alerts": [
+          {
+            "monitorId": "api",
+            "incident": 1,
+            "reopenedAt": 1120,
+            "run": 3,
+            "kind": "down",
+            "incidentStartTime": 1000,
+            "error": "A",
+            "alsoDown": []
+          }
+        ],
         "history": [
           {
             "start": [1000],
