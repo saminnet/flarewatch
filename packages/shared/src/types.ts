@@ -87,7 +87,13 @@ export type Maintenance = MaintenanceConfig & {
 
 export type IncidentStatus = 'investigating' | 'identified' | 'monitoring' | 'resolved';
 
-export type AnnouncementUpdate = { at: string; status: IncidentStatus; body: string; by: string };
+export type AnnouncementUpdate = {
+  at: string;
+  status: IncidentStatus;
+  body: string;
+  /** The responder. The hub always stores it, and only operators see it. */
+  by?: string;
+};
 
 export type AnnouncementConfig = {
   kind?: 'notice' | 'incident';

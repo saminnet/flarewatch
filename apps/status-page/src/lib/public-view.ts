@@ -165,11 +165,22 @@ export function toAdminMonitors(config: RuntimeConfig): AdminMonitor[] {
   }));
 }
 
-function announcementsFor(announcements: Announcement[], visibleIds: Set<string>): Announcement[] {
+function announcementsFor(
+  announcements: Announcement[],
+  visibleIds: Set<string>,
+  operator: boolean,
+): Announcement[] {
   return announcements.flatMap((announcement) => {
-    if (!announcement.monitors?.length) return [announcement];
-    const monitors = announcement.monitors.filter((id) => visibleIds.has(id));
-    return monitors.length ? [{ ...announcement, monitors }] : [];
+    const visible =
+      operator || !announcement.updates
+        ? announcement
+        : {
+            ...announcement,
+            updates: announcement.updates.map(({ by: _by, ...update }) => update),
+          };
+    if (!visible.monitors?.length) return [visible];
+    const monitors = visible.monitors.filter((id) => visibleIds.has(id));
+    return monitors.length ? [{ ...visible, monitors }] : [];
   });
 }
 
@@ -188,6 +199,7 @@ export function visitorSnapshot(
     announcements: announcementsFor(
       announcements,
       new Set(view.monitors.map((monitor) => monitor.id)),
+      false,
     ),
   };
 }
@@ -226,7 +238,7 @@ export function memberSnapshot(
     groups: groupsOf(config, monitorIds),
     state: state && viewOf(state, monitorIds, principal.groups === 'all'),
     maintenances: maintenancesFor(maintenances, monitorIds),
-    announcements: announcementsFor(announcements, monitorIds),
+    announcements: announcementsFor(announcements, monitorIds, principal.groups === 'all'),
   };
 }
 
