@@ -28,3 +28,17 @@ for (const { from, link, shows, expectedError } of pages) {
     }
   });
 }
+
+test('a username and password typed while /login loads its scripts still sign in', async ({
+  page,
+}) => {
+  await page.route('**/assets/**/*.js', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await route.continue();
+  });
+  await page.goto('/login', { waitUntil: 'commit' });
+  await page.getByLabel('Username').fill('e2e-admin');
+  await page.getByLabel('Password').fill('e2e-password');
+  await page.getByRole('button', { name: 'Sign in' }).click({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/$/);
+});

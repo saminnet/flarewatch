@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { PAGE_CONTAINER_CLASSES } from '@/lib/constants';
 import { useSignIn } from '@/lib/query/auth.mutations';
+import { useHydrated } from '@/lib/hooks/use-hydrated';
 
 /** Why a provider sign-in sent someone back, from /auth/callback's ?error=. */
 const PROVIDER_ERRORS = new Map([
@@ -43,8 +44,7 @@ function SignInHeading({
 }
 
 export function SignInForm({ privateOnly, passwordSignIn, providers, error }: SignInFormProps) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const isHydrated = useHydrated();
   const [loginError, setLoginError] = useState<string | null>(
     (error && PROVIDER_ERRORS.get(error)) ?? null,
   );
@@ -55,8 +55,15 @@ export function SignInForm({ privateOnly, passwordSignIn, providers, error }: Si
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const field = (name: string) => {
+      const value = form.get(name);
+      return typeof value === 'string' ? value : '';
+    };
+    const username = field('username');
+    const password = field('password');
     if (!username || !password || loginMutation.isPending) return;
     setLoginError(null);
     loginMutation.mutate({ username, password });
@@ -103,8 +110,8 @@ export function SignInForm({ privateOnly, passwordSignIn, providers, error }: Si
                 <FieldLabel htmlFor="username">Username</FieldLabel>
                 <Input
                   id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  name="username"
+                  required
                   autoCapitalize="none"
                   autoCorrect="off"
                   autoComplete="username"
@@ -117,8 +124,8 @@ export function SignInForm({ privateOnly, passwordSignIn, providers, error }: Si
                 <Input
                   id="password"
                   type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  name="password"
+                  required
                   autoComplete="current-password"
                   aria-describedby={loginError ? 'login-error' : undefined}
                   aria-invalid={!!loginError}
@@ -127,7 +134,7 @@ export function SignInForm({ privateOnly, passwordSignIn, providers, error }: Si
 
               <Button
                 type="submit"
-                disabled={!username || !password || loginMutation.isPending}
+                disabled={!isHydrated || loginMutation.isPending}
                 className="w-full"
               >
                 <IconLock className="mr-2 size-4" />
