@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import { accessConfigIssues, configIssues } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
+import { accessConfig } from '@flarewatch/config/access';
 import { workerConfig as demoWorker } from '@flarewatch/config/demo/worker';
 import { pageConfig as demoPage } from '@flarewatch/config/demo/public';
 import { accessConfig as accessExample } from '@flarewatch/config/access.example';
@@ -88,6 +89,12 @@ describe('capacityIssue', () => {
         0,
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('packages/config access', () => {
+  it('is valid, so a broken sign-in config fails CI instead of deploying', () => {
+    expect(accessConfigIssues(accessConfig, Object.keys(pageConfig.group ?? {}))).toEqual([]);
   });
 });
 
