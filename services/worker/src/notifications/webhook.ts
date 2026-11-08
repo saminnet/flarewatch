@@ -345,6 +345,7 @@ export class WebhookNotifier {
         };
       }
 
+      await response.body?.cancel();
       log.info('Success', { status: response.status });
       return { success: true, statusCode: response.status };
     } catch (error) {

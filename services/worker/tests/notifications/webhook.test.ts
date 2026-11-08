@@ -39,6 +39,23 @@ describe('webhook notifications', () => {
     });
   });
 
+  it('releases the response body of an accepted webhook', async () => {
+    let cancelled = false;
+    const body = new ReadableStream({
+      cancel: () => {
+        cancelled = true;
+      },
+    });
+    const notifier = new WebhookNotifier(
+      { url: 'https://hooks.example.com/webhook' },
+      vi.fn<Fetcher>(async () => new Response(body)),
+    );
+    await expect(notifier.send(createContext(), '')).resolves.toEqual([
+      { success: true, statusCode: 200 },
+    ]);
+    expect(cancelled).toBe(true);
+  });
+
   describe('buildTemplateContext', () => {
     const webhook: Webhook = { url: 'https://hooks.example.com/webhook' };
 
