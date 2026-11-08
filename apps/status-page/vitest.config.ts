@@ -2,6 +2,8 @@ import path from 'node:path';
 import { defineConfig } from 'vite-plus/test/config';
 import { commonTestOptions } from '@flarewatch/vitest-config';
 
+const testConfig = path.resolve(import.meta.dirname, 'tests/config');
+
 export default defineConfig({
   plugins: [
     {
@@ -11,10 +13,14 @@ export default defineConfig({
       resolveId: (id) => (id === 'cloudflare:workers' ? { id, external: true } : null),
     },
   ],
+  // A fork edits its own config, so the tests read the upstream demo config instead.
   resolve: {
-    alias: {
-      '@': path.resolve(import.meta.dirname, './src'),
-    },
+    alias: [
+      { find: '@', replacement: path.resolve(import.meta.dirname, './src') },
+      { find: /^@flarewatch\/config\/worker$/, replacement: '@flarewatch/config/demo/worker' },
+      { find: /^@flarewatch\/config\/access$/, replacement: `${testConfig}/access.ts` },
+      { find: /^@flarewatch\/config$/, replacement: '@flarewatch/config/demo/public' },
+    ],
   },
   test: {
     ...commonTestOptions,

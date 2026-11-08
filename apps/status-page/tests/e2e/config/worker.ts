@@ -1,5 +1,5 @@
 import type { HeartbeatMonitor, MonitorTarget, WorkerConfig } from '@flarewatch/shared';
-import { workerConfig as demoConfig } from '../../../../../packages/config/src/worker.ts';
+import { workerConfig as demoConfig } from '@flarewatch/config/demo/worker';
 
 const MINUTE = 60;
 const HOUR = 60 * MINUTE;
