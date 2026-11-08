@@ -1,4 +1,5 @@
-import { format } from 'date-fns';
+import { formatDateTime, formatUtcShort, type DatePattern } from '@flarewatch/shared/utils';
+import { pageZone } from './page-zone';
 
 export function parseYearMonth(value: string) {
   const [yearStr = '1970', monthStr = '01'] = value.split('-');
@@ -30,12 +31,16 @@ export function getUtcMonthBounds(value: string) {
   return { monthStart, monthEnd };
 }
 
-function toUtcViewDate(date: Date): Date {
-  return new Date(date.getTime() + date.getTimezoneOffset() * 60_000);
+export function formatUtc(date: Date, pattern: DatePattern): string {
+  return formatDateTime(date, pattern);
 }
 
-export function formatUtc(date: Date, pattern: string): string {
-  return format(toUtcViewDate(date), pattern);
+export function formatPageDate(date: Date, pattern: DatePattern): string {
+  return formatDateTime(date, pattern, pageZone.timezone);
+}
+
+export function formatPageTime(seconds: number): string {
+  return formatUtcShort(seconds, pageZone.timezone);
 }
 
 export function getDateKey(date: Date): string {

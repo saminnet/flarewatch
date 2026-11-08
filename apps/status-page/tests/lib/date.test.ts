@@ -1,5 +1,10 @@
+import { pageZone } from '@/lib/page-zone';
+import { restoreAfterEach } from '../helpers/config';
 import { describe, it, expect } from 'vite-plus/test';
 import {
+  formatUtc,
+  formatPageDate,
+  formatPageTime,
   isValidYearMonth,
   shiftYearMonth,
   getUtcMonthBounds,
@@ -171,5 +176,35 @@ describe('formatDuration', () => {
   it('respects minUnit option', () => {
     expect(formatDuration(30000, { minUnit: 'minutes' })).toBe('0m');
     expect(formatDuration(90000, { minUnit: 'minutes' })).toBe('1m');
+  });
+});
+
+restoreAfterEach(pageZone, ['timezone']);
+
+describe('page date formatting', () => {
+  it.each([
+    ['MMMM yyyy', 'September 2026'],
+    ['MMM yyyy', 'Sep 2026'],
+    ['MMM d, yyyy', 'Sep 16, 2026'],
+    ['HH:mm', '07:02'],
+    ['MMM d, yyyy HH:mm z', 'Sep 16, 2026 07:02 UTC'],
+    ['MMM d, HH:mm', 'Sep 16, 07:02'],
+    ['HH:mm z', '07:02 UTC'],
+  ] as const)('preserves captured UTC output for %s without a setting', (pattern, expected) => {
+    delete pageZone.timezone;
+    const date = new Date('2026-09-16T07:02:42Z');
+    expect(formatUtc(date, pattern)).toBe(expected);
+    expect(formatPageDate(date, pattern)).toBe(expected);
+    expect(formatPageTime(date.getTime() / 1000)).toBe('Sep 16, 07:02 UTC');
+  });
+
+  it('uses the page zone for displayed times and UTC for calendar labels', () => {
+    pageZone.timezone = 'America/Los_Angeles';
+    const date = new Date('2026-01-05T02:00:00Z');
+    expect(formatPageDate(date, 'MMM d, yyyy HH:mm z')).toBe('Jan 4, 2026 18:00 UTC-8');
+    expect(formatPageTime(date.getTime() / 1000)).toBe('Jan 4, 18:00 UTC-8');
+    expect(formatUtc(date, 'MMM d, yyyy')).toBe('Jan 5, 2026');
+    expect(getUtcMonthBounds('2026-01').monthStart.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    expect(generateCalendarGrids(date, 1)[0]?.label).toBe('January 2026');
   });
 });

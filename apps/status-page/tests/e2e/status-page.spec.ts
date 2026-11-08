@@ -265,7 +265,7 @@ test.describe('latency chart touch', () => {
       pointerId: 1,
       bubbles: true,
     };
-    const tooltip = chart.getByText(/\w{3} \d{1,2}, \d{2}:\d{2} UTC/);
+    const tooltip = chart.getByText(/\w{3} \d{1,2}, \d{2}:\d{2} UTC\+9:30/);
 
     // Same hydration race as the hover test: a pointerdown dispatched before
     // the handler attaches is lost, so retry until the tooltip appears.
@@ -413,7 +413,7 @@ test('rows show the last 90 days, or 30 on a phone, and still open the monitor p
   await expect(page).toHaveURL(/\/monitors\/demo_cloudflare_docs$/);
 });
 
-const UTC_STAMP = String.raw`\w{3} \d{1,2}, \d{2}:\d{2} UTC`;
+const PAGE_STAMP = String.raw`\w{3} \d{1,2}, \d{2}:\d{2} UTC\+9:30`;
 
 function monitorRow(page: Page, name: string) {
   return page
@@ -427,18 +427,18 @@ test('heartbeat monitors render every phase on the public page', async ({ page }
   await expect(
     page.getByRole('link', {
       name: new RegExp(
-        `^Nightly Backup, operational, last run ${UTC_STAMP}, next expected by ${UTC_STAMP}, last 2 runs: 0 missed, 0 failed, 0 late$`,
+        `^Nightly Backup, operational, last run ${PAGE_STAMP}, next expected by ${PAGE_STAMP}, last 2 runs: 0 missed, 0 failed, 0 late$`,
       ),
     }),
   ).toBeVisible();
   await expect(monitorRow(page, 'Nightly Backup')).toContainText(
-    new RegExp(`last run ${UTC_STAMP}`),
+    new RegExp(`last run ${PAGE_STAMP}`),
   );
   await expect(
     page.getByRole('link', { name: /Hourly Report, running late, last run/ }),
   ).toBeVisible();
   await expect(monitorRow(page, 'Hourly Report')).toContainText(
-    new RegExp(`Running late, expected by ${UTC_STAMP}`),
+    new RegExp(`Running late, expected by ${PAGE_STAMP}`),
   );
   await expect(
     page.getByRole('link', { name: /Weekly Prune, waiting for first ping/ }),
@@ -448,11 +448,11 @@ test('heartbeat monitors render every phase on the public page', async ({ page }
     'Pending',
   );
   await expect(monitorRow(page, 'Index Rebuild')).toContainText(
-    new RegExp(`Running since ${UTC_STAMP}`),
+    new RegExp(`Running since ${PAGE_STAMP}`),
   );
   await expect(page.getByRole('link', { name: /Log Shipper, overdue/ })).toBeVisible();
   await expect(monitorRow(page, 'Log Shipper')).toContainText(
-    new RegExp(`Overdue, was expected by ${UTC_STAMP}`),
+    new RegExp(`Overdue, was expected by ${PAGE_STAMP}`),
   );
   await expect(monitorRow(page, 'Log Shipper')).not.toContainText(
     /No heartbeat since .+ \(expected by .+\)/,
@@ -662,7 +662,7 @@ test('private monitor never appears to visitors but shows to the operator with a
   await expect(page.getByText('Synthetic private outage')).toBeVisible();
   await page
     .getByRole('link', {
-      name: new RegExp(`^${privateHeartbeat.name}, operational, last run ${UTC_STAMP}`),
+      name: new RegExp(`^${privateHeartbeat.name}, operational, last run ${PAGE_STAMP}`),
     })
     .click();
   await expect(page).toHaveURL(new RegExp(`/monitors/${privateHeartbeat.id}$`));

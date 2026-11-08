@@ -168,12 +168,21 @@ To keep the whole page to yourself, set `visibility: 'private'` in `packages/con
 
 | Setting           | Does                                                                                                      |
 | ----------------- | --------------------------------------------------------------------------------------------------------- |
+| `timezone`        | IANA name for displayed timestamps. Defaults to UTC.                                                      |
 | `title`           | Page and tab title.                                                                                       |
 | `logo`, `favicon` | Paths, `https:` URLs or `data:image/` URLs: PNG, JPEG, GIF, WebP or ICO. An `http:` URL fails the config. |
 | `links`           | Footer links, like `{ label: 'GitHub', link: 'https://...' }`.                                            |
 | `group`           | Monitor groups, like `{ APIs: ['api', 'auth'] }`.                                                         |
 | `visibility`      | `'private'` for a [private page](#private-page).                                                          |
 | `apiCorsOrigins`  | Origins allowed to call the JSON API. Defaults to any.                                                    |
+
+To show timestamps in one time zone for every visitor, set `timezone` to an IANA name:
+
+```ts
+  timezone: 'Europe/Stockholm',
+```
+
+Omit it to keep UTC. Each timestamp shows its offset, such as `UTC+1` in winter or `UTC+2` in summer. A zone name that the runtime does not know fails the config check. Uptime bars, calendar days, history month bounds and uptime percentages still use UTC days. Date-entry controls still take UTC. Alerts and emails keep their own settings.
 
 Colours and the corner radius are CSS variables at the top of [`apps/status-page/src/styles.css`](../apps/status-page/src/styles.css), in a `:root` block for light mode and a `.dark` block for dark mode. Edit them there.
 

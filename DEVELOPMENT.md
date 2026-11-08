@@ -66,7 +66,9 @@ The status page renders on the server, then React hydrates it in the browser. Di
 
 - Don't render `Date.now()`, `new Date()`, `Math.random()` or locale formatting during SSR.
 - Take one "now" from the loader or the state, such as `state.lastUpdate`, and pass it down.
-- Format dates in UTC with the helpers in `src/lib/date.ts` or `formatUtcShort`.
+- Use `formatPageTime` or `formatPageDate` in `src/lib/date.ts` for displayed timestamps. Calendar day labels use `formatUtc`. Date-entry fields stay in UTC.
+- Only `formatDateTime` in `packages/shared/src/utils.ts` can read numeric locale parts for the configured page zone. It builds all text in code.
+- Do not import `@flarewatch/config` in client code: its groups name private monitors. `vite.config.ts` puts only the zone in the bundle as `__PAGE_TIMEZONE__`, and `src/lib/page-zone.ts` holds it.
 - Gate browser-only code (`localStorage`, `window`) on `useHydrated()`.
 
 ## Changelog

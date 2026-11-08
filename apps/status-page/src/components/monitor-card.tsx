@@ -1,8 +1,8 @@
+import { formatPageTime } from '@/lib/date';
 import type { ComponentProps, ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { IconExternalLink, IconChevronRight, IconEyeOff } from '@tabler/icons-react';
 import type { HeartbeatStatus } from '@flarewatch/shared';
-import { formatUtcShort } from '@flarewatch/shared';
 import { UPTIME_DAYS } from '@/lib/constants';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,13 +41,13 @@ const CHECK_STATUS_LABELS: Partial<Record<MonitorState, string>> = {
   degraded: 'responding slowly',
 };
 
-function UtcTime({ sec, className }: { sec: number; className?: string }) {
+function PageTime({ sec, className }: { sec: number; className?: string }) {
   return (
     <time
       className={cn('whitespace-nowrap', className)}
       dateTime={new Date(sec * 1000).toISOString()}
     >
-      {formatUtcShort(sec)}
+      {formatPageTime(sec)}
     </time>
   );
 }
@@ -58,7 +58,7 @@ function HeartbeatMeta({ heartbeat }: { heartbeat: HeartbeatView }) {
   return (
     <>
       last run{' '}
-      <UtcTime sec={heartbeat.lastRunSec} className="font-medium tabular-nums text-foreground" />
+      <PageTime sec={heartbeat.lastRunSec} className="font-medium tabular-nums text-foreground" />
     </>
   );
 }
@@ -83,7 +83,7 @@ function activeHeartbeatRows(heartbeat: HeartbeatView): DetailRow[] {
       });
     }
     if (deadlineSec !== undefined) {
-      rows.push({ label: 'Must finish by', value: <UtcTime sec={deadlineSec} /> });
+      rows.push({ label: 'Must finish by', value: <PageTime sec={deadlineSec} /> });
     }
   } else if (phase === 'late') {
     if (lastDurationSec !== undefined) {
@@ -95,7 +95,7 @@ function activeHeartbeatRows(heartbeat: HeartbeatView): DetailRow[] {
     if (deadlineSec !== undefined) {
       rows.push({
         label: 'Grace ends',
-        value: <UtcTime sec={deadlineSec} />,
+        value: <PageTime sec={deadlineSec} />,
         valueClassName: 'text-status-degraded-text',
       });
     }
@@ -117,7 +117,7 @@ function completedHeartbeatRows(heartbeat: HeartbeatView): DetailRow[] {
       });
     }
     if (deadlineSec !== undefined) {
-      rows.push({ label: 'Next due', value: <UtcTime sec={deadlineSec} /> });
+      rows.push({ label: 'Next due', value: <PageTime sec={deadlineSec} /> });
     }
   } else if (phase === 'down') {
     if (lastDurationSec !== undefined) {
@@ -143,7 +143,7 @@ function completedHeartbeatRows(heartbeat: HeartbeatView): DetailRow[] {
 
     const dueSec = nextDueSec ?? deadlineSec;
     if (dueSec !== undefined) {
-      rows.push({ label: 'Next due', value: <UtcTime sec={dueSec} /> });
+      rows.push({ label: 'Next due', value: <PageTime sec={dueSec} /> });
     }
   }
 
@@ -264,7 +264,7 @@ function rowLabel({
     return `${name}, ${status}${ack}, ${uptime}`;
   }
 
-  return `${name}, ${status}${ack}, last run ${formatUtcShort(heartbeat.lastRunSec)}, next expected by ${formatUtcShort(heartbeat.deadlineSec)}`;
+  return `${name}, ${status}${ack}, last run ${formatPageTime(heartbeat.lastRunSec)}, next expected by ${formatPageTime(heartbeat.deadlineSec)}`;
 }
 
 function MonitorSubLines({
@@ -307,7 +307,7 @@ function MonitorSubLines({
       )}
       {overdueDeadline !== undefined && !operator && (
         <p className="text-xs text-status-down-text mt-0.5">
-          {`Overdue, was expected by ${formatUtcShort(overdueDeadline)}`}
+          {`Overdue, was expected by ${formatPageTime(overdueDeadline)}`}
         </p>
       )}
       {acknowledgement}
@@ -327,7 +327,7 @@ function MonitorTimingLines({
     <>
       {lateDeadline !== undefined && (
         <p className="text-xs text-status-degraded-text mt-0.5">
-          Running late, expected by <UtcTime sec={lateDeadline} />
+          Running late, expected by <PageTime sec={lateDeadline} />
         </p>
       )}
       {slowOverMs !== undefined && (
@@ -337,7 +337,7 @@ function MonitorTimingLines({
       )}
       {runningStart !== undefined && (
         <p className="text-xs text-muted-foreground mt-0.5">
-          Running since <UtcTime sec={runningStart} />
+          Running since <PageTime sec={runningStart} />
         </p>
       )}
       {heartbeat?.phase === 'pending' && (

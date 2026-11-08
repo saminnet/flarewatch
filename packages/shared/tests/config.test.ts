@@ -38,6 +38,20 @@ function createConfigWithMonitor(monitor: MonitorOverrides) {
 const isValid = (value: unknown) => configIssues(value).length === 0;
 
 describe('config validation', () => {
+  it.each(['UTC', 'Europe/Stockholm', 'Australia/Darwin', 'America/Los_Angeles'])(
+    'accepts page timezone %s',
+    (timezone) => {
+      expect(configIssues(createRuntimeConfig({ statusPage: { timezone } }))).toEqual([]);
+    },
+  );
+  it.each(['Europe/Stockholmm', '', 'GMT+2'])(
+    'rejects unknown page timezone %s and names its value',
+    (timezone) => {
+      expect(configIssues(createRuntimeConfig({ statusPage: { timezone } }))).toEqual([
+        'statusPage.timezone: Unknown page timezone: ' + timezone,
+      ]);
+    },
+  );
   it('accepts every hub location hint and rejects invalid hub locations', () => {
     for (const hubLocation of [
       'wnam',

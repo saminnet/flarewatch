@@ -5,6 +5,7 @@ import type { PageConfig } from '@flarewatch/shared';
 // monitor config in the browser bundle, since the page config ships there.
 export const pageConfig: PageConfig = {
   title: 'FlareWatch',
+  timezone: 'Australia/Darwin',
   links: [
     { label: 'GitHub', link: 'https://github.com/saminnet/flarewatch' },
     { label: 'Cloudflare', link: 'https://www.cloudflare.com/' },

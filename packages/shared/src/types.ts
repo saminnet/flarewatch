@@ -6,6 +6,7 @@ export type PageConfig = {
     maxSubscribers?: number;
   };
   title?: string;
+  timezone?: string;
   links?: PageConfigLink[];
   group?: PageConfigGroup;
   favicon?: string;

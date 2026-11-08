@@ -93,7 +93,7 @@ export function DateTimePicker({
             )}
           >
             <IconCalendar className="mr-2 size-4" />
-            {value ? formatUtc(value, "MMM d, yyyy HH:mm 'UTC'") : placeholder}
+            {value ? formatUtc(value, 'MMM d, yyyy HH:mm z') : placeholder}
           </Button>
         }
       />

@@ -1,8 +1,9 @@
+import { formatPageTime } from '@/lib/date';
 import type { PublicMonitor } from '@/lib/public-view';
 import { useReducer } from 'react';
 import { CLOSED_DIALOG, dialogStep } from '@/lib/dialog-state';
 import { IconBroadcast, IconPencil, IconTrash } from '@tabler/icons-react';
-import { formatUtcShort, isAnnouncementActive, type Announcement } from '@flarewatch/shared';
+import { isAnnouncementActive, type Announcement } from '@flarewatch/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AnnouncementFormDialog } from './announcement-form-dialog';
@@ -59,7 +60,7 @@ export function AnnouncementBanner({
                 )}
                 {announcement.end !== undefined && (
                   <span className="text-xs text-muted-foreground">
-                    {`until ${formatUtcShort(new Date(announcement.end).getTime() / 1000)}`}
+                    {`until ${formatPageTime(new Date(announcement.end).getTime() / 1000)}`}
                   </span>
                 )}
               </div>
@@ -70,7 +71,7 @@ export function AnnouncementBanner({
                 (update) => (
                   <div key={update.at} className="mbs-2 text-sm">
                     <p>
-                      {update.status} · {formatUtcShort(Date.parse(update.at) / 1000)}
+                      {update.status} · {formatPageTime(Date.parse(update.at) / 1000)}
                     </p>
                     <p className="whitespace-pre-wrap wrap-break-word">{update.body}</p>
                   </div>

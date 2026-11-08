@@ -7,10 +7,9 @@ import {
 } from 'react';
 import type { HeartbeatRun } from '@flarewatch/shared';
 import { HEARTBEAT_RUN_HISTORY } from '@flarewatch/shared';
-import { formatUtcShort } from '@flarewatch/shared';
 import { Tooltip, TooltipContent } from '@/components/ui/tooltip';
 import { RunCell } from '@/components/ui/status-cell';
-import { formatDuration } from '@/lib/date';
+import { formatDuration, formatPageTime } from '@/lib/date';
 import { runLatenessSec, type HeartbeatView } from '@/lib/heartbeat';
 import { useContainerWidth } from '@/lib/hooks/use-container-width';
 import { STATUS_BAR } from '@/lib/constants';
@@ -171,7 +170,7 @@ function runDetail(
   periodSeconds: number | undefined,
   graceSeconds: number | undefined,
 ): string {
-  const time = formatUtcShort(run.at);
+  const time = formatPageTime(run.at);
   if (run.outcome === 'late') {
     const lateBySec = runLatenessSec(runs, index, periodSeconds, graceSeconds);
     if (lateBySec > 0) {
@@ -202,7 +201,7 @@ function nextCell(heartbeat: HeartbeatView) {
       ? 'Waiting for the first ping'
       : nextTimeSec === undefined
         ? 'Next run not scheduled yet'
-        : NEXT_DETAIL[nextKind](formatUtcShort(nextTimeSec));
+        : NEXT_DETAIL[nextKind](formatPageTime(nextTimeSec));
 
   return { nextKind, nextDetail };
 }
@@ -225,10 +224,10 @@ export function RunStrip({
   const failed = runs.filter((run) => run.outcome === 'fail').length;
   const lastRun = runs[runs.length - 1];
   const lastRunSec = lastRun ? lastRun.at : heartbeat.lastRunSec;
-  const runningDetail = `Running since ${formatUtcShort(heartbeat.startedSec ?? heartbeat.nowSec)}`;
+  const runningDetail = `Running since ${formatPageTime(heartbeat.startedSec ?? heartbeat.nowSec)}`;
   const summary =
     lastRunSec !== undefined
-      ? `${runs.length} runs, ${missed} missed, ${failed} failed, last run ${formatUtcShort(lastRunSec)}`
+      ? `${runs.length} runs, ${missed} missed, ${failed} failed, last run ${formatPageTime(lastRunSec)}`
       : running
         ? runningDetail
         : 'No run recorded yet. The first ping starts the schedule.';

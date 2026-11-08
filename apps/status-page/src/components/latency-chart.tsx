@@ -1,11 +1,11 @@
 import { useId, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { area, line, curveMonotoneX } from 'd3-shape';
-import { formatUtcShort, type LatencySample } from '@flarewatch/shared';
+import type { LatencySample } from '@flarewatch/shared';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { linearScale, niceLinearTicks } from '@/lib/chart-scale';
 import { timeTicks } from '@/lib/chart-ticks';
-import { formatUtc } from '@/lib/date';
+import { formatPageTime, formatPageDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 type ChartPoint = {
@@ -63,7 +63,7 @@ function ChartTooltip({ point, xFrac }: { point: ChartPoint; xFrac: number }) {
     >
       <div className="font-medium text-popover-foreground">{point.ping}ms</div>
       <div className="text-muted-foreground">{coloLabel || point.loc}</div>
-      <div className="text-muted-foreground">{formatUtcShort(point.timeMs / 1000)}</div>
+      <div className="text-muted-foreground">{formatPageTime(point.timeMs / 1000)}</div>
     </div>
   );
 }
@@ -234,7 +234,7 @@ function SvgLatencyChart({ chartData }: { chartData: ChartPoint[] }) {
             )}
             style={{ '--x': pct(fracX(tick)) }}
           >
-            {formatUtc(new Date(tick), 'HH:mm')}
+            {formatPageDate(new Date(tick), 'HH:mm')}
           </span>
         ))}
 

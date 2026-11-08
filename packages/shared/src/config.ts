@@ -492,6 +492,13 @@ function loopFrom(start: string, byId: Map<string, DependencyNode>): string[] | 
 const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.strictObject(
   {
     title: z.optional(z.string()),
+    timezone: z.optional(
+      z.string().check(
+        z.refine((value) => knownZone(value) !== undefined, {
+          error: (issue) => 'Unknown page timezone: ' + String(issue.input),
+        }),
+      ),
+    ),
     visibility: z.optional(z.enum(['public', 'private'])),
     subscribers: z.optional(
       z.strictObject(

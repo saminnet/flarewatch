@@ -1,5 +1,4 @@
 import {
-  formatUtcShort,
   nextMaintenanceOccurrence,
   occurrencePhase,
   type Maintenance,
@@ -7,7 +6,7 @@ import {
   type Occurrence,
 } from '@flarewatch/shared';
 import { TIME_MS, UPCOMING_MAINTENANCE_DAYS } from './constants';
-import { formatUtc, formatDuration, getDateKey } from './date';
+import { formatPageTime, formatPageDate, formatDuration } from './date';
 
 /** Of the given run, by default the window's current or next one. */
 export function getMaintenanceStatus(
@@ -99,7 +98,7 @@ export function describeRepeat(repeat: MaintenanceRepeat): string {
   if (repeat.every === 'month' && repeat.dayOfMonth) text += ` on day ${repeat.dayOfMonth}`;
   if (repeat.timeZone && repeat.timeZone !== 'UTC') text += `, ${repeat.timeZone} time`;
   if (repeat.until !== undefined) {
-    text += `, until ${formatUtcShort(new Date(repeat.until).getTime() / 1000)}`;
+    text += `, until ${formatPageTime(new Date(repeat.until).getTime() / 1000)}`;
   }
   return text;
 }
@@ -110,11 +109,15 @@ export function formatTimeUntil(date: Date, now = new Date()): string {
 }
 
 export function formatDateRange(start: Date, end: Date | null): string {
-  if (!end) return formatUtcShort(start.getTime() / 1000);
-  if (getDateKey(start) === getDateKey(end)) {
-    return `${formatUtc(start, 'MMM d, HH:mm')}–${formatUtc(end, "HH:mm 'UTC'")}`;
+  if (!end) return formatPageTime(start.getTime() / 1000);
+  const zoneOf = (date: Date) => formatPageDate(date, 'z');
+  if (zoneOf(start) !== zoneOf(end)) {
+    return `${formatPageTime(start.getTime() / 1000)} – ${formatPageTime(end.getTime() / 1000)}`;
   }
-  return `${formatUtc(start, 'MMM d, HH:mm')} – ${formatUtcShort(end.getTime() / 1000)}`;
+  if (formatPageDate(start, 'MMM d, yyyy') === formatPageDate(end, 'MMM d, yyyy')) {
+    return `${formatPageDate(start, 'MMM d, HH:mm')}–${formatPageDate(end, 'HH:mm z')}`;
+  }
+  return `${formatPageDate(start, 'MMM d, HH:mm')} – ${formatPageTime(end.getTime() / 1000)}`;
 }
 
 type MaintenanceColors = {

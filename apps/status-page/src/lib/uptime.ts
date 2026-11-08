@@ -1,5 +1,5 @@
 import type { LatencySample, StatusView } from '@flarewatch/shared';
-import { formatUtc } from './date';
+import { formatPageDate } from './date';
 import { UPTIME_DAYS, UPTIME_THRESHOLDS } from './constants';
 
 const MIN_MONITOR_AGE_SECONDS = 60;
@@ -194,8 +194,8 @@ export function generateDailyStatus(monitorId: string, state: StatusView): Daily
 
             dayIncidents.push({
               startSec: partStart,
-              startTime: formatUtc(new Date(clampedStart * 1000), 'HH:mm'),
-              endTime: formatUtc(new Date(clampedEnd * 1000), 'HH:mm'),
+              startTime: formatPageDate(new Date(clampedStart * 1000), 'HH:mm'),
+              endTime: formatPageDate(new Date(clampedEnd * 1000), 'HH:mm'),
               error: errorMsg ?? 'Unknown error',
             });
           }
