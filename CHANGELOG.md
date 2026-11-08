@@ -25,6 +25,7 @@ All notable changes to FlareWatch will be documented in this file.
 
 ### Changed
 
+- Summary counts use status colours with plain text, so an operational page no longer shows a filled accent badge. ([#109](https://github.com/saminnet/flarewatch/issues/109))
 - A refused expiry warning is tried again after 60 check runs, about an hour. Before, it wasn't tried again.
 - Check now starts the check while it looks up the Cloudflare location, so it no longer waits for that lookup first. Scheduled runs still finish the lookup first: a Worker can have only six connections waiting at once, and a seventh would add its wait to one monitor's latency.
 - Pages load faster when your hub is far from the visitor. The status page now keeps what visitors can see for 20 seconds in each Cloudflare location, and a monitor's response times for 30 seconds, so most views skip the trip to the hub. Signed-in views still read monitor status from the hub every time. An edit you make can take up to 40 seconds to reach visitors.

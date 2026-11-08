@@ -1,9 +1,9 @@
+import { Fragment } from 'react';
+import { formatPageTime } from '@/lib/date';
 import { IconCircleCheck, IconAlertTriangle, IconCircleX, IconRefresh } from '@tabler/icons-react';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Maintenance, StatusView } from '@flarewatch/shared';
-import { formatPageTime } from '@/lib/date';
 import { countStatuses, getOverallStatus } from '@/lib/monitor-state';
 import type { PublicMonitor } from '@/lib/public-view';
 import { useAutoRefresh } from '@/lib/hooks/use-auto-refresh';
@@ -21,27 +21,29 @@ const statusConfig = {
     title: 'All systems operational',
     bgClass: 'bg-status-operational-bg',
     iconClass: 'text-status-operational-text',
-    badgeVariant: 'default' as const,
   },
   degraded: {
     icon: IconAlertTriangle,
     title: 'Some systems are down',
     bgClass: 'bg-status-degraded-bg',
     iconClass: 'text-status-degraded-text',
-    badgeVariant: 'secondary' as const,
   },
   down: {
     icon: IconCircleX,
     title: 'All systems down',
     bgClass: 'bg-status-down-bg',
     iconClass: 'text-status-down-text',
-    badgeVariant: 'destructive' as const,
   },
 };
 
 export function OverallStatus({ monitors, state, maintenances }: OverallStatusProps) {
   const counts = countStatuses(monitors, state, maintenances);
   const { up, late, slow, expiry, down } = counts;
+  const degraded = [
+    late > 0 && `${late} late`,
+    slow > 0 && `${slow} slow`,
+    expiry > 0 && `${expiry} expiry warning${expiry === 1 ? '' : 's'}`,
+  ].filter((text) => text !== false);
   const monitorCount = monitors.length;
   const jobCount = monitors.filter((monitor) => monitor.method === 'HEARTBEAT').length;
   const status = getOverallStatus(counts);
@@ -95,7 +97,7 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
         </div>
 
         <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
             <h2 className="text-base sm:text-lg font-semibold text-balance text-foreground">
               {title}
               {Boolean(count) && (
@@ -105,17 +107,21 @@ export function OverallStatus({ monitors, state, maintenances }: OverallStatusPr
                 </span>
               )}
             </h2>
-            <Badge variant={config.badgeVariant} className="shrink-0">
-              {[
-                `${up} up`,
-                late > 0 && `${late} late`,
-                slow > 0 && `${slow} slow`,
-                expiry > 0 && `${expiry} expiry warning${expiry === 1 ? '' : 's'}`,
-                `${down} down`,
-              ]
-                .filter(Boolean)
-                .join(' / ')}
-            </Badge>
+            <p className="text-sm tabular-nums text-muted-foreground">
+              <span className={up > 0 ? 'text-status-operational-text' : 'text-muted-foreground'}>
+                {up} up
+              </span>
+              {degraded.map((text) => (
+                <Fragment key={text}>
+                  {' / '}
+                  <span className="text-status-degraded-text">{text}</span>
+                </Fragment>
+              ))}
+              {' / '}
+              <span className={down > 0 ? 'text-status-down-text' : 'text-muted-foreground'}>
+                {down} down
+              </span>
+            </p>
           </div>
 
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
