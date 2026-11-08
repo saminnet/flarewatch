@@ -7,6 +7,7 @@ All notable changes to FlareWatch will be documented in this file.
 ### Fixed
 
 - A fork that replaces the demo monitors passes CI and deploys again. ([#111](https://github.com/saminnet/flarewatch/issues/111))
+- A username and password typed while the sign-in page is still loading now sign you in. Before, the Sign in button stayed disabled until you typed again.
 - When a monitor fails again while its outage waits to close, an error-change alert that was being sent at that moment is handled as it would be otherwise. If no webhook accepted it, the outage gets its slot back. If a busy check run put it off, it goes out on a later run. Before, it was lost and used up one of the outage's five. A reminder sent at that moment now counts, so the next reminder has the right number. ([#103](https://github.com/saminnet/flarewatch/pull/103))
 
 ### Changed
