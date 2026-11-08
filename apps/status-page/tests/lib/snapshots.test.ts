@@ -320,6 +320,29 @@ describe('location cache', () => {
     ]);
   });
 
+  it('keeps the first deadline when another isolate copies a location cache hit', async () => {
+    const cache = memoryCache();
+    vi.stubGlobal('caches', { default: cache });
+    const view = vi.fn(async () => Response.json(hubView()));
+    const latencyCalls = vi.fn(async () => Response.json(samples));
+    stubMonitorWorker(async (input) => (input.includes('/latency/') ? latencyCalls() : view()));
+    await (await isolate()).readVisitorSnapshot();
+    const first = await isolate();
+    await latency(first.readMonitorLatency, 'published');
+    vi.setSystemTime(NOW + 19_000);
+    const second = await isolate();
+    await second.readVisitorSnapshot();
+    await latency(second.readMonitorLatency, 'published');
+    expect(view).toHaveBeenCalledTimes(1);
+    expect(latencyCalls).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(NOW + 20_001);
+    await second.readVisitorSnapshot();
+    expect(view).toHaveBeenCalledTimes(2);
+    vi.setSystemTime(NOW + 30_001);
+    await latency(second.readMonitorLatency, 'published');
+    expect(latencyCalls).toHaveBeenCalledTimes(2);
+  });
+
   it('reuses latency for thirty seconds and retries a failed hub call immediately', async () => {
     const cache = memoryCache();
     vi.stubGlobal('caches', { default: cache });

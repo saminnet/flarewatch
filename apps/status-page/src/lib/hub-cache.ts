@@ -23,21 +23,25 @@ async function triggerInitialCheck(lastUpdate: number): Promise<void> {
 const VIEW_CACHE_MS = 20_000;
 const LATENCY_CACHE_MS = 30_000;
 const VIEW_CACHE_KEY = 'https://flarewatch-cache.invalid/visitor-view';
-const cachedLatency = new Map<string, { atMs: number; samples: Promise<LatencySample[]> }>();
+const AT_HEADER = 'X-FlareWatch-At';
+/** A value and when the hub served it, so a copy from another cache keeps the first deadline. */
+type Timed<T> = { atMs: number; value: T };
+const cachedLatency = new Map<string, Timed<Promise<LatencySample[]>>>();
 const viewWrites = new Set<Promise<void>>();
 let viewGeneration = 0;
-let cachedView: { atMs: number; view: Promise<HubView> } | null = null;
+let cachedView: Timed<Promise<HubView>> | null = null;
 
 async function locationRead<T>(
   key: string,
   valid: (value: unknown) => value is T,
-): Promise<T | undefined> {
+): Promise<Timed<T> | undefined> {
   if (typeof caches === 'undefined') return undefined;
   try {
     const response = await caches.default.match(key);
-    if (response) {
+    const atMs = Number(response?.headers.get(AT_HEADER));
+    if (response && Number.isFinite(atMs)) {
       const value: unknown = await response.json();
-      if (valid(value)) return value;
+      if (valid(value)) return { atMs, value };
     }
   } catch (error) {
     console.warn('Location cache read failed:', error);
@@ -45,29 +49,47 @@ async function locationRead<T>(
   return undefined;
 }
 
-async function locationWrite(key: string, value: unknown, ttlMs: number): Promise<void> {
+async function locationWrite(key: string, { atMs, value }: Timed<unknown>, ttlMs: number) {
   if (typeof caches === 'undefined') return;
   try {
     await caches.default.put(
       key,
-      Response.json(value, { headers: { 'Cache-Control': `max-age=${ttlMs / 1000}` } }),
+      Response.json(value, {
+        headers: { 'Cache-Control': `max-age=${ttlMs / 1000}`, [AT_HEADER]: String(atMs) },
+      }),
     );
   } catch (error) {
     console.warn('Location cache write failed:', error);
   }
 }
 
-async function fetchVisitorView(): Promise<HubView> {
+/** Starts the isolate copy now, then moves its deadline to when the hub served the value. */
+function isolateEntry<T>(nowMs: number, read: Promise<Timed<T>>) {
+  const entry = { atMs: nowMs, value: read.then(({ value }) => value) };
+  void read.then(
+    ({ atMs }) => {
+      entry.atMs = atMs;
+    },
+    () => {},
+  );
+  return entry;
+}
+
+async function fetchVisitorView(): Promise<Timed<HubView>> {
   const generation = viewGeneration;
   const cached = await locationRead(VIEW_CACHE_KEY, isHubView);
   if (cached) return cached;
+  const atMs = Date.now();
   const view = await fetchHubView();
   const snapshot = visitorSnapshot(getConfig(), view, view.maintenances, view.announcements);
   const filtered = {
-    lastUpdate: view.lastUpdate,
-    monitors: snapshot.state?.monitors ?? {},
-    maintenances: snapshot.maintenances,
-    announcements: snapshot.announcements,
+    atMs,
+    value: {
+      lastUpdate: view.lastUpdate,
+      monitors: snapshot.state?.monitors ?? {},
+      maintenances: snapshot.maintenances,
+      announcements: snapshot.announcements,
+    },
   };
   if (generation === viewGeneration) {
     const write = locationWrite(VIEW_CACHE_KEY, filtered, VIEW_CACHE_MS);
@@ -83,22 +105,25 @@ export async function readLatency(id: string, published: boolean): Promise<Laten
     if (now - entry.atMs >= LATENCY_CACHE_MS) cachedLatency.delete(key);
   }
   const existing = cachedLatency.get(id);
-  if (existing) return existing.samples;
-  const samples = (async () => {
-    const key = `https://flarewatch-cache.invalid/latency/${encodeURIComponent(id)}`;
-    if (published) {
-      const cached = await locationRead(key, isLatencySamples);
-      if (cached) return cached;
-    }
-    const value = await fetchLatency(id);
-    if (published) await locationWrite(key, value, LATENCY_CACHE_MS);
-    return value;
-  })();
-  cachedLatency.set(id, { atMs: now, samples });
-  void samples.catch(() => {
-    if (cachedLatency.get(id)?.samples === samples) cachedLatency.delete(id);
+  if (existing) return existing.value;
+  const entry = isolateEntry(
+    now,
+    (async () => {
+      const key = `https://flarewatch-cache.invalid/latency/${encodeURIComponent(id)}`;
+      if (published) {
+        const cached = await locationRead(key, isLatencySamples);
+        if (cached) return cached;
+      }
+      const fetched = { atMs: Date.now(), value: await fetchLatency(id) };
+      if (published) await locationWrite(key, fetched, LATENCY_CACHE_MS);
+      return fetched;
+    })(),
+  );
+  cachedLatency.set(id, entry);
+  void entry.value.catch(() => {
+    if (cachedLatency.get(id) === entry) cachedLatency.delete(id);
   });
-  return samples;
+  return entry.value;
 }
 
 /** After an operator edit, so visitors see it without waiting out the caches. */
@@ -118,13 +143,13 @@ export async function forgetCachedView(): Promise<void> {
 
 function readVisitorView(nowMs: number): Promise<HubView> {
   if (!cachedView || nowMs - cachedView.atMs >= VIEW_CACHE_MS) {
-    const view = fetchVisitorView();
-    cachedView = { atMs: nowMs, view };
-    void view.catch(() => {
-      if (cachedView?.view === view) cachedView = null;
+    const entry = isolateEntry(nowMs, fetchVisitorView());
+    cachedView = entry;
+    void entry.value.catch(() => {
+      if (cachedView === entry) cachedView = null;
     });
   }
-  return cachedView.view;
+  return cachedView.value;
 }
 
 /** Visitors reuse the filtered view for 20s per isolate and Cloudflare location. */
