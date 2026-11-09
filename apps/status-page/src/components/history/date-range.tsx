@@ -1,4 +1,4 @@
-import { formatUtcShort } from '@flarewatch/shared';
+import { formatPageTime } from '@/lib/date';
 
 interface DateRangeProps {
   start: Date;
@@ -11,11 +11,11 @@ export function DateRange({ start, end, noEndLabel, noEndClassName }: DateRangeP
   return (
     <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
       <span>
-        <strong>From</strong> {formatUtcShort(start.getTime() / 1000)}
+        <strong>From</strong> {formatPageTime(start.getTime() / 1000)}
       </span>
       {end ? (
         <span>
-          <strong>To</strong> {formatUtcShort(end.getTime() / 1000)}
+          <strong>To</strong> {formatPageTime(end.getTime() / 1000)}
         </span>
       ) : (
         <span className={noEndClassName}>{noEndLabel}</span>

@@ -227,3 +227,25 @@ describe('forwardPing', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 });
+
+it('retains valid acknowledgement fields and rejects malformed acknowledgement data from the hub', async () => {
+  const { fetch } = stubEnv();
+  const answer = (acked_at: unknown, acked_by: unknown) => ({
+    ...hubView,
+    monitors: {
+      api: {
+        status: 'down',
+        incidents: [{ start: [100], error: ['HTTP 503'], acked_at, acked_by }],
+      },
+    },
+  });
+  fetch.mockResolvedValueOnce(Response.json(answer(110, 'Pat')));
+  expect((await fetchHubView()).monitors.api?.incidents[0]).toMatchObject({
+    acked_at: 110,
+    acked_by: 'Pat',
+  });
+  fetch.mockResolvedValueOnce(Response.json(answer('110', 'Pat')));
+  await expect(fetchHubView()).rejects.toThrow('Monitor worker sent an invalid view');
+  fetch.mockResolvedValueOnce(Response.json(answer(110, ['Pat'])));
+  await expect(fetchHubView()).rejects.toThrow('Monitor worker sent an invalid view');
+});

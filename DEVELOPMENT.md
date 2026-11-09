@@ -66,12 +66,23 @@ The status page renders on the server, then React hydrates it in the browser. Di
 
 - Don't render `Date.now()`, `new Date()`, `Math.random()` or locale formatting during SSR.
 - Take one "now" from the loader or the state, such as `state.lastUpdate`, and pass it down.
-- Format dates in UTC with the helpers in `src/lib/date.ts` or `formatUtcShort`.
+- Use `formatPageTime` or `formatPageDate` in `src/lib/date.ts` for displayed timestamps. Calendar day labels use `formatUtc`. Date-entry fields stay in UTC.
+- Only `formatDateTime` in `packages/shared/src/utils.ts` can read numeric locale parts for the configured page zone. It builds all text in code.
+- Do not import `@flarewatch/config` in client code: its groups name private monitors. `vite.config.ts` puts only the zone in the bundle as `__PAGE_TIMEZONE__`, and `src/lib/page-zone.ts` holds it.
 - Gate browser-only code (`localStorage`, `window`) on `useHydrated()`.
 
 ## Changelog
 
 A pull request that changes behavior adds an entry to `CHANGELOG.md` under the next version. Write it for someone upgrading.
+
+## Release
+
+1. Look for implicit state machines: flags that gate each other, nullable columns that mean a state, and rules spread across SQL statements. The checks only protect machines that already exist, so finding a new one takes reading the code. [ADR 0003](docs/adr/0003-lifecycles-are-explicit-state-machines.md) says what counts and what doesn't. Do this before every minor or major release.
+2. If the architecture changed, update `docs/assets/how-it-works.svg`.
+3. Rename `## Unreleased` in `CHANGELOG.md` to `## X.Y.Z - YYYY-MM-DD` and merge that to main.
+4. Wait for CI and Deploy to pass on that commit, then tag it and push the tag: `git tag -s vX.Y.Z && git push origin vX.Y.Z`.
+
+The Release workflow checks that the tagged commit is on main and that CI and Deploy passed on it. Then it publishes the changelog section as the GitHub release "FlareWatch X.Y.Z" and rebuilds flarewatch.app.
 
 ## Deploy by hand
 

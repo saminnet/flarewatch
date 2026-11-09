@@ -20,6 +20,7 @@ describe.each([
     expect(
       configIssues({
         monitors: worker.monitors,
+        hubLocation: worker.hubLocation,
         statusPage: page,
         notification: worker.notification,
       }),
@@ -103,6 +104,7 @@ describe('packages/config examples', () => {
     expect([
       ...configIssues({
         monitors: workerExample.monitors,
+        hubLocation: workerExample.hubLocation,
         statusPage: pageExample,
         notification: workerExample.notification,
       }),

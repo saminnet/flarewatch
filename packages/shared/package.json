@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./utils": "./src/utils.ts",
+    "./initial-run": "./src/initial-run.ts",
     "./testing/*": "./tests/helpers/*.ts"
   },
   "scripts": {

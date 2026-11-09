@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { IconWorld, IconClockPlay } from '@tabler/icons-react';
 import {
@@ -29,6 +29,7 @@ interface MonitorListProps {
   monitors: AdminMonitor[];
   state: StatusView;
   maintenances: Maintenance[];
+  nowMs: number;
   groups?: PageConfigGroup;
   uiPrefs?: UiPrefs;
   operator?: boolean;
@@ -96,6 +97,7 @@ export function MonitorList({
   monitors,
   state,
   maintenances,
+  nowMs,
   groups,
   uiPrefs,
   operator,
@@ -107,18 +109,6 @@ export function MonitorList({
     () => uiPrefs?.collapsedGroups ?? [],
   );
 
-  const isInitialMount = useRef(true);
-
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    const next = { collapsedGroups };
-    queryClient.setQueryData(qk.uiPrefs, next);
-    void setUiPrefsServerFn({ data: next });
-  }, [collapsedGroups, queryClient]);
-
   function renderRows(rows: AdminMonitor[]) {
     return (
       <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
@@ -128,6 +118,7 @@ export function MonitorList({
             monitor={monitor}
             state={state}
             maintenances={maintenances}
+            nowMs={nowMs}
             operator={operator}
           />
         ))}
@@ -190,6 +181,9 @@ export function MonitorList({
               const open = new Set(value.filter((v): v is string => typeof v === 'string'));
               const nextCollapsed = activeGroupKeys.filter((key) => !open.has(key));
               setCollapsedGroups(nextCollapsed);
+              const next = { collapsedGroups: nextCollapsed };
+              queryClient.setQueryData(qk.uiPrefs, next);
+              void setUiPrefsServerFn({ data: next });
             }}
             variant="card"
           >

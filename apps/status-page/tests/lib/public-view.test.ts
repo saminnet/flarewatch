@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { Maintenance, RuntimeConfig, StatusView } from '@flarewatch/shared';
+import type { Announcement, Maintenance, RuntimeConfig, StatusView } from '@flarewatch/shared';
 import {
   operatorSnapshot,
   publicMaintenances,
@@ -376,4 +376,69 @@ describe('snapshots', () => {
       down: 0,
     });
   });
+});
+
+it('strips responders and private monitor ids from visitor output', () => {
+  const incident = {
+    start: [100],
+    error: ['HTTP 503'],
+    acked_at: 110,
+    acked_by: 'private@example.com',
+  };
+  const announcements: Announcement[] = [
+    {
+      id: 'mixed',
+      title: 'API delays',
+      body: 'Working on it.',
+      kind: 'incident',
+      monitors: ['public', 'hidden'],
+      status: 'investigating',
+      updates: [
+        {
+          at: '2026-11-08T10:00:00.000Z',
+          status: 'investigating',
+          body: 'Looking into it.',
+          by: 'responder@example.com',
+        },
+      ],
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    {
+      id: 'private',
+      title: 'Private issue',
+      body: 'Private details',
+      kind: 'incident',
+      monitors: ['hidden'],
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ];
+  const snapshot = visitorSnapshot(
+    config,
+    {
+      ...state,
+      monitors: { ...state.monitors, public: { status: 'down', incidents: [incident] } },
+    },
+    [],
+    announcements,
+  );
+  expect(snapshot.state?.monitors.public?.incidents).toEqual([
+    { start: [100], error: ['HTTP 503'], acked_at: 110 },
+  ]);
+  expect(snapshot.announcements.map((a) => a.monitors)).toEqual([['public']]);
+  expect(JSON.stringify(snapshot)).not.toContain('private@example.com');
+  expect(JSON.stringify(snapshot)).not.toContain('responder@example.com');
+  expect(snapshot.announcements[0]?.updates?.[0]?.body).toBe('Looking into it.');
+  expect(JSON.stringify(snapshot)).not.toContain('hidden');
+  expect(
+    operatorSnapshot(config, state, [], announcements).announcements[0]?.updates?.[0]?.by,
+  ).toBe('responder@example.com');
+  expect(
+    operatorSnapshot(
+      config,
+      { lastUpdate: 120, monitors: { public: { status: 'down', incidents: [incident] } } },
+      [],
+    ).state?.monitors.public?.incidents[0]?.acked_by,
+  ).toBe('private@example.com');
 });

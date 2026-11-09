@@ -1,3 +1,5 @@
+import { pageZone } from '@/lib/page-zone';
+import { restoreAfterEach } from '../helpers/config';
 import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import type { MonitorView, StatusView } from '@flarewatch/shared';
 import {
@@ -225,4 +227,30 @@ describe('uptime utilities', () => {
       expect(formatUptimeDisplay(null, false, 2)).toBe('Pending');
     });
   });
+});
+
+restoreAfterEach(pageZone, ['timezone']);
+
+it('keeps the uptime bar day and percentage on UTC with Asia/Tokyo at 23:30 UTC', () => {
+  pageZone.timezone = 'Asia/Tokyo';
+  const now = Date.parse('2026-01-06T01:00:00Z') / 1000;
+  const start = Date.parse('2026-01-05T23:30:00Z') / 1000;
+  const state = view(
+    {
+      test: {
+        startedAt: Date.parse('2026-01-05T00:00:00Z') / 1000,
+        incidents: [{ start: [start], end: start + 600, error: ['HTTP 503'] }],
+        latest: { time: start, loc: 'NRT', ping: 20 },
+      },
+    },
+    now,
+  );
+  const days = generateDailyStatus('test', state);
+  const day = days.find((item) => item.date.toISOString() === '2026-01-05T00:00:00.000Z');
+  expect(day?.downtime).toBe(600_000);
+  expect(day?.uptime).toBeCloseTo(99.305556);
+  expect(day?.incidents[0]?.startTime).toBe('08:30');
+  expect(day?.incidents[0]?.endTime).toBe('08:40');
+  expect(days.at(-1)?.downtime).toBe(0);
+  expect(calculateUptimePercent('test', state)).toBeCloseTo(99.333333);
 });

@@ -213,6 +213,9 @@ jobs:
           FLAREWATCH_AUTH_SECRET: ${{ secrets.FLAREWATCH_AUTH_SECRET }}
           FLAREWATCH_OIDC_SECRETS: ${{ secrets.FLAREWATCH_OIDC_SECRETS }}
           HEARTBEAT_SECRET: ${{ secrets.HEARTBEAT_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SUBSCRIBER_SECRET: ${{ secrets.SUBSCRIBER_SECRET }}
+          TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
         shell: bash
         run: |
           set -euo pipefail
@@ -235,6 +238,8 @@ jobs:
           vp exec --filter worker -- wrangler deploy --config wrangler.toml
           put_secret worker wrangler.toml FLAREWATCH_PROXY_TOKEN "$FLAREWATCH_PROXY_TOKEN"
           put_secret worker wrangler.toml HEARTBEAT_SECRET "$HEARTBEAT_SECRET"
+          put_secret worker wrangler.toml RESEND_API_KEY "$RESEND_API_KEY"
+          put_secret worker wrangler.toml SUBSCRIBER_SECRET "$SUBSCRIBER_SECRET"
           put_secret worker wrangler.toml FLAREWATCH_WEBHOOKS "$FLAREWATCH_WEBHOOKS"
 
           echo "Building status page"
@@ -247,6 +252,7 @@ jobs:
           put_secret status-page dist/server/wrangler.json FLAREWATCH_ADMIN_BASIC_AUTH "$FLAREWATCH_ADMIN_BASIC_AUTH"
           put_secret status-page dist/server/wrangler.json FLAREWATCH_AUTH_SECRET "$FLAREWATCH_AUTH_SECRET"
           put_secret status-page dist/server/wrangler.json FLAREWATCH_OIDC_SECRETS "$FLAREWATCH_OIDC_SECRETS"
+          put_secret status-page dist/server/wrangler.json TURNSTILE_SECRET "$TURNSTILE_SECRET"
 
           STATUS_PAGE_URL="$(printf '%s\n' "$STATUS_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.workers\.dev[^[:space:]]*' | tail -n 1 || true)"
           if [ -z "$STATUS_PAGE_URL" ]; then

@@ -6,6 +6,7 @@ export function useWindowVisibility(): boolean {
   useEffect(() => {
     const handleVisibilityChange = () => setIsVisible(document.visibilityState === 'visible');
 
+    handleVisibilityChange();
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);

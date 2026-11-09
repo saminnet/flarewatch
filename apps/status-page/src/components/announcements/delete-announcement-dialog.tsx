@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { Announcement } from '@flarewatch/shared';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -23,10 +22,8 @@ export function DeleteAnnouncementDialog({
   announcement,
   onClose,
 }: DeleteAnnouncementDialogProps) {
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const deleteMutation = useDeleteAnnouncement({
     onSuccess: onClose,
-    onError: (error) => setErrorMessage(mutationErrorMessage(error)),
   });
 
   return (
@@ -35,9 +32,9 @@ export function DeleteAnnouncementDialog({
         <DialogHeader>
           <DialogTitle>Delete announcement</DialogTitle>
         </DialogHeader>
-        {errorMessage && (
+        {deleteMutation.error && (
           <Alert variant="destructive">
-            <AlertDescription>{errorMessage}</AlertDescription>
+            <AlertDescription>{mutationErrorMessage(deleteMutation.error)}</AlertDescription>
           </Alert>
         )}
         <p className="py-4 text-muted-foreground">

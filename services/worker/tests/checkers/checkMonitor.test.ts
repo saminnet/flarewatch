@@ -38,7 +38,10 @@ const failedMeasurement = (output: string) =>
   json({
     status: 'finished',
     results: [
-      { probe: { country: 'DE', city: 'Berlin' }, result: { status: 'failed', rawOutput: output } },
+      {
+        probe: { country: 'DE', city: 'Berlin' },
+        result: { status: 'offline', rawOutput: output },
+      },
     ],
   });
 
@@ -144,7 +147,7 @@ describe('checkMonitor', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
-      result: { ok: false, error: 'GlobalPing: Measurement failed: probe offline' },
+      result: { ok: false, error: 'GlobalPing: Measurement offline: the probe did not answer' },
     });
     expect(urls()).toEqual([GLOBALPING_API, `${GLOBALPING_API}/m1`]);
   });
@@ -447,6 +450,17 @@ describe('checkMonitor', () => {
       },
     );
 
+    it('checks every confirmer against adapter capabilities', () => {
+      const target = createTarget({
+        responseHeaderEquals: { 'X-A': '1' },
+        confirmVia: ['https://proxy.example.com/check', 'globalping://TOKEN'],
+      });
+
+      expect(planIssues(target)).toEqual([
+        'confirmVia: responseHeaderEquals is not supported by Globalping',
+      ]);
+    });
+
     it('falls back to the Worker for a header check when the proxy is too old', async () => {
       fetchMock
         .mockResolvedValueOnce(
@@ -488,6 +502,178 @@ describe('checkMonitor', () => {
   });
 
   describe('confirmVia', () => {
+    it.each([
+      { votes: ['up'], quorum: 1, ok: true, location: 'place-0', note: 'confirmed elsewhere' },
+      {
+        votes: ['down'],
+        quorum: 1,
+        ok: false,
+        location: 'SFO',
+        note: 'confirmed elsewhere',
+      },
+      {
+        votes: ['unreachable'],
+        quorum: 1,
+        ok: false,
+        location: 'SFO',
+        note: 'no confirmation available',
+      },
+      {
+        votes: ['up', 'down'],
+        quorum: 1,
+        ok: false,
+        location: 'SFO',
+        note: 'confirmed elsewhere',
+      },
+      {
+        votes: ['down', 'down'],
+        quorum: 1,
+        ok: false,
+        location: 'SFO',
+        note: 'confirmed elsewhere',
+      },
+      {
+        votes: ['up', 'up', 'down'],
+        quorum: 1,
+        ok: true,
+        location: 'place-0',
+        note: 'confirmed elsewhere',
+      },
+      {
+        votes: ['unreachable', 'down'],
+        quorum: 1,
+        ok: false,
+        location: 'SFO',
+        note: 'confirmed elsewhere',
+      },
+      {
+        votes: ['up', 'down'],
+        quorum: 2,
+        ok: false,
+        location: 'SFO',
+        note: 'confirmed elsewhere',
+      },
+      {
+        votes: ['unreachable', 'down'],
+        quorum: 2,
+        ok: false,
+        location: 'SFO',
+        note: 'no confirmation available',
+      },
+    ])('votes $votes with quorum $quorum', async ({ votes, quorum, ok, location, note }) => {
+      fetchMock.mockImplementation(async (url) => {
+        const value = String(url);
+        if (value === 'https://example.com') return new Response('down', { status: 500 });
+        const index = Number(value.match(/place-(\d)/)?.[1]);
+        const vote = votes[index];
+        if (vote === 'unreachable') return new Response('unavailable', { status: 503 });
+        const result = vote === 'up' ? { ok: true, latency: 1 } : { ok: false, error: 'down' };
+        return json({ location: `place-${index}`, result });
+      });
+      const target = createTarget({
+        confirmVia: votes.map((_, index) => `https://place-${index}/check`),
+        confirmQuorum: quorum,
+      });
+
+      const result = await checkMonitor(target, createCtx(), deps);
+
+      expect(result.result.ok).toBe(ok);
+      expect(result.location).toBe(location);
+      if (!result.result.ok) expect(result.result.error).toContain(note);
+    });
+
+    it('skips confirmers the remaining budget cannot afford', async () => {
+      fetchMock.mockImplementation(async (url) => {
+        if (String(url) === 'https://example.com') return new Response('down', { status: 500 });
+        return json({ location: 'place', result: { ok: true, latency: 1 } });
+      });
+
+      const ctx = createCtx({ subrequests: 1 });
+      const result = await checkMonitor(
+        createTarget({
+          confirmVia: ['https://one.example/check', 'https://two.example/check'],
+          confirmQuorum: 2,
+        }),
+        ctx,
+        deps,
+      );
+
+      expect(result.result).toMatchObject({ ok: false });
+      expect(result.result.ok ? '' : result.result.error).toContain('no confirmation available');
+      expect(urls()).toHaveLength(1);
+      expect(ctx.budget.subrequests).toBe(1);
+    });
+
+    it('reserves the cheapest confirmers first so a tight budget still reaches the quorum', async () => {
+      fetchMock.mockImplementation(async (url) => {
+        if (String(url) === 'https://example.com') return new Response('down', { status: 500 });
+        return json({ location: 'place', result: { ok: true, latency: 1 } });
+      });
+
+      const ctx = createCtx({ subrequests: 2 });
+      const result = await checkMonitor(
+        createTarget({
+          confirmVia: [
+            'globalping://TOKEN',
+            'https://one.example/check',
+            'https://two.example/check',
+          ],
+          confirmQuorum: 2,
+        }),
+        ctx,
+        deps,
+      );
+
+      expect(result.result.ok).toBe(true);
+      expect(urls()).toEqual([
+        'https://example.com',
+        'https://one.example/check',
+        'https://two.example/check',
+      ]);
+      expect(ctx.budget.subrequests).toBe(0);
+    });
+
+    it('does not count a confirmer the run deadline cut off', async () => {
+      vi.useFakeTimers();
+      fetchMock.mockImplementation(async (url) => {
+        const value = String(url);
+        if (value === 'https://example.com') return new Response('down', { status: 500 });
+        if (value.startsWith('https://fast.example'))
+          return json({ location: 'fast', result: { ok: true, latency: 1 } });
+        return new Promise<Response>(() => {});
+      });
+
+      const pending = checkMonitor(
+        createTarget({
+          confirmVia: ['https://fast.example/check', 'https://silent.example/check'],
+        }),
+        createCtx({ deadline: Date.now() + 5_000 }),
+        deps,
+      );
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      const result = await pending;
+      expect(result.result.ok).toBe(true);
+      expect(result.location).toBe('fast');
+    });
+
+    it('reserves the two prepaid requests for a Globalping confirmer', async () => {
+      fetchMock
+        .mockResolvedValueOnce(new Response('down', { status: 500 }))
+        .mockResolvedValueOnce(json({ id: 'm1' }, 202))
+        .mockResolvedValueOnce(finishedAt('DE', 'Frankfurt', 30));
+      const ctx = createCtx({ subrequests: 2 });
+
+      const result = await checkMonitor(
+        createTarget({ confirmVia: 'globalping://CONFIRM' }),
+        ctx,
+        deps,
+      );
+
+      expect(result).toMatchObject({ location: 'DE/Frankfurt', result: { ok: true } });
+      expect(ctx.budget.subrequests).toBe(0);
+    });
+
     it('records the confirmation and its location when the first check fails', async () => {
       fetchMock
         .mockResolvedValueOnce(new Response('unavailable', { status: 500 }))
@@ -507,7 +693,7 @@ describe('checkMonitor', () => {
       });
     });
 
-    it('records a failed confirmation as the result', async () => {
+    it('keeps the primary failure when the confirmation also sees it down', async () => {
       fetchMock
         .mockResolvedValueOnce(new Response('unavailable', { status: 500 }))
         .mockResolvedValueOnce(
@@ -522,7 +708,14 @@ describe('checkMonitor', () => {
         deps,
       );
 
-      expect(result).toEqual({ location: 'home-lab', result: { ok: false, error: 'Refused' } });
+      expect(result).toEqual({
+        location: 'SFO',
+        result: {
+          ok: false,
+          error: 'Expected 2xx status, got 500 (confirmed elsewhere)',
+          latency: 0,
+        },
+      });
       expect(fetchMock.mock.calls[1]?.[0]).toBe('https://proxy.example.com/check');
     });
 
@@ -574,13 +767,8 @@ describe('checkMonitor', () => {
         deps,
       );
 
-      expect(result).toEqual({
-        location: 'ERROR',
-        result: {
-          ok: false,
-          error: 'Proxy is too old for header and JSON checks: update to flarewatch-proxy 2.0.0',
-        },
-      });
+      expect(result).toMatchObject({ location: 'SFO', result: { ok: false } });
+      expect(result.result.ok ? '' : result.result.error).toContain('(no confirmation available)');
     });
 
     it('lets a proxy with contract 2 confirm a JSON check', async () => {
@@ -633,12 +821,16 @@ describe('checkMonitor', () => {
       expect(ctx.budget.subrequests).toBe(0);
     });
 
-    it('stops polling when the run has no subrequests left', async () => {
+    it('keeps the primary failure when the Globalping confirmer runs out of subrequests', async () => {
       const { result, ctx } = await confirmThroughGlobalping(2);
 
       expect(result).toEqual({
-        location: 'ERROR',
-        result: { ok: false, error: 'GlobalPing: no subrequests left in this check run' },
+        location: 'SFO',
+        result: {
+          ok: false,
+          error: 'Expected 2xx status, got 500 (no confirmation available)',
+          latency: 0,
+        },
       });
       expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(ctx.budget.subrequests).toBe(0);

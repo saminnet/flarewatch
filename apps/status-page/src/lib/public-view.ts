@@ -22,11 +22,11 @@ export type PublicMonitor = Pick<Monitor, 'id' | 'name' | 'tooltip' | 'method'> 
 export type AdminMonitor = PublicMonitor & { private?: boolean };
 
 export type Snapshot = {
+  subscriberCount?: number;
   monitors: AdminMonitor[];
   groups: PageConfigGroup;
   state: StatusView | null;
   maintenances: Maintenance[];
-  /** Announcements have no monitor scope, so every audience receives them. */
   announcements: Announcement[];
 };
 
@@ -75,12 +75,19 @@ function viewOf(state: StatusView, monitorIds: Set<string>, operator: boolean): 
   const monitors: Record<string, MonitorView> = {};
   for (const [id, monitor] of Object.entries(state.monitors)) {
     if (!monitorIds.has(id)) continue;
+    const visible =
+      operator || !monitor.incidents.some((incident) => incident.acked_by !== undefined)
+        ? monitor
+        : {
+            ...monitor,
+            incidents: monitor.incidents.map(({ acked_by: _by, ...incident }) => incident),
+          };
     if (operator || !monitor.heartbeat) {
-      monitors[id] = monitor;
+      monitors[id] = visible;
       continue;
     }
     const { message: _message, ...heartbeat } = monitor.heartbeat;
-    monitors[id] = { ...monitor, heartbeat };
+    monitors[id] = { ...visible, heartbeat };
   }
   return { lastUpdate: state.lastUpdate, monitors };
 }
@@ -158,6 +165,25 @@ export function toAdminMonitors(config: RuntimeConfig): AdminMonitor[] {
   }));
 }
 
+function announcementsFor(
+  announcements: Announcement[],
+  visibleIds: Set<string>,
+  operator: boolean,
+): Announcement[] {
+  return announcements.flatMap((announcement) => {
+    const visible =
+      operator || !announcement.updates
+        ? announcement
+        : {
+            ...announcement,
+            updates: announcement.updates.map(({ by: _by, ...update }) => update),
+          };
+    if (!visible.monitors?.length) return [visible];
+    const monitors = visible.monitors.filter((id) => visibleIds.has(id));
+    return monitors.length ? [{ ...visible, monitors }] : [];
+  });
+}
+
 export function visitorSnapshot(
   config: RuntimeConfig,
   state: StatusView | null,
@@ -170,7 +196,11 @@ export function visitorSnapshot(
     groups: view.statusPage?.group ?? {},
     state: view.state,
     maintenances: publicMaintenances(config, maintenances),
-    announcements,
+    announcements: announcementsFor(
+      announcements,
+      new Set(view.monitors.map((monitor) => monitor.id)),
+      false,
+    ),
   };
 }
 
@@ -208,7 +238,7 @@ export function memberSnapshot(
     groups: groupsOf(config, monitorIds),
     state: state && viewOf(state, monitorIds, principal.groups === 'all'),
     maintenances: maintenancesFor(maintenances, monitorIds),
-    announcements,
+    announcements: announcementsFor(announcements, monitorIds, principal.groups === 'all'),
   };
 }
 

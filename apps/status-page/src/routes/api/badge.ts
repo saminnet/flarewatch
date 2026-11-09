@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { readVisitorSnapshot } from '@/lib/snapshots';
+import { readVisitorSnapshot } from '@/lib/hub-cache';
 import { projectBadgeStatus } from '@/lib/status-projection';
 
 type BadgePayload = {

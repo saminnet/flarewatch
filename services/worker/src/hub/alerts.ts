@@ -1,80 +1,75 @@
+import { ExpiryReceiptState, stepExpiryReceipt } from './expiry-lifecycle';
+import { RecoveryState, stepRecovery, type Recovery } from './recovery-lifecycle';
+import { ErrorFollowUpState, stepErrorFollowUp, stepReminder } from './follow-up-lifecycle';
+import { DownAlertState, stepDownAlert } from './down-alert-lifecycle';
 import { coversMonitor, type Maintenance, type Monitor } from '@flarewatch/shared';
 import type { IncidentUpdate, OpenIncident } from './incidents';
 import type { Sql } from './sql';
 
-/** Failed deliveries of one down alert before the hub stops trying. */
-const MAX_ALERT_ATTEMPTS = 10;
-/**
- * How long a run's claim on a down alert holds before another run may send it.
- * Longer than a cron run can last (15 minutes), so the run that made it is gone.
- */
-const ALERT_CLAIM_SECONDS = 20 * 60;
-/** Error-change alerts per incident, so a target whose error keeps changing cannot spam. */
-const MAX_ERROR_ALERTS = 5;
-
 export type AlertKind = 'down' | 'error' | 'reminder' | 'recovered' | 'expiry';
-
-/**
- * Whether the incident's down alert reached a webhook: 'pending', 'sending'
- * (claimed by a run), 'sent', 'failed' (gave up) or 'silent' (never alert).
- */
-type AlertState = 'pending' | 'sending' | 'sent' | 'failed' | 'silent';
 
 /** An incident's alert columns. */
 export interface IncidentAlert {
-  state: AlertState;
+  state: DownAlertState;
+  attempts: number;
   claimedAt: number | null;
   /** Error-change alerts claimed and not refused since the incident last opened. */
   errorAlerts: number;
   /** An error change a run deferred, owed to the next run that can send it. */
   errorDue: boolean;
+  errorRun: number | null;
   /** The check run that claimed the last down alert or reminder; null before reminders existed. */
   run: number | null;
   /** Reminders a webhook accepted since the incident last opened. */
   reminders: number;
+  subscriberNotified: boolean;
 }
 
 /** The alert columns, for the query that loads the open incidents. */
 export const ALERT_COLUMNS =
-  'alert, alert_claimed_at, error_alerts, error_due, alert_run, reminders';
+  'alert, alert_attempts, alert_claimed_at, error_alerts, error_due, error_run, alert_run, reminders, subscriber_notified';
 
 export type AlertRow = {
-  alert: AlertState;
+  alert: DownAlertState;
+  alert_attempts: number;
   alert_claimed_at: number | null;
   error_alerts: number;
   error_due: number;
+  error_run: number | null;
   alert_run: number | null;
   reminders: number;
+  subscriber_notified: number;
 };
 
 export function readAlert(row: AlertRow): IncidentAlert {
   return {
     state: row.alert,
+    attempts: row.alert_attempts,
     claimedAt: row.alert_claimed_at,
     errorAlerts: row.error_alerts,
     errorDue: row.error_due === 1,
+    errorRun: row.error_run,
     run: row.alert_run,
     reminders: row.reminders,
+    subscriberNotified: row.subscriber_notified === 1,
   };
 }
-
-/**
- * The alert columns a reopen sets, in the reopen's own UPDATE. The down alert
- * is due again unless it is still waiting to go out: the outage it covered ended.
- */
-export const REOPEN_ALERT_RESET = `error_alerts = 0, error_due = 0, reminders = 0,
-  alert_attempts = CASE WHEN alert IN ('pending', 'sending') THEN alert_attempts ELSE 0 END,
-  alert = CASE WHEN alert IN ('pending', 'sending') THEN alert ELSE 'pending' END`;
 
 /** The notification settings the hub decides alerts with. */
 export interface AlertPolicy {
   gracePeriodSeconds: number;
-  /** Monitors that never alert: skipNotificationIds, and monitors no webhook routes. */
+  webhookIds?: string[];
+  /** Monitors excluded from every alert channel. */
   skipIds: string[];
   skipErrorChanges: boolean;
 }
 
+export function routesToWebhook(policy: AlertPolicy, id: string): boolean {
+  return !policy.webhookIds || policy.webhookIds.includes(id);
+}
+
 export interface Alert {
+  ackedBy?: string;
   expiryDate?: number;
   monitorId: string;
   incident: number;
@@ -99,9 +94,9 @@ export interface Alert {
   run: number;
 }
 
-/** Whether any webhook accepted an alert. */
+/** Whether a delivery channel accepted an alert. */
 export interface AlertOutcome {
-  monitorId?: string;
+  monitorId: string;
   expiryDate?: number;
   incident: number;
   kind: AlertKind;
@@ -160,6 +155,7 @@ export class Alerts {
             closed.reopenedAt,
             change.incidentStartTime,
             closed.upSince ?? now,
+            closed.incident.acked_by ?? null,
           );
         }
         continue;
@@ -172,15 +168,35 @@ export class Alerts {
       const quiet =
         blocked(monitor.id) ||
         activeMaintenances.some((maintenance) => coversMonitor(maintenance, monitor.id));
-      const { state, claimedAt, errorAlerts, reminders } = open.alert;
+      const { state, reminders } = open.alert;
+      const webhook = routesToWebhook(policy, monitor.id);
       // A flapping monitor that is up again, waiting to close, is not down now.
       const recovering = open.upSince !== null;
 
       // A claim older than any run means the run that made it died before reporting back.
-      const due =
-        state === 'pending' ||
-        (state === 'sending' && now - (claimedAt ?? 0) >= ALERT_CLAIM_SECONDS);
-      if (due) {
+      const down = stepDownAlert(open.alert, {
+        type: 'eligible',
+        now,
+        run: runNumber,
+      });
+      const followUp = stepErrorFollowUp(errorFollowUpLifecycle(open.alert, open.reopenedAt), {
+        type: 'eligible',
+        run: runNumber,
+        changed: change?.changeType === 'error',
+        eligible: webhook && state === 'sent' && !quiet && !recovering && !policy.skipErrorChanges,
+      });
+      const reminder = stepReminder(reminderLifecycle(open.alert, open.reopenedAt), {
+        type: 'eligible',
+        run: runNumber,
+        interval: monitor.reminderEveryChecks,
+        eligible:
+          webhook &&
+          state === 'sent' &&
+          open.incident.acked_at === undefined &&
+          !quiet &&
+          !recovering,
+      });
+      if (down.claim) {
         // A job's own graceSeconds already delays its down state.
         const grace = monitor.method === 'HEARTBEAT' ? 0 : policy.gracePeriodSeconds;
         // One run's wait lets a dependency that fails a run later cover this monitor.
@@ -194,9 +210,10 @@ export class Alerts {
           continue;
         // Claimed so an overlapping run skips it, until record hears how delivery went.
         this.sql.exec(
-          "UPDATE incidents SET alert = 'sending', alert_claimed_at = ?, alert_run = ? WHERE id = ?",
-          now,
-          runNumber,
+          'UPDATE incidents SET alert = ?, alert_claimed_at = ?, alert_run = ? WHERE id = ?',
+          down.next.state,
+          down.next.claimedAt,
+          down.next.run,
           open.id,
         );
         alerts.push({
@@ -211,18 +228,13 @@ export class Alerts {
             .filter((other) => isDown(other.id) && ancestors.get(other.id)?.has(monitor.id))
             .map((other) => other.name),
         });
-      } else if (
-        state === 'sent' &&
-        (change?.changeType === 'error' || open.alert.errorDue) &&
-        !quiet &&
-        !recovering &&
-        !policy.skipErrorChanges &&
-        errorAlerts < MAX_ERROR_ALERTS
-      ) {
+      } else if (followUp.claim) {
         // Counted now, so an overlapping run cannot pass the cap; a refused one is given back.
         this.sql.exec(
-          'UPDATE incidents SET error_alerts = error_alerts + 1, error_due = 0, error_run = ? WHERE id = ?',
-          runNumber,
+          'UPDATE incidents SET error_alerts = ?, error_due = ?, error_run = ? WHERE id = ?',
+          followUp.next.count,
+          Number(followUp.next.state === ErrorFollowUpState.Owed),
+          followUp.next.run,
           open.id,
         );
         alerts.push({
@@ -235,15 +247,13 @@ export class Alerts {
           error,
           alsoDown: [],
         });
-      } else if (
-        state === 'sent' &&
-        monitor.reminderEveryChecks !== undefined &&
-        runNumber - (open.alert.run ?? 0) >= monitor.reminderEveryChecks &&
-        !quiet &&
-        !recovering
-      ) {
+      } else if (reminder.claim) {
         // Moving the count on is the claim: an overlapping run finds the next reminder not due.
-        this.sql.exec('UPDATE incidents SET alert_run = ? WHERE id = ?', runNumber, open.id);
+        this.sql.exec(
+          'UPDATE incidents SET alert_run = ? WHERE id = ?',
+          reminder.next.run,
+          open.id,
+        );
         alerts.push({
           monitorId: monitor.id,
           incident: open.id,
@@ -270,15 +280,17 @@ export class Alerts {
     reopenedAt: number | null,
     start: number,
     at: number,
+    ackedBy: string | null,
   ): void {
     this.sql.exec(
-      `INSERT OR REPLACE INTO pending_recoveries (monitor_id, incident, reopened_at, start, at)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO pending_recoveries (monitor_id, incident, reopened_at, start, at, acked_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       monitorId,
       incident,
       reopenedAt,
       start,
       at,
+      ackedBy,
     );
   }
 
@@ -294,26 +306,45 @@ export class Alerts {
     for (const row of this.sql.exec<PendingRecoveryRow>(
       'SELECT * FROM pending_recoveries ORDER BY at',
     )) {
-      if (!alerting.has(row.monitor_id) || openNow.has(row.monitor_id)) {
+      const transition = stepRecovery(
+        readRecovery(row),
+        !alerting.has(row.monitor_id) || openNow.has(row.monitor_id)
+          ? { type: 'cancelled' }
+          : {
+              type: 'eligible',
+              now,
+              run: runNumber,
+            },
+      );
+      if (transition.effect === 'delete') {
         this.sql.exec('DELETE FROM pending_recoveries WHERE monitor_id = ?', row.monitor_id);
         continue;
       }
-      if (row.claimed_at !== null && now - row.claimed_at < ALERT_CLAIM_SECONDS) continue;
+      if (transition.effect !== 'claim' || transition.next.state !== RecoveryState.Claimed)
+        continue;
       this.sql.exec(
         'UPDATE pending_recoveries SET claimed_run = ?, claimed_at = ? WHERE monitor_id = ?',
-        runNumber,
-        now,
+        transition.next.run,
+        transition.next.at,
         row.monitor_id,
       );
       claimed.push(
-        recoveryAlert(row.monitor_id, row.incident, row.reopened_at, runNumber, row.start, row.at),
+        recoveryAlert(
+          row.monitor_id,
+          row.incident,
+          row.reopened_at,
+          runNumber,
+          row.start,
+          row.at,
+          row.acked_by ?? undefined,
+        ),
       );
     }
     return claimed;
   }
 
   /**
-   * Records how each alert's delivery went. A down alert no webhook accepted is
+   * Records how each alert's delivery went. A down alert no delivery channel accepted is
    * due again next run, until MAX_ALERT_ATTEMPTS failures; a deferred one is due
    * again with no failure counted. A recovery goes once tried and waits for a
    * later run when deferred. A delivered outage that ended while its alert was
@@ -330,81 +361,135 @@ export class Alerts {
       monitorId,
       expiryDate,
     } of outcomes) {
-      if (kind === 'expiry' && deferred && monitorId !== undefined && expiryDate !== undefined) {
-        this.sql.exec(
-          'DELETE FROM expiry_alerts WHERE monitor_id = ? AND expiry_date = ? AND run = ?',
+      const type = delivered ? 'delivered' : deferred ? 'deferred' : 'refused';
+      if (kind === 'expiry' && expiryDate !== undefined) {
+        const [row] = this.sql.exec<{ run: number; retry_run: number | null }>(
+          'SELECT run, retry_run FROM expiry_alerts WHERE monitor_id = ? AND expiry_date = ?',
           monitorId,
           expiryDate,
-          run,
         );
-      }
-      if (kind === 'error' && !delivered) {
-        this.sql.exec(
-          `UPDATE incidents SET error_alerts = error_alerts - 1,
-             error_due = CASE WHEN ? AND error_run IS ? THEN 1 ELSE error_due END
-           WHERE id = ? AND error_alerts > 0 AND reopened_at IS ?`,
-          deferred ? 1 : 0,
-          run,
-          incident,
-          reopenedAt,
-        );
+        const current = !row
+          ? ({ state: ExpiryReceiptState.Absent } as const)
+          : row.retry_run === null
+            ? ({ state: ExpiryReceiptState.Recorded, run: row.run } as const)
+            : ({
+                state: ExpiryReceiptState.RetryWaiting,
+                run: row.run,
+                retryRun: row.retry_run,
+              } as const);
+        const transition = stepExpiryReceipt(current, { type, run });
+        if (transition.effect === 'delete') {
+          this.sql.exec(
+            'DELETE FROM expiry_alerts WHERE monitor_id = ? AND expiry_date = ? AND run = ?',
+            monitorId,
+            expiryDate,
+            run,
+          );
+        } else if (transition.effect === 'wait') {
+          this.sql.exec(
+            'UPDATE expiry_alerts SET retry_run = ? WHERE monitor_id = ? AND expiry_date = ? AND run = ?',
+            transition.next.retryRun,
+            monitorId,
+            expiryDate,
+            run,
+          );
+        }
+        continue;
       }
       if (kind === 'recovered') {
-        this.sql.exec(
-          deferred
-            ? 'UPDATE pending_recoveries SET claimed_run = NULL, claimed_at = NULL WHERE incident = ? AND claimed_run = ?'
-            : 'DELETE FROM pending_recoveries WHERE incident = ? AND claimed_run = ?',
+        const [row] = this.sql.exec<PendingRecoveryRow>(
+          'SELECT * FROM pending_recoveries WHERE monitor_id = ?',
+          monitorId,
+        );
+        const transition = stepRecovery(row ? readRecovery(row) : { state: RecoveryState.Absent }, {
+          type: deferred ? 'deferred' : 'attempted',
           incident,
           run,
-        );
+        });
+        if (transition.effect === 'release') {
+          this.sql.exec(
+            'UPDATE pending_recoveries SET claimed_run = NULL, claimed_at = NULL WHERE monitor_id = ? AND incident = ? AND claimed_run = ?',
+            monitorId,
+            incident,
+            run,
+          );
+        } else if (transition.effect === 'delete') {
+          this.sql.exec(
+            'DELETE FROM pending_recoveries WHERE monitor_id = ? AND incident = ? AND claimed_run = ?',
+            monitorId,
+            incident,
+            run,
+          );
+        }
+        continue;
       }
-      // A refused reminder keeps its number for the next one.
-      if (kind === 'reminder' && delivered) {
+      if (kind === 'expiry') continue;
+      const [row] = this.sql.exec<
+        AlertRow & {
+          monitor_id: string;
+          start: number | null;
+          acked_by: string | null;
+          end_at: number | null;
+          reopened_at: number | null;
+        }
+      >(
+        `SELECT ${ALERT_COLUMNS}, monitor_id, end_at, reopened_at, acked_by,
+          CASE WHEN json_valid(starts) THEN json_extract(starts, '$[0]') END AS start
+         FROM incidents WHERE id = ?`,
+        incident,
+      );
+      if (!row) continue;
+      const alert = readAlert(row);
+      if (kind === 'error') {
+        const current = errorFollowUpLifecycle(alert, row.reopened_at);
+        const { next } = stepErrorFollowUp(current, {
+          type,
+          run,
+          generation: reopenedAt,
+        });
+        if (next === current) continue;
         this.sql.exec(
-          'UPDATE incidents SET reminders = reminders + 1 WHERE id = ? AND reopened_at IS ?',
+          'UPDATE incidents SET error_alerts = ?, error_due = ? WHERE id = ? AND error_alerts > 0 AND reopened_at IS ?',
+          next.count,
+          Number(next.state === ErrorFollowUpState.Owed),
           incident,
           reopenedAt,
         );
+        continue;
       }
-      if (kind !== 'down') continue;
-      if (deferred) {
+      if (kind === 'reminder') {
+        const current = reminderLifecycle(alert, row.reopened_at);
+        const { next } = stepReminder(current, {
+          type,
+          generation: reopenedAt,
+        });
+        if (next === current) continue;
         this.sql.exec(
-          "UPDATE incidents SET alert = 'pending' WHERE id = ? AND alert = 'sending' AND alert_run = ?",
+          'UPDATE incidents SET reminders = ? WHERE id = ? AND reopened_at IS ?',
+          next.count,
           incident,
-          run,
+          reopenedAt,
         );
         continue;
       }
-      if (!delivered) {
-        this.sql.exec(
-          `UPDATE incidents SET alert_attempts = alert_attempts + 1,
-             alert = CASE WHEN alert_attempts + 1 >= ? THEN 'failed' ELSE 'pending' END
-           WHERE id = ? AND alert = 'sending' AND alert_run = ?`,
-          MAX_ALERT_ATTEMPTS,
-          incident,
-          run,
-        );
-        continue;
-      }
-      const [row] = this.sql.exec<{
-        monitor_id: string;
-        start: number | null;
-        end_at: number | null;
-        reopened_at: number | null;
-      }>(
-        `UPDATE incidents SET alert = 'sent' WHERE id = ? AND alert = 'sending' AND alert_run = ?
-         RETURNING monitor_id, end_at, reopened_at,
-           CASE WHEN json_valid(starts) THEN json_extract(starts, '$[0]') END AS start`,
+      const { next } = stepDownAlert(alert, { type, run });
+      if (next === alert) continue;
+      this.sql.exec(
+        `UPDATE incidents SET alert = ?, alert_attempts = ?
+         WHERE id = ? AND alert = 'sending' AND alert_run = ?`,
+        next.state,
+        next.attempts,
         incident,
         run,
       );
-      if (row?.end_at != null) {
+      if (next.state === DownAlertState.Sent && row.end_at !== null) {
         this.queueRecovery(
           row.monitor_id,
           incident,
           row.reopened_at,
           row.start ?? row.end_at,
           row.end_at,
+          row.acked_by,
         );
       }
     }
@@ -412,21 +497,48 @@ export class Alerts {
 }
 
 type PendingRecoveryRow = {
+  acked_by: string | null;
   monitor_id: string;
   incident: number;
   reopened_at: number | null;
   start: number;
   at: number;
   claimed_at: number | null;
+  claimed_run: number | null;
 };
 
-function recoveryAlert(
+function readRecovery(row: PendingRecoveryRow): Recovery {
+  return row.claimed_at === null
+    ? { state: RecoveryState.Queued, incident: row.incident }
+    : {
+        state: RecoveryState.Claimed,
+        incident: row.incident,
+        run: row.claimed_run!,
+        at: row.claimed_at,
+      };
+}
+
+export function errorFollowUpLifecycle(alert: IncidentAlert, generation: number | null) {
+  return {
+    state: alert.errorDue ? ErrorFollowUpState.Owed : ErrorFollowUpState.Idle,
+    count: alert.errorAlerts,
+    run: alert.errorRun,
+    generation,
+  };
+}
+
+export function reminderLifecycle(alert: IncidentAlert, generation: number | null) {
+  return { run: alert.run, count: alert.reminders, generation };
+}
+
+export function recoveryAlert(
   monitorId: string,
   incident: number,
   reopenedAt: number | null,
   run: number,
   start: number,
   at: number,
+  ackedBy?: string,
 ): Alert {
   return {
     monitorId,
@@ -434,6 +546,7 @@ function recoveryAlert(
     reopenedAt,
     run,
     kind: 'recovered',
+    ...(ackedBy !== undefined && { ackedBy }),
     incidentStartTime: start,
     error: '',
     alsoDown: [],

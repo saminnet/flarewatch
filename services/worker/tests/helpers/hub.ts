@@ -1,10 +1,19 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterAll, expect, onTestFinished } from 'vite-plus/test';
+import type { Env } from '../../src/env';
 import { MonitorHub } from '../../src/hub/monitor-hub';
 
 /** Durable Object storage over an in-memory node:sqlite database. */
 function createStorage(db: DatabaseSync, onQuery: (query: string) => void) {
+  let alarm: number | null = null;
   return {
+    getAlarm: async () => alarm,
+    deleteAlarm: async () => {
+      alarm = null;
+    },
+    setAlarm: async (at: number) => {
+      alarm = at;
+    },
     sql: {
       exec: (query: string, ...bindings: SQLInputValue[]) => {
         let statement = db.prepare(query);
@@ -54,10 +63,13 @@ function own(db: DatabaseSync): void {
  * when it loses its index. The workerd tests measure the rows Durable Objects bill.
  * A hub reopened over the same `db` shares its owner.
  */
-export function createHub(db = new DatabaseSync(':memory:')) {
+export function createHub(db = new DatabaseSync(':memory:'), env: Env = {}) {
   own(db);
   let migrated = false;
   const ctx = {
+    waitUntil: (promise: Promise<unknown>) => {
+      void promise;
+    },
     storage: createStorage(db, (query) => {
       const plan = migrated ? db.prepare(`EXPLAIN QUERY PLAN ${query}`).all() : [];
       if (plan.some(({ detail }) => /^SCAN incidents\b/.test(String(detail)))) {
@@ -65,11 +77,10 @@ export function createHub(db = new DatabaseSync(':memory:')) {
       }
     }),
   };
-  // SAFETY: the hub touches only ctx.storage.sql.exec and ctx.storage.transactionSync,
-  // which the fake implements.
-  const hub = new MonitorHub(ctx as typeof ctx & DurableObjectState, {});
+  // SAFETY: the fake implements the SQL, transaction and alarm operations used by the hub.
+  const hub = new MonitorHub(ctx as typeof ctx & DurableObjectState, env);
   migrated = true;
-  return { hub, db };
+  return { hub, db, storage: ctx.storage };
 }
 
 /** A namespace whose every name resolves to this hub, standing in for the MONITOR_HUB binding. */

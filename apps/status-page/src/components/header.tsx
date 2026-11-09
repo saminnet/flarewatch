@@ -2,17 +2,21 @@ import { Link } from '@tanstack/react-router';
 import { IconFlame, IconHistory } from '@tabler/icons-react';
 import type { PageConfig } from '@flarewatch/shared';
 import { buttonVariants } from '@/components/ui/button-variants';
+import { SubscribeMenu } from '@/components/subscribe-form';
 import { UserMenu } from '@/components/user-menu';
+import type { SubscriberSettings } from '@/lib/config';
 import type { Session } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
 interface HeaderProps {
   config?: PageConfig;
+  subscribers: SubscriberSettings;
   session: Session;
   visitorView: boolean;
 }
 
-export function Header({ config, session, visitorView }: HeaderProps) {
+export function Header({ config, subscribers, session, visitorView }: HeaderProps) {
+  const audience = visitorView ? 'visitor' : session.viewer;
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-sm">
       <div className="container mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-4">
@@ -28,20 +32,31 @@ export function Header({ config, session, visitorView }: HeaderProps) {
         </Link>
 
         {session.privateOnly && session.viewer === 'visitor' ? null : (
-          <nav className="flex shrink-0 items-center gap-1" aria-label="Main navigation">
+          <nav
+            className="flex shrink-0 items-center gap-1 text-muted-foreground"
+            aria-label="Main navigation"
+          >
+            {subscribers.enabled && audience === 'visitor' && (
+              <SubscribeMenu siteKey={subscribers.siteKey} />
+            )}
+
             <Link
               to="/history"
               className={cn(
                 buttonVariants({ variant: 'ghost', size: 'sm' }),
-                'text-muted-foreground aria-[current=page]:bg-muted aria-[current=page]:text-foreground',
+                'aria-[current=page]:bg-muted aria-[current=page]:text-foreground',
               )}
             >
               <IconHistory />
-              History
+              <span className="max-sm:sr-only">History</span>
             </Link>
 
             {session.viewer !== 'visitor' && (
-              <UserMenu session={session} visitorView={visitorView} />
+              <UserMenu
+                session={session}
+                visitorView={visitorView}
+                subscribers={subscribers.enabled}
+              />
             )}
           </nav>
         )}

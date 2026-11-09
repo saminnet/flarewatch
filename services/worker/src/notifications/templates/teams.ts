@@ -15,7 +15,7 @@ export function teamsTemplate(ctx: TemplateContext): TemplateOutput {
   const name = singleLine(ctx.monitorName);
 
   const facts: { title: string; value: string }[] = [
-    { title: 'Status', value: statusText(ctx) },
+    { title: 'Status', value: statusText(ctx).replaceAll('[', '⟦').replaceAll(']', '⟧') },
     { title: 'Duration', value: `${ctx.downtimeMinutes} min` },
   ];
 

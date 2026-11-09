@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { pageConfig } from '@flarewatch/config';
 import { workerConfig } from '@flarewatch/config/worker';
 import type { HubView } from '@flarewatch/shared';
-import { readVisitorSnapshot, forgetCachedView } from '@/lib/snapshots';
+import { readVisitorSnapshot, forgetCachedView } from '@/lib/hub-cache';
 import { Route } from '@/routes/feed[.]atom';
 import { stubMonitorWorker } from '../helpers/bindings';
 import { forgetViewAroundEachTest } from '../helpers/snapshots';
@@ -127,7 +127,7 @@ describe('GET /feed.atom', () => {
     view.announcements[0]!.title = 'Edited notice';
     view.announcements[0]!.updatedAt += 60000;
     view.monitors.public!.incidents[0]!.end = T + 60;
-    forgetCachedView();
+    await forgetCachedView();
     const after = (await parse()).doc;
     const ids = (doc: Document) =>
       [...doc.querySelectorAll('entry > id')].map((e) => e.textContent).sort();
@@ -163,4 +163,44 @@ describe('GET /feed.atom', () => {
     expect(doc.querySelector('feed > updated')?.textContent).toBe('1970-01-01T00:00:00.000Z');
     expect(doc.querySelectorAll('entry')).toHaveLength(0);
   });
+});
+
+it('emits one stable Atom entry per manual incident update without private scope', async () => {
+  const view = fixture();
+  view.announcements = [
+    {
+      id: 'manual',
+      title: 'API delays',
+      body: 'Investigating.',
+      kind: 'incident',
+      monitors: ['public', 'private'],
+      status: 'resolved',
+      createdAt: T * 1000,
+      updatedAt: (T + 120) * 1000,
+      updates: [
+        {
+          at: new Date((T + 60) * 1000).toISOString(),
+          status: 'identified',
+          body: '<Cause> found.',
+          by: 'Pat',
+        },
+        {
+          at: new Date((T + 120) * 1000).toISOString(),
+          status: 'resolved',
+          body: 'Fixed.',
+          by: 'Pat',
+        },
+      ],
+    },
+  ];
+  stub(view);
+  const { doc, text } = await parse();
+  expect(
+    [...doc.querySelectorAll('entry > title')].map((node) => node.textContent).slice(0, 2),
+  ).toEqual(['API delays: resolved', 'API delays: identified']);
+  expect(doc.querySelector('entry:nth-of-type(2) > content')?.textContent).toBe('<Cause> found.');
+  expect(text).not.toContain('private');
+  expect(
+    new Set([...doc.querySelectorAll('entry > id')].map((node) => node.textContent)).size,
+  ).toBe(5);
 });

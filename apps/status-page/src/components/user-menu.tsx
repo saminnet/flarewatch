@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
   DropdownMenu,
@@ -10,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useSignOut } from '@/lib/query/auth.mutations';
+import { snapshotQuery } from '@/lib/query/monitors.queries';
 import type { Session } from '@/lib/session';
 
 function initialsOf(name: string): string {
@@ -23,12 +25,34 @@ function initialsOf(name: string): string {
   );
 }
 
+function SubscriberCount() {
+  const { data: count } = useQuery({
+    ...snapshotQuery('operator'),
+    enabled: false,
+    select: (snapshot) => snapshot.subscriberCount,
+  });
+  if (count === undefined) return null;
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuGroup>
+        <DropdownMenuLabel>
+          {count === 0
+            ? 'No email subscribers yet'
+            : `${count} email ${count === 1 ? 'subscriber' : 'subscribers'}`}
+        </DropdownMenuLabel>
+      </DropdownMenuGroup>
+    </>
+  );
+}
+
 interface UserMenuProps {
   session: Session;
   visitorView: boolean;
+  subscribers: boolean;
 }
 
-export function UserMenu({ session, visitorView }: UserMenuProps) {
+export function UserMenu({ session, visitorView, subscribers }: UserMenuProps) {
   const navigate = useNavigate();
   const signOut = useSignOut();
   const name = session.name ?? 'Operator';
@@ -53,6 +77,7 @@ export function UserMenu({ session, visitorView }: UserMenuProps) {
             )}
           </DropdownMenuLabel>
         </DropdownMenuGroup>
+        {subscribers && session.viewer === 'operator' && <SubscriberCount />}
         <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem
           closeOnClick

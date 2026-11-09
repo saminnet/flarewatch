@@ -1,3 +1,5 @@
+import { pageZone } from '@/lib/page-zone';
+import { restoreAfterEach } from '../helpers/config';
 import { describe, expect, it } from 'vite-plus/test';
 import type { Maintenance } from '@flarewatch/shared';
 import {
@@ -147,4 +149,27 @@ describe('maintenance helpers', () => {
       }),
     ).toBe('Every week on Mon, Thu, Europe/Berlin time, until Jul 1, 10:00 UTC');
   });
+});
+
+restoreAfterEach(pageZone, ['timezone']);
+
+it('shows both local dates when a maintenance range crosses local midnight', () => {
+  pageZone.timezone = 'Australia/Darwin';
+  expect(formatDateRange(new Date('2026-01-05T14:00:00Z'), new Date('2026-01-05T15:00:00Z'))).toBe(
+    'Jan 5, 23:30 – Jan 6, 00:30 UTC+9:30',
+  );
+});
+
+it('names the page zone once for a range within one local day', () => {
+  pageZone.timezone = 'Australia/Darwin';
+  expect(formatDateRange(new Date('2026-11-08T05:00:00Z'), new Date('2026-11-08T06:00:00Z'))).toBe(
+    'Nov 8, 14:30–15:30 UTC+9:30',
+  );
+});
+
+it('shows both offsets when a maintenance range crosses the March change', () => {
+  pageZone.timezone = 'Europe/Stockholm';
+  expect(formatDateRange(new Date('2026-03-29T00:30:00Z'), new Date('2026-03-29T01:30:00Z'))).toBe(
+    'Mar 29, 01:30 UTC+1 – Mar 29, 03:30 UTC+2',
+  );
 });

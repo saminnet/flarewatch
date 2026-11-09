@@ -1,5 +1,6 @@
 import * as z from 'zod/mini';
 import {
+  HUB_LOCATIONS,
   NOTIFICATION_TEMPLATES,
   type AccessConfig,
   type Announcement,
@@ -16,7 +17,7 @@ import {
   type Webhook,
 } from './types';
 import { isNormalizedMaintenance, knownZone, normalizeMaintenance } from './maintenance';
-import { isValidAnnouncement } from './announcement';
+import { isValidAnnouncement, isVisitorAnnouncement } from './announcement';
 import { isJsonObject, isNonEmptyString, isSecureUrl, jsonPathKeys } from './utils';
 
 const PULL_METHODS = [
@@ -301,7 +302,23 @@ const pullMonitorShape = {
   ),
   checkProxy: z.optional(checkLocation('checkProxy')),
   checkProxyFallback: optionalBoolean('checkProxyFallback'),
-  confirmVia: z.optional(checkLocation('confirmVia')),
+  confirmVia: z.optional(
+    z.union(
+      [
+        checkLocation('confirmVia'),
+        z.array(checkLocation('confirmVia')).check(
+          z.refine((places) => places.length >= 1 && places.length <= 5, {
+            error: 'confirmVia must have 1 to 5 places',
+          }),
+          z.refine((places) => new Set(places).size === places.length, {
+            error: 'confirmVia must not contain duplicates',
+          }),
+        ),
+      ],
+      { error: "confirmVia must be an http(s) URL, globalping://<token> or 'vpc'" },
+    ),
+  ),
+  confirmQuorum: z.optional(intInRange('confirmQuorum', 1, 5)),
   pingProtocol: z.optional(
     z.enum(['tcp', 'icmp'], { error: "pingProtocol must be 'tcp' or 'icmp'" }),
   ),
@@ -318,16 +335,35 @@ const unknownFieldError = {
       : undefined,
 };
 
+export function confirmPlaces(confirmVia: string | string[] | undefined): string[] {
+  return confirmVia === undefined ? [] : [confirmVia].flat();
+}
+
 const pullMonitorSchema = z.strictObject(pullMonitorShape, unknownFieldError).check((ctx) => {
-  const { method, target, responseJsonPath, responseJsonValue, checkProxy, confirmVia } = ctx.value;
+  const {
+    method,
+    target,
+    responseJsonPath,
+    responseJsonValue,
+    checkProxy,
+    confirmVia,
+    confirmQuorum,
+  } = ctx.value;
+  const confirmers = confirmPlaces(confirmVia);
   const issues = [
     targetIssue(method, target),
     networkMonitorIssue(ctx.value),
     (responseJsonPath === undefined) !== (responseJsonValue === undefined)
       ? 'responseJsonPath and responseJsonValue go together'
       : null,
-    confirmVia !== undefined && confirmVia === checkProxy
+    confirmers.some((place) => place === checkProxy)
       ? 'confirmVia must be another place than checkProxy'
+      : null,
+    confirmQuorum !== undefined && confirmers.length === 0
+      ? 'confirmQuorum requires confirmVia'
+      : null,
+    confirmQuorum !== undefined && confirmQuorum > confirmers.length
+      ? 'confirmQuorum must not exceed the number of confirmVia places'
       : null,
   ];
   for (const message of issues) {
@@ -456,7 +492,25 @@ function loopFrom(start: string, byId: Map<string, DependencyNode>): string[] | 
 const statusPageSchema: z.ZodMiniType<SchemaOutput<PageConfig>> = z.strictObject(
   {
     title: z.optional(z.string()),
+    timezone: z.optional(
+      z.string().check(
+        z.refine((value) => knownZone(value) !== undefined, {
+          error: (issue) => 'Unknown page timezone: ' + String(issue.input),
+        }),
+      ),
+    ),
     visibility: z.optional(z.enum(['public', 'private'])),
+    subscribers: z.optional(
+      z.strictObject(
+        {
+          provider: z.optional(z.enum(['resend', 'cloudflare'])),
+          from: z.string().check(z.minLength(3), z.maxLength(320), z.regex(/^[^\r\n]+@[^\r\n]+$/)),
+          dailySendCap: z.optional(intInRange('dailySendCap', 1, 100000)),
+          maxSubscribers: z.optional(intInRange('maxSubscribers', 1, 100000)),
+        },
+        unknownFieldError,
+      ),
+    ),
     links: z.optional(
       z.array(
         z.object({
@@ -512,6 +566,7 @@ const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.ob
 const runtimeConfigSchema: z.ZodMiniType<SchemaOutput<RuntimeConfig>> = z
   .object({
     monitors: monitorListSchema,
+    hubLocation: z.optional(z.enum(HUB_LOCATIONS)),
     statusPage: z.optional(statusPageSchema),
     notification: z.optional(notificationSchema),
   })
@@ -612,6 +667,8 @@ const heartbeatStateSchema = z.object({
 });
 
 const incidentSchema = z.object({
+  acked_at: z.exactOptional(z.number()),
+  acked_by: z.exactOptional(z.string()),
   start: z.array(z.number()),
   end: z.exactOptional(z.number()),
   error: z.array(z.string()),
@@ -619,22 +676,27 @@ const incidentSchema = z.object({
 
 const latencySampleSchema = z.object({ loc: z.string(), ping: z.number(), time: z.number() });
 
-const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
-  lastUpdate: z.number(),
-  maintenances: z.array(z.custom<Maintenance>(isValidMaintenance)),
-  announcements: z.array(z.custom<Announcement>(isValidAnnouncement)),
-  monitors: z.record(
-    z.string(),
-    z.object({
-      status: z.enum(['up', 'late', 'pending', 'running', 'down', 'degraded']),
-      warning: z.exactOptional(z.string()),
-      startedAt: z.exactOptional(z.number()),
-      incidents: z.array(incidentSchema),
-      latest: z.exactOptional(latencySampleSchema),
-      heartbeat: z.exactOptional(heartbeatStateSchema),
-    }),
-  ),
-});
+const viewMonitorsSchema = z.record(
+  z.string(),
+  z.object({
+    status: z.enum(['up', 'late', 'pending', 'running', 'down', 'degraded']),
+    warning: z.exactOptional(z.string()),
+    startedAt: z.exactOptional(z.number()),
+    incidents: z.array(incidentSchema),
+    latest: z.exactOptional(latencySampleSchema),
+    heartbeat: z.exactOptional(heartbeatStateSchema),
+  }),
+);
+
+const viewSchema = (
+  isAnnouncement: (value: unknown) => value is Announcement,
+): z.ZodMiniType<SchemaOutput<HubView>> =>
+  z.object({
+    lastUpdate: z.number(),
+    maintenances: z.array(z.custom<Maintenance>(isValidMaintenance)),
+    announcements: z.array(z.custom<Announcement>(isAnnouncement)),
+    monitors: viewMonitorsSchema,
+  });
 
 export function configIssues(value: unknown): string[] {
   const result = runtimeConfigSchema.safeParse(value);
@@ -741,7 +803,9 @@ export function parseHeartbeatState(value: unknown): HeartbeatState | null {
   return result.success ? result.data : null;
 }
 
-export const isHubView = asTypeGuard<HubView>(hubViewSchema);
+export const isHubView = asTypeGuard<HubView>(viewSchema(isValidAnnouncement));
+/** The view a visitor may see, as the location cache holds it: no update names its responder. */
+export const isVisitorView = asTypeGuard<HubView>(viewSchema(isVisitorAnnouncement));
 const isAccessConfig = asTypeGuard<AccessConfig>(accessConfigSchema);
 const isWebhook = asTypeGuard<Webhook>(webhookSchema);
 export const isLatencySamples = asTypeGuard<LatencySample[]>(z.array(latencySampleSchema));

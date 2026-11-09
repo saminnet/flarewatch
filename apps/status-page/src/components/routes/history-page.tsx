@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useReducer } from 'react';
+import { CLOSED_DIALOG, dialogStep } from '@/lib/dialog-state';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { usePageHydrated } from '@/lib/hooks/use-page-hydration';
 import { getRouteApi } from '@tanstack/react-router';
@@ -36,11 +37,6 @@ function getCurrentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-/** Dialogs stay mounted with their last target so they can animate out. */
-type DialogTarget = { open: boolean; maintenance?: Maintenance; key: number };
-
-const CLOSED: DialogTarget = { open: false, key: 0 };
-
 export function HistoryPage() {
   usePageHydrated();
   const audience = useAudience();
@@ -48,14 +44,8 @@ export function HistoryPage() {
   const {
     data: { monitors, state, maintenances, announcements },
   } = useSuspenseQuery(snapshotQuery(audience));
-  const [editing, setEditing] = useState(CLOSED);
-  const [deleting, setDeleting] = useState(CLOSED);
-  const openFor = (maintenance?: Maintenance) => (prev: DialogTarget) => ({
-    open: true,
-    maintenance,
-    key: prev.key + 1,
-  });
-  const closeDialog = (prev: DialogTarget) => ({ ...prev, open: false });
+  const [editing, edit] = useReducer(dialogStep<Maintenance>, CLOSED_DIALOG);
+  const [deleting, remove] = useReducer(dialogStep<Maintenance>, CLOSED_DIALOG);
   const { loaderNowMs } = historyRoute.useLoaderData();
   const nowMs = useNow({ serverTime: loaderNowMs });
   const {
@@ -82,8 +72,8 @@ export function HistoryPage() {
   function maintenanceActions(maintenance: Maintenance) {
     if (!operator) return {};
     return {
-      onEdit: () => setEditing(openFor(maintenance)),
-      onDelete: () => setDeleting(openFor(maintenance)),
+      onEdit: () => edit({ type: 'open', target: maintenance }),
+      onDelete: () => remove({ type: 'open', target: maintenance }),
     };
   }
 
@@ -110,8 +100,8 @@ export function HistoryPage() {
         </div>
         {operator && (
           <div className="flex flex-wrap gap-2">
-            <AddAnnouncementButton />
-            <Button onClick={() => setEditing(openFor())}>
+            <AddAnnouncementButton monitors={monitors} />
+            <Button onClick={() => edit({ type: 'open' })}>
               <IconPlus className="size-4" />
               Add maintenance window
             </Button>
@@ -121,7 +111,12 @@ export function HistoryPage() {
 
       {state && <UptimeCalendar monitors={monitors} state={state} selectedMonth={resolvedMonth} />}
 
-      <ManageAnnouncements announcements={announcements} nowMs={nowMs} operator={operator} />
+      <ManageAnnouncements
+        announcements={announcements}
+        nowMs={nowMs}
+        operator={operator}
+        monitors={monitors}
+      />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
@@ -231,6 +226,8 @@ export function HistoryPage() {
                   <IncidentCard
                     key={`incident-${event.monitorId}-${event.start}-${event.end ?? 'open'}`}
                     event={event}
+                    nowMs={nowMs}
+                    operator={operator}
                   />
                 ) : (
                   <MaintenanceEventCard
@@ -251,16 +248,16 @@ export function HistoryPage() {
         <>
           <MaintenanceFormDialog
             key={editing.key}
-            open={editing.open}
-            maintenance={editing.maintenance}
+            open={editing.status === 'open'}
+            maintenance={editing.target}
             monitors={monitors}
-            onClose={() => setEditing(closeDialog)}
+            onClose={() => edit({ type: 'close' })}
           />
           <DeleteMaintenanceDialog
             key={deleting.key}
-            open={deleting.open}
-            maintenance={deleting.maintenance}
-            onClose={() => setDeleting(closeDialog)}
+            open={deleting.status === 'open'}
+            maintenance={deleting.target}
+            onClose={() => remove({ type: 'close' })}
           />
         </>
       )}

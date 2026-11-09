@@ -13,6 +13,7 @@ import {
   success,
   failure,
   formatUtcShort,
+  formatDateTime,
   timingSafeEqual,
   readJsonUpTo,
 } from '../src/utils';
@@ -645,6 +646,34 @@ describe('readJsonUpTo', () => {
   ] as const)('rejects %s JSON one byte past the limit', async (_case, body, limit) => {
     await expect(readJsonUpTo(new Response(body), limit)).rejects.toThrow(
       `response is over ${limit} bytes`,
+    );
+  });
+});
+
+describe('page time zones', () => {
+  it.each([
+    ['2026-01-05T00:00:00Z', 'Europe/Stockholm', 'Jan 5, 01:00 UTC+1'],
+    ['2026-07-05T00:00:00Z', 'Europe/Stockholm', 'Jul 5, 02:00 UTC+2'],
+    ['2026-03-29T00:59:59.999Z', 'Europe/Stockholm', 'Mar 29, 01:59 UTC+1'],
+    ['2026-03-29T01:00:00Z', 'Europe/Stockholm', 'Mar 29, 03:00 UTC+2'],
+    ['2026-01-05T00:00:00Z', 'Australia/Darwin', 'Jan 5, 09:30 UTC+9:30'],
+    ['2026-01-05T02:00:00Z', 'America/Los_Angeles', 'Jan 4, 18:00 UTC-8'],
+    ['2026-01-05T02:00:00Z', 'America/St_Johns', 'Jan 4, 22:30 UTC-3:30'],
+    ['2026-01-05T00:00:00Z', 'UTC', 'Jan 5, 00:00 UTC'],
+  ])('formats %s in %s with its instantaneous offset', (iso, timezone, expected) => {
+    const date = new Date(iso);
+    expect(formatDateTime(date, 'MMM d, HH:mm z', timezone)).toBe(expected);
+    expect(formatUtcShort(date.getTime() / 1000, timezone)).toBe(expected);
+    expect(formatUtcShort(date.getTime() / 1000)).toBe(
+      iso.startsWith('2026-03-29T00')
+        ? 'Mar 29, 00:59 UTC'
+        : iso.startsWith('2026-03-29T01')
+          ? 'Mar 29, 01:00 UTC'
+          : iso.startsWith('2026-07')
+            ? 'Jul 5, 00:00 UTC'
+            : iso.includes('T02')
+              ? 'Jan 5, 02:00 UTC'
+              : 'Jan 5, 00:00 UTC',
     );
   });
 });

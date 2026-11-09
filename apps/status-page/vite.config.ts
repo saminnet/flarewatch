@@ -7,13 +7,18 @@ import transformImports from '@rolldown/plugin-transform-imports';
 import viteReact, { reactCompilerPreset } from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { cloudflare } from '@cloudflare/vite-plugin';
+import { pageConfig } from '@flarewatch/config';
+import { pageConfig as e2ePublic } from './tests/e2e/config/public';
+import { pageConfig as e2ePrivate } from './tests/e2e/config/private';
 
 // Browser-test builds swap in test monitors, a test sign-in provider and a Partner page
 // group; FLAREWATCH_E2E=private also makes the page private.
 const e2e = process.env.FLAREWATCH_E2E;
 const e2eConfig = path.resolve(import.meta.dirname, 'tests/e2e/config');
+const page = e2e ? (e2e === 'private' ? e2ePrivate : e2ePublic) : pageConfig;
 
 const config = defineConfig({
+  define: { __PAGE_TIMEZONE__: JSON.stringify(page.timezone ?? null) },
   plugins: [
     devtools(),
     cloudflare({ viteEnvironment: { name: 'ssr' } }),

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { IconArrowLeft, IconLock } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
@@ -45,15 +44,10 @@ function SignInHeading({
 
 export function SignInForm({ privateOnly, passwordSignIn, providers, error }: SignInFormProps) {
   const isHydrated = useHydrated();
-  const [loginError, setLoginError] = useState<string | null>(
-    (error && PROVIDER_ERRORS.get(error)) ?? null,
-  );
-
-  const loginMutation = useSignIn({
-    onError: (error) => {
-      setLoginError(error.message);
-    },
-  });
+  const loginMutation = useSignIn();
+  const loginError =
+    loginMutation.error?.message ??
+    (loginMutation.isIdle && error ? PROVIDER_ERRORS.get(error) : null);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -65,7 +59,6 @@ export function SignInForm({ privateOnly, passwordSignIn, providers, error }: Si
     const username = field('username');
     const password = field('password');
     if (!username || !password || loginMutation.isPending) return;
-    setLoginError(null);
     loginMutation.mutate({ username, password });
   };
 

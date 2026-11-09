@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import type { Announcement, Maintenance, StatusView } from '@flarewatch/shared';
 import { getConfig } from '@/lib/config';
-import { readVisitorSnapshot } from '@/lib/snapshots';
+import { readVisitorSnapshot } from '@/lib/hub-cache';
 import type { PublicMonitor } from '@/lib/public-view';
 import { escapeXml } from '@/lib/xml';
 
@@ -69,14 +69,29 @@ function maintenanceEntries(input: FeedInput): FeedEntry[] {
 }
 
 function announcementEntries(input: FeedInput): FeedEntry[] {
-  return input.announcements.map((announcement) => ({
-    id: tagId(input.host, 'announcement', announcement.id, announcement.createdAt),
-    title: announcement.title,
-    content: announcement.body,
-    when: announcement.createdAt,
-    updated: announcement.updatedAt,
-    link: `${input.origin}/`,
-  }));
+  return input.announcements.flatMap((announcement) => [
+    {
+      id: tagId(input.host, 'announcement', announcement.id, announcement.createdAt),
+      title: announcement.title,
+      content: `${announcement.status ? `${announcement.status}\n` : ''}${announcement.body}`,
+      when: announcement.createdAt,
+      updated: announcement.updatedAt,
+      link: `${input.origin}/`,
+    },
+    ...(announcement.updates ?? []).map((update, index) => ({
+      id: tagId(
+        input.host,
+        'announcement-update',
+        `${announcement.id}/${index}`,
+        announcement.createdAt,
+      ),
+      title: `${announcement.title}: ${update.status}`,
+      content: update.body,
+      when: Date.parse(update.at),
+      updated: Date.parse(update.at),
+      link: `${input.origin}/history`,
+    })),
+  ]);
 }
 
 function atomFeed(input: FeedInput, updatedSeconds: number): string {

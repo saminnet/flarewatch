@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { Maintenance } from '@flarewatch/shared';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -29,10 +28,8 @@ export function DeleteMaintenanceDialog({
   maintenance,
   onClose,
 }: DeleteMaintenanceDialogProps) {
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const deleteMutation = useDeleteMaintenance({
     onSuccess: onClose,
-    onError: (error) => setErrorMessage(mutationErrorMessage(error)),
   });
 
   return (
@@ -41,9 +38,9 @@ export function DeleteMaintenanceDialog({
         <DialogHeader>
           <DialogTitle>Delete maintenance window</DialogTitle>
         </DialogHeader>
-        {errorMessage && (
+        {deleteMutation.error && (
           <Alert variant="destructive">
-            <AlertDescription>{errorMessage}</AlertDescription>
+            <AlertDescription>{mutationErrorMessage(deleteMutation.error)}</AlertDescription>
           </Alert>
         )}
         <p className="py-4 text-muted-foreground">

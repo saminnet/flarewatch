@@ -1348,7 +1348,11 @@ describe('alert delivery', () => {
     const failing = { location: 'SFO', result: { ok: false as const, error: 'Unavailable' } };
     const record = (at: number) =>
       d.hub.record(at, [{ monitor: pull('api') as MonitorTarget, check: failing }], policy);
-    const outcome = ({ incident, kind, reopenedAt, run }: Alert, delivered: boolean) => ({
+    const outcome = (
+      { monitorId, incident, kind, reopenedAt, run }: Alert,
+      delivered: boolean,
+    ) => ({
+      monitorId,
       incident,
       kind,
       reopenedAt,

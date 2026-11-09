@@ -1,5 +1,12 @@
 export type PageConfig = {
+  subscribers?: {
+    provider?: 'resend' | 'cloudflare';
+    from: string;
+    dailySendCap?: number;
+    maxSubscribers?: number;
+  };
   title?: string;
+  timezone?: string;
   links?: PageConfigLink[];
   group?: PageConfigGroup;
   favicon?: string;
@@ -79,7 +86,21 @@ export type Maintenance = MaintenanceConfig & {
   updatedAt: number;
 };
 
+export type IncidentStatus = 'investigating' | 'identified' | 'monitoring' | 'resolved';
+
+export type AnnouncementUpdate = {
+  at: string;
+  status: IncidentStatus;
+  body: string;
+  /** The responder. The hub always stores it, and only operators see it. */
+  by?: string;
+};
+
 export type AnnouncementConfig = {
+  kind?: 'notice' | 'incident';
+  monitors?: string[];
+  status?: IncidentStatus;
+  updates?: AnnouncementUpdate[];
   title: string;
   body: string;
   /** Unix timestamp (ms) or a date/time string. */
@@ -140,17 +161,21 @@ export type PullMonitor = {
   checkProxy?: string;
   checkProxyFallback?: boolean;
   /**
-   * Another place to check from, in `checkProxy`'s formats. When the check fails, it runs once
-   * more from here, and this result is the one recorded.
+   * One to five places to check from, in `checkProxy`'s formats, after the primary check and
+   * any fallback fail. The failed primary and each place that answered vote, and the monitor is
+   * down when more than half of the votes are down. A place that cannot be reached does not vote.
    */
-  confirmVia?: string;
+  confirmVia?: string | string[];
+  /** How many `confirmVia` places must answer before the vote counts. Defaults to one. */
+  confirmQuorum?: number;
   pingProtocol?: 'tcp' | 'icmp';
   sslCheckEnabled?: boolean;
   sslCheckDaysBeforeExpiry?: number;
   sslIgnoreSelfSigned?: boolean;
   /**
    * Hide from the status page and public API. The monitor is still checked,
-   * stored, and alerted, only signed-in admins see it.
+   * stored, and alerted. Only operators, members, and audiences whose page
+   * group holds it see it.
    */
   private?: boolean;
   /** Monitor ids this one reaches its target through. While one of them is down, this one sends no alert of its own. */
@@ -181,7 +206,23 @@ export function isPublicMonitor(monitor: Pick<MonitorTarget, 'private'>): boolea
   return monitor.private !== true;
 }
 
+export const HUB_LOCATIONS = [
+  'wnam',
+  'enam',
+  'sam',
+  'weur',
+  'eeur',
+  'apac',
+  'apac-ne',
+  'apac-se',
+  'oc',
+  'afr',
+  'me',
+] as const;
+
 export type WorkerConfig = {
+  /** Placement hint for a new hub only. An existing hub does not move. */
+  hubLocation?: (typeof HUB_LOCATIONS)[number];
   monitors: Monitor[];
   notification?: NotificationConfig;
   callbacks?: {
@@ -259,6 +300,7 @@ export type Webhook = {
 export type WebhookConfig = Webhook | Webhook[];
 
 export type RuntimeConfig = {
+  hubLocation?: WorkerConfig['hubLocation'];
   monitors: Monitor[];
   statusPage?: PageConfig;
   notification?: NotificationConfig;
@@ -294,6 +336,8 @@ export type HeartbeatState = HeartbeatSignal & {
 
 /** A stretch of downtime. Each error change inside it starts a new segment. */
 export type Incident = {
+  acked_at?: number;
+  acked_by?: string;
   /** Unix timestamps (seconds). One per error segment. */
   start: number[];
   /** Unix timestamp (seconds). Undefined while the incident is open. */
@@ -355,6 +399,7 @@ export type CheckResult = CheckSuccess | CheckFailure;
 export interface CheckResultWithLocation {
   location: string;
   result: CheckResult;
+  unreachable?: true;
 }
 
 /** What one check run can still spend. Every monitor in the run shares one. */

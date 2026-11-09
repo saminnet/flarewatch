@@ -9,7 +9,11 @@ import { cspNonce } from './csp-nonce';
 /** On a private-only page, what a visitor may still reach. Data server fns check for themselves. */
 function isOpenToVisitors(pathname: string): boolean {
   return (
-    pathname === '/login' || pathname.startsWith('/auth/') || pathname.startsWith('/_serverfn/')
+    pathname.startsWith('/subscribe/') ||
+    pathname === '/subscribe' ||
+    pathname === '/login' ||
+    pathname.startsWith('/auth/') ||
+    pathname.startsWith('/_serverfn/')
   );
 }
 
@@ -23,16 +27,18 @@ function hasInvalidOrigin(request: Request): boolean {
   return origin !== new URL(request.url).origin;
 }
 
-function contentSecurityPolicy(nonce: string, framable: boolean): string {
+function contentSecurityPolicy(nonce: string, framable: boolean, turnstile: boolean): string {
   // Vite's dev server injects inline scripts for HMR and React refresh.
   const devScripts = import.meta.env.DEV ? " 'unsafe-inline' 'unsafe-eval'" : '';
+  const challenge = turnstile ? ' https://challenges.cloudflare.com' : '';
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}'${devScripts}`,
+    `script-src 'self'${challenge} 'nonce-${nonce}'${devScripts}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    `connect-src 'self'${challenge}`,
+    ...(turnstile ? ['frame-src https://challenges.cloudflare.com'] : []),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -55,15 +61,19 @@ export async function authMiddlewareServer(
   const result = await authorize(opts);
   const response = result instanceof Response ? result : result.response;
   const pathname = opts.pathname.toLowerCase();
+  const env = await resolveRuntimeEnv();
   // Only the embed belongs in another site's frame; a framed sign-in or admin page invites clickjacking.
   if (response.headers.get('Content-Type') !== 'image/svg+xml') {
     response.headers.set(
       'Content-Security-Policy',
-      contentSecurityPolicy(cspNonce(opts.request), pathname.startsWith('/embed/')),
+      contentSecurityPolicy(
+        cspNonce(opts.request),
+        pathname.startsWith('/embed/'),
+        Boolean(env.TURNSTILE_SECRET),
+      ),
     );
   }
   // What a signed-in person or an admin script sees must never be stored by a shared cache.
-  const env = await resolveRuntimeEnv();
   if (pathname.startsWith('/api/admin') || (await resolveViewer(env, opts.request)) !== 'visitor') {
     response.headers.set('Cache-Control', 'private, no-store');
   }
@@ -74,6 +84,7 @@ async function authorize(opts: RequestServerOptions<any, any>): Promise<Middlewa
   const { request, next } = opts;
   // The router matches routes in any letter case and with a trailing slash, so every gate here must too.
   const pathname = opts.pathname.toLowerCase().replace(/\/+$/, '');
+  if (pathname === '/mcp') return next();
   const env = await resolveRuntimeEnv();
 
   if (pathname.startsWith('/api/admin')) {

@@ -4,7 +4,7 @@ See [README.md](README.md) for what FlareWatch is, [DEVELOPMENT.md](DEVELOPMENT.
 
 - Use `vp` (Vite+), not `pnpm`, for scripts: `vp check`, `vp run test`, `vp run build`.
 - Wrangler owns production deploys. Keep `services/worker/wrangler.toml` and `apps/status-page/wrangler.jsonc` deployable as committed.
-- `apps/status-page` renders on the server. Keep its output deterministic: no `Date.now()`, `Math.random()` or locale formatting. See DEVELOPMENT.md, SSR and hydration safety.
+- `apps/status-page` renders on the server. Keep its output deterministic. Do not render `Date.now()` or `Math.random()`. Use locale parts only through `formatDateTime` in `packages/shared/src/utils.ts`. Ban all other locale formatting. See DEVELOPMENT.md, SSR and hydration safety.
 - The hub in `services/worker/src/hub` runs on the Workers Free plan: 5 million rows read and 100,000 rows written a day. A query that runs on every check run or page view must not read the whole history.
 - A link hover must not add a server call or a KV read. A client navigation must not add one while the cached data is fresh. The router preloads a route when a link is hovered. A cached failure must expire.
 - After a UI change in `apps/status-page`, run `vp check` and fix each `shadcn` finding.
@@ -13,3 +13,5 @@ See [README.md](README.md) for what FlareWatch is, [DEVELOPMENT.md](DEVELOPMENT.
 - Before you add a variant in `components/ui`, check that no existing variant, size or theme token does the job.
 - Seed data in `apps/status-page/scripts/seed-e2e.ts` must read like a real status page. A test that needs hostile input must create it and delete it.
 - Hub migrations in `schema.ts` only grow. Append a step. Never edit a shipped one. A step runs in the hub's constructor and blocks its first request. A step that rewrites rows must page through them and bound what it keeps, as step 7 does.
+- Logic that tracks a lifecycle gets a state enum and a pure `step(state, event)`, ending its switch with a `never` check. Do not add a flag or a nullable column that gates another one. Each event needs a production caller. Bulk SQL stays outside the machines. See [docs/adr/0003-lifecycles-are-explicit-state-machines.md](docs/adr/0003-lifecycles-are-explicit-state-machines.md).
+- A write to a lifecycle column takes its value from the step function. `services/worker/tests/hub/lifecycle-writers.test.ts` lists who writes each column. Add a line there only after you check that.

@@ -83,6 +83,28 @@ describe('MonitorHub incidents', () => {
     });
   });
 
+  it('adds no segment when only the confirmation note changes', () => {
+    const { hub } = createHub();
+    const confirmed = 'Timeout (confirmed elsewhere)';
+    const unconfirmed = 'Timeout (no confirmation available)';
+    hub.record(T0, [check('api', down(confirmed))]);
+
+    const [flipped] = hub.record(T0 + 60, [check('api', down(unconfirmed))]).updates;
+    const [back] = hub.record(T0 + 120, [check('api', down(confirmed))]).updates;
+    const [changed] = hub.record(T0 + 180, [
+      check('api', down('HTTP 502 (no confirmation available)')),
+    ]).updates;
+
+    expect(flipped).toMatchObject({ changeType: 'none' });
+    expect(back).toMatchObject({ changeType: 'none' });
+    expect(changed).toMatchObject({ changeType: 'error' });
+    expect(hub.view().monitors.api).toMatchObject({
+      incidents: [
+        { start: [T0, T0 + 180], error: [confirmed, 'HTTP 502 (no confirmation available)'] },
+      ],
+    });
+  });
+
   it('keeps the first and the latest segments of an incident whose error keeps changing', () => {
     const { hub } = createHub();
     for (let i = 0; i < 1000; i++) hub.record(T0 + i * 60, [check('api', down(`err-${i}`))]);
@@ -602,7 +624,8 @@ describe('MonitorHub after an upgrade from 3.2', () => {
     const before = createHub(db).hub;
     const { alerts } = before.record(T0, [check('api', down())], POLICY);
     before.confirmAlerts(
-      alerts.map(({ incident, kind, reopenedAt, run }) => ({
+      alerts.map(({ monitorId, incident, kind, reopenedAt, run }) => ({
+        monitorId,
         incident,
         kind,
         reopenedAt,

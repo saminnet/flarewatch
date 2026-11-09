@@ -164,6 +164,38 @@ const MIGRATIONS: (string | ((sql: Sql) => void))[][] = [
   // A relapse in the wait to close restarts the grace period without moving reopened_at,
   // which outcomes match to tell a reopen's reset counters from the ones they claimed.
   [`ALTER TABLE incidents ADD COLUMN relapsed_at INTEGER`],
+  [
+    `ALTER TABLE incidents ADD COLUMN acked_at INTEGER`,
+    `ALTER TABLE incidents ADD COLUMN acked_by TEXT`,
+    `ALTER TABLE pending_recoveries ADD COLUMN acked_by TEXT`,
+  ],
+  [
+    `CREATE TABLE subscribers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      state TEXT NOT NULL CHECK (state IN ('pending', 'confirmed')),
+      created_at INTEGER NOT NULL,
+      confirmed_at INTEGER
+    )`,
+    `CREATE INDEX subscribers_pending ON subscribers (state, created_at)`,
+    `CREATE TABLE subscriber_outbox (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      monitor_id TEXT,
+      incident_id INTEGER,
+      payload TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      sent_to INTEGER NOT NULL DEFAULT 0,
+      batch_index INTEGER NOT NULL DEFAULT 0,
+      batch TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0
+    )`,
+    `CREATE INDEX subscriber_outbox_delivery ON subscriber_outbox ((kind = 'confirm'), id)`,
+    `CREATE INDEX subscriber_outbox_expiry ON subscriber_outbox (kind, created_at) WHERE kind = 'confirm'`,
+    `ALTER TABLE incidents ADD COLUMN subscriber_notified INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE incidents ADD COLUMN subscriber_recovered INTEGER NOT NULL DEFAULT 0`,
+  ],
+  ['ALTER TABLE expiry_alerts ADD COLUMN retry_run INTEGER'],
 ];
 
 export function migrate(sql: Sql): void {

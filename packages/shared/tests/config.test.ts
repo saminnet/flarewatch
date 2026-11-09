@@ -38,6 +38,40 @@ function createConfigWithMonitor(monitor: MonitorOverrides) {
 const isValid = (value: unknown) => configIssues(value).length === 0;
 
 describe('config validation', () => {
+  it.each(['UTC', 'Europe/Stockholm', 'Australia/Darwin', 'America/Los_Angeles'])(
+    'accepts page timezone %s',
+    (timezone) => {
+      expect(configIssues(createRuntimeConfig({ statusPage: { timezone } }))).toEqual([]);
+    },
+  );
+  it.each(['Europe/Stockholmm', '', 'GMT+2'])(
+    'rejects unknown page timezone %s and names its value',
+    (timezone) => {
+      expect(configIssues(createRuntimeConfig({ statusPage: { timezone } }))).toEqual([
+        'statusPage.timezone: Unknown page timezone: ' + timezone,
+      ]);
+    },
+  );
+  it('accepts every hub location hint and rejects invalid hub locations', () => {
+    for (const hubLocation of [
+      'wnam',
+      'enam',
+      'sam',
+      'weur',
+      'eeur',
+      'apac',
+      'apac-ne',
+      'apac-se',
+      'oc',
+      'afr',
+      'me',
+    ]) {
+      expect(configIssues({ monitors: [], hubLocation })).toEqual([]);
+    }
+    for (const hubLocation of ['SIN', 'eu', '', null, 1, {}]) {
+      expect(configIssues({ monitors: [], hubLocation }).join()).toContain('hubLocation');
+    }
+  });
   it.each([[], [''], [1], '192.0.2.1', [null]].map((dnsExpected) => ({ dnsExpected })))(
     'rejects DNS expected values %j',
     ({ dnsExpected }) => {
@@ -354,6 +388,7 @@ describe('config validation', () => {
   });
 
   it.each([
+    [{ confirmVia: [] }, 'confirmVia must have 1 to 5 places'],
     [{ id: '' }, 'id must be a non-empty string'],
     [{ id: '__proto__' }, 'id cannot be __proto__'],
     [{ name: '' }, 'name must be a non-empty string'],
@@ -540,6 +575,40 @@ describe('config validation', () => {
     });
 
     expect(configIssues(config)).toEqual([]);
+  });
+
+  it('accepts confirmVia lists and a quorum', () => {
+    expect(
+      configIssues(
+        createConfigWithMonitor({
+          confirmVia: ['https://one.example/check', 'globalping://TOKEN?magic=fra'],
+          confirmQuorum: 2,
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [{ confirmVia: [] }, 'confirmVia must have 1 to 5 places'],
+    [
+      { confirmVia: ['https://one.example/check', 'https://one.example/check'] },
+      'confirmVia must not contain duplicates',
+    ],
+    [
+      { checkProxy: 'https://one.example/check', confirmVia: ['https://one.example/check'] },
+      'confirmVia must be another place than checkProxy',
+    ],
+    [
+      { confirmVia: Array.from({ length: 6 }, (_, index) => `https://${index}.example/check`) },
+      'confirmVia must have 1 to 5 places',
+    ],
+    [
+      { confirmVia: ['https://one.example/check'], confirmQuorum: 2 },
+      'confirmQuorum must not exceed the number of confirmVia places',
+    ],
+    [{ confirmQuorum: 1 }, 'confirmQuorum requires confirmVia'],
+  ])('rejects invalid confirmer config %j', (overrides, message) => {
+    expect(configIssues(createConfigWithMonitor(overrides)).join('\n')).toContain(message);
   });
 
   it.each([
@@ -785,5 +854,49 @@ describe('config validation', () => {
         issues: ['webhook 1.monitors: monitors must be a list of monitor ids'],
       });
     });
+  });
+});
+
+describe('subscriber config', () => {
+  it('accepts both subscriber providers and rejects an unknown provider', () => {
+    for (const provider of ['resend', 'cloudflare'] as const)
+      expect(
+        isValid(
+          createRuntimeConfig({
+            statusPage: { subscribers: { from: 'status@example.com', provider } },
+          }),
+        ),
+      ).toBe(true);
+    expect(
+      isValid({
+        ...createRuntimeConfig(),
+        statusPage: { subscribers: { from: 'status@example.com', provider: 'unknown' } },
+      }),
+    ).toBe(false);
+  });
+  it('accepts the optional caps and refuses invalid senders and non-positive caps', () => {
+    expect(
+      isValid(
+        createRuntimeConfig({
+          statusPage: { subscribers: { from: 'Status <status@example.com>' } },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isValid(
+        createRuntimeConfig({
+          statusPage: {
+            subscribers: { from: 'status@example.com', dailySendCap: 90, maxSubscribers: 200 },
+          },
+        }),
+      ),
+    ).toBe(true);
+    for (const subscribers of [
+      { from: 'status@example.com\r\nBcc: victim@example.com' },
+      { from: 'status@example.com', dailySendCap: 0 },
+      { from: 'status@example.com', maxSubscribers: 0 },
+      { from: 'status@example.com', dailySendCap: 1.5 },
+    ])
+      expect(isValid(createRuntimeConfig({ statusPage: { subscribers } }))).toBe(false);
   });
 });

@@ -204,7 +204,7 @@ Releases change `wrangler.toml` too. When a release touches the file, GitHub can
 
 For certificate expiry, set `sslCheckEnabled: true` and `sslCheckDaysBeforeExpiry: 14`. This needs Globalping or a proxy, because the Worker can't see the certificate. `sslCheckDaysBeforeExpiry` must be a whole number from 0 to 3650.
 
-A valid certificate inside this window marks the monitor as degraded, with its expiry date. FlareWatch sends one warning per monitor and expiry date, without retrying a failed delivery. A covering maintenance window pauses the alert. Renewal clears the warning, and the renewed certificate sends its own warning when it enters the window. Warnings open no incident and do not affect uptime. An expired or invalid certificate still fails the check.
+A valid certificate inside this window marks the monitor as degraded, with its expiry date. FlareWatch sends one warning per monitor and expiry date. When no webhook accepts it, FlareWatch tries again after 60 check runs, about an hour. A covering maintenance window pauses the alert. Renewal clears the warning, and the renewed certificate sends its own warning when it enters the window. Warnings open no incident and do not affect uptime. An expired or invalid certificate still fails the check.
 
 FlareWatch sends a threshold of zero to flarewatch-proxy. flarewatch-proxy fails a valid certificate in its last 24 hours because it counts whole days. Globalping uses the exact expiry time.
 
@@ -227,7 +227,7 @@ A monitor that asks a place for something it can't do fails on every check, with
 
 ### Confirm from a second place
 
-`confirmVia` names a second place to check from, in the same formats as `checkProxy`. When a check fails, FlareWatch runs it once more from there, straight away, and records that result and its location. The monitor goes down only when the second place sees it down too. A check that passes costs nothing extra. With `checkProxyFallback`, FlareWatch tries the Worker first. Confirmation runs only if that check fails too and the run has time and subrequests left.
+`confirmVia` names one to five places to check from, in the same formats as `checkProxy`. When a check fails, FlareWatch runs every confirmer the run can afford in parallel. The primary check counts as one down vote. By default, at least one confirmer must answer, and the monitor is down when down votes exceed half of all votes. Set `confirmQuorum` to require more confirmers to answer before the vote counts. If too few answer, the monitor stays down with the primary error and the note `(no confirmation available)`. A down vote keeps the primary error and adds `(confirmed elsewhere)`. A change of note alone, such as a confirmer that comes and goes, opens no new incident segment and sends no error-change alert. The incident keeps the note it had. When the run cannot afford enough confirmers to reach `confirmQuorum`, it starts none of them and keeps the requests for other monitors. A passing primary check costs nothing extra. With `checkProxyFallback`, FlareWatch tries the Worker first. Confirmation runs only if that check fails too and the run has time and subrequests left.
 
 ```ts
 {
@@ -235,11 +235,15 @@ A monitor that asks a place for something it can't do fails on every check, with
   name: 'Website',
   method: 'GET',
   target: 'https://example.com',
-  confirmVia: 'https://your-proxy.example.com/check',
+  confirmVia: [
+    'https://your-proxy.example.com/check',
+    'globalping://<token>?magic=fra',
+  ],
+  confirmQuorum: 2,
 }
 ```
 
-This is how to use your own [flarewatch-proxy](https://github.com/saminnet/flarewatch-proxy) as a second vantage point: a blip between Cloudflare and your site no longer opens an incident unless the proxy sees it too. `confirmVia: 'globalping://<token>?magic=fra'` does the same from a Globalping probe. `confirmVia` must name a different place than `checkProxy`, and the table above applies to it too. A confirmation that fails for any reason counts as down, so a proxy older than 2.0.0 can't clear a failed header or JSON check.
+You can also set `confirmVia` to one string, as before. Each place must be different from `checkProxy` and from the other confirmers. A place that cannot be reached does not vote. The table above applies to every confirmer. A proxy older than 2.0.0 cannot confirm a failed header or JSON check.
 
 The free plan allows a check run 50 subrequests. An HTTP, TCP or DNS check reserves one, a DOMAIN check two, and a Globalping check two plus one per extra poll. The hub and each alert webhook need their own. When the checks due in a minute need more than that, the ones that don't fit skip that minute, as a monitor outside its slot does: no result, and its status and incidents stay as they are. The run logs which ones it skipped. Its starting point moves each minute, so the same checks don't miss every time. CI fails a config whose checks due every minute need more on their own, counting the webhooks in the config but not the ones in `FLAREWATCH_WEBHOOKS`. A confirmation, a `checkProxyFallback` check or an extra Globalping poll runs only while the run has some to spare. FlareWatch holds back one request per webhook for alerts. When the run can't send every alert on its own, each webhook gets the ones that don't fit as one summary, in the same run. A summary uses one request per webhook.
 

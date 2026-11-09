@@ -22,6 +22,37 @@ const announcements: Announcement[] = [
   { id: 'ended', title: 'Ended update', body: 'Old details', createdAt: 0, updatedAt: 0, end: 100 },
 ];
 describe('AnnouncementBanner', () => {
+  it('keeps the old target visible during exit after the last announcement disappears', () => {
+    const { rerender } = renderWithProviders(
+      <AnnouncementBanner announcements={announcements} nowMs={100} operator />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete announcement Older update' }));
+    const dialog = screen.getByRole('dialog');
+    Object.defineProperty(dialog, 'getAnimations', {
+      value: () => [{ finished: new Promise<void>(() => {}) }],
+    });
+    rerender(withProviders(<AnnouncementBanner announcements={[]} nowMs={100} operator />));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(dialog.hasAttribute('data-closed')).toBe(true);
+    expect(dialog.isConnected).toBe(true);
+    expect(dialog.textContent).toContain('Delete "Older update"?');
+  });
+
+  it('remounts the form with the new target after open close and open', async () => {
+    renderWithProviders(<AnnouncementBanner announcements={announcements} nowMs={100} operator />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Edit announcement <script>Update</script>' }),
+    );
+    const firstTitle = screen.getByLabelText('Title');
+    fireEvent.change(firstTitle, { target: { value: 'Unsaved draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit announcement Older update' }));
+    expect(screen.getByLabelText('Title')).not.toBe(firstTitle);
+    expect(screen.getByLabelText('Title')).toHaveProperty('value', 'Older update');
+    expect(screen.getByLabelText('Body')).toHaveProperty('value', 'Details');
+  });
+
   it('renders active announcements in order as plain text during SSR and in the browser', () => {
     const ui = <AnnouncementBanner announcements={announcements} nowMs={100} operator={false} />;
     const html = renderToString(withProviders(ui));
@@ -80,4 +111,88 @@ describe('AnnouncementBanner', () => {
     expect(screen.getByLabelText('Title')).toHaveProperty('value', '');
     expect(screen.getByLabelText('Body')).toHaveProperty('value', '');
   });
+});
+
+it('renders incident fields, monitor selection and an update in the form dialog', async () => {
+  const { AnnouncementFormDialog } =
+    await import('@/components/announcements/announcement-form-dialog');
+  const requests: unknown[] = [];
+  vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => {
+    if (typeof init?.body !== 'string') throw new Error('Expected JSON body');
+    requests.push(JSON.parse(init.body));
+    return Response.json({
+      id: 'incident',
+      title: 'API delays',
+      body: 'Investigating.',
+      kind: 'incident',
+      status: 'investigating',
+      updates: [],
+      createdAt: 1,
+      updatedAt: 1,
+    });
+  });
+  renderWithProviders(
+    <AnnouncementFormDialog
+      open
+      onClose={() => {}}
+      monitors={[{ id: 'api', name: 'API', method: 'GET' }]}
+      announcement={{
+        id: 'incident',
+        title: 'API delays',
+        body: 'Investigating.',
+        kind: 'incident',
+        status: 'investigating',
+        createdAt: 1,
+        updatedAt: 1,
+      }}
+    />,
+  );
+  expect(screen.getByLabelText('Kind')).toBeTruthy();
+  expect(screen.getByLabelText('Status')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'API' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add update' }));
+  fireEvent.change(screen.getByLabelText('Update'), { target: { value: 'We found the cause.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(requests).toEqual([
+      {
+        id: 'incident',
+        updates: {
+          title: 'API delays',
+          body: 'Investigating.',
+          end: null,
+          kind: 'incident',
+          status: 'investigating',
+          monitors: ['api'],
+          addUpdate: { status: 'investigating', body: 'We found the cause.' },
+        },
+      },
+    ]),
+  );
+});
+
+it('shows the latest update on the banner and every update on History', () => {
+  const incident: Announcement = {
+    id: 'incident',
+    kind: 'incident',
+    title: 'API delays',
+    body: 'Investigating.',
+    status: 'monitoring',
+    updates: [
+      { at: '2026-10-20T10:00:00Z', status: 'identified', body: 'Cause found.', by: 'Pat' },
+      { at: '2026-10-20T11:00:00Z', status: 'monitoring', body: 'Fix deployed.', by: 'Pat' },
+    ],
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const { rerender } = renderWithProviders(
+    <AnnouncementBanner announcements={[incident]} nowMs={1} />,
+  );
+  expect(screen.queryByText('Cause found.')).toBeNull();
+  expect(screen.getByText('Fix deployed.')).toBeTruthy();
+  rerender(
+    withProviders(<ManageAnnouncements announcements={[incident]} nowMs={1} operator={false} />),
+  );
+  expect(screen.getByText('Cause found.')).toBeTruthy();
+  expect(screen.getByText('Fix deployed.')).toBeTruthy();
 });

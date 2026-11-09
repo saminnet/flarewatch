@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as FeedDotatomRouteImport } from './routes/feed[.]atom'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as McpRouteImport } from './routes/mcp'
+import { Route as SubscribeRouteImport } from './routes/subscribe'
 import { Route as ApiBadgeRouteImport } from './routes/api/badge'
 import { Route as ApiBadgeDotsvgRouteImport } from './routes/api/badge[.]svg'
 import { Route as ApiDataRouteImport } from './routes/api/data'
@@ -22,6 +24,9 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as EmbedMonitorIdRouteImport } from './routes/embed.$monitorId'
 import { Route as MonitorsMonitorIdRouteImport } from './routes/monitors.$monitorId'
 import { Route as PingSplatRouteImport } from './routes/ping.$'
+import { Route as SubscribeConfirmRouteImport } from './routes/subscribe.confirm'
+import { Route as SubscribeUnsubscribeRouteImport } from './routes/subscribe.unsubscribe'
+import { Route as ApiAdminAckRouteImport } from './routes/api/admin/ack'
 import { Route as ApiAdminAnnouncementsRouteImport } from './routes/api/admin/announcements'
 import { Route as ApiAdminCheckRouteImport } from './routes/api/admin/check'
 import { Route as ApiAdminMaintenancesRouteImport } from './routes/api/admin/maintenances'
@@ -45,6 +50,16 @@ const HistoryRoute = HistoryRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubscribeRoute = SubscribeRouteImport.update({
+  id: '/subscribe',
+  path: '/subscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiBadgeRoute = ApiBadgeRouteImport.update({
@@ -92,6 +107,21 @@ const PingSplatRoute = PingSplatRouteImport.update({
   path: '/ping/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SubscribeConfirmRoute = SubscribeConfirmRouteImport.update({
+  id: '/confirm',
+  path: '/confirm',
+  getParentRoute: () => SubscribeRoute,
+} as any)
+const SubscribeUnsubscribeRoute = SubscribeUnsubscribeRouteImport.update({
+  id: '/unsubscribe',
+  path: '/unsubscribe',
+  getParentRoute: () => SubscribeRoute,
+} as any)
+const ApiAdminAckRoute = ApiAdminAckRouteImport.update({
+  id: '/api/admin/ack',
+  path: '/api/admin/ack',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminAnnouncementsRoute = ApiAdminAnnouncementsRouteImport.update({
   id: '/api/admin/announcements',
   path: '/api/admin/announcements',
@@ -118,6 +148,8 @@ export interface FileRoutesByFullPath {
   '/feed.atom': typeof FeedDotatomRoute
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
+  '/subscribe': typeof SubscribeRouteWithChildren
   '/api/badge': typeof ApiBadgeRoute
   '/api/badge.svg': typeof ApiBadgeDotsvgRoute
   '/api/data': typeof ApiDataRoute
@@ -127,6 +159,9 @@ export interface FileRoutesByFullPath {
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
+  '/subscribe/confirm': typeof SubscribeConfirmRoute
+  '/subscribe/unsubscribe': typeof SubscribeUnsubscribeRoute
+  '/api/admin/ack': typeof ApiAdminAckRoute
   '/api/admin/announcements': typeof ApiAdminAnnouncementsRoute
   '/api/admin/check': typeof ApiAdminCheckRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
@@ -137,6 +172,8 @@ export interface FileRoutesByTo {
   '/feed.atom': typeof FeedDotatomRoute
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
+  '/subscribe': typeof SubscribeRouteWithChildren
   '/api/badge': typeof ApiBadgeRoute
   '/api/badge.svg': typeof ApiBadgeDotsvgRoute
   '/api/data': typeof ApiDataRoute
@@ -146,6 +183,9 @@ export interface FileRoutesByTo {
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
+  '/subscribe/confirm': typeof SubscribeConfirmRoute
+  '/subscribe/unsubscribe': typeof SubscribeUnsubscribeRoute
+  '/api/admin/ack': typeof ApiAdminAckRoute
   '/api/admin/announcements': typeof ApiAdminAnnouncementsRoute
   '/api/admin/check': typeof ApiAdminCheckRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
@@ -157,6 +197,8 @@ export interface FileRoutesById {
   '/feed.atom': typeof FeedDotatomRoute
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
+  '/subscribe': typeof SubscribeRouteWithChildren
   '/api/badge': typeof ApiBadgeRoute
   '/api/badge.svg': typeof ApiBadgeDotsvgRoute
   '/api/data': typeof ApiDataRoute
@@ -166,6 +208,9 @@ export interface FileRoutesById {
   '/embed/$monitorId': typeof EmbedMonitorIdRoute
   '/monitors/$monitorId': typeof MonitorsMonitorIdRoute
   '/ping/$': typeof PingSplatRoute
+  '/subscribe/confirm': typeof SubscribeConfirmRoute
+  '/subscribe/unsubscribe': typeof SubscribeUnsubscribeRoute
+  '/api/admin/ack': typeof ApiAdminAckRoute
   '/api/admin/announcements': typeof ApiAdminAnnouncementsRoute
   '/api/admin/check': typeof ApiAdminCheckRoute
   '/api/admin/maintenances': typeof ApiAdminMaintenancesRoute
@@ -178,6 +223,8 @@ export interface FileRouteTypes {
     | '/feed.atom'
     | '/history'
     | '/login'
+    | '/mcp'
+    | '/subscribe'
     | '/api/badge'
     | '/api/badge.svg'
     | '/api/data'
@@ -187,6 +234,9 @@ export interface FileRouteTypes {
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
+    | '/subscribe/confirm'
+    | '/subscribe/unsubscribe'
+    | '/api/admin/ack'
     | '/api/admin/announcements'
     | '/api/admin/check'
     | '/api/admin/maintenances'
@@ -197,6 +247,8 @@ export interface FileRouteTypes {
     | '/feed.atom'
     | '/history'
     | '/login'
+    | '/mcp'
+    | '/subscribe'
     | '/api/badge'
     | '/api/badge.svg'
     | '/api/data'
@@ -206,6 +258,9 @@ export interface FileRouteTypes {
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
+    | '/subscribe/confirm'
+    | '/subscribe/unsubscribe'
+    | '/api/admin/ack'
     | '/api/admin/announcements'
     | '/api/admin/check'
     | '/api/admin/maintenances'
@@ -216,6 +271,8 @@ export interface FileRouteTypes {
     | '/feed.atom'
     | '/history'
     | '/login'
+    | '/mcp'
+    | '/subscribe'
     | '/api/badge'
     | '/api/badge.svg'
     | '/api/data'
@@ -225,6 +282,9 @@ export interface FileRouteTypes {
     | '/embed/$monitorId'
     | '/monitors/$monitorId'
     | '/ping/$'
+    | '/subscribe/confirm'
+    | '/subscribe/unsubscribe'
+    | '/api/admin/ack'
     | '/api/admin/announcements'
     | '/api/admin/check'
     | '/api/admin/maintenances'
@@ -236,6 +296,8 @@ export interface RootRouteChildren {
   FeedDotatomRoute: typeof FeedDotatomRoute
   HistoryRoute: typeof HistoryRoute
   LoginRoute: typeof LoginRoute
+  McpRoute: typeof McpRoute
+  SubscribeRoute: typeof SubscribeRouteWithChildren
   ApiBadgeRoute: typeof ApiBadgeRoute
   ApiBadgeDotsvgRoute: typeof ApiBadgeDotsvgRoute
   ApiDataRoute: typeof ApiDataRoute
@@ -245,6 +307,7 @@ export interface RootRouteChildren {
   EmbedMonitorIdRoute: typeof EmbedMonitorIdRoute
   MonitorsMonitorIdRoute: typeof MonitorsMonitorIdRoute
   PingSplatRoute: typeof PingSplatRoute
+  ApiAdminAckRoute: typeof ApiAdminAckRoute
   ApiAdminAnnouncementsRoute: typeof ApiAdminAnnouncementsRoute
   ApiAdminCheckRoute: typeof ApiAdminCheckRoute
   ApiAdminMaintenancesRoute: typeof ApiAdminMaintenancesRoute
@@ -279,6 +342,20 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/subscribe': {
+      id: '/subscribe'
+      path: '/subscribe'
+      fullPath: '/subscribe'
+      preLoaderRoute: typeof SubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/badge': {
@@ -344,6 +421,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PingSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/subscribe/confirm': {
+      id: '/subscribe/confirm'
+      path: '/confirm'
+      fullPath: '/subscribe/confirm'
+      preLoaderRoute: typeof SubscribeConfirmRouteImport
+      parentRoute: typeof SubscribeRoute
+    }
+    '/subscribe/unsubscribe': {
+      id: '/subscribe/unsubscribe'
+      path: '/unsubscribe'
+      fullPath: '/subscribe/unsubscribe'
+      preLoaderRoute: typeof SubscribeUnsubscribeRouteImport
+      parentRoute: typeof SubscribeRoute
+    }
+    '/api/admin/ack': {
+      id: '/api/admin/ack'
+      path: '/api/admin/ack'
+      fullPath: '/api/admin/ack'
+      preLoaderRoute: typeof ApiAdminAckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/announcements': {
       id: '/api/admin/announcements'
       path: '/api/admin/announcements'
@@ -375,11 +473,27 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface SubscribeRouteChildren {
+  SubscribeConfirmRoute: typeof SubscribeConfirmRoute
+  SubscribeUnsubscribeRoute: typeof SubscribeUnsubscribeRoute
+}
+
+const SubscribeRouteChildren: SubscribeRouteChildren = {
+  SubscribeConfirmRoute: SubscribeConfirmRoute,
+  SubscribeUnsubscribeRoute: SubscribeUnsubscribeRoute,
+}
+
+const SubscribeRouteWithChildren = SubscribeRoute._addFileChildren(
+  SubscribeRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FeedDotatomRoute: FeedDotatomRoute,
   HistoryRoute: HistoryRoute,
   LoginRoute: LoginRoute,
+  McpRoute: McpRoute,
+  SubscribeRoute: SubscribeRouteWithChildren,
   ApiBadgeRoute: ApiBadgeRoute,
   ApiBadgeDotsvgRoute: ApiBadgeDotsvgRoute,
   ApiDataRoute: ApiDataRoute,
@@ -389,6 +503,7 @@ const rootRouteChildren: RootRouteChildren = {
   EmbedMonitorIdRoute: EmbedMonitorIdRoute,
   MonitorsMonitorIdRoute: MonitorsMonitorIdRoute,
   PingSplatRoute: PingSplatRoute,
+  ApiAdminAckRoute: ApiAdminAckRoute,
   ApiAdminAnnouncementsRoute: ApiAdminAnnouncementsRoute,
   ApiAdminCheckRoute: ApiAdminCheckRoute,
   ApiAdminMaintenancesRoute: ApiAdminMaintenancesRoute,

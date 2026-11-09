@@ -39,6 +39,36 @@ describe('webhook notifications', () => {
     });
   });
 
+  it('releases the response body of an accepted webhook', async () => {
+    let cancelled = false;
+    const body = new ReadableStream({
+      cancel: () => {
+        cancelled = true;
+      },
+    });
+    const notifier = new WebhookNotifier(
+      { url: 'https://hooks.example.com/webhook' },
+      vi.fn<Fetcher>(async () => new Response(body)),
+    );
+    await expect(notifier.send(createContext(), '')).resolves.toEqual([
+      { success: true, statusCode: 200 },
+    ]);
+    expect(cancelled).toBe(true);
+  });
+
+  it('counts an accepted webhook as sent when its response body errors', async () => {
+    const body = new ReadableStream({
+      start: (controller) => controller.error(new Error('connection reset')),
+    });
+    const notifier = new WebhookNotifier(
+      { url: 'https://hooks.example.com/webhook' },
+      vi.fn<Fetcher>(async () => new Response(body)),
+    );
+    await expect(notifier.send(createContext(), '')).resolves.toEqual([
+      { success: true, statusCode: 200 },
+    ]);
+  });
+
   describe('buildTemplateContext', () => {
     const webhook: Webhook = { url: 'https://hooks.example.com/webhook' };
 
@@ -113,4 +143,17 @@ describe('webhook notifications', () => {
       expect(fields.get('user')).toBe('recipient-key');
     });
   });
+});
+
+it('names the responder in recovery text and batched recovery alerts', async () => {
+  const ctx = createContext({ kind: 'recovered', ackedBy: 'Pat' });
+  expect(formatNotificationMessage(ctx)).toContain('Acknowledged by Pat.');
+  const requests: string[] = [];
+  const notifier = new WebhookNotifier([], async (url, init) => {
+    if (typeof init?.body !== 'string') throw new Error(`Expected text for ${url}`);
+    requests.push(init.body);
+    return new Response('ok');
+  });
+  await notifier.sendSummary({ url: 'https://hooks.example.com', template: 'text' }, [ctx]);
+  expect(requests[0]).toContain('acknowledged by Pat');
 });

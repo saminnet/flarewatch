@@ -7,6 +7,9 @@ declare namespace Cloudflare {
     /** JSON object of each provider's client secret, keyed by provider id. */
     FLAREWATCH_OIDC_SECRETS?: string;
     MONITOR_WORKER?: Fetcher;
+    SUBSCRIBE_RATE_LIMIT?: RateLimit;
+    TURNSTILE_SECRET?: string;
+    TURNSTILE_SITE_KEY?: string;
     /** Sign-in attempts per client IP; see wrangler.jsonc. */
     LOGIN_RATE_LIMIT?: RateLimit;
   }

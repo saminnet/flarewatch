@@ -156,6 +156,10 @@ export async function signedInAs(
   return { name: identity.kind === 'provider' ? identity.name : null, since: createdAt };
 }
 
+export async function operatorName(request: Request): Promise<string> {
+  return (await signedInAs(await resolveRuntimeEnv(), request))?.name || 'operator';
+}
+
 export function clearedSessionCookie(request: Request): string {
   const url = new URL(request.url);
   const secure = url.protocol === 'https:';

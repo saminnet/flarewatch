@@ -1,4 +1,5 @@
 import { IconAlertTriangle } from '@tabler/icons-react';
+import { IncidentAcknowledgement } from '@/components/incident-acknowledgement';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { DateRange } from './date-range';
@@ -6,9 +7,11 @@ import type { IncidentEvent } from './types';
 
 interface IncidentCardProps {
   event: IncidentEvent;
+  nowMs: number;
+  operator?: boolean;
 }
 
-export function IncidentCard({ event }: IncidentCardProps) {
+export function IncidentCard({ event, nowMs, operator }: IncidentCardProps) {
   const startDate = new Date(event.start * 1000);
   const endDate = event.end ? new Date(event.end * 1000) : null;
   const isOngoing = !event.end;
@@ -30,6 +33,13 @@ export function IncidentCard({ event }: IncidentCardProps) {
           end={endDate}
           noEndLabel="Ongoing"
           noEndClassName="text-status-down-text"
+        />
+        <IncidentAcknowledgement
+          monitorId={event.monitorId}
+          monitorName={event.monitorName}
+          incident={event.incident}
+          nowMs={nowMs}
+          operator={operator}
         />
       </AlertDescription>
     </Alert>

@@ -47,6 +47,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     return {
       theme,
       statusPage: config.statusPage,
+      subscribers: config.subscribers,
       title: config.statusPage?.title || DEFAULT_TITLE,
     };
   },

@@ -1,3 +1,5 @@
+import { buildTemplateContext } from '../../src/notifications/webhook';
+import { notificationContext } from '../helpers/notification-context';
 import { describe, it, expect } from 'vite-plus/test';
 import { NOTIFICATION_TEMPLATES, type JsonValue } from '@flarewatch/shared';
 import { getTemplate } from '../../src/notifications/templates';
@@ -437,5 +439,32 @@ describe('notification templates', () => {
 
       expect(text).toContain('`@**all**`, `[x](https://evil.example)`');
     },
+  );
+});
+
+it.each(NOTIFICATION_TEMPLATES)('names the responder in the %s recovery template', (name) => {
+  const result = getTemplate(name)(
+    buildTemplateContext(notificationContext({ kind: 'recovered', ackedBy: 'Pat' }), {
+      url: baseContext.webhookUrl,
+    }),
+  );
+  expect(decodeURIComponent(result.body.replaceAll('+', ' '))).toContain('Pat');
+});
+
+it('keeps responder names from adding mentions and links in recovery templates', () => {
+  const ackedBy = '<!channel> <users/all> @**all** [click](https://evil.test) `x`';
+  const body = (name: Parameters<typeof getTemplate>[0]) =>
+    decodeURIComponent(
+      getTemplate(name)({ ...baseContext, kind: 'recovered', ackedBy }).body.replaceAll('+', ' '),
+    );
+  expect(body('slack')).not.toContain('<!channel>');
+  expect(body('telegram')).not.toContain('<users/all>');
+  expect(body('googlechat')).not.toContain('<users/all>');
+  expect(body('teams')).not.toContain('[click]');
+  expect(body('zulip')).toContain(
+    "`Operational (acknowledged by <!channel> <users/all> @**all** [click](https://evil.test) 'x')`",
+  );
+  expect(body('discord')).toContain(
+    "`Operational (acknowledged by <!channel> <users/all> @**all** [click](https://evil.test) 'x')`",
   );
 });

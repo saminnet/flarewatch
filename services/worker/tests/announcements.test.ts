@@ -7,6 +7,7 @@ const announcement = (id: string, createdAt = 1): Announcement => ({
   id,
   title: 'Update',
   body: 'Details',
+  kind: 'notice',
   createdAt,
   updatedAt: createdAt,
 });
@@ -28,6 +29,82 @@ function fixture() {
 }
 
 describe('announcement hub routes', () => {
+  it('appends concurrent updates in order and rejects the twenty-first update', async () => {
+    const { hub, send } = fixture();
+    hub.putAnnouncement({ ...announcement('incident'), kind: 'incident' });
+    const append = (body: string) =>
+      send('/announcements/incident/updates', 'POST', {
+        status: 'identified',
+        body,
+        by: 'Pat',
+        at: '1970-01-01T00:00:00Z',
+      });
+    const results = await Promise.all([append('First'), append('Second')]);
+    expect(results.map((r) => r?.status)).toEqual([200, 200]);
+    expect(hub.announcements()[0]?.updates?.map((u) => u.body)).toEqual(['First', 'Second']);
+    expect(
+      (
+        await send('/announcements/incident', 'PUT', {
+          ...announcement('incident'),
+          kind: 'incident',
+          title: 'Changed title',
+          updates: [],
+        })
+      )?.status,
+    ).toBe(204);
+    expect(hub.announcements()[0]?.updates?.map((u) => u.body)).toEqual(['First', 'Second']);
+    expect(hub.announcements()[0]?.updates?.[0]?.at).not.toBe('1970-01-01T00:00:00.000Z');
+    for (let i = 2; i < 20; i++) expect((await append(`Update ${i}`))?.status).toBe(200);
+    expect((await append('Overflow'))?.status).toBe(409);
+    expect(hub.announcements()[0]?.updates).toHaveLength(20);
+  });
+
+  it('accepts eleven CJK updates without forwarding accumulated history', async () => {
+    const { hub, send } = fixture();
+    hub.putAnnouncement({ ...announcement('cjk'), kind: 'incident' });
+    for (let i = 0; i < 11; i++) {
+      expect(
+        (
+          await send('/announcements/cjk/updates', 'POST', {
+            status: 'monitoring',
+            body: '界'.repeat(2000),
+            by: 'Pat',
+          })
+        )?.status,
+      ).toBe(200);
+    }
+    expect(hub.announcements()[0]?.updates).toHaveLength(11);
+  });
+
+  it('refuses invalid append fields, unknown ids, oversized patches and oversized rows without changing history', async () => {
+    const { hub, send } = fixture();
+    hub.putAnnouncement({ ...announcement('incident'), kind: 'incident' });
+    const valid = { status: 'identified', body: 'Found it', by: 'Pat' };
+    expect((await send('/announcements/missing/updates', 'POST', valid))?.status).toBe(404);
+    expect((await send('/announcements/%ZZ/updates', 'POST', valid))?.status).toBe(400);
+    for (const patch of [
+      null,
+      { ...valid, body: 'x'.repeat(2001) },
+      { ...valid, body: ' ' },
+      { ...valid, by: ' ' },
+      { ...valid, status: 'invalid' },
+      { ...valid, padding: 'x'.repeat(16 * 1024) },
+    ]) {
+      expect((await send('/announcements/incident/updates', 'POST', patch))?.status).toBe(400);
+    }
+    expect(hub.announcements()[0]?.updates).toBeUndefined();
+    hub.putAnnouncement({
+      ...announcement('huge'),
+      kind: 'incident',
+      monitors: ['界'.repeat(640_000)],
+    });
+    const response = await send('/announcements/huge/updates', 'POST', valid);
+    expect(response?.status).toBe(400);
+    expect(await response?.json()).toEqual({ error: 'Announcement exceeds the row size limit' });
+    hub.putAnnouncement(announcement('notice'));
+    expect((await send('/announcements/notice/updates', 'POST', valid))?.status).toBe(400);
+  });
+
   it('stores normalized records and reads newest first with maintenance in one view after restart', async () => {
     const { hub, db, send } = fixture();
     hub.record(100, [

@@ -18,7 +18,7 @@ const heartbeatMonitors: AdminMonitor[] = [
 describe('MonitorList', () => {
   it('renders every card when the page has only heartbeats and no groups', () => {
     renderWithProviders(
-      <MonitorList monitors={heartbeatMonitors} state={state} maintenances={[]} />,
+      <MonitorList monitors={heartbeatMonitors} state={state} maintenances={[]} nowMs={0} />,
     );
 
     expect(screen.getByText('Job A')).toBeTruthy();
@@ -47,7 +47,9 @@ describe('MonitorList', () => {
       { id: 'flaky', name: 'Flaky', method: 'GET' },
     ];
 
-    renderWithProviders(<MonitorList monitors={monitors} state={young} maintenances={[]} />);
+    renderWithProviders(
+      <MonitorList monitors={monitors} state={young} maintenances={[]} nowMs={lastUpdate * 1000} />,
+    );
 
     expect(
       screen.getByRole('link', { name: /^Quiet, .*, no downtime in the last 24 days$/ }),

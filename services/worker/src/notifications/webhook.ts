@@ -45,6 +45,7 @@ export interface NotificationContext {
   alsoDown: string[];
   /** Reminders only: this one's number, counted from 1. */
   reminder?: number;
+  ackedBy?: string;
 }
 
 /** A down alert sent the run its outage began; one delayed by a grace period, a retry or a reopen reads "still down". */
@@ -67,7 +68,7 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
   if (ctx.kind === 'recovered') {
     return [
       `✅ ${monitor.name} is up!`,
-      `The service recovered after ${downtimeMinutes} minutes of downtime.`,
+      `The service recovered after ${downtimeMinutes} minutes of downtime.${ctx.ackedBy ? ` Acknowledged by ${ctx.ackedBy}.` : ''}`,
     ].join('\n');
   }
 
@@ -113,11 +114,13 @@ function summaryContext(contexts: NotificationContext[]): NotificationContext {
               ? 'Down'
               : 'Still down';
     const detail =
-      ctx.kind === 'expiry'
-        ? `: ${singleLine(ctx.reason)}`
-        : ctx.kind === 'reminder'
-          ? ` (reminder ${String(ctx.reminder)})`
-          : '';
+      ctx.kind === 'recovered' && ctx.ackedBy
+        ? ` (acknowledged by ${singleLine(ctx.ackedBy)})`
+        : ctx.kind === 'expiry'
+          ? `: ${singleLine(ctx.reason)}`
+          : ctx.kind === 'reminder'
+            ? ` (reminder ${String(ctx.reminder)})`
+            : '';
     groups.get(group)!.push(`- ${singleLine(ctx.monitor.name)}${detail}`);
   }
   let reason = '';
@@ -232,6 +235,7 @@ export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook)
     downtimeMinutes: Math.round(ctx.downtimeSeconds / 60),
     reason: reason || 'Unknown',
     alsoDown: ctx.alsoDown,
+    ...(ctx.ackedBy !== undefined && { ackedBy: ctx.ackedBy }),
     ...(ctx.reminder !== undefined && { reminder: ctx.reminder }),
     timestamp: formatter.format(new Date(currentTime * 1000)),
     timestampIso: new Date(currentTime * 1000).toISOString(),
@@ -341,6 +345,8 @@ export class WebhookNotifier {
         };
       }
 
+      // The receiver accepted the alert. A body that fails to release must not turn that into a retry.
+      await response.body?.cancel().catch(() => {});
       log.info('Success', { status: response.status });
       return { success: true, statusCode: response.status };
     } catch (error) {

@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { formatPageTime } from '@/lib/date';
+import type { PublicMonitor } from '@/lib/public-view';
+import { useReducer } from 'react';
+import { CLOSED_DIALOG, dialogStep } from '@/lib/dialog-state';
 import { IconBroadcast, IconPencil, IconTrash } from '@tabler/icons-react';
-import { formatUtcShort, isAnnouncementActive, type Announcement } from '@flarewatch/shared';
+import { isAnnouncementActive, type Announcement } from '@flarewatch/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AnnouncementFormDialog } from './announcement-form-dialog';
@@ -8,33 +11,28 @@ import { DeleteAnnouncementDialog } from './delete-announcement-dialog';
 
 interface AnnouncementBannerProps {
   announcements: Announcement[];
+  monitors?: PublicMonitor[];
   nowMs: number;
   operator?: boolean;
   showEnded?: boolean;
 }
-
-type DialogTarget = { open: boolean; announcement?: Announcement; key: number };
-
-const CLOSED: DialogTarget = { open: false, key: 0 };
 
 export function AnnouncementBanner({
   announcements,
   nowMs,
   operator = false,
   showEnded = false,
+  monitors,
 }: AnnouncementBannerProps) {
   const active = showEnded
     ? announcements
     : announcements.filter((announcement) => isAnnouncementActive(announcement, nowMs));
-  const [editing, setEditing] = useState(CLOSED);
-  const [deleting, setDeleting] = useState(CLOSED);
-  const openEdit = (announcement: Announcement) =>
-    setEditing((prev) => ({ open: true, announcement, key: prev.key + 1 }));
-  const openDelete = (announcement: Announcement) =>
-    setDeleting((prev) => ({ open: true, announcement, key: prev.key + 1 }));
-  const closeDialog = (prev: DialogTarget) => ({ ...prev, open: false });
+  const [editing, edit] = useReducer(dialogStep<Announcement>, CLOSED_DIALOG);
+  const [deleting, remove] = useReducer(dialogStep<Announcement>, CLOSED_DIALOG);
+  const openEdit = (announcement: Announcement) => edit({ type: 'open', target: announcement });
+  const openDelete = (announcement: Announcement) => remove({ type: 'open', target: announcement });
 
-  if (active.length === 0 && !editing.open && !deleting.open) return null;
+  if (active.length === 0 && editing.key === 0 && deleting.key === 0) return null;
 
   return (
     <div className="space-y-2" aria-label="Announcements">
@@ -50,6 +48,9 @@ export function AnnouncementBanner({
                 <h3 className="wrap-break-word text-sm font-medium text-foreground">
                   {announcement.title}
                 </h3>
+                {announcement.kind === 'incident' && (
+                  <Badge variant="outline">{announcement.status ?? 'investigating'}</Badge>
+                )}
                 {showEnded && (
                   <Badge
                     variant={isAnnouncementActive(announcement, nowMs) ? 'secondary' : 'outline'}
@@ -59,13 +60,23 @@ export function AnnouncementBanner({
                 )}
                 {announcement.end !== undefined && (
                   <span className="text-xs text-muted-foreground">
-                    {`until ${formatUtcShort(new Date(announcement.end).getTime() / 1000)}`}
+                    {`until ${formatPageTime(new Date(announcement.end).getTime() / 1000)}`}
                   </span>
                 )}
               </div>
               <p className="mt-1.5 whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">
                 {announcement.body}
               </p>
+              {(showEnded ? announcement.updates : announcement.updates?.slice(-1))?.map(
+                (update) => (
+                  <div key={update.at} className="mbs-2 text-sm">
+                    <p>
+                      {update.status} · {formatPageTime(Date.parse(update.at) / 1000)}
+                    </p>
+                    <p className="whitespace-pre-wrap wrap-break-word">{update.body}</p>
+                  </div>
+                ),
+              )}
             </div>
             {operator && (
               <div className="flex shrink-0 gap-1">
@@ -93,15 +104,16 @@ export function AnnouncementBanner({
 
       <AnnouncementFormDialog
         key={editing.key}
-        open={editing.open}
-        announcement={editing.announcement}
-        onClose={() => setEditing(closeDialog)}
+        open={editing.status === 'open'}
+        announcement={editing.target}
+        monitors={monitors}
+        onClose={() => edit({ type: 'close' })}
       />
       <DeleteAnnouncementDialog
         key={deleting.key}
-        open={deleting.open}
-        announcement={deleting.announcement}
-        onClose={() => setDeleting(closeDialog)}
+        open={deleting.status === 'open'}
+        announcement={deleting.target}
+        onClose={() => remove({ type: 'close' })}
       />
     </div>
   );

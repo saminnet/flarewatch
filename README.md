@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/how-it-works.svg" alt="How FlareWatch works. Inside your Cloudflare account, a monitor Worker runs every minute. It checks your sites, APIs and domains, saves the results in a Durable Object, and sends alerts when something goes down or comes back up. Your scheduled jobs ping the status page Worker when they finish. The status page Worker reads the Durable Object through the monitor Worker and serves the status page. Visitors see what you publish, and you sign in to see everything. Checks can also run from other regions or private networks through Globalping, your own proxy or Workers VPC, and a failing check can be confirmed there before it counts." />
+  <img src="docs/assets/how-it-works.svg" alt="How FlareWatch works. Everything runs in your Cloudflare account. The monitor Worker runs every minute. It checks your sites, APIs and domains, saves the results in a Durable Object, and sends alerts when something goes down or comes back up. Visitors who subscribe get the same news by email. Your scheduled jobs ping the status page Worker when they finish. The status page Worker reads the Durable Object through the monitor Worker and serves the status page. Visitors see what you publish, and you sign in to see everything. Checks can also run from other regions or private networks through Globalping, your own proxy or Workers VPC, and a failing check can be confirmed there before it counts." />
 </p>
 
 ## What you get

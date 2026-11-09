@@ -1,16 +1,20 @@
+import { IncidentState, stepIncident, type IncidentLifecycle } from './incident-lifecycle';
 import * as z from 'zod/mini';
 import type { CheckResult, Incident } from '@flarewatch/shared';
 import {
   ALERT_COLUMNS,
+  errorFollowUpLifecycle,
   readAlert,
-  REOPEN_ALERT_RESET,
+  reminderLifecycle,
   type AlertRow,
   type IncidentAlert,
 } from './alerts';
-import { parseJson, ROW_BYTES, type Sql } from './sql';
+import { withoutConfirmationNote } from '../checkers/confirmation-note';
+import { stepDownAlert } from './down-alert-lifecycle';
+import { ErrorFollowUpState, stepErrorFollowUp, stepReminder } from './follow-up-lifecycle';
+import { readNotice, stepNotice, noticeColumns, type NoticeColumns } from './subscriber-notices';
+import { parseJson, ROW_BYTES, type Sql, utf8Bytes } from './sql';
 
-/** A failure this soon after recovering reopens the incident, so a flapping target adds no rows. */
-const FLAP_SECONDS = 15 * 60;
 /** Closed incidents kept per monitor, however many fit in the retention window. */
 const MAX_CLOSED_INCIDENTS = 1000;
 /** JSON characters of history kept per monitor, so long, changing errors cannot fill memory. */
@@ -19,8 +23,6 @@ const MAX_HISTORY_CHARS = 1_000_000;
 const MAX_INCIDENT_SEGMENTS = 100;
 /** With the segment cap, bounds how many list parts a monitor's history can fill. */
 const MAX_ERROR_CHARS = 500;
-const encoder = new TextEncoder();
-const utf8Bytes = (text: string) => encoder.encode(text).byteLength;
 /** Rows importHistory reads per query, and ids per delete: a query binds at most 100 values. */
 const IMPORT_PAGE = 100;
 
@@ -53,12 +55,20 @@ type IncidentRow = {
   reopened_at: number | null;
   relapsed_at: number | null;
   up_since: number | null;
+  acked_at: number | null;
+  acked_by: string | null;
 };
 
 const startsSchema = z.array(z.number());
 const errorsSchema = z.array(z.string());
 const listSchema = z.array(
-  z.object({ start: startsSchema, error: errorsSchema, end: z.optional(z.number()) }),
+  z.object({
+    start: startsSchema,
+    error: errorsSchema,
+    end: z.optional(z.number()),
+    acked_at: z.optional(z.number()),
+    acked_by: z.optional(z.string()),
+  }),
 );
 
 /**
@@ -72,7 +82,7 @@ export class Incidents {
     return new Map(
       this.sql
         .exec<IncidentRow & AlertRow>(
-          `SELECT id, monitor_id, starts, errors, end_at, reopened_at, relapsed_at, up_since, ${ALERT_COLUMNS}
+          `SELECT id, monitor_id, starts, errors, end_at, reopened_at, relapsed_at, up_since, acked_at, acked_by, ${ALERT_COLUMNS}
            FROM incidents WHERE end_at IS NULL`,
         )
         .map((row) => [
@@ -100,7 +110,25 @@ export class Incidents {
       list.push(...parseList(data));
       lists.set(monitor_id, list);
     }
+    for (const row of this.sql.exec<IncidentRow>(
+      'SELECT monitor_id, acked_at, acked_by FROM incidents WHERE end_at IS NULL',
+    )) {
+      const list = lists.get(row.monitor_id);
+      const incident = list?.[list.length - 1];
+      if (incident) Object.assign(incident, ackFields(row.acked_at, row.acked_by));
+    }
     return lists;
+  }
+
+  ack(monitorId: string, by: string, now: number): boolean {
+    return (
+      this.sql.exec(
+        'UPDATE incidents SET acked_at = ?, acked_by = ? WHERE monitor_id = ? AND end_at IS NULL AND acked_at IS NULL RETURNING id',
+        now,
+        by,
+        monitorId,
+      ).length > 0
+    );
   }
 
   has(monitorId: string): boolean {
@@ -119,6 +147,22 @@ export class Incidents {
   ): IncidentUpdate {
     const incidentStartTime = open?.incident.start[0] ?? now;
 
+    const lifecycle: IncidentLifecycle = !open
+      ? { state: IncidentState.Absent }
+      : open.reopenedAt === null
+        ? { state: IncidentState.Open }
+        : open.upSince === null
+          ? {
+              state: IncidentState.ReopenedDown,
+              generation: open.reopenedAt,
+              relapse: open.relapsedAt,
+            }
+          : {
+              state: IncidentState.RecoveryHold,
+              generation: open.reopenedAt,
+              relapse: open.relapsedAt,
+              upSince: open.upSince,
+            };
     if (result.ok) {
       const up = (changed: boolean): IncidentUpdate => ({
         monitorId,
@@ -132,31 +176,37 @@ export class Incidents {
         /^(?:SSL certificate|Certificate) expires in \d+ days \(threshold: \d+\)$/.test(
           open.incident.error[open.incident.error.length - 1] ?? '',
         );
-      if (open.reopenedAt === null || legacyCertificate) {
-        this.close(open, now);
+      const transition = stepIncident(lifecycle, { type: 'passed', now, legacyCertificate });
+      if (transition.effect === 'close' && transition.next.state === IncidentState.Closed) {
+        this.close(open, transition.next.end);
         return up(true);
       }
-      // Closes only once it stays up, so each flip writes one value.
-      const upSince = open.upSince ?? now;
-      if (now - upSince < FLAP_SECONDS) {
-        if (open.upSince === null) {
-          this.sql.exec('UPDATE incidents SET up_since = ? WHERE id = ?', now, open.id);
-        }
-        return up(false);
-      }
-      this.close(open, upSince);
-      return up(true);
+      if (transition.effect === 'hold' && transition.next.state === IncidentState.RecoveryHold)
+        this.sql.exec(
+          'UPDATE incidents SET up_since = ? WHERE id = ?',
+          transition.next.upSince,
+          open.id,
+        );
+      return up(false);
     }
 
     const error = result.error.slice(0, MAX_ERROR_CHARS);
     if (!open) {
-      const [recent] = this.sql.exec<IncidentRow>(
-        `SELECT id, starts, errors FROM incidents
-         WHERE monitor_id = ? AND end_at >= ? ORDER BY id DESC LIMIT 1`,
+      const [recent] = this.sql.exec<IncidentRow & NoticeColumns & AlertRow>(
+        `SELECT id, starts, errors, end_at, reopened_at, acked_at, acked_by, subscriber_recovered, ${ALERT_COLUMNS} FROM incidents
+         WHERE monitor_id = ? AND end_at IS NOT NULL ORDER BY end_at DESC, id DESC LIMIT 1`,
         monitorId,
-        now - FLAP_SECONDS,
       );
-      if (recent) return this.reopen(monitorId, recent, error, now);
+      const transition = stepIncident(
+        recent ? { state: IncidentState.Closed, end: recent.end_at ?? now } : lifecycle,
+        { type: 'failed', now, changed: false },
+      );
+      if (
+        transition.effect === 'reopen' &&
+        transition.next.state === IncidentState.ReopenedDown &&
+        recent
+      )
+        return this.reopen(monitorId, recent, error, transition.next.generation);
       this.sql.exec(
         'INSERT INTO incidents (monitor_id, starts, errors) VALUES (?, ?, ?)',
         monitorId,
@@ -176,21 +226,28 @@ export class Incidents {
     // Down again during a wait to close: the grace period before a down alert
     // starts over, as at a reopen. One update, so a changing error costs one write.
     const segments = addSegment(open.incident, error, now);
+    const transition = stepIncident(lifecycle, {
+      type: 'failed',
+      now,
+      changed: segments !== null,
+    });
     if (segments) {
       this.sql.exec(
-        `UPDATE incidents SET starts = ?, errors = ?, up_since = NULL,
-           relapsed_at = CASE WHEN up_since IS NULL THEN relapsed_at ELSE ? END
+        `UPDATE incidents SET starts = ?, errors = ?, up_since = NULL, relapsed_at = ?
          WHERE id = ?`,
         JSON.stringify(segments.start),
         JSON.stringify(segments.error),
-        now,
+        transition.next.state === IncidentState.ReopenedDown ? transition.next.relapse : null,
         open.id,
       );
       this.setNewest(monitorId, segments, true);
-    } else if (open.upSince !== null) {
+    } else if (
+      transition.effect === 'relapse' &&
+      transition.next.state === IncidentState.ReopenedDown
+    ) {
       this.sql.exec(
         'UPDATE incidents SET up_since = NULL, relapsed_at = ? WHERE id = ?',
-        now,
+        transition.next.relapse,
         open.id,
       );
     }
@@ -313,17 +370,43 @@ export class Incidents {
   }
 
   /** The grace period before a down alert restarts at the reopen. */
-  private reopen(monitorId: string, row: IncidentRow, error: string, now: number): IncidentUpdate {
-    const { start, error: errors } = toIncident(row);
-    const incident = { start, error: errors };
+  private reopen(
+    monitorId: string,
+    row: IncidentRow & NoticeColumns & AlertRow,
+    error: string,
+    now: number,
+  ): IncidentUpdate {
+    const { end: _end, acked_at: _ackedAt, acked_by: _ackedBy, ...incident } = toIncident(row);
+    const notices = noticeColumns(stepNotice(readNotice(row), 'reopen'));
+    const alert = readAlert(row);
+    const down = stepDownAlert(alert, { type: 'reopened' }).next;
+    const followUp = stepErrorFollowUp(errorFollowUpLifecycle(alert, row.reopened_at), {
+      type: 'reopened',
+      generation: now,
+    }).next;
+    const reminder = stepReminder(reminderLifecycle(alert, row.reopened_at), {
+      type: 'reopened',
+      generation: now,
+    }).next;
     const reopened = addSegment(incident, error, now) ?? incident;
     this.sql.exec(
       `UPDATE incidents SET end_at = NULL, reopened_at = ?, relapsed_at = NULL, starts = ?, errors = ?,
-         ${REOPEN_ALERT_RESET}
+         acked_at = NULL, acked_by = NULL,
+         subscriber_notified = ?, subscriber_recovered = ?, error_alerts = ?, error_due = ?,
+         reminders = ?, alert_attempts = ?, alert = ?, alert_claimed_at = ?, alert_run = ?
        WHERE id = ?`,
       now,
       JSON.stringify(reopened.start),
       JSON.stringify(reopened.error),
+      notices.subscriber_notified,
+      notices.subscriber_recovered,
+      followUp.count,
+      Number(followUp.state === ErrorFollowUpState.Owed),
+      reminder.count,
+      down.attempts,
+      down.state,
+      down.claimedAt,
+      down.run,
       row.id,
     );
     this.setNewest(monitorId, reopened, true);
@@ -420,9 +503,20 @@ export class Incidents {
   }
 }
 
+function ackFields(
+  at?: number | null,
+  by?: string | null,
+): Pick<Incident, 'acked_at' | 'acked_by'> {
+  return at != null ? { acked_at: at, ...(by != null && { acked_by: by }) } : {};
+}
+
 /** Errors and segments cut as new ones are: a release before 3.2.0 stored them whole. */
-function toIncident(row: Pick<IncidentRow, 'starts' | 'errors' | 'end_at'>): Incident {
+function toIncident(
+  row: Pick<IncidentRow, 'starts' | 'errors' | 'end_at'> &
+    Partial<Pick<IncidentRow, 'acked_at' | 'acked_by'>>,
+): Incident {
   return {
+    ...ackFields(row.acked_at, row.acked_by),
     start: capSegments(startsSchema.safeParse(parseJson(row.starts)).data ?? []),
     error: capSegments(
       (errorsSchema.safeParse(parseJson(row.errors)).data ?? []).map((error) =>
@@ -435,16 +529,24 @@ function toIncident(row: Pick<IncidentRow, 'starts' | 'errors' | 'end_at'>): Inc
 
 /** Segments cut too: 3.2.0 copied legacy incidents into the lists whole. */
 function parseList(data: string): Incident[] {
-  return (listSchema.safeParse(parseJson(data)).data ?? []).map(({ start, error, end }) => ({
-    start: capSegments(start),
-    error: capSegments(error),
-    ...(end !== undefined && { end }),
-  }));
+  return (listSchema.safeParse(parseJson(data)).data ?? []).map(
+    ({ start, error, end, acked_at, acked_by }) => ({
+      ...ackFields(acked_at, acked_by),
+      start: capSegments(start),
+      error: capSegments(error),
+      ...(end !== undefined && { end }),
+    }),
+  );
 }
 
-/** The incident with `error` starting at `now`, or null when that is already its error. */
+/**
+ * The incident with `error` starting at `now`, or null when that is already its error.
+ * A confirmer that comes and goes changes only the note, which is not a new failure.
+ */
 function addSegment(incident: Incident, error: string, now: number): Incident | null {
-  if (incident.error[incident.error.length - 1] === error) return null;
+  const latest = incident.error[incident.error.length - 1];
+  if (latest !== undefined && withoutConfirmationNote(latest) === withoutConfirmationNote(error))
+    return null;
   return {
     ...incident,
     start: capSegments([...incident.start, now]),

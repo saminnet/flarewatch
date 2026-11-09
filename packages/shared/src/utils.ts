@@ -1,5 +1,6 @@
 import type {
   CheckFailure,
+  CheckResultWithLocation,
   CheckSuccess,
   JsonObject,
   MonitorTarget,
@@ -26,14 +27,82 @@ export function toHeaders(headers?: { [key: string]: string | number }): Headers
   return new Headers(Object.entries(headers ?? {}).map(([key, value]) => [key, String(value)]));
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
-/** "Sep 16, 07:02 UTC": the same shape the status page uses for timestamps. */
-export function formatUtcShort(seconds: number): string {
-  const d = new Date(seconds * 1000);
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${hh}:${mm} UTC`;
+export type DatePattern =
+  | 'MMMM yyyy'
+  | 'MMM yyyy'
+  | 'MMM d, yyyy'
+  | 'HH:mm'
+  | 'z'
+  | 'MMM d, yyyy HH:mm z'
+  | 'MMM d, HH:mm'
+  | 'HH:mm z'
+  | 'MMM d, HH:mm z';
+
+/** Numeric zone parts only: build the text here so SSR never uses localized strings. */
+export function formatDateTime(date: Date, pattern: DatePattern, timezone = 'UTC'): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((item) => item.type === type)?.value);
+  const year = part('year');
+  const month = part('month');
+  const day = part('day');
+  const hour = part('hour');
+  const minute = part('minute');
+  const second = part('second');
+  const offset = Math.round(
+    (Date.UTC(year, month - 1, day, hour, minute, second) -
+      Math.floor(date.getTime() / 1000) * 1000) /
+      60_000,
+  );
+  const offsetMinutes = Math.abs(offset) % 60;
+  const zone =
+    offset === 0
+      ? 'UTC'
+      : `UTC${offset > 0 ? '+' : '-'}${Math.floor(Math.abs(offset) / 60)}${offsetMinutes ? ':' + String(offsetMinutes).padStart(2, '0') : ''}`;
+  const fullMonth = MONTHS[month - 1];
+  const shortMonth = fullMonth?.slice(0, 3);
+  const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  const short = `${shortMonth} ${day}, ${time}`;
+  return {
+    'MMMM yyyy': `${fullMonth} ${year}`,
+    'MMM yyyy': `${shortMonth} ${year}`,
+    'MMM d, yyyy': `${shortMonth} ${day}, ${year}`,
+    'HH:mm': time,
+    z: zone,
+    'MMM d, yyyy HH:mm z': `${shortMonth} ${day}, ${year} ${time} ${zone}`,
+    'MMM d, HH:mm': short,
+    'HH:mm z': `${time} ${zone}`,
+    'MMM d, HH:mm z': `${short} ${zone}`,
+  }[pattern];
+}
+
+/** "Sep 16, 07:02 UTC": notifications default to UTC, pages can pass their zone. */
+export function formatUtcShort(seconds: number, timezone?: string): string {
+  return formatDateTime(new Date(seconds * 1000), 'MMM d, HH:mm z', timezone);
 }
 
 export function getErrorMessage(error: unknown): string {
@@ -258,6 +327,11 @@ export function failure(error: string, latency?: number): CheckFailure {
     return { ok: false, error, latency };
   }
   return { ok: false, error };
+}
+
+/** The place could not check at all, so it does not vote in `confirmVia`. */
+export function unreachable(result: CheckFailure, location = 'ERROR'): CheckResultWithLocation {
+  return { location, unreachable: true, result };
 }
 
 type LogLevel = 'info' | 'warn' | 'error';

@@ -138,7 +138,11 @@ describe('checkExternalProxy', () => {
 
     const result = await checkExternalProxy(createTarget(), PROXY_URL, undefined, fetchMock);
 
-    expect(result).toEqual({ location: 'ERROR', result: { ok: false, error: 'Proxy HTTP 503' } });
+    expect(result).toEqual({
+      location: 'ERROR',
+      unreachable: true,
+      result: { ok: false, error: 'Proxy HTTP 503' },
+    });
   });
 
   it('keeps the proxy response body out of the public error', async () => {
@@ -150,6 +154,7 @@ describe('checkExternalProxy', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: { ok: false, error: 'Proxy HTTP 503' },
     });
   });
@@ -189,6 +194,7 @@ describe('checkExternalProxy', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: { ok: false, error: 'Proxy returned invalid response' },
     });
   });
@@ -217,6 +223,7 @@ describe('checkExternalProxy', () => {
 
       expect(result).toEqual({
         location: 'ERROR',
+        unreachable: true,
         result: { ok: false, error: 'Proxy returned invalid response' },
       });
     }
@@ -259,6 +266,7 @@ describe('checkExternalProxy', () => {
   describe('header and JSON checks', () => {
     const TOO_OLD = {
       location: 'ERROR',
+      unreachable: true,
       result: {
         ok: false,
         error: 'Proxy is too old for header and JSON checks: update to flarewatch-proxy 2.0.0',
@@ -370,6 +378,7 @@ describe('checkExternalProxy', () => {
 
     expect(result).toEqual({
       location: 'ERROR',
+      unreachable: true,
       result: { ok: false, error: 'Proxy error: network unavailable' },
     });
   });

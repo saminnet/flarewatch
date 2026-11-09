@@ -36,16 +36,19 @@ Your account ID is under **Workers & Pages > Account details**.
 
 In your fork, open **Settings > Secrets and variables > Actions**. Only the first two are required. The rest turn on optional features.
 
-| Secret                        | What it's for                                                                                                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `CLOUDFLARE_ACCOUNT_ID`       | Required. Your account ID.                                                                                               |
-| `CLOUDFLARE_API_TOKEN`        | Required. The token from step 2.                                                                                         |
-| `FLAREWATCH_ADMIN_BASIC_AUTH` | Signing in to your status page with a password.                                                                          |
-| `FLAREWATCH_AUTH_SECRET`      | [Signing in with a provider](status-page.md#sign-in-with-a-provider). At least 32 characters: `openssl rand -base64 32`. |
-| `FLAREWATCH_OIDC_SECRETS`     | Your providers' client secrets, as JSON: `{"github": "..."}`.                                                            |
-| `HEARTBEAT_SECRET`            | [Heartbeat](monitors.md#heartbeats) ping URLs. At least 32 characters: `openssl rand -base64 32`.                        |
-| `FLAREWATCH_PROXY_TOKEN`      | A [check proxy](monitors.md#other-regions-and-private-networks).                                                         |
-| `FLAREWATCH_WEBHOOKS`         | [Alert webhooks](alerts.md) you keep out of git, as JSON.                                                                |
+| Secret                        | What it's for                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID`       | Required. Your account ID.                                                                                                                  |
+| `CLOUDFLARE_API_TOKEN`        | Required. The token from step 2.                                                                                                            |
+| `FLAREWATCH_ADMIN_BASIC_AUTH` | Signing in to your status page with a password.                                                                                             |
+| `FLAREWATCH_AUTH_SECRET`      | [Signing in with a provider](status-page.md#sign-in-with-a-provider). At least 32 characters: `openssl rand -base64 32`.                    |
+| `FLAREWATCH_OIDC_SECRETS`     | Your providers' client secrets, as JSON: `{"github": "..."}`.                                                                               |
+| `RESEND_API_KEY`              | [Email subscribers](status-page.md#email-subscribers). A Resend key for the default provider. Cloudflare Email Service needs no Resend key. |
+| `SUBSCRIBER_SECRET`           | Subscriber confirmation and unsubscribe links. At least 32 random characters: `openssl rand -base64 32`.                                    |
+| `TURNSTILE_SECRET`            | Optional verification for the subscriber form. Set `TURNSTILE_SITE_KEY` in the status page's Wrangler vars too.                             |
+| `HEARTBEAT_SECRET`            | [Heartbeat](monitors.md#heartbeats) ping URLs. At least 32 characters: `openssl rand -base64 32`.                                           |
+| `FLAREWATCH_PROXY_TOKEN`      | A [check proxy](monitors.md#other-regions-and-private-networks).                                                                            |
+| `FLAREWATCH_WEBHOOKS`         | [Alert webhooks](alerts.md) you keep out of git, as JSON.                                                                                   |
 
 With the GitHub CLI, each command prompts for the value:
 
@@ -73,6 +76,23 @@ vp exec --filter status-page -- wrangler secret delete FLAREWATCH_ADMIN_BASIC_AU
 
 The repo ships demo monitors, so a first deploy shows a working page. Replace them before you rely on the alerts.
 
+### Cloudflare subscriber mail
+
+For the second subscriber provider, set `statusPage.subscribers.provider: 'cloudflare'` in `packages/config/src/public.ts`. Add this optional block to `services/worker/wrangler.toml`:
+
+```toml
+[[send_email]]
+name = "SUBSCRIBER_EMAIL"
+```
+
+In JSON, use `"send_email": [{ "name": "SUBSCRIBER_EMAIL" }]`. Leave the block out for the default Free-plan deployment. Set `PUBLIC_ORIGIN` and the `SUBSCRIBER_SECRET` secret. Onboard the sending domain to Email Service and use a verified sender address.
+
+Arbitrary recipients require Workers Paid: 3,000 emails per month are included, then $0.35 per 1,000. Free has no outbound mail to arbitrary recipients. See [Cloudflare pricing](https://developers.cloudflare.com/email-service/platform/pricing/).
+
+The binding accepts plain message objects, without the legacy `cloudflare:email` class. Limits are 50 addresses across to/cc/bcc, 5 MiB per message, 16 KB of custom headers total and 2,048 bytes per header value. FlareWatch sends one message per recipient and records progress after each success. Cloudflare has no batch endpoint or idempotency key. A crash between send and progress write can double-send one message. Retries resume at the saved index without Resend's 23-hour ambiguity cutoff. The daily cap and backoff apply to both providers.
+
+Cloudflare throws `Error` objects with codes. `E_RATE_LIMIT_EXCEEDED` retries with backoff. `E_SENDER_NOT_VERIFIED` and `E_SENDER_DOMAIN_NOT_AVAILABLE` log permanent failures and drop the affected event, so fix the domain before enabling signup. See [subscriber setup](status-page.md#cloudflare-email-service) and the [Workers API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/).
+
 ## 5. Push to main
 
 The workflow runs the checks and tests. Follow it in the **Actions** tab, or with `gh run watch --repo <you>/flarewatch`. It then creates or reuses a KV namespace called `flarewatch-state` for sign-in sessions and deploys the monitor Worker, then the status page. The run summary shows the page URL, usually `https://flarewatch.<your-subdomain>.workers.dev`.
@@ -96,11 +116,21 @@ A personal or small-team page costs nothing. These are the free tier limits that
 | 1,000 KV writes/day                 | Sign-ins.                                                                                                      |
 | 5 cron triggers per account         | FlareWatch uses one.                                                                                           |
 
-Every check run is saved in the hub, the monitor Worker's Durable Object, so the charts get a sample every minute. For visitors, the status page reuses what it read from the hub for 20 seconds, so a busy page doesn't cost a hub request per view. Page traffic is the limit you're most likely to reach.
+Every check run is saved in the hub, the monitor Worker's Durable Object, so the charts get a sample every minute. For visitors, the status page keeps what it read from the hub for 20 seconds, and a monitor's response times for 30 seconds, so a busy page doesn't cost a hub request per view. It keeps them in memory and in Cloudflare's cache in each location. Signed-in views read monitor status from the hub every time. On a `workers.dev` address Cloudflare's cache does nothing, so only the memory copy helps. Page traffic is the limit you're most likely to reach.
+
+An open, visible status page refreshes about once a minute, so one tab left open all day makes at least 1,400 Worker requests. A background tab makes none.
 
 A monitor that keeps going down and coming back up adds about 1,500 rows written a day, more if its error changes each time.
 
 See Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
+
+## Hub location
+
+Cloudflare creates the hub near whatever first talks to it, and it stays there. If that was a check run in Singapore, every page view from Europe waits on a round trip to Singapore.
+
+To pick the region, set `hubLocation` in `packages/config/src/worker.ts` before your first deploy, for example `hubLocation: 'weur'` for western Europe. Choose the region closest to most of your visitors. Cloudflare treats it as a hint, not a promise. It has no effect on a hub that already exists. Leave it out to let Cloudflare choose.
+
+The values are `wnam`, `enam`, `sam`, `weur`, `eeur`, `apac`, `apac-ne`, `apac-se`, `oc`, `afr` and `me`.
 
 ## Update your fork
 

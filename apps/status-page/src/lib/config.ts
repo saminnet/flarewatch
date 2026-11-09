@@ -1,6 +1,7 @@
 import { createServerFn, createServerOnlyFn } from '@tanstack/react-start';
 import type { PageConfig, RuntimeConfig } from '@flarewatch/shared';
 import { pageConfig } from '@flarewatch/config';
+import { resolveRuntimeEnv } from './runtime-env';
 import { workerConfig } from '@flarewatch/config/worker';
 
 /**
@@ -20,9 +21,20 @@ export function isPrivateOnly(config: RuntimeConfig): boolean {
 /** What the page shell renders; safe to send to anyone, including visitors of a private page. */
 export type PageBranding = Pick<PageConfig, 'title' | 'favicon' | 'logo' | 'links'>;
 
+export type SubscriberSettings = { enabled: boolean; siteKey: string | null };
+
 export const getConfigServerFn = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<{ statusPage: PageBranding }> => {
-    const { title, favicon, logo, links } = getConfig().statusPage ?? {};
-    return { statusPage: { title, favicon, logo, links } };
+  async (): Promise<{ statusPage: PageBranding; subscribers: SubscriberSettings }> => {
+    const config = getConfig();
+    const { title, favicon, logo, links } = config.statusPage ?? {};
+    const env = await resolveRuntimeEnv();
+    const enabled = Boolean(config.statusPage?.subscribers && !isPrivateOnly(config));
+    return {
+      statusPage: { title, favicon, logo, links },
+      subscribers: {
+        enabled,
+        siteKey: enabled && env.TURNSTILE_SECRET ? (env.TURNSTILE_SITE_KEY ?? '') : null,
+      },
+    };
   },
 );

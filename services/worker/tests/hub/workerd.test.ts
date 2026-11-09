@@ -1,10 +1,20 @@
+import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createTestHarness } from 'wrangler';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vite-plus/test';
-import type { CheckResult, HubView, Incident, LatencySample } from '@flarewatch/shared';
+import {
+  isValidAnnouncement,
+  type CheckResult,
+  type HubView,
+  type Incident,
+  type LatencySample,
+} from '@flarewatch/shared';
 import type { CheckRecord } from '../../src/hub/monitor-hub';
 import { check, down, up } from '../helpers/check-records';
 import { RELEASE_STEP, rewindStatements } from '../helpers/schema-rewind';
 import type { Rows, Run } from '../workerd/entry';
+import type { SubscriberMessage } from '../../src/notifications/subscriber-sender';
 
 // The hub in the workerd that wrangler deploys with. Storage is recreated after
 // every test, so a retried test starts empty.
@@ -21,6 +31,37 @@ const T0 = Date.parse('2025-01-15T12:00:00Z') / 1000;
 const HOUR = 60 * 60;
 const DAY = 24 * HOUR;
 const FLAP_SECONDS = 15 * 60;
+
+it('atomically appends progress, accepts eleven CJK updates and enforces update limits', async () => {
+  const send = (method: string, body: unknown, path = '/announcements/progress') =>
+    server.fetch(path, {
+      method,
+      body: JSON.stringify(body),
+    });
+  expect(
+    (
+      await send('PUT', {
+        id: 'progress',
+        kind: 'incident',
+        title: 'API delays',
+        body: 'Investigating',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+    ).status,
+  ).toBe(204);
+  const append = (body: string) =>
+    send('POST', { status: 'monitoring', body, by: 'Pat' }, '/announcements/progress/updates');
+  const concurrent = await Promise.all([append('First'), append('Second')]);
+  expect(concurrent.map((r) => r.status)).toEqual([200, 200]);
+  const saved: unknown = await concurrent[1]!.json();
+  if (!isValidAnnouncement(saved)) throw new Error('Expected announcement');
+  expect(saved.updates?.map((u) => u.body)).toEqual(['First', 'Second']);
+  expect((await append('x'.repeat(2001))).status).toBe(400);
+  for (let i = 0; i < 11; i++) expect((await append('界'.repeat(2000))).status).toBe(200);
+  for (let i = 13; i < 20; i++) expect((await append(`Update ${i}`)).status).toBe(200);
+  expect((await append('Overflow')).status).toBe(409);
+});
 
 async function call<T>(hub: string, path: string, query = '', runs?: Run[]) {
   const response = await server.fetch(
@@ -566,20 +607,20 @@ describe('MonitorHub in workerd row budgets', () => {
 
   it('writes two rows for a reminder, its claim and its outcome, and reads only those rows', () => {
     expect(large.alertReminder, report()).toEqual(small.alertReminder);
-    // Measured 22 read and 4 written on workerd 1.20260930: a steady run plus two
-    // updates of the incident row, each reading the row it writes.
+    // Measured 25 read and 4 written on workerd 1.20260930: a steady run, two updates of the
+    // incident row, each reading the row it writes, and the read that the outcome steps from.
     expect(small.alertReminder.written, report()).toBeLessThanOrEqual(
       small.alertSteady.written + 2,
     );
-    expect(small.alertReminder.read, report()).toBeLessThanOrEqual(small.alertSteady.read + 2);
+    expect(small.alertReminder.read, report()).toBeLessThanOrEqual(small.alertSteady.read + 3);
   });
 
   it.each([
     // Measured on workerd 1.20260930 with the recovery queue, which every alerting run reads.
     ['alertOpening', { read: 27, written: 8 }],
     ['alertSteady', { read: 22, written: 2 }],
-    ['alertErrorChange', { read: 25, written: 5 }],
-    ['alertRecovery', { read: 27, written: 9 }],
+    ['alertErrorChange', { read: 26, written: 5 }],
+    ['alertRecovery', { read: 28, written: 9 }],
   ] as const)('reads and writes no more rows than before for %s', (name, before) => {
     expect(large[name], report()).toEqual(small[name]);
     expect(small[name].read, report()).toBeLessThanOrEqual(before.read);
@@ -788,3 +829,305 @@ it('keeps expiry warnings and their delivered claims across a restart', async ()
     ['api expiry'],
   ]);
 }, 60_000);
+
+it('acknowledges once with one row written, holds reminders, and carries the responder through recovery', async () => {
+  const hub = 'ack';
+  const failed = check('api', down('HTTP 503'));
+  failed.monitor.reminderEveryChecks = 1;
+  const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+  await alert(hub, [{ now: T0, records: [failed], policy }]);
+  const ack = () => call<boolean>(hub, '/ack', '&id=api&by=Pat');
+  const first = await ack();
+  expect(first.body).toBe(true);
+  expect(first.rows.written).toBe(1);
+  const initial = (await view(hub)).body.monitors.api?.incidents[0];
+  expect(initial?.acked_by).toBe('Pat');
+  expect(initial?.acked_at).toEqual(expect.any(Number));
+  const second = await call<boolean>(hub, '/ack', '&id=api&by=Other');
+  expect(second.body).toBe(false);
+  expect(second.rows.written).toBe(0);
+  expect((await view(hub)).body.monitors.api?.incidents[0]).toEqual(initial);
+  expect((await alert(hub, [{ now: T0 + 60, records: [failed], policy }])).body).toEqual([[]]);
+  await evict(hub);
+  const recovered = await call<{ alerts: { ackedBy?: string; kind: string }[] }[]>(
+    hub,
+    '/record',
+    '',
+    [{ now: T0 + 120, records: [check('api', up())], policy }],
+  );
+  expect(recovered.body[0]?.alerts).toEqual([
+    expect.objectContaining({ kind: 'recovered', ackedBy: 'Pat' }),
+  ]);
+  expect((await ack()).body).toBe(false);
+  expect((await call<boolean>(hub, '/ack', '&id=missing&by=Pat')).body).toBe(false);
+  expect((await view(hub)).body.monitors.api?.incidents[0]).toMatchObject({
+    acked_by: 'Pat',
+    end: T0 + 120,
+  });
+});
+describe('subscribers in workerd', () => {
+  const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+  const action = (hub: string, kind: string, now: number, extra = '') =>
+    call<boolean | number>(hub, '/subscriber-action', `&action=${kind}&now=${now}${extra}`);
+  const monitors = [check('api', down())];
+  const run = (now: number, records = monitors): Run[] => [
+    { now, records, policy, subscribers: true },
+  ];
+  type Delivery = { key: string; recipients: string[]; text: string[] };
+  const drain = (hub: string, now: number, cap: number, extra = '', records = monitors) =>
+    call<Delivery[]>(hub, '/subscriber-drain', `&now=${now}&cap=${cap}${extra}`, run(now, records));
+
+  it('drains with settings supplied by the run instead of the committed config', async () => {
+    const hub = 'flarewatch';
+    const now = Math.floor(Date.now() / 1000) - 1;
+    for (const email of ['one@example.com', 'two@example.com']) {
+      expect((await action(hub, 'subscribe', now, `&email=${email}`)).body).toBe(true);
+      const generation = email === 'one@example.com' ? '1' : '2';
+      expect(
+        (await action(hub, 'confirm', now, `&email=${email}&generation=${generation}`)).body,
+      ).toBe(true);
+    }
+    const records = [check('injected-api', down())];
+    records[0]!.monitor.name = 'Injected API';
+    await call<number>(hub, '/subscriber-check', '', [
+      {
+        now,
+        records,
+        policy,
+        subscribers: true,
+        page: {
+          visibility: 'public',
+          subscribers: {
+            from: 'injected@example.com',
+            provider: 'cloudflare',
+            dailySendCap: 1,
+            maxSubscribers: 2,
+          },
+        },
+      },
+    ]);
+    const sent = await call<SubscriberMessage[]>(hub, '/subscriber-alarm');
+    expect(sent.body).toHaveLength(1);
+    expect(sent.body[0]).toMatchObject({ from: 'injected@example.com', to: ['one@example.com'] });
+    expect(sent.body[0]?.text).toContain('Injected API');
+    const sql = await storage(hub);
+    expect(
+      await sql.exec(
+        "SELECT json_extract(value, '$.count') AS count FROM meta WHERE key = 'subscriber_sends'",
+      ),
+    ).toEqual([{ count: 1 }]);
+    expect(await sql.exec("SELECT sent_to FROM subscriber_outbox WHERE kind = 'down'")).toEqual([
+      { sent_to: 1 },
+    ]);
+  });
+
+  it('keeps signup idempotent and capped, and expires a pending row at 24 hours', async () => {
+    const hub = 'subscriber-storage';
+    expect((await action(hub, 'subscribe', T0, '&max=1')).body).toBe(true);
+    expect((await action(hub, 'subscribe', T0, '&max=1')).body).toBe(false);
+    expect((await action(hub, 'subscribe', T0, '&max=1&email=other@example.com')).body).toBe(false);
+    expect((await action(hub, 'confirm', T0 + DAY)).body).toBe(false);
+    expect((await action(hub, 'subscribe', T0 + DAY, '&max=1&email=other@example.com')).body).toBe(
+      true,
+    );
+  });
+
+  it('adds no rows to a healthy run and adds one outbox row for an eligible event', async () => {
+    const baseline = 'subscriber-baseline';
+    const hub = 'subscriber-budget';
+    const healthy = [check('api', up())];
+    await record(baseline, [{ now: T0, records: healthy, policy }]);
+    await record(hub, run(T0, healthy));
+    const normalQuiet = await record(baseline, [{ now: T0 + 60, records: healthy, policy }]);
+    const quiet = await record(hub, run(T0 + 60, healthy));
+    expect(quiet.rows).toEqual(normalQuiet.rows);
+    const normalEvent = await record(baseline, [{ now: T0 + 120, records: monitors, policy }]);
+    const event = await record(hub, run(T0 + 120));
+    expect(event.rows.written).toBeLessThanOrEqual(normalEvent.rows.written + 4);
+    const sql = await storage(hub);
+    expect(await sql.exec('SELECT kind FROM subscriber_outbox')).toEqual([{ kind: 'down' }]);
+    const baselineRecoveryHub = 'subscriber-baseline-recovery';
+    const recoveryHub = 'subscriber-recovery-budget';
+    await alert(baselineRecoveryHub, [{ now: T0, records: monitors, policy }]);
+    await alert(recoveryHub, run(T0));
+    const baselineRecovery = await alert(baselineRecoveryHub, [
+      { now: T0 + 60, records: healthy, policy },
+    ]);
+    const recovery = await alert(recoveryHub, run(T0 + 60, healthy));
+    writeFileSync(
+      join(tmpdir(), 'subscribers-rows.json'),
+      JSON.stringify(
+        {
+          quiet: quiet.rows,
+          baselineQuiet: normalQuiet.rows,
+          event: event.rows,
+          baselineEvent: normalEvent.rows,
+          recovery: recovery.rows,
+          baselineRecovery: baselineRecovery.rows,
+        },
+        null,
+        2,
+      ),
+    );
+    expect(recovery.rows.written).toBeLessThanOrEqual(baselineRecovery.rows.written + 4);
+  });
+
+  it('drains batches with progress across restart, respects the cap and honours unsubscribe', async () => {
+    const hub = 'subscriber-drain';
+    await record(hub, run(T0));
+    const sql = await storage(hub);
+    for (let id = 1; id <= 202; id++)
+      await sql.exec(
+        "INSERT INTO subscribers (email, state, created_at, confirmed_at) VALUES (?, 'confirmed', ?, ?)",
+        `person${id}@example.com`,
+        T0 - 1,
+        T0 - 1,
+      );
+    const first = await drain(hub, T0, 200, '&remove=person101@example.com');
+    expect(first.body.map(({ recipients }) => recipients.length)).toEqual([100, 100]);
+    expect(first.body.flatMap(({ recipients }) => recipients)).not.toContain(
+      'person101@example.com',
+    );
+    await evict(hub);
+    expect((await drain(hub, T0 + 60, 200)).body).toEqual([]);
+    const tomorrow = (Math.floor(T0 / DAY) + 1) * DAY;
+    expect(
+      (await drain(hub, tomorrow, 200)).body.map(({ recipients }) => recipients.length),
+    ).toEqual([1]);
+  });
+
+  it('persists a failed batch and resumes it with the same key after eviction', async () => {
+    const hub = 'subscriber-retry';
+    await record(hub, run(T0));
+    const sql = await storage(hub);
+    await sql.exec(
+      "INSERT INTO subscribers (email, state, created_at, confirmed_at) VALUES ('person@example.com', 'confirmed', ?, ?)",
+      T0 - 1,
+      T0 - 1,
+    );
+    expect((await drain(hub, T0, 1, '&fail=true')).body).toEqual([]);
+    await evict(hub);
+    const resumed = await drain(hub, T0 + 30, 1);
+    const install = await sql.exec("SELECT value FROM meta WHERE key = 'subscriber_install_id'");
+    const installId = install[0]?.value;
+    if (typeof installId !== 'string') throw new Error('Missing install id');
+    expect(resumed.body.map(({ key }) => key)).toEqual(['subscribers/' + installId + '/1/0']);
+    expect(resumed.body[0]?.recipients).toEqual(['person@example.com']);
+  });
+
+  it('keeps private descendants and failure details out of mail', async () => {
+    const hub = 'subscriber-private';
+    const hidden = check('private-descendant', down());
+    hidden.monitor.private = true;
+    hidden.monitor.dependsOn = ['api'];
+    const records = [check('api', down('private reason')), hidden];
+    await record(hub, run(T0, records));
+    const sql = await storage(hub);
+    await sql.exec(
+      "INSERT INTO subscribers (email, state, created_at, confirmed_at) VALUES ('person@example.com', 'confirmed', ?, ?)",
+      T0 - 1,
+      T0 - 1,
+    );
+    const deliveries = await drain(hub, T0, 90, '', records);
+    expect(deliveries.body).toHaveLength(1);
+    expect(deliveries.body[0]?.text.join('\n')).not.toMatch(/private-descendant|private reason/);
+  });
+});
+
+it('counts each batch against its UTC day when midnight falls during a drain', async () => {
+  const hub = 'subscriber-midnight';
+  const records = [check('api', down())];
+  const policy = { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false };
+  await record(hub, [{ now: T0, records, policy, subscribers: true }]);
+  const sql = await storage(hub);
+  await sql.exec(
+    `WITH RECURSIVE people(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM people WHERE id < 201)
+    INSERT INTO subscribers (email, state, created_at, confirmed_at)
+    SELECT 'person' || id || '@example.com', 'confirmed', ?, ? FROM people`,
+    T0 - 1,
+    T0 - 1,
+  );
+  const result = await call<{ recipients: string[] }[]>(
+    hub,
+    '/subscriber-drain',
+    `&now=${T0}&cap=100&rollover=true`,
+    [{ now: T0, records }],
+  );
+  expect(result.body.map(({ recipients }) => recipients.length)).toEqual([100, 100]);
+});
+
+it('claims a subscriber-only incident once when a webhook routes another monitor', async () => {
+  const records = [check('a', up()), check('b', down())];
+  const runs = [{ now: T0, records }];
+  const writes: number[] = [];
+  const baselineWrites: number[] = [];
+  for (let index = 0; index < 3; index++) {
+    const actual = await call<number>('flarewatch', '/subscriber-check', '', runs);
+    writes.push(actual.rows.written);
+    const baseline = await alert('webhook-delivered', [
+      {
+        now: actual.body,
+        records,
+        policy: { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false },
+        subscribers: true,
+      },
+    ]);
+    baselineWrites.push(baseline.rows.written);
+  }
+  const sql = await storage('flarewatch');
+  expect(
+    await sql.exec(
+      "SELECT alert, alert_run, subscriber_notified FROM incidents WHERE monitor_id = 'b'",
+    ),
+  ).toEqual([{ alert: 'sent', alert_run: 1, subscriber_notified: 1 }]);
+  expect(await sql.exec('SELECT kind FROM subscriber_outbox')).toEqual([{ kind: 'down' }]);
+  expect(writes).toEqual(baselineWrites.map((written, index) => written + (index === 0 ? 1 : 0)));
+  writeFileSync(
+    join(tmpdir(), 'subscriber-only-rows.json'),
+    JSON.stringify({ writes, baselineWrites }, null, 2),
+  );
+});
+
+it('reserves remaining Cloudflare recipients against the new UTC day within a batch', async () => {
+  const hub = 'subscriber-cloudflare-midnight';
+  const records = [check('api', down())];
+  await record(hub, [
+    {
+      now: T0,
+      records,
+      policy: { gracePeriodSeconds: 0, skipIds: [], skipErrorChanges: false },
+      subscribers: true,
+    },
+  ]);
+  const sql = await storage(hub);
+  await sql.exec(
+    `INSERT INTO subscribers (email, state, created_at, confirmed_at) VALUES ('one@example.com', 'confirmed', ?, ?), ('two@example.com', 'confirmed', ?, ?), ('three@example.com', 'confirmed', ?, ?)`,
+    T0 - 1,
+    T0 - 1,
+    T0 - 1,
+    T0 - 1,
+    T0 - 1,
+    T0 - 1,
+  );
+  const first = await call<{ recipients: string[] }[]>(
+    hub,
+    '/subscriber-drain',
+    `&now=${T0}&cap=2&provider=cloudflare&rollover=true`,
+    [{ now: T0, records }],
+  );
+  expect(first.body.map(({ recipients }) => recipients)).toEqual([['one@example.com']]);
+  await evict(hub);
+  const second = await call<{ recipients: string[] }[]>(
+    hub,
+    '/subscriber-drain',
+    `&now=${T0 + DAY}&cap=2&provider=cloudflare`,
+    [{ now: T0 + DAY, records }],
+  );
+  expect(second.body.map(({ recipients }) => recipients)).toEqual([
+    ['two@example.com'],
+    ['three@example.com'],
+  ]);
+  expect(await sql.exec("SELECT value FROM meta WHERE key = 'subscriber_sends'")).toEqual([
+    { value: JSON.stringify({ day: Math.floor((T0 + DAY) / DAY), count: 2 }) },
+  ]);
+});
