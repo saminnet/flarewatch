@@ -19,7 +19,11 @@ export function isAnnouncementActive(announcement: AnnouncementConfig, now: numb
   return announcement.end === undefined || new Date(announcement.end).getTime() > now;
 }
 
-export function normalizeAnnouncement(input: unknown, { capped = true } = {}): Normalized {
+/** `visitor` reads a visitor's copy, whose updates must carry no responder. */
+export function normalizeAnnouncement(
+  input: unknown,
+  { capped = true, visitor = false } = {},
+): Normalized {
   if (!isJsonObject(input)) return { error: 'An announcement must be an object' };
 
   if (typeof input.body !== 'string') return { error: 'Body must be text' };
@@ -58,17 +62,19 @@ export function normalizeAnnouncement(input: unknown, { capped = true } = {}): N
       return { error: `Updates must contain at most ${MAX_ANNOUNCEMENT_UPDATES} entries` };
     for (const update of input.updates) {
       const text = isJsonObject(update) && isNonEmptyString(update.body) ? update.body.trim() : '';
+      const by = isJsonObject(update) && isNonEmptyString(update.by) ? update.by.trim() : '';
       if (
         !isJsonObject(update) ||
         !isIncidentStatus(update.status) ||
         !text ||
         text.length > MAX_ANNOUNCEMENT_TEXT ||
-        !isNonEmptyString(update.by) ||
-        !update.by.trim() ||
+        (visitor ? update.by !== undefined : !by) ||
         typeof update.at !== 'string'
       )
         return {
-          error: `Invalid update: status, body (at most ${MAX_ANNOUNCEMENT_TEXT} characters) and responder are required`,
+          error: visitor
+            ? 'Invalid update: a visitor copy has status and body, and no responder'
+            : `Invalid update: status, body (at most ${MAX_ANNOUNCEMENT_TEXT} characters) and responder are required`,
         };
       const at = parseTime(update.at);
       if (
@@ -80,7 +86,7 @@ export function normalizeAnnouncement(input: unknown, { capped = true } = {}): N
         at: new Date(at).toISOString(),
         status: update.status,
         body: text,
-        by: update.by.trim(),
+        ...(!visitor && { by }),
       });
     }
   }
@@ -97,18 +103,25 @@ export function normalizeAnnouncement(input: unknown, { capped = true } = {}): N
   return { value };
 }
 
-export function toStoredAnnouncement(value: unknown, { capped = true } = {}): Announcement | null {
+export function toStoredAnnouncement(
+  value: unknown,
+  { capped = true, visitor = false } = {},
+): Announcement | null {
   if (!isJsonObject(value) || !isNonEmptyString(value.id)) return null;
   const { createdAt, updatedAt } = value;
   if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) return null;
   if (typeof updatedAt !== 'number' || !Number.isFinite(updatedAt)) return null;
-  const result = normalizeAnnouncement(value, { capped });
+  const result = normalizeAnnouncement(value, { capped, visitor });
   if ('error' in result) return null;
   return { ...result.value, id: value.id, createdAt, updatedAt };
 }
 
 export function isValidAnnouncement(value: unknown): value is Announcement {
   return toStoredAnnouncement(value, { capped: false }) !== null;
+}
+
+export function isVisitorAnnouncement(value: unknown): value is Announcement {
+  return toStoredAnnouncement(value, { capped: false, visitor: true }) !== null;
 }
 
 export function parseAnnouncements(value: unknown): Announcement[] {

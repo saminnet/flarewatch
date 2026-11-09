@@ -345,7 +345,8 @@ export class WebhookNotifier {
         };
       }
 
-      await response.body?.cancel();
+      // The receiver accepted the alert. A body that fails to release must not turn that into a retry.
+      await response.body?.cancel().catch(() => {});
       log.info('Success', { status: response.status });
       return { success: true, statusCode: response.status };
     } catch (error) {

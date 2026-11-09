@@ -75,9 +75,14 @@ The status page renders on the server, then React hydrates it in the browser. Di
 
 A pull request that changes behavior adds an entry to `CHANGELOG.md` under the next version. Write it for someone upgrading.
 
-## Before a major release
+## Release
 
-Look for implicit state machines: flags that gate each other, nullable columns that mean a state, and rules spread across SQL statements. The checks only protect machines that already exist, so finding a new one takes reading the code. [ADR 0003](docs/adr/0003-lifecycles-are-explicit-state-machines.md) says what counts and what doesn't.
+1. Look for implicit state machines: flags that gate each other, nullable columns that mean a state, and rules spread across SQL statements. The checks only protect machines that already exist, so finding a new one takes reading the code. [ADR 0003](docs/adr/0003-lifecycles-are-explicit-state-machines.md) says what counts and what doesn't. Do this before every minor or major release.
+2. If the architecture changed, update `docs/assets/how-it-works.svg`.
+3. Rename `## Unreleased` in `CHANGELOG.md` to `## X.Y.Z - YYYY-MM-DD` and merge that to main.
+4. Wait for CI and Deploy to pass on that commit, then tag it and push the tag: `git tag -s vX.Y.Z && git push origin vX.Y.Z`.
+
+The Release workflow checks that the tagged commit is on main and that CI and Deploy passed on it. Then it publishes the changelog section as the GitHub release "FlareWatch X.Y.Z" and rebuilds flarewatch.app.
 
 ## Deploy by hand
 

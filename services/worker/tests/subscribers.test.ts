@@ -487,6 +487,59 @@ it('uses the Cloudflare batch size and daily cap', async () => {
   expect(recipients).toHaveLength(12);
 });
 
+it('spreads a Cloudflare batch over days when the cap drops below it', async () => {
+  const recipients: string[] = [];
+  let failNext = true;
+  const { hub, db } = createHub(undefined, {
+    ...mailEnv,
+    SUBSCRIBER_EMAIL: {
+      async send(message) {
+        if (failNext) {
+          failNext = false;
+          throw new Error('send failed');
+        }
+        recipients.push(...message.to);
+      },
+    },
+  });
+  confirmed(db, 10);
+  hub.record(T, [check('api', down())], policy, true);
+  const monitors = [check('api', down()).monitor];
+  const cloudflare = { ...settings, provider: 'cloudflare' as const };
+  await hub.drainSubscriberOutbox({ ...cloudflare, dailySendCap: 10 }, monitors, T);
+  expect(recipients).toEqual([]);
+  const day = (n: number) => (Math.floor(T / 86400) + n) * 86400;
+  await hub.drainSubscriberOutbox({ ...cloudflare, dailySendCap: 4 }, monitors, day(1));
+  expect(recipients).toHaveLength(4);
+  await hub.drainSubscriberOutbox({ ...cloudflare, dailySendCap: 4 }, monitors, day(1) + 600);
+  expect(recipients).toHaveLength(4);
+  await hub.drainSubscriberOutbox({ ...cloudflare, dailySendCap: 4 }, monitors, day(2));
+  await hub.drainSubscriberOutbox({ ...cloudflare, dailySendCap: 4 }, monitors, day(3));
+  expect(recipients).toEqual(Array.from({ length: 10 }, (_, i) => `person${i + 1}@example.com`));
+  expect(outbox(db)).toEqual([]);
+});
+
+it('skips a Resend batch that the lowered cap can never fit, and keeps sending later mail', async () => {
+  const { hub, db } = createHub(undefined, mailEnv);
+  confirmed(db, 10);
+  hub.record(T, [check('api', down())], policy, true);
+  const { sent, network } = captureMail();
+  network.mockRejectedValueOnce(new Error('network interrupted'));
+  const monitors = [check('api', down()).monitor];
+  await hub.drainSubscriberOutbox({ ...settings, dailySendCap: 10 }, monitors, T);
+  hub.record(T + 60, [check('api', up())], policy, true);
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const nextDay = (Math.floor(T / 86400) + 1) * 86400;
+  await hub.drainSubscriberOutbox({ ...settings, dailySendCap: 4 }, monitors, nextDay);
+  expect(errors).toHaveBeenCalledWith(
+    'Subscriber batch larger than the daily cap skipped',
+    expect.objectContaining({ size: 10, cap: 4 }),
+  );
+  expect(sent.map(({ body }) => body.length)).toEqual([4]);
+  expect(sent[0]?.body[0]?.text).toContain('Downtime:');
+  expect(outbox(db).map(({ kind }) => kind)).toEqual(['recovered']);
+});
+
 it('sends every Cloudflare adapter message as a separate plain object', async () => {
   const messages = await Promise.all(
     ['one@example.com', 'two@example.com'].map((email) =>

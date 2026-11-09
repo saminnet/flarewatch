@@ -174,7 +174,8 @@ export type PullMonitor = {
   sslIgnoreSelfSigned?: boolean;
   /**
    * Hide from the status page and public API. The monitor is still checked,
-   * stored, and alerted, only signed-in admins see it.
+   * stored, and alerted. Only operators, members, and audiences whose page
+   * group holds it see it.
    */
   private?: boolean;
   /** Monitor ids this one reaches its target through. While one of them is down, this one sends no alert of its own. */

@@ -2,7 +2,7 @@
 
 The status page is a Worker that reads what the monitor Worker saves. Visitors see public monitors, their uptime and response times, and the incident and maintenance history.
 
-An open page picks up each new check run on its own, about once a minute, without a reload. A page in a background tab waits until you come back to it. If no check run has finished for 5 minutes, the page says its data is stale.
+The main page picks up each new check run on its own, about once a minute, without a reload. A page in a background tab waits until you come back to it. If no check run has finished for 5 minutes, the page says its data is stale. The history and monitor pages show what was current when you opened them.
 
 ## Sign in
 
@@ -194,13 +194,13 @@ The upstream deployment uses `packages/config/src/demo/worker.ts` and `demo/publ
 
 Every monitor shows one status. Its row, the banner, the JSON API and embeds all agree. A badge shows pending and running as up, and unknown before the monitor's first result.
 
-| Status     | Means                                                                     |
-| ---------- | ------------------------------------------------------------------------- |
-| `up`       | Working.                                                                  |
-| `degraded` | A job is late, or a site's last check was slower than its `maxLatencyMs`. |
-| `down`     | It has an open incident.                                                  |
-| `pending`  | No result yet, or a job that hasn't pinged yet.                           |
-| `running`  | A job has started and hasn't finished.                                    |
+| Status     | Means                                                                                                           |
+| ---------- | --------------------------------------------------------------------------------------------------------------- |
+| `up`       | Working.                                                                                                        |
+| `degraded` | A job is late, a site's last check was slower than its `maxLatencyMs`, or a certificate or domain expires soon. |
+| `down`     | It has an open incident.                                                                                        |
+| `pending`  | No result yet, or a job that hasn't pinged yet.                                                                 |
+| `running`  | A job has started and hasn't finished.                                                                          |
 
 Only down counts against uptime.
 
@@ -329,6 +329,8 @@ The subscriber cap counts pending and confirmed addresses together. Pending subs
 Mail leaves from the hub's alarm, outside the check run. Incident emails go first. Confirmation emails share the daily cap, but they stop at half of it, so a burst of signups can't use up the mail kept for incidents. The counter resets at midnight UTC. A full cap delays the remaining mail until the next day, so a list larger than half the cap receives updates late. Resend's Free plan currently allows 100 emails a day and 3,000 a month. Keep the default cap below those limits and leave room for other mail sent by your Resend account.
 
 A batch reserves quota before sending. A failed or interrupted request keeps that reservation because Resend may already have accepted it. Retries reuse the saved body and idempotency key. The alarm stops retrying an ambiguous batch after 23 hours, before Resend's 24-hour key expires, and logs `Expired ambiguous subscriber batch`. That batch can lose mail rather than send duplicates. An unsubscribe takes effect before the next batch is prepared. A batch already submitted to Resend cannot be recalled.
+
+If you lower `dailySendCap` below the size of a batch that is waiting to retry, the batch can never fit in a day. FlareWatch skips it and logs `Subscriber batch larger than the daily cap skipped`, so later mail still goes out. The Cloudflare provider sends one message at a time, so it spreads such a batch over the next few days instead.
 
 Each email includes an unsubscribe link and RFC 8058 one-click unsubscribe headers. Opening the link shows a button. A mail client's one-click POST unsubscribes directly, as a URL-encoded or multipart form. The link in a confirmation email also opens a button, so a mail scanner that follows it can't confirm an address. Each unsubscribe link has its own rate limit, because mail providers post from shared addresses. The monitor Worker checks HMAC tokens without a token table. Rotating `SUBSCRIBER_SECRET` invalidates outstanding confirmation and unsubscribe links.
 

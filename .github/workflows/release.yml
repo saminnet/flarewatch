@@ -11,10 +11,38 @@ jobs:
     # Forks keep their own tags; only the upstream repo publishes releases.
     if: ${{ github.repository == 'saminnet/flarewatch' }}
     permissions:
+      actions: read
       contents: write
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    # Room to wait for CI on the tagged commit when the tag is pushed right after the merge.
+    timeout-minutes: 30
     steps:
+      - name: Check that the tag is on main and CI passed on it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # identical or behind means main contains the commit.
+          STATUS=$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${SHA}" --jq .status)
+          if [[ "$STATUS" != identical && "$STATUS" != behind ]]; then
+            echo "The tag points to ${SHA}, which is not on main (compare status: ${STATUS}). Tag a commit on main."
+            exit 1
+          fi
+
+          RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --branch main \
+            --event push --commit "$SHA" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [[ -z "$RUN" ]]; then
+            echo "No CI and Deploy run on main for ${SHA}. Tag the commit that the merge pushed to main."
+            exit 1
+          fi
+          if ! gh run watch "$RUN" --repo "$GITHUB_REPOSITORY" --interval 30 --exit-status > /dev/null; then
+            echo "CI and Deploy run ${RUN} did not pass for ${SHA}. Fix it, then re-run this job."
+            exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
         with:
           persist-credentials: false
@@ -40,7 +68,7 @@ jobs:
             exit 1
           fi
 
-          gh release create "$TAG" --title "$TAG" --notes-file "$NOTES"
+          gh release create "$TAG" --title "FlareWatch ${TAG#v}" --notes-file "$NOTES"
 
       - name: Rebuild flarewatch.app
         env:

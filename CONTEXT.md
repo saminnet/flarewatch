@@ -47,7 +47,7 @@ _Avoid_: Private mode, locked mode
 One thing FlareWatch watches. It is either a check monitor or a heartbeat monitor.
 
 **Check monitor**:
-A monitor that the worker probes on a schedule over HTTP or TCP.
+A monitor that the worker probes on a schedule: HTTP, TCP, DNS or domain expiry.
 _Avoid_: Pull monitor, web monitor, endpoint
 
 **Heartbeat monitor**:
@@ -71,7 +71,7 @@ What the page shows for a check monitor slower than its `maxLatencyMs`, a monito
 _Avoid_: Slow, warning, yellow
 
 **Confirmation**:
-A last attempt from another location, set by `confirmVia`, after the check fails, and after the `checkProxyFallback` check fails too when one is set. Its result is the one recorded.
+A vote among one to five other places, set by `confirmVia`, after the check fails, and after the `checkProxyFallback` check fails too when one is set. The failed check counts as one down vote. The monitor is down when down votes exceed half of all votes, or when fewer confirmers answer than `confirmQuorum` asks. A down result keeps the primary error.
 _Avoid_: Retry, re-check
 
 **Check now**:

@@ -17,7 +17,7 @@ import {
   type Webhook,
 } from './types';
 import { isNormalizedMaintenance, knownZone, normalizeMaintenance } from './maintenance';
-import { isValidAnnouncement } from './announcement';
+import { isValidAnnouncement, isVisitorAnnouncement } from './announcement';
 import { isJsonObject, isNonEmptyString, isSecureUrl, jsonPathKeys } from './utils';
 
 const PULL_METHODS = [
@@ -676,22 +676,27 @@ const incidentSchema = z.object({
 
 const latencySampleSchema = z.object({ loc: z.string(), ping: z.number(), time: z.number() });
 
-const hubViewSchema: z.ZodMiniType<SchemaOutput<HubView>> = z.object({
-  lastUpdate: z.number(),
-  maintenances: z.array(z.custom<Maintenance>(isValidMaintenance)),
-  announcements: z.array(z.custom<Announcement>(isValidAnnouncement)),
-  monitors: z.record(
-    z.string(),
-    z.object({
-      status: z.enum(['up', 'late', 'pending', 'running', 'down', 'degraded']),
-      warning: z.exactOptional(z.string()),
-      startedAt: z.exactOptional(z.number()),
-      incidents: z.array(incidentSchema),
-      latest: z.exactOptional(latencySampleSchema),
-      heartbeat: z.exactOptional(heartbeatStateSchema),
-    }),
-  ),
-});
+const viewMonitorsSchema = z.record(
+  z.string(),
+  z.object({
+    status: z.enum(['up', 'late', 'pending', 'running', 'down', 'degraded']),
+    warning: z.exactOptional(z.string()),
+    startedAt: z.exactOptional(z.number()),
+    incidents: z.array(incidentSchema),
+    latest: z.exactOptional(latencySampleSchema),
+    heartbeat: z.exactOptional(heartbeatStateSchema),
+  }),
+);
+
+const viewSchema = (
+  isAnnouncement: (value: unknown) => value is Announcement,
+): z.ZodMiniType<SchemaOutput<HubView>> =>
+  z.object({
+    lastUpdate: z.number(),
+    maintenances: z.array(z.custom<Maintenance>(isValidMaintenance)),
+    announcements: z.array(z.custom<Announcement>(isAnnouncement)),
+    monitors: viewMonitorsSchema,
+  });
 
 export function configIssues(value: unknown): string[] {
   const result = runtimeConfigSchema.safeParse(value);
@@ -798,7 +803,9 @@ export function parseHeartbeatState(value: unknown): HeartbeatState | null {
   return result.success ? result.data : null;
 }
 
-export const isHubView = asTypeGuard<HubView>(hubViewSchema);
+export const isHubView = asTypeGuard<HubView>(viewSchema(isValidAnnouncement));
+/** The view a visitor may see, as the location cache holds it: no update names its responder. */
+export const isVisitorView = asTypeGuard<HubView>(viewSchema(isVisitorAnnouncement));
 const isAccessConfig = asTypeGuard<AccessConfig>(accessConfigSchema);
 const isWebhook = asTypeGuard<Webhook>(webhookSchema);
 export const isLatencySamples = asTypeGuard<LatencySample[]>(z.array(latencySampleSchema));

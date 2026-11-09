@@ -4,8 +4,11 @@ import {
   type CheckResultWithLocation,
 } from '@flarewatch/shared';
 
-/** Runs one check of a monitor for the signed-in operator; the error carries the server's reason. */
-export async function requestCheckNow(id: string): Promise<CheckResultWithLocation> {
+/**
+ * Runs one check of a monitor for the signed-in operator. The worker never records it, so no
+ * cached query goes stale. The error carries the server's reason.
+ */
+export async function runTestCheck(id: string): Promise<CheckResultWithLocation> {
   const response = await fetch('/api/admin/check', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

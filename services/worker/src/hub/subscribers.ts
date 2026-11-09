@@ -205,6 +205,8 @@ export async function drainSubscribers(
   fetcher: typeof fetch = fetch,
 ): Promise<void> {
   const cloudflare = settings.provider === 'cloudflare';
+  // Resend reserves a batch's quota before the send. Cloudflare counts each message as it goes out.
+  const reserved = (messages: number) => (cloudflare ? 0 : messages);
   const sender = cloudflare
     ? env.SUBSCRIBER_EMAIL && cloudflareSender(env.SUBSCRIBER_EMAIL)
     : env.RESEND_API_KEY && resendSender(env.RESEND_API_KEY, fetcher);
@@ -317,15 +319,29 @@ export async function drainSubscribers(
         day,
       };
       state = stepOutbox(state, { type: 'batch built', batch });
-      saveBatch(sql, row.id, state, day, used);
+      saveBatch(sql, row.id, state, day, used + reserved(batch.size));
     } else if (batch.day !== day) {
-      if (available < batch.size - batch.sent) {
+      const remaining = batch.size - batch.sent;
+      // Resend replays a batch whole under one key. One that a lowered cap can never fit would
+      // hold every later message, so it gives way. Cloudflare sends one message at a time and
+      // spreads the batch over as many days as it takes.
+      if (!cloudflare && remaining > limit) {
+        finishBatch(sql, row, state);
+        console.error('Subscriber batch larger than the daily cap skipped', {
+          event: row.id,
+          batch: state.batchIndex,
+          size: remaining,
+          cap: limit,
+        });
+        continue;
+      }
+      if (available < (cloudflare ? 1 : remaining)) {
         await storage.setAlarm(tomorrow * 1000);
         return;
       }
       state = stepOutbox(state, { type: 'day changed', day });
       batch = state.batch!;
-      saveBatch(sql, row.id, state, day, used);
+      saveBatch(sql, row.id, state, day, used + reserved(remaining));
     }
     // Arm the next attempt before network I/O, including a process death or exhausted platform retries.
     await storage.setAlarm((now + Math.min(3600, 30 * 2 ** Math.min(state.attempts, 7))) * 1000);
@@ -333,16 +349,22 @@ export async function drainSubscribers(
       const messages = z.array(subscriberMessageSchema).parse(parseJson(batch.body));
       const key = `subscribers/${subscriberInstallId(sql)}/${row.id}/${state.batchIndex}`;
       if (cloudflare) {
+        let spent = used;
         while (batch.sent < messages.length) {
           const sendNow = clock();
           if (Math.floor(sendNow / PENDING_SECONDS) !== batch.day) {
             await storage.setAlarm((sendNow + 30) * 1000);
             return;
           }
+          if (spent >= limit) {
+            await storage.setAlarm(tomorrow * 1000);
+            return;
+          }
           await sender.send(messages.slice(batch.sent, batch.sent + 1), key);
+          spent++;
           state = stepOutbox(state, { type: 'recipient sent' });
           batch = state.batch!;
-          writeOutbox(sql, row.id, state);
+          saveBatch(sql, row.id, state, batch.day, spent);
         }
       } else await sender.send(messages, key);
       finishBatch(sql, row, state);
@@ -369,15 +391,11 @@ export async function drainSubscribers(
 
 const quotaSchema = z.object({ day: z.number(), count: z.number() });
 
-function saveBatch(sql: Sql, id: number, state: OutboxState, day: number, used: number): void {
+/** Saves the batch with the day's send count, which already includes this batch's share. */
+function saveBatch(sql: Sql, id: number, state: OutboxState, day: number, count: number): void {
   if (state.status !== OutboxStatus.Sending) return;
-  const { batch } = state;
   sql.transaction(() => {
-    setMeta(
-      sql,
-      'subscriber_sends',
-      JSON.stringify({ day, count: used + batch.size - batch.sent }),
-    );
+    setMeta(sql, 'subscriber_sends', JSON.stringify({ day, count }));
     writeOutbox(sql, id, state);
   });
 }

@@ -56,6 +56,19 @@ describe('webhook notifications', () => {
     expect(cancelled).toBe(true);
   });
 
+  it('counts an accepted webhook as sent when its response body errors', async () => {
+    const body = new ReadableStream({
+      start: (controller) => controller.error(new Error('connection reset')),
+    });
+    const notifier = new WebhookNotifier(
+      { url: 'https://hooks.example.com/webhook' },
+      vi.fn<Fetcher>(async () => new Response(body)),
+    );
+    await expect(notifier.send(createContext(), '')).resolves.toEqual([
+      { success: true, statusCode: 200 },
+    ]);
+  });
+
   describe('buildTemplateContext', () => {
     const webhook: Webhook = { url: 'https://hooks.example.com/webhook' };
 

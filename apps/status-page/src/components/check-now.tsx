@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { IconCircleCheck, IconCircleX, IconRefresh } from '@tabler/icons-react';
 import { getErrorMessage, type CheckResultWithLocation } from '@flarewatch/shared';
 import { Button } from '@/components/ui/button';
-import { requestCheckNow } from '@/lib/check-now';
+import { runTestCheck } from '@/lib/check-now';
 import { formatColoLabel } from '@/lib/cf-colos';
 import { cn } from '@/lib/utils';
 
@@ -18,7 +18,7 @@ export function CheckNow({ monitorId }: CheckNowProps) {
     error,
     mutate,
   } = useMutation({
-    mutationFn: () => requestCheckNow(monitorId),
+    mutationFn: () => runTestCheck(monitorId),
   });
 
   return (

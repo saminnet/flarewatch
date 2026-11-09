@@ -229,6 +229,74 @@ describe('location cache', () => {
     expect([...cache.entries.keys()]).toEqual(['https://flarewatch-cache.invalid/visitor-view']);
   });
 
+  it('shares a view with incident updates across isolates without their responders', async () => {
+    const cache = memoryCache();
+    vi.stubGlobal('caches', { default: cache });
+    const incident = {
+      id: 'checkout-errors',
+      kind: 'incident',
+      status: 'identified',
+      monitors: ['published'],
+      title: 'Checkout errors',
+      body: 'Some payments fail.',
+      updates: [
+        {
+          at: '2026-06-10T11:40:00.000Z',
+          status: 'identified',
+          body: 'A database failover is in progress.',
+          by: 'Dana Whitfield',
+        },
+      ],
+      createdAt: NOW - 1_200_000,
+      updatedAt: NOW - 1_200_000,
+    };
+    const fetch = vi.fn(async () => Response.json({ ...hubView(), announcements: [incident] }));
+    stubMonitorWorker(fetch);
+    await (await isolate()).readVisitorSnapshot();
+    expect(await [...cache.entries.values()][0]!.response.clone().text()).not.toContain('Dana');
+    const second = await isolate();
+    expect((await second.readVisitorSnapshot()).announcements[0]?.updates).toEqual([
+      {
+        at: '2026-06-10T11:40:00.000Z',
+        status: 'identified',
+        body: 'A database failover is in progress.',
+      },
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not serve a cached view that still names a responder', async () => {
+    const cache = memoryCache();
+    vi.stubGlobal('caches', { default: cache });
+    const fetch = vi.fn(async () => Response.json(hubView()));
+    stubMonitorWorker(fetch);
+    await (await isolate()).readVisitorSnapshot();
+    const [key, entry] = [...cache.entries][0]!;
+    const cached = {
+      lastUpdate: 100,
+      monitors: { published: { status: 'up', incidents: [] } },
+      maintenances: [],
+      announcements: [
+        {
+          id: 'checkout-errors',
+          kind: 'incident',
+          status: 'identified',
+          title: 'Checkout errors',
+          body: 'Some payments fail.',
+          updates: [
+            { at: '2026-06-10T11:40:00.000Z', status: 'identified', body: 'Failover.', by: 'Dana' },
+          ],
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+      ],
+    };
+    cache.entries.set(key, { ...entry, response: Response.json(cached, entry.response) });
+    const second = await isolate();
+    expect(JSON.stringify(await second.readVisitorSnapshot())).not.toContain('Dana');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps operator and member reads fresh without reading or writing the location cache', async () => {
     const cache = memoryCache();
     vi.stubGlobal('caches', { default: cache });

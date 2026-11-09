@@ -1,4 +1,9 @@
-import { isHubView, isLatencySamples, type HubView, type LatencySample } from '@flarewatch/shared';
+import {
+  isLatencySamples,
+  isVisitorView,
+  type HubView,
+  type LatencySample,
+} from '@flarewatch/shared';
 import { initialRunStatus } from '@flarewatch/shared/initial-run';
 import { getConfig } from '@/lib/config';
 import { fetchHubView, fetchLatency, triggerCheckRun } from '@/lib/monitor-worker';
@@ -77,7 +82,7 @@ function isolateEntry<T>(nowMs: number, read: Promise<Timed<T>>) {
 
 async function fetchVisitorView(): Promise<Timed<HubView>> {
   const generation = viewGeneration;
-  const cached = await locationRead(VIEW_CACHE_KEY, isHubView);
+  const cached = await locationRead(VIEW_CACHE_KEY, isVisitorView);
   if (cached) return cached;
   const atMs = Date.now();
   const view = await fetchHubView();
