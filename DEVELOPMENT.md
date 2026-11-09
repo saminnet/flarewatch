@@ -80,9 +80,8 @@ A pull request that changes behavior adds an entry to `CHANGELOG.md` under the n
 1. Look for implicit state machines: flags that gate each other, nullable columns that mean a state, and rules spread across SQL statements. The checks only protect machines that already exist, so finding a new one takes reading the code. [ADR 0003](docs/adr/0003-lifecycles-are-explicit-state-machines.md) says what counts and what doesn't. Do this before every minor or major release.
 2. If the architecture changed, update `docs/assets/how-it-works.svg`.
 3. Rename `## Unreleased` in `CHANGELOG.md` to `## X.Y.Z - YYYY-MM-DD` and merge that to main.
-4. Wait for CI and Deploy to pass on that commit, then tag it and push the tag: `git tag -s vX.Y.Z && git push origin vX.Y.Z`.
 
-The Release workflow checks that the tagged commit is on main and that CI and Deploy passed on it. Then it publishes the changelog section as the GitHub release "FlareWatch X.Y.Z" and rebuilds flarewatch.app.
+The merge is the release. When CI and Deploy passes on main and the newest dated section of `CHANGELOG.md` has no tag, the Release workflow tags that commit `vX.Y.Z`, publishes the section as the GitHub release "FlareWatch X.Y.Z" and rebuilds flarewatch.app. If CI and Deploy fails, fix it on main: the next passing run releases. Don't push a release tag by hand: the workflow skips a version that already has a tag.
 
 ## Deploy by hand
 

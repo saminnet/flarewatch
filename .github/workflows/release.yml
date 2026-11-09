@@ -1,56 +1,61 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
+  workflow_run:
+    workflows: ['CI and Deploy']
+    types: [completed]
+    branches: [main]
 
 permissions: {}
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
-    # Forks keep their own tags; only the upstream repo publishes releases.
-    if: ${{ github.repository == 'saminnet/flarewatch' }}
+    # Forks keep their own releases. Only a passing CI and Deploy run for a push to main releases.
+    if: >-
+      github.repository == 'saminnet/flarewatch' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.conclusion == 'success'
     permissions:
-      actions: read
       contents: write
     runs-on: ubuntu-26.04
-    # Room to wait for CI on the tagged commit when the tag is pushed right after the merge.
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
-      - name: Check that the tag is on main and CI passed on it
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.sha }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Find the newest dated version in CHANGELOG.md and check it has no tag
+        id: version
         shell: bash
         run: |
           set -euo pipefail
 
-          # identical or behind means main contains the commit.
-          STATUS=$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${SHA}" --jq .status)
-          if [[ "$STATUS" != identical && "$STATUS" != behind ]]; then
-            echo "The tag points to ${SHA}, which is not on main (compare status: ${STATUS}). Tag a commit on main."
-            exit 1
+          # The newest dated section, so an Unreleased section merged above it does not hide it.
+          HEADING=$(grep -m1 -E '^## [0-9]+\.[0-9]+\.[0-9]+ - [0-9]{4}-[0-9]{2}-[0-9]{2}$' CHANGELOG.md || true)
+          if [[ -z "$HEADING" ]]; then
+            echo "CHANGELOG.md has no '## X.Y.Z - YYYY-MM-DD' section. Nothing to release."
+            exit 0
           fi
 
-          RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --branch main \
-            --event push --commit "$SHA" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          if [[ -z "$RUN" ]]; then
-            echo "No CI and Deploy run on main for ${SHA}. Tag the commit that the merge pushed to main."
-            exit 1
+          VERSION=${HEADING#'## '}
+          TAG="v${VERSION%% *}"
+          if [[ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]]; then
+            echo "${TAG} is already released."
+            exit 0
           fi
-          if ! gh run watch "$RUN" --repo "$GITHUB_REPOSITORY" --interval 30 --exit-status > /dev/null; then
-            echo "CI and Deploy run ${RUN} did not pass for ${SHA}. Fix it, then re-run this job."
-            exit 1
-          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Publish the CHANGELOG.md section as the release notes
+      - name: Tag the commit and publish the CHANGELOG.md section as the release notes
+        if: steps.version.outputs.tag
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.version.outputs.tag }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -64,13 +69,14 @@ jobs:
             | sed -E "s#\]\(([^):\#][^):]*)\)#](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/\1)#g" > "$NOTES"
 
           if ! grep -q '[^[:space:]]' "$NOTES"; then
-            echo "CHANGELOG.md has no '## ${TAG#v} - <date>' section with content"
+            echo "The CHANGELOG.md section for ${TAG#v} is empty."
             exit 1
           fi
 
-          gh release create "$TAG" --title "FlareWatch ${TAG#v}" --notes-file "$NOTES"
+          gh release create "$TAG" --target "$SHA" --title "FlareWatch ${TAG#v}" --notes-file "$NOTES"
 
       - name: Rebuild flarewatch.app
+        if: steps.version.outputs.tag
         env:
           GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
         run: gh workflow run deploy.yml --repo saminnet/flarewatch-app --ref main
