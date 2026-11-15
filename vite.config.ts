@@ -95,7 +95,6 @@ export default defineConfig({
         files: [
           'apps/status-page/src/components/ui/calendar.tsx',
           'apps/status-page/src/components/ui/status-cell.tsx',
-          'apps/status-page/src/components/ui/uptime-badge.tsx',
         ],
         rules: {
           'shadcn/require-static-classes': 'off',
