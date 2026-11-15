@@ -18,7 +18,7 @@ import {
 } from './types';
 import { isNormalizedMaintenance, knownZone, normalizeMaintenance } from './maintenance';
 import { isValidAnnouncement, isVisitorAnnouncement } from './announcement';
-import { isJsonObject, isNonEmptyString, isSecureUrl, jsonPathKeys } from './utils';
+import { HEADER_NAME, isJsonObject, isNonEmptyString, isSecureUrl, jsonPathKeys } from './utils';
 
 const PULL_METHODS = [
   'GET',
@@ -227,8 +227,6 @@ function checkLocation(field: string) {
     );
 }
 
-/** RFC 9110 token characters; Headers.get throws on anything else. */
-const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 const HEADERS_ERROR = 'headers must map names to strings or numbers';
 
 const pullMonitorShape = {
