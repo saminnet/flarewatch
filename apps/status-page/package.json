@@ -40,7 +40,7 @@
     "@flarewatch/ts-config": "workspace:*",
     "@flarewatch/vitest-config": "workspace:*",
     "@playwright/test": "^1.64.0",
-    "@rolldown/plugin-babel": "^0.2.4",
+    "@rolldown/plugin-babel": "^0.3.0",
     "@rolldown/plugin-transform-imports": "^0.1.2",
     "@tanstack/devtools-vite": "catalog:",
     "@tanstack/react-start": "catalog:",
