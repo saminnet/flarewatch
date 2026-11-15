@@ -22,9 +22,18 @@ export function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
-/** HeadersInit is string-valued, so configured numeric header values are converted. */
+/** RFC 9110 token characters. */
+export const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+/**
+ * HeadersInit is string-valued, so configured numeric header values are converted.
+ * Names are checked here because newer workerd builds accept an empty name.
+ */
 export function toHeaders(headers?: { [key: string]: string | number }): Headers {
-  return new Headers(Object.entries(headers ?? {}).map(([key, value]) => [key, String(value)]));
+  const entries = Object.entries(headers ?? {});
+  const bad = entries.find(([name]) => !HEADER_NAME.test(name));
+  if (bad) throw new TypeError(`Invalid header name: "${bad[0]}"`);
+  return new Headers(entries.map(([key, value]) => [key, String(value)]));
 }
 
 const MONTHS = [
