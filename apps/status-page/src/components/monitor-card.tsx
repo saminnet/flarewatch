@@ -6,7 +6,6 @@ import type { HeartbeatStatus } from '@flarewatch/shared';
 import { UPTIME_DAYS } from '@/lib/constants';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { UptimeBadge } from '@/components/ui/uptime-badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusBar } from '@/components/status-bar';
 import { RowBars, barsSummary } from '@/components/row-bars';
@@ -475,9 +474,7 @@ function MonitorSummary({
   const acknowledged = acknowledgedIncident(state, monitor.id, shown);
 
   const uptimeBadge = (
-    <UptimeBadge tone={uptimeTone(heartbeat !== null, shown, uptimePercent)}>
-      {uptimeDisplay}
-    </UptimeBadge>
+    <Badge variant={uptimeTone(heartbeat !== null, shown, uptimePercent)}>{uptimeDisplay}</Badge>
   );
 
   return (
