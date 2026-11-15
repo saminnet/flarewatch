@@ -2,6 +2,18 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## 3.6.1 - 2026-11-15
+
+### Fixed
+
+- A monitor or webhook header with an empty name fails with "Invalid header name". Before, newer Cloudflare runtimes sent the request anyway. ([#121](https://github.com/saminnet/flarewatch/pull/121))
+
+### Changed
+
+- CI and deploys run on Node 26. Node 24 still works on your machine. ([#122](https://github.com/saminnet/flarewatch/pull/122))
+- Wrangler 4.161.0, with workerd 1.20261110.1, and `@cloudflare/vite-plugin` 1.69.1. ([#119](https://github.com/saminnet/flarewatch/pull/119))
+- Dependencies updated, including pnpm 12.20, Vite+ 1.6, TanStack Start 1.169.5, Tailwind CSS 4.3.5 and jsdom 31. After you pull, run `vp install`. ([#118](https://github.com/saminnet/flarewatch/pull/118))
+
 ## 3.6.0 - 2026-11-09
 
 ### Added
