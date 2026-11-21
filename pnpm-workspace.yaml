@@ -13,7 +13,7 @@ allowBuilds:
   protobufjs: true
 
 catalog:
-  '@cloudflare/workers-types': 5.20261112.1
+  '@cloudflare/workers-types': 5.20261118.1
   '@tailwindcss/vite': 4.3.5
   '@tanstack/devtools-vite': 0.8.6
   '@tanstack/react-query': 5.107.1
@@ -29,7 +29,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@1.6.0
   wrangler: 4.161.0
   zod: 4.6.7
-  vite-plus: 1.6.0
+  vite-plus: 1.7.0
 overrides:
   vite@*: 'catalog:'
 peerDependencyRules:
