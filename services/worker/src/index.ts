@@ -1,10 +1,12 @@
 import {
   isPublicMonitor,
+  type EmailAlert,
   type PageConfig,
   type CheckContext,
   createLogger,
   type CheckResultWithLocation,
   type MonitorTarget,
+  parseSecretAlertEmails,
   parseSecretWebhooks,
   type Webhook,
   type WorkerConfig,
@@ -18,7 +20,14 @@ import { handleHubRequest } from './hub/routes';
 import { handleSubscriberRequest } from './subscriber-routes';
 import { handlePing, handlePingUrl } from './ping';
 import { getEdgeLocation } from './utils/location';
-import { affordableChecks, checkInterval, checkMonitor, runBudget } from './checkers';
+import {
+  affordableChecks,
+  checkInterval,
+  checkMonitor,
+  plannedAlertChannels,
+  runBudget,
+} from './checkers';
+import { DEFAULT_EMAIL_MARGIN_MS, sendAlertEmail } from './notifications/email';
 import {
   createNotifier,
   formatNotificationMessage,
@@ -60,16 +69,32 @@ async function safeCallback<T extends unknown[]>(
   }
 }
 
+function configuredList<T>(value: T | T[] | undefined): T[] {
+  return value === undefined ? [] : Array.isArray(value) ? value : [value];
+}
+
 /** The config's webhooks plus FLAREWATCH_WEBHOOKS, which keeps webhook URLs out of a public fork. */
 function alertWebhooks(config: WorkerConfig, secret: string | undefined): Webhook[] {
-  const configured = config.notification?.webhook;
-  const listed =
-    configured === undefined ? [] : Array.isArray(configured) ? configured : [configured];
+  const listed = configuredList(config.notification?.webhook);
   if (!secret) return listed;
-  const ids = config.monitors.map(({ id }) => id);
-  const { webhooks, issues } = parseSecretWebhooks(secret, ids);
+  const { webhooks, issues } = parseSecretWebhooks(
+    secret,
+    config.monitors.map(({ id }) => id),
+  );
   for (const issue of issues) log.error('Skipping part of FLAREWATCH_WEBHOOKS', { issue });
   return [...listed, ...webhooks];
+}
+
+/** The config's email channels plus FLAREWATCH_ALERT_EMAILS, keeping addresses out of a public fork. */
+function alertEmails(config: WorkerConfig, secret: string | undefined): EmailAlert[] {
+  const listed = configuredList(config.notification?.email);
+  if (!secret) return listed;
+  const { emails, issues } = parseSecretAlertEmails(
+    secret,
+    config.monitors.map(({ id }) => id),
+  );
+  for (const issue of issues) log.error('Skipping part of FLAREWATCH_ALERT_EMAILS', { issue });
+  return [...listed, ...emails];
 }
 
 export interface WorkerDeps {
@@ -107,12 +132,16 @@ export async function runChecks(
 
   const currentTime = Math.floor(startedAt / 1000);
   const webhooks = alertWebhooks(config, env.FLAREWATCH_WEBHOOKS);
+  const emails = alertEmails(config, env.FLAREWATCH_ALERT_EMAILS);
+  const channels = webhooks.length + emails.length;
   const notifier = deps.createNotifier(webhooks);
+  const hasOperatorChannel = Boolean(notifier) || emails.length > 0;
   const minute = Math.floor((scheduledAt ?? startedAt) / 60000);
   const due = config.monitors.filter(
     (monitor) => monitor.method !== 'HEARTBEAT' && checkDue(monitor, minute),
   );
-  const checks = affordableChecks(due, webhooks.length, spentSubrequests, minute);
+  const reservedChannels = plannedAlertChannels(due, channels, spentSubrequests);
+  const checks = affordableChecks(due, reservedChannels, spentSubrequests, minute);
   const dueIds = new Set(checks.map((monitor) => monitor.id));
   if (checks.length < due.length) {
     log.warn('Skipping checks the run has no subrequests for', {
@@ -121,7 +150,7 @@ export async function runChecks(
   }
   const budget = runBudget(
     checks,
-    webhooks.length,
+    reservedChannels,
     startedAt,
     triggered ? TRIGGER_WINDOW_MS : undefined,
   );
@@ -141,23 +170,27 @@ export async function runChecks(
   const subscribers = Boolean(
     deps.pageConfig?.subscribers && deps.pageConfig.visibility !== 'private',
   );
-  const webhookIds = new Set(
+  const operatorIds = new Set(
     config.monitors
-      .filter(({ id }) => webhooks.some((webhook) => routes(webhook, id)))
+      .filter(
+        ({ id }) =>
+          webhooks.some((webhook) => routes(webhook, id)) ||
+          emails.some((email) => routes(email, id)),
+      )
       .map(({ id }) => id),
   );
   const policy: AlertPolicy | undefined =
-    notifier || subscribers
+    hasOperatorChannel || subscribers
       ? {
           gracePeriodSeconds: (config.notification?.gracePeriod ?? 0) * 60,
-          webhookIds: [...webhookIds],
-          // Claim a monitor only when a webhook or the published subscriber list takes its alerts.
+          webhookIds: [...operatorIds],
+          // Claim a monitor only when an operator channel or the published subscriber list takes its alerts.
           skipIds: [
             ...(config.notification?.skipNotificationIds ?? []),
             ...config.monitors
               .filter(
                 (monitor) =>
-                  !(subscribers && isPublicMonitor(monitor)) && !webhookIds.has(monitor.id),
+                  !(subscribers && isPublicMonitor(monitor)) && !operatorIds.has(monitor.id),
               )
               .map(({ id }) => id),
           ],
@@ -173,9 +206,8 @@ export async function runChecks(
   );
   const monitors = new Map(config.monitors.map((monitor) => [monitor.id, monitor]));
 
-  // The run held back one request per webhook. Each webhook spends it last, so the alerts that
-  // the spare budget cannot send one by one still go out, together as one summary.
-  let reserved = webhooks.length;
+  // Each channel spends its reserve last so overflow alerts go out together as one summary.
+  let reserved = reservedChannels;
   const spend = (fromReserve: boolean): boolean => {
     if (fromReserve && reserved > 0) {
       reserved--;
@@ -213,51 +245,74 @@ export async function runChecks(
           subscribers &&
           monitor &&
           isPublicMonitor(monitor) &&
-          !webhookIds.has(alert.monitorId) &&
+          !operatorIds.has(alert.monitorId) &&
           (alert.kind === 'down' || alert.kind === 'recovered')
             ? 'subscriber-only'
-            : !notifier || !ctx
+            : !hasOperatorChannel || !ctx
               ? 'attempted'
               : 'waiting';
-        return !ctx && summaryAfter !== Infinity && notifier ? [] : [{ alert, ctx, status }];
+        return !ctx && summaryAfter !== Infinity && hasOperatorChannel
+          ? []
+          : [{ alert, ctx, status }];
       },
     );
-    if (notifier) {
-      type Entry = (typeof entries)[number];
-      const send = async (webhook: Webhook, group: Entry[]) => {
+    type Entry = (typeof entries)[number];
+    const deliverChannel = async (
+      channel: { monitors?: string[] },
+      marginMs: number,
+      sendGroup: (group: Entry[]) => Promise<boolean>,
+    ) => {
+      const routed = entries.filter(({ alert, ctx }) => ctx && routes(channel, alert.monitorId));
+      if (routed.length === 0) return;
+      const inTime = () => Date.now() + marginMs <= deliverBy;
+      const attempt = async (group: Entry[]) => {
         for (const entry of group) if (entry.status === 'waiting') entry.status = 'attempted';
         try {
-          const results =
-            group.length > 1
-              ? [
-                  await notifier.sendSummary(
-                    webhook,
-                    group.map(({ ctx }) => ctx!),
-                  ),
-                ]
-              : await notifier.send(
-                  group[0]!.ctx!,
-                  formatNotificationMessage(group[0]!.ctx!),
-                  webhook,
-                );
-          if (results.some((result) => result.success))
-            for (const entry of group) entry.status = 'delivered';
+          if (await sendGroup(group)) for (const entry of group) entry.status = 'delivered';
         } catch (error) {
           log.error('Alert failed', { error: String(error) });
         }
       };
-      for (const webhook of webhooks) {
-        const routed = entries.filter(({ alert, ctx }) => ctx && routes(webhook, alert.monitorId));
-        if (routed.length === 0) continue;
-        const inTime = () =>
-          Date.now() + (webhook.timeout ?? DEFAULT_WEBHOOK_TIMEOUT_MS) <= deliverBy;
-        let next = 0;
-        if (routed.length < summaryAfter) {
-          for (; next < routed.length - 1 && inTime() && spend(false); next++)
-            await send(webhook, [routed[next]!]);
-        }
-        if (inTime() && spend(true)) await send(webhook, routed.slice(next));
+      let next = 0;
+      if (routed.length < summaryAfter) {
+        for (; next < routed.length - 1 && inTime() && spend(false); next++)
+          await attempt([routed[next]!]);
       }
+      if (inTime() && spend(true)) await attempt(routed.slice(next));
+    };
+    if (notifier) {
+      for (const webhook of webhooks) {
+        await deliverChannel(
+          webhook,
+          webhook.timeout ?? DEFAULT_WEBHOOK_TIMEOUT_MS,
+          async (group) => {
+            const results =
+              group.length > 1
+                ? [
+                    await notifier.sendSummary(
+                      webhook,
+                      group.map(({ ctx }) => ctx!),
+                    ),
+                  ]
+                : await notifier.send(
+                    group[0]!.ctx!,
+                    formatNotificationMessage(group[0]!.ctx!),
+                    webhook,
+                  );
+            return results.some((result) => result.success);
+          },
+        );
+      }
+    }
+    for (const email of emails) {
+      await deliverChannel(email, DEFAULT_EMAIL_MARGIN_MS, (group) =>
+        sendAlertEmail(
+          env.ALERT_EMAIL,
+          email,
+          group.map(({ ctx }) => ctx!),
+          Math.min(DEFAULT_EMAIL_MARGIN_MS, Math.max(1_000, deliverBy - Date.now())),
+        ),
+      );
     }
     return entries.map(({ alert, status }): AlertOutcome => ({
       ...alert,

@@ -193,6 +193,20 @@ function checkRoom(webhooks: number): number {
 }
 
 /**
+ * Cap pre-check alert reservations so secret channels cannot starve scheduled checks to zero.
+ */
+export function plannedAlertChannels(
+  due: readonly Monitor[],
+  channels: number,
+  spentSubrequests = 0,
+): number {
+  const available = Math.max(0, checkRoom(0) - spentSubrequests);
+  const dueCost = due.reduce((sum, monitor) => sum + primaryCost(monitor), 0);
+  const minCheckFloor = Math.min(dueCost, Math.floor(available / 2));
+  return Math.min(channels, Math.max(0, available - minCheckFloor));
+}
+
+/**
  * The due checks a run can afford. The list starts at a point that moves each minute,
  * so a run that is short of requests skips different checks each time.
  */
@@ -243,20 +257,23 @@ export function latencyRowIssue(monitors: readonly Monitor[]): string | undefine
     : undefined;
 }
 
+function sumPrimaries(monitors: readonly Monitor[]): number {
+  return monitors.reduce((sum, monitor) => sum + primaryCost(monitor), 0);
+}
+
 /**
  * The budget for one check run starting now: its deadline and the subrequests left for extras.
- * Each webhook is held one request first, so the first alert of the run always goes out.
+ * Up to `channels` requests are held back for alerts (capped by `plannedAlertChannels`).
  */
 export function runBudget(
   monitors: readonly Monitor[],
-  webhooks: number,
+  channels: number,
   now = Date.now(),
   windowMs = CHECK_WINDOW_MS,
 ): RunBudget {
-  const primaries = monitors.reduce((sum, monitor) => sum + primaryCost(monitor), 0);
   return {
     deadline: now + windowMs,
-    subrequests: Math.max(0, checkRoom(webhooks) - primaries),
+    subrequests: Math.max(0, checkRoom(channels) - sumPrimaries(monitors)),
   };
 }
 

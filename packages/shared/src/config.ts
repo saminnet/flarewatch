@@ -5,6 +5,7 @@ import {
   type AccessConfig,
   type Announcement,
   type CheckResultWithLocation,
+  type EmailAlert,
   type HeartbeatSignal,
   type HeartbeatState,
   type LatencySample,
@@ -552,9 +553,22 @@ const webhookSchema: z.ZodMiniType<SchemaOutput<Webhook>> = z
     z.refine((webhook) => isAllowedPayload(webhook.template, webhook.payloadType, webhook.payload)),
   );
 
+const plainEmailAddress = z
+  .string()
+  .check(z.minLength(3), z.maxLength(320), z.regex(/^[^\s<>@]+@[^\s<>@]+$/));
+
+const emailAlertShape = {
+  from: plainEmailAddress,
+  to: plainEmailAddress,
+  monitors: z.optional(z.array(z.string(), { error: 'monitors must be a list of monitor ids' })),
+};
+
+const emailAlertSchema: z.ZodMiniType<SchemaOutput<EmailAlert>> = z.strictObject(emailAlertShape);
+
 const notificationSchema: z.ZodMiniType<SchemaOutput<NotificationConfig>> = z.object({
   summaryAfter: z.optional(intInRange('summaryAfter', 2, 50)),
   webhook: z.optional(z.union([webhookSchema, z.array(webhookSchema)])),
+  email: z.optional(z.union([emailAlertSchema, z.array(emailAlertSchema)])),
   timeZone: z.optional(timeZone('timeZone')),
   gracePeriod: z.optional(z.number()),
   skipNotificationIds: z.optional(z.array(z.string())),
@@ -570,20 +584,28 @@ const runtimeConfigSchema: z.ZodMiniType<SchemaOutput<RuntimeConfig>> = z
   })
   .check((ctx) => {
     const ids = ctx.value.monitors.map(({ id }) => id);
-    const webhook = ctx.value.notification?.webhook;
-    const listed = Array.isArray(webhook);
-    (listed ? webhook : [webhook]).forEach((entry, index) => {
-      for (const id of entry?.monitors ?? []) {
-        // SchemaOutput stops typing this deep; the webhook schema has checked each id is a string.
-        if (typeof id !== 'string' || ids.includes(id)) continue;
-        ctx.issues.push({
-          code: 'custom',
-          message: `no monitor has id "${id}"`,
-          input: entry,
-          path: ['notification', 'webhook', ...(listed ? [index] : []), 'monitors'],
-        });
-      }
-    });
+    const checkMonitors = (
+      field: 'webhook' | 'email',
+      entries:
+        | { monitors?: unknown[] | undefined }
+        | ({ monitors?: unknown[] | undefined } | undefined)[]
+        | undefined,
+    ) => {
+      const listed = Array.isArray(entries);
+      (listed ? entries : [entries]).forEach((entry, index) => {
+        for (const id of entry?.monitors ?? []) {
+          if (typeof id !== 'string' || ids.includes(id)) continue;
+          ctx.issues.push({
+            code: 'custom',
+            message: `no monitor has id "${id}"`,
+            input: entry,
+            path: ['notification', field, ...(listed ? [index] : []), 'monitors'],
+          });
+        }
+      });
+    };
+    checkMonitors('webhook', ctx.value.notification?.webhook);
+    checkMonitors('email', ctx.value.notification?.email);
   });
 
 const PROVIDER_ID = /^[A-Za-z0-9_-]{1,32}$/;
@@ -711,39 +733,34 @@ export function configIssues(value: unknown): string[] {
   });
 }
 
-/**
- * The webhooks in the FLAREWATCH_WEBHOOKS secret, one or a list as in `notification.webhook`.
- * A bad entry is dropped with an issue; the others still alert. Issues never quote the secret.
- * `monitorIds` are the configured monitors, which an entry's `monitors` may list.
- */
-export function parseSecretWebhooks(text: string, monitorIds: string[]) {
-  const webhooks: Webhook[] = [];
+function parseSecretEntries<T, Parsed>(
+  text: string,
+  monitorIds: string[],
+  label: string,
+  knownKeys: ReadonlySet<string>,
+  schema: z.ZodMiniType<Parsed>,
+  accept: (data: Parsed) => T | undefined,
+  prepare?: (entry: unknown, index: number, issues: string[]) => unknown,
+) {
+  const entries: T[] = [];
   const issues: string[] = [];
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
     issues.push('not valid JSON');
-    return { webhooks, issues };
+    return { entries, issues };
   }
-  const entries: unknown[] = Array.isArray(value) ? value : [value];
-  entries.forEach((entry, index) => {
-    // A bad timeout falls back to the default: dropping the webhook would silence its alerts,
-    // and unlike the config, the secret has no CI check to catch it first.
-    const timeout = isJsonObject(entry) ? webhookTimeout.safeParse(entry.timeout) : undefined;
-    if (isJsonObject(entry) && entry.timeout !== undefined && timeout?.error) {
-      issues.push(
-        `webhook ${index + 1}.timeout: ${timeout.error.issues[0]?.message}; using the default`,
-      );
-      entry = { ...entry, timeout: undefined };
-    }
-    // An unknown field or monitor id is ignored, not fatal, for the same reason. Issues count
-    // them without naming them, since any part of the secret could carry a token.
+  const raw: unknown[] = Array.isArray(value) ? value : [value];
+  raw.forEach((item, index) => {
+    let entry = prepare ? prepare(item, index, issues) : item;
+    // An unknown field or monitor id is ignored, not fatal. Issues count them without naming them,
+    // since any part of the secret could carry a token or private address.
     if (isJsonObject(entry)) {
-      const known = Object.entries(entry).filter(([key]) => Object.hasOwn(webhookShape, key));
+      const known = Object.entries(entry).filter(([key]) => knownKeys.has(key));
       const unknown = Object.keys(entry).length - known.length;
       if (unknown > 0)
-        issues.push(`webhook ${index + 1}: ${countOf(unknown, 'unknown field')} ignored`);
+        issues.push(`${label} ${index + 1}: ${countOf(unknown, 'unknown field')} ignored`);
       entry = Object.fromEntries(known);
     }
     if (isJsonObject(entry) && Array.isArray(entry.monitors)) {
@@ -752,22 +769,76 @@ export function parseSecretWebhooks(text: string, monitorIds: string[]) {
       const unknown = listed.length - monitors.length;
       if (unknown > 0) {
         issues.push(
-          `webhook ${index + 1}.monitors: ${countOf(unknown, 'unknown monitor id')} ignored`,
+          `${label} ${index + 1}.monitors: ${countOf(unknown, 'unknown monitor id')} ignored`,
         );
       }
       entry = { ...entry, monitors };
     }
-    const result = webhookSchema.safeParse(entry);
-    // The parsed value, not the entry: parsing upper-cases the method.
-    if (result.success && isWebhook(result.data)) webhooks.push(result.data);
+    const result = schema.safeParse(entry);
+    const accepted = result.success ? accept(result.data) : undefined;
+    if (accepted !== undefined) entries.push(accepted);
     for (const { path, message } of result.error?.issues ?? []) {
       // The top field only: a deeper key sits inside headers or options and could be a token.
       issues.push(
-        `webhook ${index + 1}${path.length > 0 ? `.${String(path[0])}` : ''}: ${message}`,
+        `${label} ${index + 1}${path.length > 0 ? `.${String(path[0])}` : ''}: ${message}`,
       );
     }
   });
+  return { entries, issues };
+}
+
+/**
+ * The webhooks in the FLAREWATCH_WEBHOOKS secret, one or a list as in `notification.webhook`.
+ * A bad entry is dropped with an issue; the others still alert. Issues never quote the secret.
+ * `monitorIds` are the configured monitors, which an entry's `monitors` may list.
+ */
+export function parseSecretWebhooks(text: string, monitorIds: string[]) {
+  const { entries: webhooks, issues } = parseSecretEntries(
+    text,
+    monitorIds,
+    'webhook',
+    new Set(Object.keys(webhookShape)),
+    webhookSchema,
+    (data) => (isWebhook(data) ? data : undefined),
+    (entry, index, list) => {
+      // A bad timeout falls back to the default: dropping the webhook would silence its alerts,
+      // and unlike the config, the secret has no CI check to catch it first.
+      const timeout = isJsonObject(entry) ? webhookTimeout.safeParse(entry.timeout) : undefined;
+      if (isJsonObject(entry) && entry.timeout !== undefined && timeout?.error) {
+        list.push(
+          `webhook ${index + 1}.timeout: ${timeout.error.issues[0]?.message}; using the default`,
+        );
+        return { ...entry, timeout: undefined };
+      }
+      return entry;
+    },
+  );
   return { webhooks, issues };
+}
+
+/**
+ * Operator email alerts in the FLAREWATCH_ALERT_EMAILS secret, one or a list as in
+ * `notification.email`. Issues never quote the secret.
+ */
+export function parseSecretAlertEmails(text: string, monitorIds: string[]) {
+  const { entries: emails, issues } = parseSecretEntries(
+    text,
+    monitorIds,
+    'email',
+    new Set(Object.keys(emailAlertShape)),
+    emailAlertSchema,
+    (data) =>
+      typeof data.from === 'string' && typeof data.to === 'string'
+        ? {
+            from: data.from,
+            to: data.to,
+            ...(Array.isArray(data.monitors) && {
+              monitors: data.monitors.filter((id): id is string => typeof id === 'string'),
+            }),
+          }
+        : undefined,
+  );
+  return { emails, issues };
 }
 
 function countOf(count: number, noun: string): string {

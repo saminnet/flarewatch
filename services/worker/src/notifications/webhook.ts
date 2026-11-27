@@ -93,7 +93,7 @@ export function formatNotificationMessage(ctx: NotificationContext): string {
   ].join('\n');
 }
 
-function summaryContext(contexts: NotificationContext[]): NotificationContext {
+export function summaryContext(contexts: NotificationContext[]): NotificationContext {
   const currentTime = Math.max(...contexts.map((ctx) => ctx.currentTime));
   const groups = new Map<string, string[]>([
     ['Down', []],
@@ -221,7 +221,10 @@ function withoutCredentials(target: string): string {
   return url.href;
 }
 
-export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook): TemplateContext {
+export function buildTemplateContext(
+  ctx: NotificationContext,
+  webhook?: Pick<Webhook, 'url' | 'options'>,
+): TemplateContext {
   const { monitor, incidentStartTime, currentTime, reason, timeZone } = ctx;
   const formatter = createDateFormatter(timeZone);
 
@@ -241,14 +244,14 @@ export function buildTemplateContext(ctx: NotificationContext, webhook: Webhook)
     timestampIso: new Date(currentTime * 1000).toISOString(),
     incidentKey:
       ctx.kind === 'summary' ? crypto.randomUUID() : `${monitor.id}:${incidentStartTime}`,
-    webhookUrl: webhook.url,
-    options: webhook.options ?? {},
+    webhookUrl: webhook?.url ?? '',
+    options: webhook?.options ?? {},
   };
 }
 
-/** Whether the webhook takes this monitor's alerts: every monitor's, unless it lists some. */
-export function routes(webhook: Webhook, monitorId: string): boolean {
-  return webhook.monitors === undefined || webhook.monitors.includes(monitorId);
+/** Whether the channel takes this monitor's alerts: every monitor's, unless it lists some. */
+export function routes(channel: { monitors?: string[] }, monitorId: string): boolean {
+  return channel.monitors === undefined || channel.monitors.includes(monitorId);
 }
 
 export class WebhookNotifier {
@@ -347,7 +350,7 @@ export class WebhookNotifier {
 
       // The receiver accepted the alert. A body that fails to release must not turn that into a retry.
       await response.body?.cancel().catch(() => {});
-      log.info('Success', { status: response.status });
+      log.info('Sent', { status: response.status });
       return { success: true, statusCode: response.status };
     } catch (error) {
       // A fetch error can quote the URL.

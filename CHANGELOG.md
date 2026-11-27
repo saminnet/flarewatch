@@ -2,6 +2,12 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Operator email alerts through Cloudflare Email Service (`notification.email` or the `FLAREWATCH_ALERT_EMAILS` secret; requires a `[[send_email]]` `ALERT_EMAIL` binding in `services/worker/wrangler.toml`). Sending to verified destination addresses works on the Workers Free plan with no third-party email provider. See [Cloudflare Email](docs/alerts.md#cloudflare-email).
+
 ## 3.6.1 - 2026-11-15
 
 ### Fixed

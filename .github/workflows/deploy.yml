@@ -209,6 +209,7 @@ jobs:
         env:
           FLAREWATCH_PROXY_TOKEN: ${{ secrets.FLAREWATCH_PROXY_TOKEN }}
           FLAREWATCH_WEBHOOKS: ${{ secrets.FLAREWATCH_WEBHOOKS }}
+          FLAREWATCH_ALERT_EMAILS: ${{ secrets.FLAREWATCH_ALERT_EMAILS }}
           FLAREWATCH_ADMIN_BASIC_AUTH: ${{ secrets.FLAREWATCH_ADMIN_BASIC_AUTH }}
           FLAREWATCH_AUTH_SECRET: ${{ secrets.FLAREWATCH_AUTH_SECRET }}
           FLAREWATCH_OIDC_SECRETS: ${{ secrets.FLAREWATCH_OIDC_SECRETS }}
@@ -234,6 +235,13 @@ jobs:
             printf '%s' "$value" | vp exec --filter "$package" -- wrangler secret put "$name" --config "$config"
           }
 
+          if [ -n "$FLAREWATCH_ALERT_EMAILS" ]; then
+            if ! node -e 'const fs = require("node:fs"); const s = fs.readFileSync("services/worker/wrangler.toml", "utf8").replace(/#.*$/gm, ""); process.exit(/^\s*\[\[send_email\]\](?:(?!^\s*\[)[\s\S])*?^\s*name\s*=\s*["'\'']ALERT_EMAIL["'\'']/m.test(s) ? 0 : 1)'; then
+              echo "FLAREWATCH_ALERT_EMAILS is set, but services/worker/wrangler.toml has no [[send_email]] binding named ALERT_EMAIL."
+              exit 1
+            fi
+          fi
+
           echo "Deploying monitoring worker"
           vp exec --filter worker -- wrangler deploy --config wrangler.toml
           put_secret worker wrangler.toml FLAREWATCH_PROXY_TOKEN "$FLAREWATCH_PROXY_TOKEN"
@@ -241,6 +249,7 @@ jobs:
           put_secret worker wrangler.toml RESEND_API_KEY "$RESEND_API_KEY"
           put_secret worker wrangler.toml SUBSCRIBER_SECRET "$SUBSCRIBER_SECRET"
           put_secret worker wrangler.toml FLAREWATCH_WEBHOOKS "$FLAREWATCH_WEBHOOKS"
+          put_secret worker wrangler.toml FLAREWATCH_ALERT_EMAILS "$FLAREWATCH_ALERT_EMAILS"
 
           echo "Building status page"
           vp run --filter status-page build

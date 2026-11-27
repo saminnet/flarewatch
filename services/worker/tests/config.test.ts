@@ -37,8 +37,10 @@ describe.each([
   });
 
   it('fits the checks due every minute into one check run', () => {
-    const webhooks = [worker.notification?.webhook ?? []].flat().length;
-    expect(capacityIssue(worker.monitors, webhooks)).toBeUndefined();
+    const channels =
+      [worker.notification?.webhook ?? []].flat().length +
+      [worker.notification?.email ?? []].flat().length;
+    expect(capacityIssue(worker.monitors, channels)).toBeUndefined();
   });
 
   it('keeps an hour of latency samples within one hub row', () => {
@@ -125,6 +127,19 @@ describe('wrangler config', () => {
       expect(toml).not.toMatch(/^\s*(\[\[)?(routes?|custom_domain)\b/m);
     },
   );
+
+  it('declares ALERT_EMAIL in wrangler.toml whenever notification.email has recipients', () => {
+    const email = workerConfig.notification?.email;
+    const hasEmail = Array.isArray(email) ? email.length > 0 : email !== undefined;
+    if (!hasEmail) return;
+    const toml = readFileSync(`${import.meta.dirname}/../wrangler.toml`, 'utf8').replace(
+      /#.*$/gm,
+      '',
+    );
+    expect(toml).toMatch(
+      /^\s*\[\[send_email\]\](?:(?!^\s*\[)[\s\S])*?^\s*name\s*=\s*["']ALERT_EMAIL["']/m,
+    );
+  });
 });
 
 describe('latencyRowIssue', () => {
