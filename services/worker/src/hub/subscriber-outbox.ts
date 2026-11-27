@@ -29,6 +29,7 @@ export type OutboxEvent =
   | { type: 'recipient sent' }
   | { type: 'day changed'; day: number }
   | { type: 'batch sent' }
+  | { type: 'batch deferred'; until: number }
   | { type: 'batch failed' }
   | { type: 'row finished' };
 
@@ -51,6 +52,14 @@ export function stepOutbox(state: OutboxState, event: OutboxEvent): OutboxState 
     case 'day changed':
       return state.status === OutboxStatus.Sending
         ? { ...state, batch: { ...state.batch, day: event.day } }
+        : state;
+    case 'batch deferred':
+      return state.status === OutboxStatus.Sending
+        ? {
+            ...state,
+            batch: { ...state.batch, preparedAt: event.until },
+            attempts: state.attempts + 1,
+          }
         : state;
     case 'batch failed':
       return state.status === OutboxStatus.Sending

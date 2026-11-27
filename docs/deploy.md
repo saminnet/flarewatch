@@ -79,7 +79,7 @@ The repo ships demo monitors, so a first deploy shows a working page. Replace th
 
 ### Cloudflare subscriber mail
 
-For the second subscriber provider, set `statusPage.subscribers.provider: 'cloudflare'` in `packages/config/src/public.ts`. Add this optional block to `services/worker/wrangler.toml`:
+For the second subscriber provider, set `pageConfig.subscribers.provider: 'cloudflare'` in `packages/config/src/public.ts`. Add this optional block to `services/worker/wrangler.toml`:
 
 ```toml
 [[send_email]]
@@ -88,11 +88,11 @@ name = "SUBSCRIBER_EMAIL"
 
 In JSON, use `"send_email": [{ "name": "SUBSCRIBER_EMAIL" }]`. Leave the block out for the default Free-plan deployment. Set `PUBLIC_ORIGIN` and the `SUBSCRIBER_SECRET` secret. Onboard the sending domain to Email Service and use a verified sender address.
 
-Arbitrary recipients require Workers Paid: 3,000 emails per month are included, then $0.35 per 1,000. Free has no outbound mail to arbitrary recipients. See [Cloudflare pricing](https://developers.cloudflare.com/email-service/platform/pricing/).
+Arbitrary recipients require Workers Paid: 3,000 emails per month are included, then $0.35 per 1,000. On Workers Free, Email Service sends only to verified destination addresses in your account, so public subscriber mail requires Workers Paid. See [Cloudflare pricing](https://developers.cloudflare.com/email-service/platform/pricing/).
 
 The binding accepts plain message objects, without the legacy `cloudflare:email` class. Limits are 50 addresses across to/cc/bcc, 5 MiB per message, 16 KB of custom headers total and 2,048 bytes per header value. FlareWatch sends one message per recipient and records progress after each success. Cloudflare has no batch endpoint or idempotency key. A crash between send and progress write can double-send one message. Retries resume at the saved index without Resend's 23-hour ambiguity cutoff. The daily cap and backoff apply to both providers.
 
-Cloudflare throws `Error` objects with codes. `E_RATE_LIMIT_EXCEEDED` retries with backoff. `E_SENDER_NOT_VERIFIED` and `E_SENDER_DOMAIN_NOT_AVAILABLE` log permanent failures and drop the affected event, so fix the domain before enabling signup. See [subscriber setup](status-page.md#cloudflare-email-service) and the [Workers API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/).
+Cloudflare throws `Error` objects with codes. `E_RATE_LIMIT_EXCEEDED` retries with backoff, and `E_DAILY_LIMIT_EXCEEDED` waits until the next UTC day. `E_SENDER_NOT_VERIFIED` and `E_SENDER_DOMAIN_NOT_AVAILABLE` log permanent failures and drop the affected event, so fix the domain before enabling signup. See [subscriber setup](status-page.md#cloudflare-email-service) and the [Workers API](https://developers.cloudflare.com/email-service/api/send-emails/workers-api/).
 
 ## 5. Push to main
 
@@ -148,7 +148,7 @@ git switch main
 git merge upstream/main
 ```
 
-Git lists each file in conflict. In `worker.ts`, `public.ts` and `access.ts`, keep your monitors and settings, and make any config change the changelog asks for. In `services/worker/wrangler.toml`, keep your `[[vpc_networks]]` block if you added one. In `apps/status-page/wrangler.jsonc`, take the release's version and put your [custom domain](#custom-domain) back if you set one. Take the release's side everywhere else. Commit the merge, then push to `main`.
+Git lists each file in conflict. In `worker.ts`, `public.ts` and `access.ts`, keep your monitors and settings, and make any config change the changelog asks for. In `services/worker/wrangler.toml`, keep your `[[vpc_networks]]` block, `[[send_email]]` block and `PUBLIC_ORIGIN` if you set them. In `apps/status-page/wrangler.jsonc`, take the release's version and put your [custom domain](#custom-domain) back if you set one. Take the release's side everywhere else. Commit the merge, then push to `main`.
 
 Don't pick the option in the **Sync fork** menu that discards your commits, and don't run `gh repo sync --force`. Both throw away your config. Your secrets are safe either way: they live in the repo settings, not in git.
 

@@ -5,7 +5,7 @@ import {
   cloudflareSender,
   resendSender,
   PermanentSubscriberError,
-  ResendSubscriberError,
+  SubscriberSendError,
   subscriberMessageSchema,
 } from '../notifications/subscriber-sender';
 import { subscriberMail } from '../notifications/subscriber-mail';
@@ -265,6 +265,7 @@ export async function drainSubscribers(
     );
     const quota = quotaSchema.safeParse(parseJson(meta?.value ?? null)).data;
     const used = quota?.day === day ? quota.count : 0;
+    const exhausted = quota?.day === day && quota.exhausted === true;
     const cap = settings.dailySendCap ?? DEFAULT_DAILY_SEND_CAP;
     // Signups can come from anyone, so they never use the half of the day's mail kept for incidents.
     const limit = row.kind === 'confirm' ? Math.ceil(cap / 2) : cap;
@@ -278,6 +279,10 @@ export async function drainSubscribers(
         batch: state.batchIndex,
       });
       continue;
+    }
+    if (exhausted) {
+      await storage.setAlarm(tomorrow * 1000);
+      return;
     }
     if (!batch) {
       if (available === 0) {
@@ -369,13 +374,25 @@ export async function drainSubscribers(
       } else await sender.send(messages, key);
       finishBatch(sql, row, state);
     } catch (error) {
-      if (error instanceof ResendSubscriberError && error.action === 'skip batch') {
+      if (error instanceof SubscriberSendError && error.action === 'skip batch') {
         finishBatch(sql, row, state);
         console.error('Subscriber batch skipped', { event: row.id, cause: String(error) });
         continue;
       }
-      if (error instanceof ResendSubscriberError && error.action === 'next day')
+      if (error instanceof SubscriberSendError && error.action === 'next day') {
+        setMeta(sql, 'subscriber_sends', JSON.stringify({ day, count: used, exhausted: true }));
         await storage.setAlarm(tomorrow * 1000);
+        writeOutbox(
+          sql,
+          row.id,
+          stepOutbox(
+            state,
+            cloudflare ? { type: 'batch failed' } : { type: 'batch deferred', until: tomorrow },
+          ),
+        );
+        console.error('Subscriber send failed', { event: row.id, cause: String(error) });
+        return;
+      }
       if (error instanceof PermanentSubscriberError) {
         writeOutbox(sql, row.id, stepOutbox(state, { type: 'row finished' }));
         console.error('Permanent subscriber send failure', { event: row.id, cause: String(error) });
@@ -389,7 +406,11 @@ export async function drainSubscribers(
   await storage.setAlarm((clock() + 30) * 1000);
 }
 
-const quotaSchema = z.object({ day: z.number(), count: z.number() });
+const quotaSchema = z.object({
+  day: z.number(),
+  count: z.number(),
+  exhausted: z.optional(z.boolean()),
+});
 
 /** Saves the batch with the day's send count, which already includes this batch's share. */
 function saveBatch(sql: Sql, id: number, state: OutboxState, day: number, count: number): void {

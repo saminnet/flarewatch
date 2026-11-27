@@ -21,7 +21,7 @@ export type SubscriberEmailBinding = {
 
 export class PermanentSubscriberError extends Error {}
 
-export class ResendSubscriberError extends Error {
+export class SubscriberSendError extends Error {
   constructor(
     message: string,
     readonly action: 'skip batch' | 'next day' | 'retry',
@@ -32,7 +32,7 @@ export class ResendSubscriberError extends Error {
 
 const resendErrorSchema = z.object({ name: z.string() });
 
-function resendAction(status: number, name: string): ResendSubscriberError['action'] {
+function resendAction(status: number, name: string): SubscriberSendError['action'] {
   if (status === 400 || status === 422) return 'skip batch';
   if (status === 409 && name === 'invalid_idempotent_request') return 'skip batch';
   if (status === 429 && (name === 'daily_quota_exceeded' || name === 'monthly_quota_exceeded'))
@@ -68,7 +68,7 @@ export function resendSender(apiKey: string, fetcher: typeof fetch = fetch): Sub
             '[redacted]',
           );
           const status = response.status;
-          throw new ResendSubscriberError(
+          throw new SubscriberSendError(
             `https://api.resend.com/emails/batch answered ${status} (${name})`,
             resendAction(status, name),
           );
@@ -82,7 +82,7 @@ export function resendSender(apiKey: string, fetcher: typeof fetch = fetch): Sub
             'https://api.resend.com/emails/batch returned an invalid acknowledgement',
           );
       } catch (error) {
-        if (error instanceof ResendSubscriberError) throw error;
+        if (error instanceof SubscriberSendError) throw error;
         const cause = String(error).replaceAll(apiKey, '[redacted]');
         throw new Error(`https://api.resend.com/emails/batch: ${cause}`);
       } finally {
@@ -101,9 +101,13 @@ export function cloudflareSender(binding: SubscriberEmailBinding): SubscriberSen
           await binding.send(message);
         } catch (error) {
           const code = error instanceof Error && 'code' in error ? String(error.code) : '';
+          let text = String(error);
+          for (const address of message.to) text = text.replaceAll(address, '[redacted]');
           if (code === 'E_SENDER_NOT_VERIFIED' || code === 'E_SENDER_DOMAIN_NOT_AVAILABLE')
-            throw new PermanentSubscriberError(`${code}: ${String(error)}`);
-          throw error;
+            throw new PermanentSubscriberError(`${code}: ${text}`);
+          if (code === 'E_DAILY_LIMIT_EXCEEDED')
+            throw new SubscriberSendError(`${code}: ${text}`, 'next day');
+          throw new Error(code ? `${code}: ${text}` : text);
         }
       }
     },

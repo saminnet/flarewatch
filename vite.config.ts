@@ -5,6 +5,10 @@ const ignorePnpmState = '!node_modules/.modules.yaml';
 
 export default defineConfig({
   lint: {
+    plugins: ['unicorn', 'typescript', 'oxc', 'react'],
+    categories: {
+      correctness: 'error',
+    },
     ignorePatterns: [
       '.wrangler/**',
       'apps/status-page/dist/**',
@@ -34,6 +38,7 @@ export default defineConfig({
       'anti-slop/no-reflect-get': 'error',
       'anti-slop/no-json-type-argument': 'error',
       'anti-slop/no-unsafe-dictionary-type': 'error',
+      'anti-slop/no-use-effect': 'error',
       'anti-slop/no-widen-then-assert': 'error',
       'anti-slop/no-zod-check-return-value': 'error',
       'anti-slop/prefer-shared-helper': [
@@ -98,6 +103,12 @@ export default defineConfig({
         ],
         rules: {
           'shadcn/require-static-classes': 'off',
+        },
+      },
+      {
+        files: ['apps/status-page/src/lib/hooks/**'],
+        rules: {
+          'anti-slop/no-use-effect': 'off',
         },
       },
       {

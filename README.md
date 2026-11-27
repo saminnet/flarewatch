@@ -27,9 +27,9 @@
 - Checks inside your private network, through Workers VPC and a Cloudflare Tunnel.
 - Heartbeats for backups, cron jobs and CI. They ping when they finish, and you hear about it when one doesn't.
 - Alerts to Slack, Discord, Telegram, ntfy, email and [more](docs/alerts.md). When a shared proxy or server goes down, you get one alert, not ten. Each channel can watch only the monitors you pick, you can ask for a reminder while something stays down, and a run with many alerts can send one summary instead.
-- A status page with uptime, response times and incident history. A slow monitor shows as degraded, maintenance windows can repeat, announcements show under the status banner, and operators can run a check on the spot.
+- A status page with uptime, response times, incident history, optional page-wide time zone and email subscriptions for outage updates. A slow monitor shows as degraded, maintenance windows can repeat, announcements and manual incidents with progress updates show under the status banner, and operators can acknowledge open incidents or run a check on the spot.
 - Sign-in with a password or your own identity provider (Pocket ID, Google, GitHub and others), for you and anyone you choose to let in. The whole page can be private too.
-- Badges as JSON or SVG, embeds, an Atom feed and a JSON API.
+- Badges as JSON or SVG, embeds, an Atom feed, a JSON API and a read-only `/mcp` endpoint for AI agents.
 
 ## Deploy
 
