@@ -253,7 +253,7 @@ For clients with a JSON config, use this shape or your client's equivalent:
 | `list_incidents` | `{ "monitorId": "api", "limit": 20 }` | Incidents, newest first. Both fields are optional. The limit defaults to 50 and accepts 1 through 50.               |
 
 Each tool returns compact JSON and a one-line summary in a text block.
-Incident times and the last update use Unix seconds. Maintenance and announcement dates keep the page API's format.
+Incident times and the last update include Unix seconds alongside ISO 8601 strings in the page's configured `timezone` (UTC by default), and incidents include `durationSeconds` and a human-readable `duration` (measured to `updatedAt` while an incident is open). Maintenance and announcement dates keep the page API's format.
 Uptime uses the same two-decimal display as the page, including `Pending` and `Starting...` before enough data arrives.
 
 An agent sees only what a visitor can read, even when the request carries a sign-in cookie.
@@ -262,7 +262,7 @@ An unknown or private monitor ID returns the same tool error with code 404.
 On a private-only page, every request to `/mcp` returns HTTP 404.
 Tools cannot change config, edit announcements or maintenance, run checks, or read operator details such as heartbeat ping URLs.
 
-The endpoint shares the visitor API's cache and `statusPage.apiCorsOrigins` policy.
+The endpoint shares the visitor API's cache and `pageConfig.apiCorsOrigins` policy.
 Requests use POST with `Content-Type: application/json` and a body of at most 16 KiB.
 After initialization, send `MCP-Protocol-Version: 2025-11-25` on each request.
 GET returns 405 because the endpoint does not offer an SSE stream.
@@ -340,7 +340,7 @@ Resend reports delivery bounces asynchronously. This version does not consume bo
 
 Set `provider: 'cloudflare'` in `subscribers` to send through Cloudflare instead of Resend. Omit `provider` or set `provider: 'resend'` for Resend.
 
-Cloudflare requires the Workers Paid plan for arbitrary subscriber addresses. Outbound mail to arbitrary recipients is unavailable on Free. Paid includes 3,000 emails per month, then costs $0.35 per 1,000. Onboard the sending domain to [Email Service](https://developers.cloudflare.com/email-service/get-started/send-emails/) before enabling this provider. See [pricing](https://developers.cloudflare.com/email-service/platform/pricing/).
+Cloudflare requires the Workers Paid plan for arbitrary subscriber addresses. On Workers Free, Email Service sends only to verified destination addresses in your account, so public subscriber mail requires Paid. Paid includes 3,000 emails per month, then costs $0.35 per 1,000. Onboard the sending domain to [Email Service](https://developers.cloudflare.com/email-service/get-started/send-emails/) before enabling this provider. See [pricing](https://developers.cloudflare.com/email-service/platform/pricing/).
 
 Add this block to `services/worker/wrangler.toml`, the monitor Worker's config:
 
@@ -355,7 +355,7 @@ The [Workers API](https://developers.cloudflare.com/email-service/api/send-email
 
 Cloudflare has no batch endpoint or idempotency key. The alarm prepares up to ten recipients at a time and saves a sent index after each successful call. A retry resumes after that index, including after 24 hours. A crash between a send and its progress write can double-send one message. Both providers reserve quota before sending and keep the daily cap and retry backoff. A retry on a new UTC day reserves quota only for Cloudflare's remaining recipients.
 
-Errors are `Error` objects with a `code`. FlareWatch retries `E_RATE_LIMIT_EXCEEDED` with backoff. It logs `E_SENDER_NOT_VERIFIED` and `E_SENDER_DOMAIN_NOT_AVAILABLE` as permanent failures and drops the affected outbox event. Fix the domain setup before accepting more subscriptions. These failures can lose queued mail. Cloudflare bounces and suppressions do not remove addresses from FlareWatch's list.
+Errors are `Error` objects with a `code`. FlareWatch retries `E_RATE_LIMIT_EXCEEDED` with backoff, and waits until the next UTC day on `E_DAILY_LIMIT_EXCEEDED`. It logs `E_SENDER_NOT_VERIFIED` and `E_SENDER_DOMAIN_NOT_AVAILABLE` as permanent failures and drops the affected outbox event. Fix the domain setup before accepting more subscriptions. These failures can lose queued mail. Cloudflare bounces and suppressions do not remove addresses from FlareWatch's list.
 
 ### Optional Turnstile
 

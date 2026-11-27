@@ -114,6 +114,49 @@ export const workerConfig: WorkerConfig = {
     //   graceSeconds: 3600,
     // },
 
+    // Header and JSON assertions, latency degradation, custom interval, streak and reminders
+    // {
+    //   id: 'api-health',
+    //   name: 'API Health',
+    //   method: 'GET',
+    //   target: 'https://api.example.com/health',
+    //   responseHeaderEquals: { 'Content-Type': 'application/json' },
+    //   responseJsonPath: '$.checks[0].status',
+    //   responseJsonValue: 'pass',
+    //   maxLatencyMs: 2000,
+    //   checkEveryMinutes: 5,
+    //   downAfterChecks: 2,
+    //   reminderEveryChecks: 60,
+    // },
+
+    // DNS record check (over DNS-over-HTTPS)
+    // {
+    //   id: 'dns',
+    //   name: 'DNS',
+    //   method: 'DNS',
+    //   target: 'example.com',
+    //   dnsRecordType: 'A',
+    //   dnsExpected: ['192.0.2.1'],
+    // },
+
+    // Domain registration expiry check (over RDAP, once a day by default)
+    // {
+    //   id: 'domain',
+    //   name: 'Domain registration',
+    //   method: 'DOMAIN',
+    //   target: 'example.com',
+    //   domainExpiryDays: 30,
+    // },
+
+    // Private network check through Workers VPC (add [[vpc_networks]] in services/worker/wrangler.toml)
+    // {
+    //   id: 'redis',
+    //   name: 'Redis',
+    //   method: 'TCP_PING',
+    //   target: '10.0.1.50:6379',
+    //   checkProxy: 'vpc',
+    // },
+
     // SSL certificate monitoring (requires a check proxy)
     // {
     //   id: 'ssl-check',
@@ -156,6 +199,7 @@ export const workerConfig: WorkerConfig = {
   //
   //   timeZone: 'UTC',
   //   gracePeriod: 3, // Minutes before sending notification (avoid flapping)
+  //   summaryAfter: 5, // Combine 5 or more alerts routed to one webhook into a summary message
   // },
 
   // Callbacks (optional, for advanced use)

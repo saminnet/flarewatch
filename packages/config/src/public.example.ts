@@ -1,6 +1,7 @@
 /**
- * Copy this to public.ts and customize. Safe to import in browser bundles
- * (status page UI).
+ * Copy this to public.ts and customize. Read on the server by the status page
+ * and monitor Workers; do not import `@flarewatch/config` in browser code
+ * because `group` can name private monitors.
  */
 
 import type { PageConfig } from '@flarewatch/shared';
@@ -15,9 +16,17 @@ export const pageConfig: PageConfig = {
   // Optional: 'private' shows visitors only the sign-in page (needs a password or a provider to sign in).
   // visibility: 'private',
 
-  // Optional: restrict CORS for public API endpoints (e.g. GET /api/data);
+  // Optional: restrict CORS for public API endpoints (e.g. GET /api/data, POST /mcp);
   // omitted allows any origin (CORS: "*").
   // apiCorsOrigins: ['https://status.example.com'],
+
+  // Optional: email subscribers for published monitor incidents (see docs/status-page.md#email-subscribers).
+  // subscribers: {
+  //   from: 'Status <status@example.com>',
+  //   // provider: 'resend', // default; set 'cloudflare' for Cloudflare Email Service (Workers Paid)
+  //   dailySendCap: 90,
+  //   maxSubscribers: 45,
+  // },
 
   // Footer links (optional)
   links: [
