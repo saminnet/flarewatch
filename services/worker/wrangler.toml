@@ -9,6 +9,11 @@ compatibility_flags = []
 workers_dev = false
 preview_urls = false
 
+# Custom logs stay enabled while invocation logs stay off so ping/subscriber token URLs are not recorded.
+[observability.logs]
+enabled = true
+invocation_logs = false
+
 # The hub stores monitor state in SQLite. Wrangler creates it on the first deploy.
 [[durable_objects.bindings]]
 name = "MONITOR_HUB"

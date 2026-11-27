@@ -38,7 +38,7 @@ A switch that shows someone signed in the status page exactly as a visitor sees 
 _Avoid_: Preview, public preview
 
 **Private-only**:
-A deployment where visitors get the sign-in page and nothing else. Set in config (`statusPage.visibility: 'private'`), not at runtime.
+A deployment where visitors get the sign-in page and nothing else. Set in config (`pageConfig.visibility: 'private'`), not at runtime.
 _Avoid_: Private mode, locked mode
 
 ## Monitors

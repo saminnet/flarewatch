@@ -1,10 +1,19 @@
-import { isAnnouncementActive, type StatusView } from '@flarewatch/shared';
+import { pageConfig } from '@flarewatch/config';
+import { formatIsoTime, isAnnouncementActive, type StatusView } from '@flarewatch/shared';
 import type { Snapshot } from '@/lib/public-view';
 import { projectPublicData } from '@/lib/status-projection';
 import { countStatuses, getOverallStatus } from '@/lib/monitor-state';
 import { calculateUptimePercent, formatUptimeDisplay } from '@/lib/uptime';
+import { formatDuration } from '@/lib/date';
 
 export const MAX_INCIDENTS = 50;
+
+const READ_ONLY_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const;
 
 export const mcpTools = [
   {
@@ -12,12 +21,14 @@ export const mcpTools = [
     description:
       'Read overall page status, monitor counts, last update, active announcements and maintenance windows.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'list_monitors',
     description:
       'List published monitors with IDs, groups, current status, displayed uptime and open incidents.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'get_monitor',
@@ -29,6 +40,7 @@ export const mcpTools = [
       required: ['id'],
       additionalProperties: false,
     },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
   {
     name: 'list_incidents',
@@ -41,6 +53,7 @@ export const mcpTools = [
       },
       additionalProperties: false,
     },
+    annotations: READ_ONLY_ANNOTATIONS,
   },
 ];
 
@@ -52,7 +65,22 @@ function toolContent(data: unknown, summary: string, isError = false) {
 
 const toolError = (data: unknown, summary: string) => toolContent(data, summary, true);
 
-function recentIncidents(monitors: Snapshot['monitors'], state: StatusView, monitorId?: string) {
+function incidentTiming(start: number, end: number | null, now: number) {
+  const durationSeconds = Math.max(0, (end ?? now) - start);
+  return {
+    start,
+    startIso: formatIsoTime(start, pageConfig.timezone),
+    durationSeconds,
+    duration: formatDuration(durationSeconds * 1000),
+  };
+}
+
+function recentIncidents(
+  monitors: Snapshot['monitors'],
+  state: StatusView,
+  limit: number,
+  monitorId?: string,
+) {
   return monitors
     .filter((monitor) => monitorId === undefined || monitor.id === monitorId)
     .flatMap((monitor) =>
@@ -60,12 +88,20 @@ function recentIncidents(monitors: Snapshot['monitors'], state: StatusView, moni
         .filter((incident) => incident.start.length > 0)
         .map((incident) => ({
           monitorId: monitor.id,
-          start: incident.start[0],
+          start: incident.start[0]!,
           end: incident.end ?? null,
           error: incident.error,
         })),
     )
-    .sort((a, b) => (b.start ?? 0) - (a.start ?? 0));
+    .sort((a, b) => b.start - a.start)
+    .slice(0, limit)
+    .map(({ monitorId: id, start, end, error }) => ({
+      monitorId: id,
+      ...incidentTiming(start, end, state.lastUpdate),
+      end,
+      endIso: end === null ? null : formatIsoTime(end, pageConfig.timezone),
+      error,
+    }));
 }
 
 export function callStatusTool(name: string, args: ToolArgs, snapshot: Snapshot) {
@@ -88,6 +124,7 @@ export function callStatusTool(name: string, args: ToolArgs, snapshot: Snapshot)
         degraded,
         down: counts.down,
         updatedAt: projection.updatedAt,
+        updatedAtIso: formatIsoTime(projection.updatedAt, pageConfig.timezone),
         announcements: announcements.filter((announcement) =>
           isAnnouncementActive(announcement, state.lastUpdate * 1000),
         ),
@@ -98,7 +135,7 @@ export function callStatusTool(name: string, args: ToolArgs, snapshot: Snapshot)
   }
 
   if (name === 'list_incidents') {
-    const incidents = recentIncidents(monitors, state, id).slice(0, args.limit ?? MAX_INCIDENTS);
+    const incidents = recentIncidents(monitors, state, args.limit ?? MAX_INCIDENTS, id);
     return toolContent({ incidents }, `${incidents.length} recent incidents.`);
   }
 
@@ -108,6 +145,7 @@ export function callStatusTool(name: string, args: ToolArgs, snapshot: Snapshot)
   const row = (monitor: Snapshot['monitors'][number]) => {
     const latest = state.monitors[monitor.id]?.incidents.at(-1);
     const open = latest?.end === undefined ? latest : undefined;
+    const openStart = open?.start[0];
     return {
       id: monitor.id,
       name: monitor.name,
@@ -118,16 +156,20 @@ export function callStatusTool(name: string, args: ToolArgs, snapshot: Snapshot)
         state.monitors[monitor.id]?.startedAt !== undefined,
         2,
       ),
-      openIncident: open
-        ? { start: open.start[0], error: open.error.at(-1) ?? 'Unknown error' }
-        : null,
+      openIncident:
+        open && openStart !== undefined
+          ? {
+              ...incidentTiming(openStart, null, state.lastUpdate),
+              error: open.error.at(-1) ?? 'Unknown error',
+            }
+          : null,
     };
   };
   if (name === 'get_monitor') {
     const monitor = monitors.find((candidate) => candidate.id === id);
     const current = monitor && row(monitor);
     return toolContent(
-      { ...current, incidents: recentIncidents(monitors, state, id).slice(0, 10) },
+      { ...current, incidents: recentIncidents(monitors, state, 10, id) },
       `Monitor status: ${current?.status}.`,
     );
   }

@@ -60,7 +60,8 @@ export type DatePattern =
   | 'MMM d, yyyy HH:mm z'
   | 'MMM d, HH:mm'
   | 'HH:mm z'
-  | 'MMM d, HH:mm z';
+  | 'MMM d, HH:mm z'
+  | 'iso';
 
 /** Numeric zone parts only: build the text here so SSR never uses localized strings. */
 export function formatDateTime(date: Date, pattern: DatePattern, timezone = 'UTC'): string {
@@ -87,14 +88,18 @@ export function formatDateTime(date: Date, pattern: DatePattern, timezone = 'UTC
       Math.floor(date.getTime() / 1000) * 1000) /
       60_000,
   );
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const offsetHours = Math.floor(Math.abs(offset) / 60);
   const offsetMinutes = Math.abs(offset) % 60;
   const zone =
     offset === 0
       ? 'UTC'
-      : `UTC${offset > 0 ? '+' : '-'}${Math.floor(Math.abs(offset) / 60)}${offsetMinutes ? ':' + String(offsetMinutes).padStart(2, '0') : ''}`;
+      : `UTC${offset > 0 ? '+' : '-'}${offsetHours}${offsetMinutes ? ':' + pad(offsetMinutes) : ''}`;
+  const isoZone =
+    offset === 0 ? 'Z' : `${offset > 0 ? '+' : '-'}${pad(offsetHours)}:${pad(offsetMinutes)}`;
   const fullMonth = MONTHS[month - 1];
   const shortMonth = fullMonth?.slice(0, 3);
-  const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  const time = `${pad(hour)}:${pad(minute)}`;
   const short = `${shortMonth} ${day}, ${time}`;
   return {
     'MMMM yyyy': `${fullMonth} ${year}`,
@@ -106,12 +111,17 @@ export function formatDateTime(date: Date, pattern: DatePattern, timezone = 'UTC
     'MMM d, HH:mm': short,
     'HH:mm z': `${time} ${zone}`,
     'MMM d, HH:mm z': `${short} ${zone}`,
+    iso: `${String(year).padStart(4, '0')}-${pad(month)}-${pad(day)}T${time}:${pad(second)}${isoZone}`,
   }[pattern];
 }
 
 /** "Sep 16, 07:02 UTC": notifications default to UTC, pages can pass their zone. */
 export function formatUtcShort(seconds: number, timezone?: string): string {
   return formatDateTime(new Date(seconds * 1000), 'MMM d, HH:mm z', timezone);
+}
+
+export function formatIsoTime(seconds: number, timezone?: string): string {
+  return formatDateTime(new Date(seconds * 1000), 'iso', timezone);
 }
 
 export function getErrorMessage(error: unknown): string {

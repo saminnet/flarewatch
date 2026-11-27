@@ -13,6 +13,7 @@ import {
   success,
   failure,
   formatUtcShort,
+  formatIsoTime,
   formatDateTime,
   timingSafeEqual,
   readJsonUpTo,
@@ -675,5 +676,15 @@ describe('page time zones', () => {
               ? 'Jan 5, 02:00 UTC'
               : 'Jan 5, 00:00 UTC',
     );
+  });
+
+  it.each([
+    ['2026-01-05T00:00:00Z', 'UTC', '2026-01-05T00:00:00Z'],
+    ['2026-01-05T00:00:00Z', 'Europe/Stockholm', '2026-01-05T01:00:00+01:00'],
+    ['2026-03-29T01:00:00Z', 'Europe/Stockholm', '2026-03-29T03:00:00+02:00'],
+    ['2026-01-05T00:00:00Z', 'Australia/Darwin', '2026-01-05T09:30:00+09:30'],
+    ['2026-01-05T02:00:00Z', 'America/St_Johns', '2026-01-04T22:30:00-03:30'],
+  ])('formats ISO %s in %s with offset', (iso, timezone, expected) => {
+    expect(formatIsoTime(new Date(iso).getTime() / 1000, timezone)).toBe(expected);
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from 'react';
+import { useReducer } from 'react';
 import { IconCheck, IconCopy } from '@tabler/icons-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTimeout } from '@/lib/hooks/use-timeout';
 import { cn } from '@/lib/utils';
 
 const COPIED_MS = 2000;
@@ -60,16 +61,10 @@ export function CopyPingUrlButton({ monitorId, monitorName, loadPingUrl }: CopyP
   const [state, dispatch] = useReducer(step, { status: 'idle' });
   const copied = state.status === 'copied';
   const unavailable = state.status === 'unavailable';
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (copiedTimer.current) clearTimeout(copiedTimer.current);
-    };
-  }, []);
+  const copiedTimer = useTimeout();
 
   async function copy() {
-    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.cancel();
     dispatch({ type: 'copy' });
     try {
       const url = await loadPingUrl(monitorId);
@@ -79,7 +74,7 @@ export function CopyPingUrlButton({ monitorId, monitorName, loadPingUrl }: CopyP
         try {
           await navigator.clipboard.writeText(url);
           dispatch({ type: 'copied' });
-          copiedTimer.current = setTimeout(() => dispatch({ type: 'expire' }), COPIED_MS);
+          copiedTimer.schedule(() => dispatch({ type: 'expire' }), COPIED_MS);
         } catch {
           dispatch({ type: 'manual', url });
         }

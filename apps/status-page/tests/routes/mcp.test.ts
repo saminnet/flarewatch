@@ -15,7 +15,7 @@ const T = 1736942400;
 const VERSION = '2025-11-25';
 const operatorIdentity = await passwordIdentity('configured');
 restoreAfterEach(workerConfig, ['monitors']);
-restoreAfterEach(pageConfig, ['visibility', 'group', 'apiCorsOrigins']);
+restoreAfterEach(pageConfig, ['visibility', 'group', 'apiCorsOrigins', 'timezone']);
 forgetViewAroundEachTest();
 
 function fixture(): HubView {
@@ -213,7 +213,13 @@ describe('/mcp', () => {
     expect(reads).toHaveLength(0);
   });
 
-  it('lists exactly four tools with actionable schemas', async () => {
+  it('lists exactly four tools with actionable schemas and read-only annotations', async () => {
+    const readOnly = {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    };
     const response = await rpc('tools/list');
     expect(await response.json()).toEqual({
       jsonrpc: '2.0',
@@ -223,10 +229,12 @@ describe('/mcp', () => {
           expect.objectContaining({
             name: 'get_status',
             inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            annotations: readOnly,
           }),
           expect.objectContaining({
             name: 'list_monitors',
             inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            annotations: readOnly,
           }),
           expect.objectContaining({
             name: 'get_monitor',
@@ -236,6 +244,7 @@ describe('/mcp', () => {
               required: ['id'],
               additionalProperties: false,
             },
+            annotations: readOnly,
           }),
           expect.objectContaining({
             name: 'list_incidents',
@@ -247,6 +256,7 @@ describe('/mcp', () => {
               },
               additionalProperties: false,
             },
+            annotations: readOnly,
           }),
         ],
       },
@@ -265,6 +275,7 @@ describe('/mcp', () => {
         degraded: 1,
         down: 1,
         updatedAt: T,
+        updatedAtIso: '2025-01-15T12:00:00Z',
         announcements: [view.announcements[0]],
         maintenances: [{ ...view.maintenances[0], monitors: ['api'] }],
       },
@@ -285,7 +296,13 @@ describe('/mcp', () => {
             group: 'Services',
             status: 'down',
             uptime: '90.00%',
-            openIncident: { start: T - 100, error: 'HTTP 503' },
+            openIncident: {
+              start: T - 100,
+              startIso: '2025-01-15T11:58:20Z',
+              durationSeconds: 100,
+              duration: '1m 40s',
+              error: 'HTTP 503',
+            },
           },
           { id: 'slow', group: null, status: 'degraded', uptime: '100.00%', openIncident: null },
           { id: 'up', status: 'up', uptime: '90.00%', openIncident: null },
@@ -311,7 +328,11 @@ describe('/mcp', () => {
         incidents: Array.from({ length: 10 }, (_, i) => ({
           monitorId: 'api',
           start: T - 189 - i,
+          startIso: new Date((T - 189 - i) * 1000).toISOString().replace('.000Z', 'Z'),
           end: T - 188 - i,
+          endIso: new Date((T - 188 - i) * 1000).toISOString().replace('.000Z', 'Z'),
+          durationSeconds: 1,
+          duration: '1s',
           error: [`HTTP ${511 - i}`],
         })),
       },
@@ -320,10 +341,32 @@ describe('/mcp', () => {
 
   it('sorts incidents across monitors, filters by ID, and caps the default and explicit limit at fifty', async () => {
     expect((await content(await call('list_incidents', { limit: 1 }))).data).toEqual({
-      incidents: [{ monitorId: 'api', start: T - 100, end: null, error: ['Timeout', 'HTTP 503'] }],
+      incidents: [
+        {
+          monitorId: 'api',
+          start: T - 100,
+          startIso: '2025-01-15T11:58:20Z',
+          end: null,
+          endIso: null,
+          durationSeconds: 100,
+          duration: '1m 40s',
+          error: ['Timeout', 'HTTP 503'],
+        },
+      ],
     });
     expect((await content(await call('list_incidents', { monitorId: 'up' }))).data).toEqual({
-      incidents: [{ monitorId: 'up', start: T - 400, end: T - 300, error: ['HTTP 502'] }],
+      incidents: [
+        {
+          monitorId: 'up',
+          start: T - 400,
+          startIso: '2025-01-15T11:53:20Z',
+          end: T - 300,
+          endIso: '2025-01-15T11:55:00Z',
+          durationSeconds: 100,
+          duration: '1m 40s',
+          error: ['HTTP 502'],
+        },
+      ],
     });
     view.monitors.api!.incidents = Array.from({ length: 60 }, (_, i) => ({
       start: [T - 200 + i],
@@ -336,11 +379,35 @@ describe('/mcp', () => {
         incidents: Array.from({ length: 50 }, (_, i) => ({
           monitorId: 'api',
           start: T - 141 - i,
+          startIso: new Date((T - 141 - i) * 1000).toISOString().replace('.000Z', 'Z'),
           end: T - 140 - i,
+          endIso: new Date((T - 140 - i) * 1000).toISOString().replace('.000Z', 'Z'),
+          durationSeconds: 1,
+          duration: '1s',
           error: ['Timeout'],
         })),
       });
     }
+  });
+
+  it('formats MCP ISO timestamps using pageConfig.timezone with offset', async () => {
+    pageConfig.timezone = 'Europe/Stockholm';
+    expect((await content(await call('get_status'))).data).toMatchObject({
+      updatedAt: T,
+      updatedAtIso: '2025-01-15T13:00:00+01:00',
+    });
+    expect((await content(await call('list_incidents', { monitorId: 'up' }))).data).toMatchObject({
+      incidents: [
+        {
+          startIso: '2025-01-15T12:53:20+01:00',
+          endIso: '2025-01-15T12:55:00+01:00',
+        },
+      ],
+    });
+    pageConfig.timezone = 'America/New_York';
+    expect((await content(await call('get_status'))).data).toMatchObject({
+      updatedAtIso: '2025-01-15T07:00:00-05:00',
+    });
   });
 
   it.each(['private', 'missing', '__proto__'])(

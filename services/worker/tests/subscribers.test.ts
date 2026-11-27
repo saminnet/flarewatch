@@ -882,3 +882,61 @@ it('keeps the original confirmation time on repeated confirmation', () => {
   expect(hub.confirmSubscriber('one@example.com', '1', T + 86400)).toBe(true);
   expect(db.prepare('SELECT confirmed_at FROM subscribers').get()).toEqual({ confirmed_at: T + 1 });
 });
+
+it('defers Cloudflare E_DAILY_LIMIT_EXCEEDED to the next UTC day and keeps the outbox row', async () => {
+  const err = Object.assign(new Error('daily quota reached'), { code: 'E_DAILY_LIMIT_EXCEEDED' });
+  const send = vi.fn().mockRejectedValue(err);
+  const cfEnv = {
+    SUBSCRIBER_EMAIL: { send },
+    SUBSCRIBER_SECRET: 'test-secret',
+    PUBLIC_ORIGIN: 'https://status.example.com',
+  };
+  const { hub, db, storage } = createHub(undefined, cfEnv);
+  confirmed(db, 1);
+  hub.record(T, [check('api', down())], policy, true);
+  await hub.drainSubscriberOutbox(
+    { ...settings, provider: 'cloudflare' },
+    [check('api', down()).monitor],
+    T,
+  );
+  const tomorrowMs = (Math.floor(T / 86400) + 1) * 86400 * 1000;
+  expect(await storage.getAlarm()).toBe(tomorrowMs);
+  expect(outbox(db)).toHaveLength(1);
+  expect(send).toHaveBeenCalledTimes(1);
+
+  // An early wakeup on the same UTC day (e.g. a new signup moving the alarm) must not retry until tomorrow.
+  await hub.drainSubscriberOutbox(
+    { ...settings, provider: 'cloudflare' },
+    [check('api', down()).monitor],
+    T + 60,
+  );
+  expect(await storage.getAlarm()).toBe(tomorrowMs);
+  expect(send).toHaveBeenCalledTimes(1);
+});
+
+it('does not re-send an already-built Resend batch on the same UTC day after daily_quota_exceeded', async () => {
+  const { hub, db, storage } = createHub(undefined, mailEnv);
+  confirmed(db, 1);
+  hub.record(T, [check('api', down())], policy, true);
+  const { network } = captureMail();
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  network.mockImplementation(async () =>
+    Response.json({ name: 'daily_quota_exceeded', message: 'limit reached' }, { status: 429 }),
+  );
+  const monitors = [check('api', down()).monitor];
+  await hub.drainSubscriberOutbox(settings, monitors, T);
+  const tomorrowMs = (Math.floor(T / 86400) + 1) * 86400 * 1000;
+  expect(await storage.getAlarm()).toBe(tomorrowMs);
+  expect(network).toHaveBeenCalledTimes(1);
+
+  // Early wakeup on the same UTC day (even with a higher cap) must keep waiting until tomorrow.
+  await hub.drainSubscriberOutbox({ ...settings, dailySendCap: 200 }, monitors, T + 60);
+  expect(await storage.getAlarm()).toBe(tomorrowMs);
+  expect(network).toHaveBeenCalledTimes(1);
+
+  // Next UTC day — even >23h later — delivers instead of expiring as an ambiguous batch.
+  network.mockResolvedValueOnce(Response.json({ data: [{ id: 'ok' }] }));
+  await hub.drainSubscriberOutbox(settings, monitors, Math.floor(tomorrowMs / 1000) + 60);
+  expect(outbox(db)).toEqual([]);
+  expect(network).toHaveBeenCalledTimes(2);
+});
