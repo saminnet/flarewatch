@@ -141,6 +141,10 @@ describe('check now route for the status page', () => {
       400,
     ],
     ['a query string', '/check/api%20v2?target=https://evil.test', { method: 'POST' }, 400],
+    ['a free URL in via', '/check/api%20v2?via=https://evil.test', { method: 'POST' }, 400],
+    ['a negative via', '/check/api%20v2?via=-1', { method: 'POST' }, 400],
+    ['a duplicate via', '/check/api%20v2?via=0&via=0', { method: 'POST' }, 400],
+    ['an out-of-range via', '/check/api%20v2?via=1', { method: 'POST' }, 400],
     ['a malformed id', '/check/%E0%A4%A', { method: 'POST' }, 400],
     ['a GET', '/check/api%20v2', { method: 'GET' }, 404],
   ])('refuses %s without checking', async (_name, path, init, status) => {
@@ -150,5 +154,39 @@ describe('check now route for the status page', () => {
 
     expect(response.status).toBe(status);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('runs only the selected configured vantage point when ?via=<index> is given', async () => {
+    const { env } = createEnv();
+    const multi: MonitorTarget = {
+      ...api,
+      checkProxyFallback: true,
+      confirmVia: ['https://confirm.example.com/check'],
+    };
+    const multiDeps = createWorkerDeps({ monitors: [multi, backup] }, { fetcher: fetchMock });
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ location: 'SIN', result: { ok: false, error: 'HTTP 502' } })),
+    );
+    const viaConfirmer = await checkNow(
+      env,
+      '/check/api%20v2?via=2',
+      { method: 'POST' },
+      multiDeps,
+    );
+    expect(viaConfirmer.status).toBe(200);
+    await expect(viaConfirmer.json()).resolves.toEqual({
+      location: 'SIN',
+      result: { ok: false, error: 'HTTP 502' },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://confirm.example.com/check');
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValueOnce(new Response('ok', { status: 200 }));
+    const viaFallback = await checkNow(env, '/check/api%20v2?via=1', { method: 'POST' }, multiDeps);
+    expect(viaFallback.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.example.com/health');
   });
 });

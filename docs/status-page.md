@@ -271,12 +271,12 @@ GET returns 405 because the endpoint does not offer an SSE stream.
 
 These need the operator's sign-in: the session cookie, or the password sign-in's username and password in a Basic `Authorization` header. Each Basic call counts against the sign-in limit of 5 per minute per IP, and so does every check-now call, signed in or not. Answers are never cached. A call without the operator's sign-in gets 401. A call gets 403 when no sign-in is set up, or when a write comes from another origin. A call over the sign-in limit gets 429 with `Too many attempts`.
 
-| URL                        | Does                                                                                               |
-| -------------------------- | -------------------------------------------------------------------------------------------------- |
-| `/api/admin/maintenances`  | Lists, adds, edits and deletes [maintenance windows](#maintenance).                                |
-| `/api/admin/announcements` | Lists, adds, edits and deletes [announcements](#announcements).                                    |
-| `/api/admin/ack`           | Acknowledges the open incident for `POST {"id":"<monitor>"}`.                                      |
-| `/api/admin/check`         | `POST {"id": "<monitor>"}` runs that check monitor once and returns the result, without saving it. |
+| URL                        | Does                                                                                                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/admin/maintenances`  | Lists, adds, edits and deletes [maintenance windows](#maintenance).                                                                                              |
+| `/api/admin/announcements` | Lists, adds, edits and deletes [announcements](#announcements).                                                                                                  |
+| `/api/admin/ack`           | Acknowledges the open incident for `POST {"id":"<monitor>"}`.                                                                                                    |
+| `/api/admin/check`         | `POST {"id": "<monitor>"}` (with optional `"via": <index>` to pick one configured place) runs that check monitor once and returns the result, without saving it. |
 
 ```bash
 curl -fsS -u 'admin:your-password' -H 'Content-Type: application/json' \
@@ -287,7 +287,7 @@ curl -fsS -u 'admin:your-password' -H 'Content-Type: application/json' \
 { "location": "FRA", "result": { "ok": true, "latency": 87 } }
 ```
 
-A failed check has `"ok": false` and an `error`. An unknown id gets a 404. A heartbeat id gets a 400, because a heartbeat has no check to run.
+A failed check has `"ok": false` and an `error`. An unknown id gets a 404. A heartbeat id gets a 400, because a heartbeat has no check to run. Optional `"via"` is a zero-based index into the monitor's configured places in order: `0` is the primary check, followed by the direct fallback if `checkProxyFallback: true` is set, then each `confirmVia` entry in config order.
 
 The JSON badge route works with [shields.io's endpoint badge](https://shields.io/badges/endpoint-badge). Pass it to shields.io, URL-encoded:
 

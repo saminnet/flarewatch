@@ -320,9 +320,15 @@ function recorded({ location, result }: CheckResultWithLocation): CheckResultWit
   return { location, result };
 }
 
+export function places(target: MonitorTarget): Attempt[] {
+  const { chain, confirmers } = plan(target);
+  return [...chain, ...confirmers];
+}
+
 /**
  * Checks a monitor where its config says, then falls back or confirms elsewhere when that fails
- * and the run can afford it. Never throws, and never runs past `ctx.budget.deadline`.
+ * and the run can afford it. When `ctx.via` is set, runs only that configured place.
+ * Never throws, and never runs past `ctx.budget.deadline`.
  */
 export async function checkMonitor(
   target: MonitorTarget,
@@ -332,6 +338,13 @@ export async function checkMonitor(
   try {
     const [issue] = planIssues(target);
     if (issue) return { location: await deps.getEdgeLocation(), result: failure(issue) };
+
+    if (ctx.via !== undefined) {
+      const chosen = places(target)[ctx.via];
+      if (!chosen)
+        return { location: await deps.getEdgeLocation(), result: failure('Invalid via index') };
+      return recorded(await attempt(target, chosen, ctx, deps));
+    }
 
     const {
       chain: [first, ...fallbacks],

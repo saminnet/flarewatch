@@ -6,6 +6,7 @@ All notable changes to FlareWatch will be documented in this file.
 
 ### Added
 
+- `POST /api/admin/check` accepts an optional `via` index (for example `{"id": "api", "via": 1}`) to run an on-the-spot check from any of the monitor's configured places (`0` for primary, then fallback and confirmation places) without saving it.
 - MCP tool responses now include ISO 8601 timestamps (`updatedAtIso`, `startIso`, `endIso`, respecting `pageConfig.timezone`) alongside Unix seconds, plus `durationSeconds` and human-readable `duration` on incidents, and `tools/list` declares read-only MCP tool `annotations` so clients can auto-approve calls.
 - Enabled Workers Logs (`[observability.logs]`, with `invocation_logs = false`) in `services/worker/wrangler.toml` and disabled `invocation_logs` in `apps/status-page/wrangler.jsonc` so Worker diagnostics are persisted without recording token-bearing URLs.
 
