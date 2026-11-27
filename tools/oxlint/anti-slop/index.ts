@@ -20,6 +20,8 @@ import { noWidenThenAssertRule } from "./rules/no-widen-then-assert.ts";
 import { preferSharedHelperRule } from "./rules/prefer-shared-helper.ts";
 import { noImplicitLocaleRule } from "./rules/no-implicit-locale.ts";
 import { noZodCheckReturnValueRule } from "./rules/no-zod-check-return-value.ts";
+import { noBooleanStateFlagsRule } from "./rules/no-boolean-state-flags.ts";
+import { noUseEffectRule } from "./rules/no-use-effect.ts";
 import { requireReadableSpacingRule } from "./rules/require-readable-spacing.ts";
 import { requireSafetyCommentForTypeAssertionRule } from "./rules/require-safety-comment-for-type-assertion.ts";
 
@@ -47,6 +49,8 @@ const antiSlopPlugin = eslintCompatPlugin({
 		"prefer-shared-helper": preferSharedHelperRule,
 		"no-implicit-locale": noImplicitLocaleRule,
 		"no-zod-check-return-value": noZodCheckReturnValueRule,
+		"no-boolean-state-flags": noBooleanStateFlagsRule,
+		"no-use-effect": noUseEffectRule,
 		"require-readable-spacing": requireReadableSpacingRule,
 		"require-safety-comment-for-type-assertion": requireSafetyCommentForTypeAssertionRule,
 	},

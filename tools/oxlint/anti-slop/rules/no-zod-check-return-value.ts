@@ -1,21 +1,13 @@
 import { defineRule } from "vite-plus/lint/plugins";
 
+import { enclosingFunction } from "../shared/function-node.ts";
 import { staticMemberName } from "../shared/property-key.ts";
 
+import type { FunctionNode } from "../shared/function-node.ts";
 import type { ESTree } from "vite-plus/lint/plugins";
-
-type FunctionNode = ESTree.ArrowFunctionExpression | ESTree.Function;
 
 function isZodSource(source: string): boolean {
   return source === "zod" || source.startsWith("zod/") || source === "@zod/mini";
-}
-
-function isFunction(node: ESTree.Node): node is FunctionNode {
-  return (
-    node.type === "ArrowFunctionExpression" ||
-    node.type === "FunctionExpression" ||
-    node.type === "FunctionDeclaration"
-  );
 }
 
 /** True for a function written inline as an argument to `.check(...)`. */
@@ -71,9 +63,8 @@ export const noZodCheckReturnValueRule = defineRule({
       ArrowFunctionExpression: checkArrowBody,
       ReturnStatement(node) {
         if (!importsZod || node.argument === null || isVoidValue(node.argument)) return;
-        let current: ESTree.Node | null = node.parent;
-        while (current !== null && !isFunction(current)) current = current.parent;
-        if (current !== null && isCheckCallback(current)) report(node.argument);
+        const owner = enclosingFunction(node);
+        if (owner !== null && isCheckCallback(owner)) report(node.argument);
       },
     };
   },

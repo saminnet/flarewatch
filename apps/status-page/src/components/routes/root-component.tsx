@@ -10,7 +10,7 @@ import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
 import { VisitorViewBar } from '@/components/visitor-view-bar';
 import { getThemeInitScript } from '@/lib/theme-server';
-import { useAccountSync } from '@/lib/query/auth.mutations';
+import { useAccountSync } from '@/lib/hooks/use-account-sync';
 
 const rootRoute = getRouteApi('__root__');
 
