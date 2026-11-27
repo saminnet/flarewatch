@@ -55,7 +55,7 @@ export async function unstable_startWorker({
   ...options
 }: Parameters<typeof startRealWorker>[0] & { config?: string }) {
   const copy = config === undefined ? undefined : copyOutsideRepo(config);
-  const worker = await startRealWorker({ ...options, config: copy?.file });
+  const worker = await startRealWorker(copy ? { ...options, config: copy.file } : options);
   const dispose = worker.dispose.bind(worker);
   return Object.assign(worker, {
     dispose: async () => {
