@@ -67,11 +67,43 @@ Dependencies can have their own dependencies, and heartbeats can use `dependsOn`
 
 A monitor that fails again within 15 minutes of recovering reopens the same outage, so a flapping target doesn't fill History. It sends a new down alert once it has been down for the whole grace period again. A reopened outage ends only after the monitor has stayed up for 15 minutes. Its recovery alert goes out then, and the outage counts as ending when the monitor came back up.
 
-If no webhook accepts a down alert, FlareWatch tries it again on each check run, up to 10 times. After that it stops alerting about that outage. A check run can make a fixed number of requests, and the checks use most of them. When more down alerts are due than the run can send, the rest go out on the following runs, in config order. Waiting doesn't count as a try. Recovery alerts, error changes and [reminders](monitors.md#reminders) are sent once, without retries. A refused expiry warning is tried again after 60 check runs, about an hour, for as long as the certificate or domain stays inside its window. A recovery that a run has no requests left for waits for a later run. So does the recovery of an outage that ends while its down alert is still going out. A waiting recovery is dropped if the monitor goes down again first, stops alerting, or every webhook is removed. An outage sends at most 5 error changes, and 5 more each time it reopens. An error change that no webhook accepts doesn't count toward the 5.
+If no channel accepts a down alert, FlareWatch tries it again on each check run, up to 10 times. After that it stops alerting about that outage. A check run can make a fixed number of requests, and the checks use most of them. When more down alerts are due than the run can send, the rest go out on the following runs, in config order. Waiting doesn't count as a try. Recovery alerts, error changes and [reminders](monitors.md#reminders) are sent once, without retries. A refused expiry warning is tried again after 60 check runs, about an hour, for as long as the certificate or domain stays inside its window. A recovery that a run has no requests left for waits for a later run. So does the recovery of an outage that ends while its down alert is still going out. A waiting recovery is dropped if the monitor goes down again first, stops alerting, or every channel is removed. An outage sends at most 5 error changes, and 5 more each time it reopens. An error change that no channel accepts doesn't count toward the 5.
 
 Acknowledging an open incident stops its reminders. Its recovery alert names the responder, using the signed-in provider's name or `operator` for a password sign-in. Every notification template includes this name.
 
-A recovery alert only follows a down alert that went out. If you remove every webhook while a monitor is down, its recovery goes unannounced.
+A recovery alert only follows a down alert that went out. If you remove every channel while a monitor is down, its recovery goes unannounced.
+
+## Cloudflare Email
+
+Send operator alerts directly through Cloudflare Email Service, with no third-party provider. On the Workers Free plan, sending to verified destination addresses in your Cloudflare account is free.
+
+1. Onboard your sending domain to Cloudflare Email Service and verify each recipient address under **Email Routing > Destination Addresses**.
+2. Add this binding to `services/worker/wrangler.toml`:
+
+```toml
+[[send_email]]
+name = "ALERT_EMAIL"
+```
+
+3. Set `notification.email` in `packages/config/src/worker.ts`:
+
+```ts
+notification: {
+  email: {
+    from: 'alerts@example.com',
+    to: 'you@example.com',
+    // monitors: ['api', 'db'], // optional, same routing rules as webhooks
+  },
+},
+```
+
+To keep addresses out of a public fork, put them in the `FLAREWATCH_ALERT_EMAILS` [GitHub secret](deploy.md#3-add-secrets-to-your-fork) as JSON instead:
+
+```json
+[{ "from": "alerts@example.com", "to": "you@example.com" }]
+```
+
+Pass a list of entries to alert multiple addresses or route different monitors to each one. Each entry sends one message per alert (or one summary when `summaryAfter` triggers) and counts as one alert channel in the check run's subrequest budget.
 
 ## Channels
 

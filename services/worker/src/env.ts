@@ -1,3 +1,4 @@
+import type { AlertEmailBinding } from './notifications/email';
 import type { SubscriberEmailBinding } from './notifications/subscriber-sender';
 import { workerConfig } from '@flarewatch/config/worker';
 import type { VpcBinding } from '@flarewatch/shared';
@@ -5,6 +6,7 @@ import type { MonitorHub } from './hub/monitor-hub';
 
 export interface Env {
   RESEND_API_KEY?: string;
+  ALERT_EMAIL?: AlertEmailBinding;
   SUBSCRIBER_EMAIL?: SubscriberEmailBinding;
   SUBSCRIBER_SECRET?: string;
   MONITOR_HUB?: DurableObjectNamespace<MonitorHub>;
@@ -14,6 +16,8 @@ export interface Env {
   FLAREWATCH_PROXY_TOKEN?: string;
   /** Webhooks as JSON, one or a list, that get alerts alongside `notification.webhook`. */
   FLAREWATCH_WEBHOOKS?: string;
+  /** Operator email alerts as JSON, one or a list, that get alerts alongside `notification.email`. */
+  FLAREWATCH_ALERT_EMAILS?: string;
   /** Root secret for ping tokens (base64url(HMAC-SHA256(secret, `v1:<id>`))). */
   HEARTBEAT_SECRET?: string;
   /** Workers rate-limiting binding: about 30 requests per 60s per monitor, counted per Cloudflare location. */

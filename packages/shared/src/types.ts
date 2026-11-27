@@ -244,9 +244,18 @@ export type WorkerConfig = {
   };
 };
 
+export type EmailAlert = {
+  from: string;
+  to: string;
+  monitors?: string[];
+};
+
+export type EmailAlertConfig = EmailAlert | EmailAlert[];
+
 export type NotificationConfig = {
   summaryAfter?: number;
   webhook?: WebhookConfig;
+  email?: EmailAlertConfig;
   timeZone?: string;
   gracePeriod?: number;
   skipNotificationIds?: string[];
