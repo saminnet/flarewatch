@@ -91,6 +91,26 @@ describe('POST /api/admin/check', () => {
     expect(worker).toHaveBeenCalledWith('https://internal/check/api', { method: 'POST' });
   });
 
+  it('forwards an optional non-negative integer via index and rejects invalid via values', async () => {
+    const worker = await stubEnv();
+
+    const response = await callCheck(OPS_AUTH, JSON.stringify({ id: 'api', via: 1 }));
+
+    expect(response.status).toBe(200);
+    expect(worker).toHaveBeenCalledWith('https://internal/check/api?via=1', { method: 'POST' });
+
+    worker.mockClear();
+    for (const bad of [
+      { id: 'api', via: -1 },
+      { id: 'api', via: 1.5 },
+      { id: 'api', via: 'https://evil.test' },
+      { id: 'api', via: 0, extra: true },
+    ]) {
+      expect((await callCheck(OPS_AUTH, JSON.stringify(bad))).status).toBe(400);
+    }
+    expect(worker).not.toHaveBeenCalled();
+  });
+
   it('runs it for the operator signed in on the page', async () => {
     const identity = await passwordIdentity(ADMIN_SECRET);
     const worker = await stubEnv({

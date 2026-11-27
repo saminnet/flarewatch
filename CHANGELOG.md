@@ -2,6 +2,12 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- `POST /api/admin/check` accepts an optional `via` index (for example `{"id": "api", "via": 1}`) to run an on-the-spot check from any of the monitor's configured places (`0` for primary, then fallback and confirmation places) without saving it.
+
 ## 3.6.1 - 2026-11-15
 
 ### Fixed

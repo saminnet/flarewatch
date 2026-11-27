@@ -183,8 +183,11 @@ export type CheckNowAnswer = { check: CheckResultWithLocation } | { status: numb
  * One check of a configured check monitor, recorded nowhere. A refusal (an
  * unknown or heartbeat id) keeps the worker's status and message.
  */
-export async function checkMonitorNow(id: string): Promise<CheckNowAnswer> {
-  const response = await callMonitorWorker(`/check/${encodeURIComponent(id)}`, { method: 'POST' });
+export async function checkMonitorNow(id: string, via?: number): Promise<CheckNowAnswer> {
+  const query = via === undefined ? '' : `?via=${via}`;
+  const response = await callMonitorWorker(`/check/${encodeURIComponent(id)}${query}`, {
+    method: 'POST',
+  });
   const body: unknown = await response.json().catch(() => null);
   if (response.ok) {
     if (!isCheckResultWithLocation(body)) throw new Error('Monitor worker sent an invalid check');

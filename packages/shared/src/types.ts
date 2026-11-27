@@ -425,6 +425,8 @@ export interface CheckContext {
    */
   env: { FLAREWATCH_PROXY_TOKEN?: string; VPC?: VpcBinding };
   budget: RunBudget;
+  /** Optional index into a monitor's planned check places (check-now only). */
+  via?: number;
 }
 
 export interface MonitorChecker {
