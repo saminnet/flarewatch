@@ -2,6 +2,17 @@
 
 All notable changes to FlareWatch will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- MCP tool responses now include ISO 8601 timestamps (`updatedAtIso`, `startIso`, `endIso`, respecting `pageConfig.timezone`) alongside Unix seconds, plus `durationSeconds` and human-readable `duration` on incidents, and `tools/list` declares read-only MCP tool `annotations` so clients can auto-approve calls.
+- Enabled Workers Logs (`[observability.logs]`, with `invocation_logs = false`) in `services/worker/wrangler.toml` and disabled `invocation_logs` in `apps/status-page/wrangler.jsonc` so Worker diagnostics are persisted without recording token-bearing URLs.
+
+### Fixed
+
+- Subscriber sends that hit a provider daily quota (`E_DAILY_LIMIT_EXCEEDED` on Cloudflare Email Service, or `daily_quota_exceeded` / `monthly_quota_exceeded` on Resend) now persist quota exhaustion and defer all subscriber mail until the next UTC day instead of retrying on short backoff.
+
 ## 3.6.1 - 2026-11-15
 
 ### Fixed

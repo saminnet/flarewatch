@@ -20,7 +20,10 @@
   // Example custom domain route:
   // "routes": [{ "pattern": "status.example.com", "custom_domain": true }],
   "observability": {
-    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false,
+    },
   },
   /**
    * CI creates/adopts the flarewatch-state namespace and replaces this placeholder before build.
